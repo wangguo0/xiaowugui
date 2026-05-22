@@ -1537,7 +1537,7 @@
         publish: "暂无发布",
         identity: "未就绪"
       },
-      pan: { config: null, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", checkEnabled: false },
+      pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", checkEnabled: false },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
       renderTimer: 0,
       scrollingUntil: 0,
@@ -1572,6 +1572,26 @@
     const HOT_PRUNE_BATCH = 1000;
     const HOT_RENDER_LIMIT = 1000;
     const UI_SNAPSHOT_TTL_MS = 2 * 60 * 60 * 1000;
+
+    let nativeSdkWait = null;
+
+    function waitForNativeSdk(timeout) {
+      if (window.fm || !window.fongmiBridge) return Promise.resolve(!!window.fm);
+      if (nativeSdkWait) return nativeSdkWait;
+      nativeSdkWait = new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          window.removeEventListener("fmsdk", finish);
+          nativeSdkWait = null;
+          resolve(!!window.fm);
+        };
+        window.addEventListener("fmsdk", finish);
+        setTimeout(finish, timeout == null ? 1500 : timeout);
+      });
+      return nativeSdkWait;
+    }
 
     function sdk() {
       if (window.fm) return window.fm;
@@ -1661,17 +1681,24 @@
       };
     }
 
-    async function initPanConfig() {
+    async function initPanConfig(options) {
+      options = options || {};
+      if (window.fongmiBridge && !window.fm) await waitForNativeSdk(options.timeout == null ? 1500 : options.timeout);
+      if (options.preserveDirty && state.pan.configDirty) return;
       let saved = null;
       try { saved = safeJson(await sdk().cache.get(cacheKey("pan")), null); } catch (e) { saved = null; }
       state.pan.config = sanitizePanConfig(saved);
+      state.pan.configDirty = false;
       renderPanConfigControls();
     }
 
     async function savePanConfig() {
+      if (window.fongmiBridge && !window.fm) await waitForNativeSdk(1500);
+      if (window.fongmiBridge && !window.fm) throw new Error("App SDK 未就绪，请稍后再保存");
       state.pan.config = sanitizePanConfig(readPanConfigControls());
       await sdk().cache.set(cacheKey("pan"), JSON.stringify(state.pan.config));
       renderPanConfigControls();
+      state.pan.configDirty = false;
       setPanStatus("配置已保存");
       toast("盘搜配置已保存");
     }
@@ -1703,6 +1730,10 @@
         label.innerHTML = `<input class="focusable" type="checkbox" value="${escapeAttr(disk.id)}" ${selected.has(disk.id) ? "checked" : ""}><span>${escapeHtml(disk.name)}</span>`;
         return label;
       }));
+    }
+
+    function markPanConfigDirty() {
+      state.pan.configDirty = true;
     }
 
     function panDiskName(type) {
@@ -4912,6 +4943,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("savePanConfigBtn").addEventListener("click", () => {
         savePanConfig().catch((e) => toast(e.message || "保存失败"));
       });
+      const panConfig = document.querySelector(".pan-config");
+      if (panConfig) {
+        panConfig.addEventListener("input", markPanConfigDirty);
+        panConfig.addEventListener("change", markPanConfigDirty);
+      }
       $("closeImageBtn").addEventListener("click", () => closeImage(false));
       $("imageViewer").addEventListener("click", (event) => {
         if (event.target === $("imageViewer")) closeImage(false);
@@ -5091,6 +5127,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }
     }
 
+    function shouldRestoreUiSnapshot() {
+      try {
+        return new URLSearchParams(location.search || "").get("_fm_restore") === "1";
+      } catch (e) {
+        return /(?:^|[?&])_fm_restore=1(?:&|$)/.test(location.search || "");
+      }
+    }
+
     function restorePanSnapshot(pan) {
       if (!pan || !pan.keyword && !(pan.results || []).length) return;
       state.pan.loading = false;
@@ -5232,7 +5276,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       stopWatchTracking(true);
     });
     window.addEventListener("pageshow", handleWebHomeResume);
-    window.addEventListener("fmsdk", () => { loadInfo().then(handleWebHomeResume).catch(() => {}); });
+    window.addEventListener("fmsdk", () => {
+      initPanConfig({ preserveDirty: true, timeout: 0 })
+        .then(loadInfo)
+        .then(handleWebHomeResume)
+        .catch(() => {});
+    });
     window.addEventListener("fmresume", () => { loadInfo().finally(handleWebHomeResume); });
     window.addEventListener("fmpause", saveUiSnapshotNow);
     document.addEventListener("visibilitychange", () => {
@@ -5258,13 +5307,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       hotLoadIndex().catch(() => {});
       await loadInfo();
       await loadCatalog();
-      const restored = await restoreUiSnapshot(await readUiSnapshot());
+      const canRestoreUi = shouldRestoreUiSnapshot();
+      const restored = canRestoreUi ? await restoreUiSnapshot(await readUiSnapshot()) : false;
       await ensureIdentity();
       await loadEvents();
       scheduleHistorySettlement();
       setTimeout(subscribeNostr, 600);
       renderMetrics();
       if (restored) handleWebHomeResume();
+      if (!canRestoreUi) scheduleUiSnapshotSave();
       updateBackTopButton();
       setTimeout(() => document.querySelector(".focusable") && document.querySelector(".focusable").focus(), 80);
     }
