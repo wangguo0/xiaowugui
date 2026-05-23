@@ -73,6 +73,8 @@
     <string name="setting_live">直播</string>
     <string name="setting_wall">壁紙</string>
     <string name="setting_player">播放設定</string>
+    <string name="setting_enhance">增強功能</string>
+    <string name="setting_debug_log">調試日誌</string>
     <string name="setting_incognito">無痕模式</string>
     <string name="setting_drive_check">網盤檢測</string>
     <string name="setting_size">圖片尺寸</string>

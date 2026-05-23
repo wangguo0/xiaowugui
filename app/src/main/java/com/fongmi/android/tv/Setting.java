@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 
+import com.github.catvod.crawler.DebugLogStore;
 import com.github.catvod.utils.Prefers;
 
 public class Setting {
@@ -139,11 +140,19 @@ public class Setting {
     }
 
     public static boolean isDriveCheck() {
-        return Prefers.getBoolean("drive_check");
+        return Prefers.getBoolean("drive_check", true);
     }
 
     public static void putDriveCheck(boolean driveCheck) {
         Prefers.put("drive_check", driveCheck);
+    }
+
+    public static boolean isDebugLog() {
+        return DebugLogStore.isEnabled();
+    }
+
+    public static void putDebugLog(boolean debugLog) {
+        DebugLogStore.setEnabled(debugLog);
     }
 
     public static boolean isBootLive() {

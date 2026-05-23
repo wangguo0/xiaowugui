@@ -26,6 +26,10 @@
       --control-active: rgba(48, 61, 70, .58);
       --accent: rgba(245, 249, 252, .86);
       --accent-2: rgba(221, 232, 241, .66);
+      --focus-line: rgba(168, 218, 255, .72);
+      --focus-line-soft: rgba(168, 218, 255, .42);
+      --focus-glow: rgba(96, 165, 250, .24);
+      --focus-surface: rgba(255, 255, 255, .12);
       --ok: #9fd8ad;
       --danger: #f09d9d;
       --shadow: 0 16px 42px rgba(0, 0, 0, .24);
@@ -982,6 +986,17 @@
       accent-color: rgba(244, 247, 251, .82);
     }
 
+    .pan-disk-grid label:focus-within {
+      background: rgba(70, 85, 96, .72);
+      border-color: var(--focus-line);
+      color: var(--text);
+    }
+
+    .panel-editing {
+      background: rgba(24, 36, 46, .88) !important;
+      border-color: rgba(184, 226, 255, .9) !important;
+    }
+
     .pan-search-block {
       display: none;
       margin-top: 18px;
@@ -995,6 +1010,7 @@
       display: grid;
       gap: 9px;
       max-height: min(calc(var(--fm-web-height) * .52), 560px);
+      min-height: 92px;
       overflow-y: auto;
       overscroll-behavior-y: contain;
       padding-right: 2px;
@@ -1193,6 +1209,72 @@
     input:focus,
     textarea:focus {
       outline: none;
+      border-color: var(--focus-line);
+      box-shadow: none;
+      position: relative;
+      z-index: 5;
+      transition: border-color .06s ease, background-color .06s ease, opacity .06s ease;
+    }
+
+    .card:focus,
+    .episode-card:focus,
+    .person-card:focus {
+      transform: translateY(-2px) scale(1.025);
+      border-color: var(--focus-line);
+      background: rgba(var(--panel-rgb), .66);
+      box-shadow: none;
+    }
+
+    .card:focus img,
+    .episode-card:focus img,
+    .person-card:focus img {
+      filter: brightness(1.06) saturate(1.04);
+    }
+
+    .pan-result-item:focus {
+      outline: 2px solid rgba(168, 218, 255, .86);
+      outline-offset: -2px;
+      border-color: rgba(188, 228, 255, .9);
+      background: rgba(82, 100, 112, .86);
+      box-shadow: none;
+    }
+
+    .pan-result-item:focus .pan-result-title {
+      color: #fff;
+    }
+
+    .chip:focus,
+    .btn:focus,
+    .mini-icon-btn:focus,
+    .connection-toggle:focus {
+      transform: translateY(-1px);
+      background: rgba(70, 85, 96, .72);
+      border-color: var(--focus-line);
+      box-shadow: none;
+    }
+
+    .chip.active:focus {
+      background: rgba(82, 98, 108, .78);
+      border-color: rgba(184, 226, 255, .8);
+    }
+
+    input.focusable:focus,
+    textarea.focusable:focus,
+    .field:focus {
+      transform: none;
+      background: rgba(28, 38, 46, .72);
+      border-color: var(--focus-line);
+      box-shadow: none;
+    }
+
+    .suggest-item:focus {
+      background: rgba(60, 76, 90, .82);
+      border-color: var(--focus-line);
+      box-shadow: none;
+    }
+
+    .image-content:focus {
+      border-radius: var(--radius);
       box-shadow: none;
     }
 
@@ -1246,7 +1328,7 @@
 <body>
   <main class="app" id="home">
     <form class="search" id="searchForm" autocomplete="off">
-      <input class="field focusable" id="searchInput" type="search" placeholder="搜索关键词" aria-autocomplete="list" aria-controls="suggestPanel">
+      <input class="field focusable" id="searchInput" type="search" placeholder="搜索关键词" aria-autocomplete="list" aria-controls="suggestPanel" readonly>
       <button class="btn blue focusable" type="submit">
         <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         搜索
@@ -1272,12 +1354,12 @@
       <div class="section-head">
         <h3>Nostr推荐</h3>
         <aside class="connection-dock" id="connectionDock">
-          <button class="connection-toggle focusable" id="connectionToggle" type="button">
+          <button class="connection-toggle focusable" id="connectionToggle" type="button" aria-expanded="false" aria-controls="connectionBody">
             <span class="dot warn" id="connectionDot"></span>
             <span class="connection-title">状态</span>
             <span class="connection-arrow">⌃</span>
           </button>
-          <div class="connection-body" id="connectionBody">
+          <div class="connection-body" id="connectionBody" aria-hidden="true">
             <div class="connection-grid">
               <div class="connection-item"><b>App SDK</b><span id="statusSdk">检测中</span></div>
               <div class="connection-item"><b>TMDB</b><span id="statusTmdb">等待请求</span></div>
@@ -1289,16 +1371,16 @@
             </div>
             <div class="pan-config">
               <label for="panBaseInput">盘搜地址
-                <input class="field focusable" id="panBaseInput" type="url" inputmode="url" placeholder="https://so.252035.xyz">
+                <input class="field focusable" id="panBaseInput" type="url" inputmode="url" placeholder="https://so.252035.xyz" readonly>
               </label>
               <label for="panChannelsInput">TG频道
-                <textarea class="field focusable" id="panChannelsInput" rows="2" placeholder="可选，多个频道用逗号或换行分隔"></textarea>
+                <textarea class="field focusable" id="panChannelsInput" rows="2" placeholder="可选，多个频道用逗号或换行分隔" readonly></textarea>
               </label>
               <label for="panUserInput">账号
-                <input class="field focusable" id="panUserInput" type="text" autocomplete="username" placeholder="未启用认证可留空">
+                <input class="field focusable" id="panUserInput" type="text" autocomplete="username" placeholder="未启用认证可留空" readonly>
               </label>
               <label for="panPassInput">密码
-                <input class="field focusable" id="panPassInput" type="password" autocomplete="current-password" placeholder="未启用认证可留空">
+                <input class="field focusable" id="panPassInput" type="password" autocomplete="current-password" placeholder="未启用认证可留空" readonly>
               </label>
               <div class="pan-disk-grid" id="panDiskGrid"></div>
               <button class="btn focusable" id="savePanConfigBtn" type="button">保存盘搜</button>
@@ -1525,7 +1607,7 @@
       loadingMore: false,
       railScroll: {},
       searchItems: [],
-      suggestions: { keyword: "", items: [], loading: false, timer: 0, controller: null },
+      suggestions: { keyword: "", items: [], loading: false, timer: 0, seq: 0, controller: null },
       hot: { db: null, dbPromise: null, idb: false, ready: false, items: [], media: new Map(), users: new Map(), ingestQueue: Promise.resolve(), refreshTimer: 0 },
       relay: { connected: 0, published: 0, total: 0, lastOk: 0, lastDone: 0, statuses: {}, subscribeStarted: false, subscribeDone: 0, subscribeFinished: {}, backfillBusy: {}, backfillTimers: {}, backfillCandidates: {}, primaryBackfillRelay: "", fallbackReadyAt: 0, fallbackTimer: 0, fallbackPrefetchTimer: 0 },
       recommendationSource: "pending",
@@ -1537,8 +1619,11 @@
         publish: "暂无发布",
         identity: "未就绪"
       },
-      pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", checkEnabled: false },
+      pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
+      detailReturn: null,
+      focusReturnEl: null,
+      remoteInitialFocused: false,
       renderTimer: 0,
       scrollingUntil: 0,
       infiniteObserver: null,
@@ -1572,6 +1657,7 @@
     const HOT_PRUNE_BATCH = 1000;
     const HOT_RENDER_LIMIT = 1000;
     const UI_SNAPSHOT_TTL_MS = 2 * 60 * 60 * 1000;
+    const PAN_PLAYBACK_RETURN_TTL_MS = 10 * 60 * 1000;
 
     let nativeSdkWait = null;
 
@@ -1594,7 +1680,16 @@
     }
 
     function sdk() {
-      if (window.fm) return window.fm;
+      if (window.fm) {
+        const pan = window.fm.pan || {};
+        return Object.assign({}, window.fm, { pan, check: pan.check || window.fm.check });
+      }
+      const check = async (items) => ({ results: (items || []).map((item) => ({ type: item.type, url: item.url, normalized_url: item.url, state: "idle", summary: "浏览器预览不检测", cache_hit: false, checked_at: Date.now(), expires_at: Date.now() + 300000 })) });
+      const play = async (payload) => {
+        const item = payload || {};
+        const url = addPanPassword(String(item.url || ""), item.password || "", { diskType: item.type });
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
+      };
       return {
         req: browserRequest,
         res: (url) => url,
@@ -1602,7 +1697,8 @@
         search: async (kw) => toast("原生搜索：" + kw),
         openKeep: async () => toast("请在 App 中打开收藏"),
         history: async () => [],
-        check: async (items) => ({ results: (items || []).map((item) => ({ disk_type: item.disk_type, url: item.url, normalized_url: item.url, state: "idle", summary: "浏览器预览不检测", cache_hit: false, checked_at: Date.now(), expires_at: Date.now() + 300000 })) }),
+        pan: { check, play },
+        check,
         cache: {
           get: async (key) => localStorage.getItem("fm_" + key) || "",
           set: async (key, value) => localStorage.setItem("fm_" + key, value),
@@ -1662,7 +1758,8 @@
     }
 
     function canCheckPanLinks() {
-      return !!(state.pan.checkEnabled && sdk().check);
+      const pan = sdk().pan || {};
+      return !!(state.pan.checkEnabled && pan.check);
     }
 
     function sanitizePanConfig(value) {
@@ -1700,6 +1797,7 @@
       renderPanConfigControls();
       state.pan.configDirty = false;
       setPanStatus("配置已保存");
+      closeConnectionPanel();
       toast("盘搜配置已保存");
     }
 
@@ -1718,10 +1816,22 @@
 
     function renderPanConfigControls() {
       const config = state.pan.config || defaultPanConfig();
-      if ($("panBaseInput")) $("panBaseInput").value = config.apiBase;
-      if ($("panChannelsInput")) $("panChannelsInput").value = (config.channels || []).join("\n");
-      if ($("panUserInput")) $("panUserInput").value = config.username || "";
-      if ($("panPassInput")) $("panPassInput").value = config.password || "";
+      if ($("panBaseInput")) {
+        $("panBaseInput").value = config.apiBase;
+        disablePanelTextEditing($("panBaseInput"));
+      }
+      if ($("panChannelsInput")) {
+        $("panChannelsInput").value = (config.channels || []).join("\n");
+        disablePanelTextEditing($("panChannelsInput"));
+      }
+      if ($("panUserInput")) {
+        $("panUserInput").value = config.username || "";
+        disablePanelTextEditing($("panUserInput"));
+      }
+      if ($("panPassInput")) {
+        $("panPassInput").value = config.password || "";
+        disablePanelTextEditing($("panPassInput"));
+      }
       const grid = $("panDiskGrid");
       if (!grid) return;
       const selected = new Set(config.diskTypes || []);
@@ -2529,6 +2639,29 @@
       });
     }
 
+    function setConnectionPanelOpen(open) {
+      const dock = $("connectionDock");
+      const body = $("connectionBody");
+      const toggle = $("connectionToggle");
+      if (!dock || !body) return;
+      dock.classList.toggle("open", !!open);
+      body.classList.toggle("open", !!open);
+      if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      body.setAttribute("aria-hidden", open ? "false" : "true");
+      if (open) disableConnectionTextEditing();
+      else if (body.contains(document.activeElement) && toggle) requestAnimationFrame(() => focusRemoteTarget(toggle));
+      fitConnectionPanel();
+      scheduleUiSnapshotSave();
+    }
+
+    function toggleConnectionPanel(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      setConnectionPanelOpen(!$("connectionDock").classList.contains("open"));
+    }
+
     function clearRelayBackfillTimers() {
       Object.values(state.relay.backfillTimers).forEach((timer) => clearTimeout(timer));
       state.relay.backfillTimers = {};
@@ -2537,9 +2670,7 @@
     }
 
     function closeConnectionPanel() {
-      $("connectionDock").classList.remove("open");
-      $("connectionBody").classList.remove("open");
-      fitConnectionPanel();
+      setConnectionPanelOpen(false);
     }
 
     function shortRelay(url) {
@@ -2983,19 +3114,37 @@
 
     function renderChips() {
       const chips = [{ id: "all", title: "Nostr推荐" }].concat(window.WEBHOME_CONFIG.tmdb.lists.map((item) => ({ id: item.id, title: item.title })));
-      $("chips").replaceChildren(...chips.map((chip) => {
-        const button = document.createElement("button");
-        button.className = "chip focusable" + (state.activeList === chip.id ? " active" : "");
-        button.type = "button";
-        button.textContent = chip.title;
-        button.addEventListener("click", () => {
-          state.activeList = chip.id;
-          renderAll();
-          if (chip.id !== "all") loadCatalogList(chip.id);
-          scheduleUiSnapshotSave();
-        });
-        return button;
-      }));
+      const root = $("chips");
+      const keys = chips.map((chip) => chip.id + ":" + chip.title).join("\n");
+      if (root.dataset.renderKeys !== keys) {
+        root.dataset.renderKeys = keys;
+        root.replaceChildren(...chips.map((chip) => {
+          const button = document.createElement("button");
+          button.className = "chip focusable";
+          button.type = "button";
+          button.dataset.chipId = chip.id;
+          button.textContent = chip.title;
+          button.addEventListener("click", () => selectChip(chip.id));
+          button.addEventListener("focus", () => {
+            if (state.activeList !== chip.id) selectChip(chip.id, { keepFocus: true });
+          });
+          return button;
+        }));
+      }
+      Array.from(root.children).forEach((button) => button.classList.toggle("active", button.dataset.chipId === state.activeList));
+    }
+
+    function selectChip(id, options) {
+      const opts = options || {};
+      if (!id || state.activeList === id) return;
+      state.activeList = id;
+      renderAll();
+      if (id !== "all") loadCatalogList(id);
+      scheduleUiSnapshotSave();
+      if (opts.keepFocus) requestAnimationFrame(() => {
+        const target = findByDataset($("chips"), "chipId", id);
+        if (target) focusRemoteTarget(target);
+      });
     }
 
     function renderRecommendations() {
@@ -3129,6 +3278,38 @@
         grid.replaceChildren(...items.map(mediaCard));
       }
       grid.dataset.renderKeys = keys.join("\n");
+      ensureRemoteInitialFocus();
+    }
+
+    function ensureRemoteInitialFocus() {
+      const active = document.activeElement;
+      if (state.remoteInitialFocused && isVisibleFocusable(active)) return;
+      const target = !state.remoteInitialFocused ? initialHomeFocus() || firstContentFocus() : firstContentFocus();
+      if (!target) return;
+      state.remoteInitialFocused = true;
+      requestAnimationFrame(() => focusRemoteTarget(target));
+    }
+
+    function ensureRemoteActiveFocus() {
+      const active = document.activeElement;
+      if (isVisibleFocusable(active)) return false;
+      if (restoreConnectionPanelFocus()) return true;
+      const target = uiSnapshotRoute() === "home" ? initialHomeFocus() || firstContentFocus() : firstContentFocus();
+      if (!target) return false;
+      focusRemoteTarget(target);
+      return true;
+    }
+
+    function focusInitialHomeNow() {
+      const target = initialHomeFocus();
+      if (!target) return;
+      state.remoteInitialFocused = true;
+      focusRemoteTarget(target);
+    }
+
+    function initialHomeFocus() {
+      if (focusScopeRoot() !== document) return null;
+      return findByDataset($("chips"), "chipId", "all") || $("chips").querySelector(".chip.active") || $("chips").querySelector(".chip");
     }
 
     function observeInfiniteScroll() {
@@ -3255,30 +3436,35 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     function scheduleSearchSuggest() {
       clearTimeout(state.suggestions.timer);
-      const kw = $("searchInput").value.trim();
+      const input = $("searchInput");
+      const kw = input ? input.value.trim() : "";
       if (!kw) {
         hideSearchSuggest();
         return;
       }
-      state.suggestions.timer = setTimeout(() => loadSearchSuggest(kw), 180);
+      if (input && input.readOnly) return hideSearchSuggest();
+      const seq = ++state.suggestions.seq;
+      state.suggestions.timer = setTimeout(() => loadSearchSuggest(kw, seq), 180);
     }
 
-    async function loadSearchSuggest(keyword) {
+    async function loadSearchSuggest(keyword, seq) {
       const kw = String(keyword || "").trim();
       if (!kw) return hideSearchSuggest();
+      if (seq !== state.suggestions.seq) return;
       if (state.suggestions.keyword === kw && state.suggestions.items.length) {
-        renderSearchSuggest();
+        if ($("searchInput") && $("searchInput").value.trim() === kw && !$("searchInput").readOnly) renderSearchSuggest();
         return;
       }
       state.suggestions.loading = true;
       try {
         const body = await requestJson(suggestUrl(kw), 8);
-        if ($("searchInput").value.trim() !== kw) return;
+        if (seq !== state.suggestions.seq) return;
+        if (!$("searchInput") || $("searchInput").value.trim() !== kw || $("searchInput").readOnly) return;
         state.suggestions.keyword = kw;
         state.suggestions.items = normalizeSuggestItems(body).slice(0, 8);
         renderSearchSuggest();
       } catch (e) {
-        if ($("searchInput").value.trim() === kw) hideSearchSuggest();
+        if (seq === state.suggestions.seq && $("searchInput") && $("searchInput").value.trim() === kw) hideSearchSuggest();
       } finally {
         state.suggestions.loading = false;
       }
@@ -3322,6 +3508,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     function hideSearchSuggest() {
       clearTimeout(state.suggestions.timer);
       state.suggestions.timer = 0;
+      state.suggestions.seq += 1;
       const panel = $("suggestPanel");
       if (panel) {
         panel.classList.remove("open");
@@ -3342,6 +3529,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("searchInput").value = value;
       hideSearchSuggest();
       searchTmdb(value);
+    }
+
+    function enableSearchEditing() {
+      if ($("searchInput")) $("searchInput").readOnly = false;
+    }
+
+    function disableSearchEditing() {
+      if ($("searchInput")) $("searchInput").readOnly = true;
     }
 
     async function searchTmdb(keyword) {
@@ -3376,12 +3571,13 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (!opts.restore) rememberWatchIntent(item, "view");
       loadDetail(item);
       scheduleUiSnapshotSave();
-      setTimeout(() => $("closeDetailBtn").focus(), 40);
+      if (!opts.restore) setTimeout(() => focusRemoteTarget($("detailSearchBtn") || $("closeDetailBtn")), 40);
     }
 
     function renderDetailBase(item) {
       $("detailTitle").textContent = item.title;
-      $("detailText").textContent = item.desc || item.remark;
+      const fallbackText = item.desc || item.remark || "";
+      if (!state.detail || !$("detailText").textContent.trim() || fallbackText) $("detailText").textContent = fallbackText || $("detailText").textContent || "";
       $("detailMeta").replaceChildren(...detailMeta(item).map((text) => {
         const span = document.createElement("span");
         span.className = "meta-pill";
@@ -3414,11 +3610,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     function renderDetailExtras(item, detail) {
       const overview = detail.overview || item.desc || item.remark;
-      $("detailText").textContent = overview || "";
+      if (overview) $("detailText").textContent = overview;
       renderImages(detail);
       renderCast(detail.credits && detail.credits.cast || []);
       if (item.mediaType === "tv") renderSeasons(item, detail);
       normalizeRails();
+      updatePostPanFocusState();
     }
 
     function renderImages(detail) {
@@ -3459,10 +3656,13 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const seasons = (detail.seasons || []).filter((season) => season.season_number > 0);
       if (!seasons.length) return;
       $("seasonBlock").style.display = "";
+      const activeEl = document.activeElement;
+      const restoreSeason = activeEl && $("seasonTabs").contains(activeEl) && activeEl.dataset.seasonNumber || "";
       $("seasonTabs").replaceChildren(...seasons.map((season, index) => {
         const button = document.createElement("button");
         button.className = "chip focusable" + (index === 0 ? " active" : "");
         button.type = "button";
+        button.dataset.seasonNumber = String(season.season_number);
         button.textContent = season.name || "第 " + season.season_number + " 季";
         button.addEventListener("click", () => {
           document.querySelectorAll("#seasonTabs .chip").forEach((el) => el.classList.remove("active"));
@@ -3471,6 +3671,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         });
         return button;
       }));
+      if (restoreSeason) requestAnimationFrame(() => focusRemoteTarget(findByDataset($("seasonTabs"), "seasonNumber", restoreSeason) || $("seasonTabs").querySelector(".chip.active") || $("seasonTabs").querySelector(".chip")));
       const first = detail["season/1"] || null;
       if (first && first.episodes) renderEpisodes(first.episodes);
       else loadSeason(item, seasons[0].season_number);
@@ -3483,9 +3684,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       } catch (e) {
         $("episodeRail").replaceChildren(emptyNode("分集加载失败"));
       }
+      updatePostPanFocusState();
     }
 
     function renderEpisodes(episodes) {
+      const activeEl = document.activeElement;
+      const restoreEpisode = activeEl && $("episodeRail").contains(activeEl) && activeEl.dataset.episodeNumber || "";
       if (!episodes.length) {
         $("episodeRail").replaceChildren(emptyNode("暂无分集信息"));
         return;
@@ -3495,6 +3699,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         const button = document.createElement("button");
         button.className = "episode-card focusable" + (still ? " has-still" : "");
         button.type = "button";
+        button.dataset.episodeNumber = String(ep.episode_number || "");
         button.innerHTML = `
           ${still ? `<img class="episode-still" alt="" src="${escapeAttr(still)}">` : ""}
           <div class="episode-body">
@@ -3506,6 +3711,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         button.addEventListener("click", () => openEpisodeViewer(ep, still));
         return button;
       }));
+      if (restoreEpisode) requestAnimationFrame(() => focusRemoteTarget(findByDataset($("episodeRail"), "episodeNumber", restoreEpisode) || $("episodeRail").querySelector(".episode-card")));
+      updatePostPanFocusState();
     }
 
     function openEpisodeViewer(ep, still) {
@@ -3523,12 +3730,18 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         const body = await requestJson(tmdbPersonUrl(person.id), 18);
         const works = (body.cast || []).filter((item) => (item.media_type === "movie" || item.media_type === "tv") && item.poster_path).slice(0, 18).map((value, index) => normalizeTmdb(value, { id: "person", title: "关联作品", mediaType: value.media_type }, index));
         fillRail($("personWorkRail"), works);
+        updatePostPanFocusState();
       } catch (e) {
         $("personWorkRail").replaceChildren(emptyNode("关联作品加载失败"));
+        updatePostPanFocusState();
       }
     }
 
     function resetPanSearch() {
+      resetPanSearchState(true);
+    }
+
+    function resetPanSearchState(hideBlock) {
       if (state.pan.observer) {
         state.pan.observer.disconnect();
         state.pan.observer = null;
@@ -3548,13 +3761,20 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       state.pan.keyword = "";
       state.pan.viewToken = "";
       state.pan.renderKeys = "";
-      if ($("panSearchBlock")) {
+      state.pan.tabKeys = "";
+      state.pan.focusKey = "";
+      state.pan.focusMode = "";
+      state.pan.playbackReturn = null;
+      if (hideBlock && $("panSearchBlock")) {
         $("panSearchBlock").classList.remove("active");
         $("panSearchBlock").style.display = "none";
       }
-      if ($("panSearchHint")) $("panSearchHint").textContent = "";
-      if ($("panTabs")) $("panTabs").replaceChildren();
-      if ($("panResultList")) $("panResultList").replaceChildren();
+      if (hideBlock) updatePostPanFocusState();
+      if (hideBlock) {
+        if ($("panSearchHint")) $("panSearchHint").textContent = "";
+        if ($("panTabs")) $("panTabs").replaceChildren();
+        if ($("panResultList")) $("panResultList").replaceChildren();
+      }
     }
 
     function panKeyword(item) {
@@ -3565,7 +3785,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (!item || state.pan.loading) return;
       const keyword = panKeyword(item);
       if (!keyword) return toast("缺少搜索标题");
-      resetPanSearch();
+      const hadResults = state.pan.results.length > 0 && $("panSearchBlock") && $("panSearchBlock").classList.contains("active");
+      resetPanSearchState(false);
       state.pan.loading = true;
       state.pan.keyword = keyword;
       const token = `pan-${Date.now()}`;
@@ -3576,6 +3797,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       state.pan.pending = {};
       state.pan.queued.clear();
       state.pan.inFlight.clear();
+      state.pan.focusMode = "tabs";
       state.pan.pollTimers.forEach((timer) => clearTimeout(timer));
       state.pan.pollTimers = [];
       state.pan.pollRound = 0;
@@ -3583,8 +3805,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         $("panSearchBlock").classList.add("active");
         $("panSearchBlock").style.display = "";
       }
-      $("panResultList").replaceChildren(emptyNode("正在搜索盘搜资源..."));
-      $("panSearchHint").textContent = keyword;
+      updatePostPanFocusState();
+      centerPanSearchBlock();
+      if (!hadResults && $("panTabs")) $("panTabs").replaceChildren();
+      if (!hadResults && $("panResultList")) $("panResultList").replaceChildren(emptyNode("正在搜索盘搜资源..."));
+      $("panSearchHint").textContent = `${keyword} · 搜索中`;
       setPanStatus(`搜索 ${keyword}`);
       try {
         const config = state.pan.config || defaultPanConfig();
@@ -3595,6 +3820,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         const results = applyPanSearchBody(body, keyword);
         setPanStatus(results.length ? `找到 ${results.length} 条` : "无资源");
         renderPanResults();
+        focusFirstPanTab();
         scheduleUiSnapshotSave();
         schedulePanPolling(token, item);
       } catch (e) {
@@ -3610,6 +3836,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       } finally {
         if (state.pan.viewToken === token) state.pan.loading = false;
       }
+    }
+
+    function focusFirstPanResult() {
+      const item = $("panResultList") && $("panResultList").querySelector(".pan-result-item");
+      if (item) requestAnimationFrame(() => focusRemoteTarget(item));
     }
 
     function applyPanSearchBody(body, keyword) {
@@ -3765,26 +3996,86 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (!tabs) return;
       const types = panAvailableTypes();
       const active = ensureActivePanType();
+      const activeEl = document.activeElement;
+      const restoreId = activeEl && tabs.contains(activeEl) && activeEl.dataset.panType || "";
+      const tabKeys = types.map((type) => `${type.id}:${type.count}`).join("\n");
       if (!types.length) {
+        state.pan.tabKeys = "";
         tabs.replaceChildren();
         return;
       }
+      if (tabKeys === state.pan.tabKeys && tabs.children.length === types.length) {
+        Array.from(tabs.children).forEach((button) => {
+          const isActive = button.dataset.panType === active;
+          button.classList.toggle("active", isActive);
+          const type = types.find((item) => item.id === button.dataset.panType);
+          if (type) button.textContent = `${type.name} ${type.count}`;
+        });
+        if (state.pan.focusMode === "tabs") lockPanFocus(findByDataset(tabs, "panType", active) || tabs.querySelector(".chip.active") || tabs.querySelector(".chip"), "tabs");
+        return;
+      }
+      state.pan.tabKeys = tabKeys;
       tabs.replaceChildren(...types.map((type) => {
         const button = document.createElement("button");
         button.className = "chip focusable" + (type.id === active ? " active" : "");
         button.type = "button";
+        button.dataset.panType = type.id;
         button.textContent = `${type.name} ${type.count}`;
+        button.addEventListener("focus", () => { state.pan.focusMode = "tabs"; });
         button.addEventListener("click", () => {
-          if (state.pan.activeType === type.id) return;
+          if (state.pan.activeType === type.id) {
+            state.pan.focusMode = "results";
+            focusFirstPanResult();
+            return;
+          }
+          const detailTop = $("detailSheet") ? $("detailSheet").scrollTop : 0;
           state.pan.activeType = type.id;
           state.pan.renderKeys = "";
+          state.pan.focusMode = "tabs";
           const list = $("panResultList");
           if (list) list.scrollTop = 0;
           renderPanResults();
+          if ($("detailSheet")) $("detailSheet").scrollTop = detailTop;
+          requestAnimationFrame(() => { if ($("detailSheet")) $("detailSheet").scrollTop = detailTop; });
+          lockPanFocus(findByDataset($("panTabs"), "panType", type.id) || $("panTabs").querySelector(".chip.active"), "tabs");
           scheduleUiSnapshotSave();
         });
         return button;
       }));
+      const restoreTarget = restoreId ? findByDataset(tabs, "panType", restoreId) : state.pan.focusMode === "tabs" ? tabs.querySelector(".chip.active") || tabs.querySelector(".chip") : null;
+      if (restoreTarget) lockPanFocus(restoreTarget, "tabs");
+    }
+
+    function focusFirstPanTab() {
+      const target = $("panTabs") && ($("panTabs").querySelector(".chip.active") || $("panTabs").querySelector(".chip"));
+      if (target) {
+        centerPanSearchBlock();
+        lockPanFocus(target, "tabs");
+      }
+    }
+
+    function updatePostPanFocusState() {
+      const panActive = !!($("panSearchBlock") && $("panSearchBlock").classList.contains("active") && $("panSearchBlock").style.display !== "none");
+      ["seasonBlock", "imageBlock", "castBlock", "personWorkBlock"].forEach((id) => {
+        const block = $(id);
+        if (!block) return;
+        block.setAttribute("aria-hidden", panActive ? "true" : "false");
+        block.querySelectorAll(".focusable,button,input,textarea").forEach((el) => {
+          if (panActive) {
+            if (!el.dataset.panFocusLocked) {
+              el.dataset.panFocusLocked = "1";
+              el.dataset.panPrevTabindex = el.hasAttribute("tabindex") ? el.getAttribute("tabindex") || "" : "__none__";
+            }
+            el.setAttribute("tabindex", "-1");
+          } else if (el.dataset.panFocusLocked) {
+            const previous = el.dataset.panPrevTabindex;
+            if (previous && previous !== "__none__") el.setAttribute("tabindex", previous);
+            else el.removeAttribute("tabindex");
+            delete el.dataset.panFocusLocked;
+            delete el.dataset.panPrevTabindex;
+          }
+        });
+      });
     }
 
     function renderPanResults() {
@@ -3807,10 +4098,111 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         return;
       }
       const keys = `${active}\n` + items.map((item) => `${item.key}:${getPanHealth(item).state}:${item.normalizedUrl || ""}`).join("\n");
-      if (keys === state.pan.renderKeys && list.children.length === items.length) return;
+      const activeEl = document.activeElement;
+      const shouldRestore = !!(activeEl && list.contains(activeEl)) || state.pan.focusMode === "results";
+      const restoreKey = shouldRestore && activeEl.dataset.panKey || state.pan.focusKey || "";
+      list.setAttribute("tabindex", "-1");
+      list.setAttribute("role", "listbox");
+      if (keys === state.pan.renderKeys && list.children.length === items.length) {
+        restorePanResultFocus(list, restoreKey, shouldRestore);
+        return;
+      }
       state.pan.renderKeys = keys;
       list.replaceChildren(...items.map(panResultNode));
       observePanVisibleItems();
+      restorePanResultFocus(list, restoreKey, shouldRestore);
+    }
+
+    function restorePanResultFocus(list, key, shouldRestore) {
+      if (!shouldRestore || !list) return;
+      const target = key ? findByDataset(list, "panKey", key) : null;
+      const fallback = list.querySelector(".pan-result-item");
+      lockPanFocus(target || fallback, "results");
+    }
+
+    function lockPanFocus(target, mode) {
+      if (!target) return;
+      const apply = () => {
+        if (!$("panSearchBlock") || $("panSearchBlock").style.display === "none") return;
+        if (mode && state.pan.focusMode && state.pan.focusMode !== mode) return;
+        const active = document.activeElement;
+        const inPan = active && ($("panTabs").contains(active) || $("panResultList").contains(active));
+        if (inPan && mode && state.pan.focusMode !== mode) return;
+        if (inPan && active === target) return;
+        if (!isVisibleFocusable(target)) return;
+        state.pan.focusMode = mode || state.pan.focusMode;
+        focusPanTarget(target);
+      };
+      requestAnimationFrame(apply);
+      setTimeout(apply, 80);
+      setTimeout(apply, 220);
+    }
+
+    function focusPanTarget(target) {
+      if (!target) return;
+      const list = $("panResultList");
+      const tabs = $("panTabs");
+      if (tabs && tabs.contains(target)) centerPanSearchBlock();
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        target.focus();
+      }
+      if (list && list.contains(target)) {
+        keepPanResultItemVisible(target, list);
+        ensurePanListViewport();
+        return;
+      }
+      if (tabs && tabs.contains(target)) return;
+      const rect = target.getBoundingClientRect();
+      const height = window.innerHeight || document.documentElement.clientHeight || 0;
+      if (height && (rect.top < 48 || rect.bottom > height - 48)) {
+        try { target.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) { target.scrollIntoView(false); }
+      }
+    }
+
+    function centerPanSearchBlock() {
+      const block = $("panSearchBlock");
+      const detail = $("detailSheet");
+      if (!block || !detail || !detail.classList.contains("active")) return;
+      try {
+        block.scrollIntoView({ block: "center", inline: "nearest" });
+      } catch (e) {
+        const blockRect = block.getBoundingClientRect();
+        const detailRect = detail.getBoundingClientRect();
+        const height = detail.clientHeight || window.innerHeight || 0;
+        if (!height) return;
+        detail.scrollTop += blockRect.top - detailRect.top - Math.round((height - Math.min(blockRect.height, height * .72)) / 2);
+      }
+    }
+
+    function ensurePanListViewport() {
+      const list = $("panResultList");
+      const detail = $("detailSheet");
+      if (!list || !detail || !detail.classList.contains("active")) return;
+      const listRect = list.getBoundingClientRect();
+      const detailRect = detail.getBoundingClientRect();
+      const height = detail.clientHeight || window.innerHeight || 0;
+      if (!height) return;
+      const topLimit = detailRect.top + Math.max(34, height * .1);
+      const bottomLimit = detailRect.top + height - Math.max(50, height * .1);
+      if (listRect.top < topLimit) detail.scrollTop += listRect.top - topLimit;
+      else if (listRect.bottom > bottomLimit && listRect.top > topLimit) detail.scrollTop += Math.min(listRect.top - topLimit, listRect.bottom - bottomLimit);
+    }
+
+    function keepPanResultItemVisible(target, list) {
+      const itemRect = target.getBoundingClientRect();
+      const listRect = list.getBoundingClientRect();
+      const topDelta = itemRect.top - listRect.top;
+      const bottomDelta = itemRect.bottom - listRect.bottom;
+      if (topDelta < 0) list.scrollTop += topDelta;
+      else if (bottomDelta > 0) list.scrollTop += bottomDelta;
+    }
+
+    function findByDataset(root, name, value) {
+      if (!root) return null;
+      return Array.from(root.querySelectorAll("[data-" + name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()) + "]"))
+        .find((el) => String(el.dataset[name] || "") === String(value || "")) || null;
     }
 
     function panResultNode(item) {
@@ -3827,8 +4219,56 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         <div class="pan-result-meta">${escapeHtml(panDiskName(item.diskType))}${item.password ? " · 提取码 " + escapeHtml(item.password) : ""}${item.source ? " · " + escapeHtml(item.source) : ""}</div>
         <div class="pan-result-url">${escapeHtml(item.normalizedUrl || item.url)}</div>
       `;
+      button.addEventListener("focus", () => { state.pan.focusKey = item.key; state.pan.focusMode = "results"; });
       button.addEventListener("click", () => playPanResult(item));
       return button;
+    }
+
+    async function rememberPanPlaybackReturn(item) {
+      const detail = $("detailSheet");
+      const list = $("panResultList");
+      const key = item && item.key || state.pan.focusKey || "";
+      state.pan.playbackReturn = {
+        key,
+        activeType: state.pan.activeType || "",
+        detailScrollTop: detail ? Math.round(detail.scrollTop || 0) : 0,
+        listScrollTop: list ? Math.round(list.scrollTop || 0) : 0,
+        at: Date.now()
+      };
+      state.pan.focusKey = key;
+      state.pan.focusMode = "results";
+      await saveUiSnapshotNow();
+    }
+
+    function restorePanPlaybackReturn() {
+      const saved = state.pan.playbackReturn;
+      if (!saved) return false;
+      if (Date.now() - Number(saved.at || 0) > PAN_PLAYBACK_RETURN_TTL_MS) {
+        state.pan.playbackReturn = null;
+        return false;
+      }
+      const detail = $("detailSheet");
+      const block = $("panSearchBlock");
+      if (!detail || !detail.classList.contains("active") || !block || !block.classList.contains("active")) return false;
+      if (saved.activeType) state.pan.activeType = saved.activeType;
+      state.pan.focusKey = saved.key || state.pan.focusKey || "";
+      state.pan.focusMode = "results";
+      renderPanResults();
+      const apply = () => {
+        const currentDetail = $("detailSheet");
+        const currentList = $("panResultList");
+        if (currentDetail) currentDetail.scrollTop = Number(saved.detailScrollTop || 0);
+        if (currentList) currentList.scrollTop = Number(saved.listScrollTop || 0);
+        const target = saved.key ? findByDataset(currentList, "panKey", saved.key) : null;
+        const fallback = currentList && currentList.querySelector(".pan-result-item");
+        if (target || fallback) lockPanFocus(target || fallback, "results");
+      };
+      requestAnimationFrame(apply);
+      setTimeout(apply, 80);
+      setTimeout(apply, 240);
+      state.pan.playbackReturn = null;
+      scheduleUiSnapshotSave();
+      return true;
     }
 
     function panHealthLabel(state) {
@@ -3896,7 +4336,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       });
       renderPanResults();
       try {
-        const response = await sdk().check(entries.map(([, item]) => ({ disk_type: item.diskType, url: item.url, password: item.password })));
+        const response = await sdk().pan.check(entries.map(([, item]) => ({ type: item.diskType, url: item.url, password: item.password })));
         const results = response && Array.isArray(response.results) ? response.results : [];
         entries.forEach(([originalKey, fallback], index) => {
           const result = results[index] || {};
@@ -3909,7 +4349,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
             expiresAt: result.expires_at || Date.now() + 300000
           };
           state.pan.health[originalKey] = health;
-          const resultKey = panHealthKey({ diskType: normalizePanDiskType(result.disk_type || fallback.diskType), url: result.url || fallback.url });
+          const resultKey = panHealthKey({ diskType: normalizePanDiskType(result.type || fallback.diskType), url: result.url || fallback.url });
           if (resultKey && resultKey !== originalKey) state.pan.health[resultKey] = health;
         });
         setPanStatus(`已检测 ${checkedPanCount()}/${checkablePanCount()}`);
@@ -3966,25 +4406,30 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }
     }
 
-    function buildPanPushUrl(item) {
+    function buildPanPlayPayload(item) {
       let url = String(item && (item.normalizedUrl || item.normalized_url || item.url) || "").trim();
-      if (!url) return "";
+      if (!url) return null;
       if (/^push:\/\//i.test(url)) url = url.replace(/^push:\/\//i, "");
-      url = addPanPassword(url, item && item.password, item);
-      if (/^push:\/\//i.test(url)) return url;
-      if (/^(https?:\/\/|magnet:|ed2k:\/\/)/i.test(url)) return "push://" + url;
-      return "push://https://" + url.replace(/^\/+/, "");
+      return {
+        type: normalizePanDiskType(item && item.diskType),
+        url,
+        password: item && item.password || "",
+        title: item && (item.title || state.pan.keyword || item.url) || ""
+      };
     }
 
     async function playPanResult(item) {
-      const playUrl = buildPanPushUrl(item);
-      if (!playUrl) return;
+      const payload = buildPanPlayPayload(item);
+      if (!payload) return;
+      await rememberPanPlaybackReturn(item);
       if (state.selected) {
         rememberWatchIntent(state.selected, "search");
         startWatchTracking(state.selected);
       }
       try {
-        await sdk().play(playUrl, item.title || state.pan.keyword || item.url);
+        const pan = sdk().pan || {};
+        if (!pan.play) throw new Error("当前 App 不支持 pan.play");
+        await pan.play(payload);
         toast("已交给原生播放");
       } catch (e) {
         toast("播放失败：" + (e.message || "unknown"));
@@ -4003,6 +4448,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       document.body.classList.remove("episode-active");
       $("detailSheet").classList.remove("active");
       $("detailSheet").setAttribute("aria-hidden", "true");
+      state.detailReturn = null;
       resetPanSearch();
       scheduleUiSnapshotSave();
       if (!fromPopState && location.hash === "#detail") history.back();
@@ -4015,7 +4461,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("nsecInput").value = state.identity ? state.identity.nsec : "";
       if (!opts.skipHistory && location.hash !== "#sync") history.pushState({ sheet: "sync" }, "", "#sync");
       scheduleUiSnapshotSave();
-      if (!opts.restore) setTimeout(() => $("nsecInput").focus(), 40);
+      if (!opts.restore) setTimeout(() => focusRemoteTarget($("saveNsecBtn")), 40);
     }
 
     function closeSync(fromPopState) {
@@ -4029,6 +4475,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const opts = options || {};
       const episode = opts.episode || null;
       if (!url && !episode) return;
+      if (!opts.restore) rememberFocusReturn();
       const image = $("viewerImage");
       const episodeBox = $("episodeViewer");
       if (episode) {
@@ -4058,7 +4505,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("imageViewer").setAttribute("aria-hidden", "false");
       if (!opts.skipHistory) history.pushState({ sheet: "image" }, "", "#image");
       scheduleUiSnapshotSave();
-      if (!opts.restore) setTimeout(() => $("closeImageBtn").focus(), 40);
+      if (!opts.restore) setTimeout(() => focusRemoteTarget(episode ? $("imageContent") : $("closeImageBtn")), 40);
     }
 
     function closeImage(fromPopState) {
@@ -4072,12 +4519,47 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("episodeViewer").replaceChildren();
       if (!fromPopState && location.hash === "#image") history.back();
       scheduleUiSnapshotSave();
+      restoreFocusReturn($("detailSheet") && $("detailSheet").classList.contains("active") ? $("closeDetailBtn") : null);
     }
 
     async function nativeSearch(title) {
       if (!title) return;
+      rememberDetailReturn($("detailSearchBtn"));
       await sdk().search(title, { direct: true });
       toast("已发起原生搜索");
+    }
+
+    function rememberDetailReturn(target) {
+      const detail = $("detailSheet");
+      if (!detail || !detail.classList.contains("active")) return;
+      state.detailReturn = {
+        scrollTop: Math.round(detail.scrollTop || 0),
+        targetId: target && target.id || document.activeElement && document.activeElement.id || "detailSearchBtn",
+        at: Date.now()
+      };
+      saveUiSnapshotNow();
+    }
+
+    function restoreDetailReturn() {
+      const saved = state.detailReturn;
+      if (!saved) return false;
+      if (Date.now() - Number(saved.at || 0) > 10 * 60 * 1000) {
+        state.detailReturn = null;
+        return false;
+      }
+      const detail = $("detailSheet");
+      if (!detail || !detail.classList.contains("active")) return false;
+      const apply = () => {
+        if ($("detailSheet")) $("detailSheet").scrollTop = Number(saved.scrollTop || 0);
+        const target = saved.targetId && $(saved.targetId) || $("detailSearchBtn") || $("closeDetailBtn");
+        if (target) focusRemoteTarget(target);
+      };
+      requestAnimationFrame(apply);
+      setTimeout(apply, 80);
+      setTimeout(apply, 220);
+      state.detailReturn = null;
+      scheduleUiSnapshotSave();
+      return true;
     }
 
     function rememberWatchIntent(item, action) {
@@ -4929,10 +5411,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         $("nsecInput").value = nsec;
         toast("已生成新身份");
       });
-      $("connectionToggle").addEventListener("click", () => {
-        const open = $("connectionDock").classList.toggle("open");
-        $("connectionBody").classList.toggle("open", open);
-        fitConnectionPanel();
+      $("connectionToggle").addEventListener("click", toggleConnectionPanel);
+      $("connectionToggle").addEventListener("keydown", (event) => {
+        const key = normalizeRemoteKey(event);
+        if (key !== "Enter" && event.key !== " ") return;
+        toggleConnectionPanel(event);
       });
       $("deleteDataBtn").addEventListener("click", () => {
         closeConnectionPanel();
@@ -4953,13 +5436,42 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (event.target === $("imageViewer")) closeImage(false);
       });
       $("searchInput").addEventListener("input", scheduleSearchSuggest);
-      $("searchInput").addEventListener("focus", scheduleSearchSuggest);
+      $("searchInput").addEventListener("pointerdown", enableSearchEditing);
+      $("searchInput").addEventListener("mousedown", enableSearchEditing);
+      $("searchInput").addEventListener("touchstart", enableSearchEditing, { passive: true });
+      $("searchInput").addEventListener("focus", () => {
+        if ($("searchInput").readOnly) hideSearchSuggest();
+      });
+      $("searchInput").addEventListener("blur", disableSearchEditing);
+      document.querySelectorAll("#connectionBody input, #connectionBody textarea").forEach((el) => {
+        el.addEventListener("pointerdown", () => enablePanelTextEditing(el));
+        el.addEventListener("mousedown", () => enablePanelTextEditing(el));
+        el.addEventListener("touchstart", () => enablePanelTextEditing(el), { passive: true });
+        el.addEventListener("blur", () => disablePanelTextEditing(el));
+      });
       $("searchInput").addEventListener("keydown", (event) => {
-        if (event.key !== "ArrowDown") return;
-        const first = $("suggestPanel") && $("suggestPanel").querySelector(".suggest-item");
-        if (!first) return;
-        event.preventDefault();
-        first.focus();
+        if (document.activeElement !== $("searchInput")) return;
+        const key = normalizeRemoteKey(event);
+        if (key === "ArrowDown" && isSearchSuggestOpen()) {
+          const first = firstSearchSuggestItem();
+          event.preventDefault();
+          event.stopPropagation();
+          if (first) focusSearchSuggestTarget(first);
+          return;
+        }
+        if (key === "ArrowDown" && $("searchInput").readOnly) {
+          event.preventDefault();
+          event.stopPropagation();
+          focusInitialHomeNow();
+          return;
+        }
+        if (key === "Enter" && $("searchInput").readOnly) {
+          event.preventDefault();
+          event.stopPropagation();
+          enableSearchEditing();
+          $("searchInput").focus();
+          return;
+        }
       });
       document.addEventListener("click", (event) => {
         if (!$("searchForm").contains(event.target)) hideSearchSuggest();
@@ -4998,21 +5510,55 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     function installRemoteKeys() {
       document.addEventListener("keydown", (event) => {
-        const key = event.key;
+        const key = normalizeRemoteKey(event);
+        if (!key) return;
         const el = document.activeElement;
-        const editing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-        if (key === "Enter") {
-          if (el && (el.tagName === "BUTTON" || el.classList.contains("focusable"))) el.click();
+        const editing = isTextEditingElement(el);
+        if (key !== "Enter" && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key) && ensureRemoteActiveFocus()) {
+          event.preventDefault();
           return;
         }
+        if (key === "Enter") {
+          if (handleConnectionPanelEnterKey(event)) return;
+          if (el === $("searchInput") && el.readOnly) {
+            event.preventDefault();
+            enableSearchEditing();
+            el.focus();
+            return;
+          }
+          if (activateFocusedElement(el, event)) return;
+          return;
+        }
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
+          if (handleSearchSuggestDirectionalKey(key, event)) return;
+          if (handleConnectionPanelDirectionalKey(key, event)) return;
+        }
+        if ((key === "Escape" || key === "Backspace") && handleConnectionPanelBackKey(event)) return;
         if (editing) {
+          if (el === $("searchInput") && el.readOnly && key === "ArrowDown") {
+            event.preventDefault();
+            el.blur();
+            focusInitialHomeNow();
+            return;
+          }
           if (key === "Escape") {
             event.preventDefault();
             el.blur();
           }
+          if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
+            const target = nearestFocusable(key, el);
+            if (!target) return;
+            event.preventDefault();
+            el.blur();
+            focusRemoteTarget(target);
+          }
           return;
         }
         if (key === "Escape" || key === "Backspace") {
+          if (handleSearchSuggestBackKey(event)) return;
+          if (handleConnectionPanelBackKey(event)) return;
+          if (handlePanBackKey(event)) return;
+          if (handleSearchBackKey(event)) return;
           event.preventDefault();
           if ($("imageViewer").classList.contains("active")) return history.back();
           if ($("detailSheet").classList.contains("active")) return history.back();
@@ -5021,20 +5567,476 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           return;
         }
         if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
+        if (handleScrollableOverlayKey(key, event)) return;
+        if (handlePanDirectionalKey(key, event)) return;
         const target = nearestFocusable(key);
         if (target) {
           event.preventDefault();
-          target.focus();
-          target.scrollIntoView({ block: "nearest", inline: "nearest" });
+          if (!isPanFocusTarget(target)) state.pan.focusMode = "";
+          focusRemoteTarget(target);
         }
+      });
+      document.addEventListener("keydown", (event) => {
+        const key = normalizeRemoteKey(event);
+        if (key !== "Escape" && key !== "Backspace") return;
+        if (handleSearchSuggestBackKey(event)) return;
+        if (handleConnectionPanelBackKey(event)) return;
+        if (handlePanBackKey(event)) return;
+        handleSearchBackKey(event);
+      }, true);
+    }
+
+    function activateFocusedElement(el, event) {
+      if (!isVisibleFocusable(el)) return false;
+      if (isTextEditingElement(el)) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      return true;
+    }
+
+    function isTextEditingElement(el) {
+      if (!el) return false;
+      if (el.tagName === "TEXTAREA" || el.isContentEditable) return true;
+      if (el.tagName !== "INPUT") return false;
+      const type = String(el.getAttribute("type") || "text").toLowerCase();
+      return !["button", "checkbox", "radio", "submit", "reset", "range", "color"].includes(type);
+    }
+
+    function isPanelTextField(el) {
+      return !!(el && $("connectionBody") && $("connectionBody").contains(el) && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" && !["button", "checkbox", "radio", "submit", "reset", "range", "color"].includes(String(el.getAttribute("type") || "text").toLowerCase())));
+    }
+
+    function enablePanelTextEditing(el) {
+      if (!isPanelTextField(el)) return false;
+      el.readOnly = false;
+      el.classList.add("panel-editing");
+      try {
+        el.focus({ preventScroll: true });
+      } catch (e) {
+        el.focus();
+      }
+      return true;
+    }
+
+    function disablePanelTextEditing(el) {
+      if (!isPanelTextField(el)) return false;
+      el.readOnly = true;
+      el.classList.remove("panel-editing");
+      return true;
+    }
+
+    function disableConnectionTextEditing() {
+      const body = $("connectionBody");
+      if (!body) return;
+      body.querySelectorAll("input,textarea").forEach((el) => {
+        if (isPanelTextField(el)) disablePanelTextEditing(el);
       });
     }
 
-    function nearestFocusable(key) {
-      const current = document.activeElement && document.activeElement.matches(".focusable,button,input,textarea") ? document.activeElement : null;
-      const list = Array.from(document.querySelectorAll(".focusable,button,input,textarea")).filter((el) => el.offsetParent !== null && !el.disabled);
+    function handleConnectionPanelEnterKey(event) {
+      if (!isConnectionPanelOpen()) return false;
+      const active = document.activeElement;
+      if (!active || !$("connectionDock") || !$("connectionDock").contains(active)) return false;
+      if (active === $("connectionToggle")) return false;
+      if (active.matches && active.matches("input[type='checkbox']")) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+        active.click();
+        markPanConfigDirty();
+        return true;
+      }
+      if (isPanelTextField(active)) {
+        if (active.readOnly) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          enablePanelTextEditing(active);
+          return true;
+        }
+        return false;
+      }
+      return false;
+    }
+
+    function handleScrollableOverlayKey(key, event) {
+      if (!$("imageViewer") || !$("imageViewer").classList.contains("active")) return false;
+      const content = $("imageContent");
+      if (!content || key !== "ArrowUp" && key !== "ArrowDown") return false;
+      const max = content.scrollHeight - content.clientHeight;
+      if (max <= 4) return false;
+      const delta = Math.max(80, Math.round(content.clientHeight * 0.72)) * (key === "ArrowDown" ? 1 : -1);
+      if (key === "ArrowUp" && content.scrollTop <= 0) {
+        event.preventDefault();
+        focusRemoteTarget($("closeImageBtn"));
+        return true;
+      }
+      if (key === "ArrowDown" && content.scrollTop >= max - 2) return false;
+      event.preventDefault();
+      content.scrollTop = Math.max(0, Math.min(max, content.scrollTop + delta));
+      if (!content.contains(document.activeElement)) focusRemoteTarget(content);
+      return true;
+    }
+
+    function handlePanBackKey(event) {
+      const tabs = $("panTabs");
+      const list = $("panResultList");
+      const active = document.activeElement;
+      const inResults = !!(tabs && list && active && list.contains(active));
+      if (!tabs || !list || !inResults && state.pan.focusMode !== "results") return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      focusPanTabFromResults();
+      scheduleUiSnapshotSave();
+      return true;
+    }
+
+    function handleSearchBackKey(event) {
+      if (!state.searchItems.length || !$("searchSection") || $("searchSection").style.display === "none") return false;
+      const active = document.activeElement;
+      const inSearch = active && ($("searchSection").contains(active) || $("searchForm").contains(active));
+      if (!inSearch) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      clearSearchResults();
+      requestAnimationFrame(() => focusInitialHomeNow());
+      return true;
+    }
+
+    function handleSearchSuggestBackKey(event) {
+      if (!isSearchSuggestOpen()) return false;
+      const active = document.activeElement;
+      const input = $("searchInput");
+      const panel = $("suggestPanel");
+      const form = $("searchForm");
+      const inSuggest = active && (active === input || panel && panel.contains(active) || form && form.contains(active));
+      if (!inSuggest) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      hideSearchSuggest();
+      disableSearchEditing();
+      if (input) requestAnimationFrame(() => focusRemoteTarget(input));
+      return true;
+    }
+
+    function handleSearchSuggestDirectionalKey(key, event) {
+      if (!isSearchSuggestOpen() || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return false;
+      const input = $("searchInput");
+      const panel = $("suggestPanel");
+      const form = $("searchForm");
+      const active = document.activeElement;
+      if (!active || active !== input && !(panel && panel.contains(active)) && !(form && form.contains(active))) return false;
+      const items = searchSuggestItems();
+      let target = null;
+      if (active === input || form && form.contains(active) && !(panel && panel.contains(active))) {
+        if (key === "ArrowDown") target = items[0] || input;
+        else target = input;
+      } else if (panel && panel.contains(active)) {
+        const index = items.indexOf(active);
+        if (key === "ArrowDown") target = items[Math.min(items.length - 1, index + 1)] || active;
+        else if (key === "ArrowUp") target = index <= 0 ? input : items[index - 1];
+        else target = active;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (target) focusSearchSuggestTarget(target);
+      return true;
+    }
+
+    function isSearchSuggestOpen() {
+      const panel = $("suggestPanel");
+      return !!(panel && panel.classList.contains("open") && panel.querySelector(".suggest-item"));
+    }
+
+    function searchSuggestItems() {
+      const panel = $("suggestPanel");
+      return panel ? Array.from(panel.querySelectorAll(".suggest-item")).filter(isVisibleFocusable) : [];
+    }
+
+    function firstSearchSuggestItem() {
+      return searchSuggestItems()[0] || null;
+    }
+
+    function focusSearchSuggestTarget(target) {
+      if (!target) return;
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        target.focus();
+      }
+      keepSearchSuggestItemVisible(target);
+    }
+
+    function keepSearchSuggestItemVisible(target) {
+      const panel = $("suggestPanel");
+      if (!panel || !target || !panel.contains(target)) return;
+      const itemRect = target.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const topDelta = itemRect.top - panelRect.top;
+      const bottomDelta = itemRect.bottom - panelRect.bottom;
+      if (topDelta < 0) panel.scrollTop += topDelta;
+      else if (bottomDelta > 0) panel.scrollTop += bottomDelta;
+    }
+
+    function handleConnectionPanelBackKey(event) {
+      if (!isConnectionPanelOpen()) return false;
+      const active = document.activeElement;
+      if (isPanelTextField(active) && !active.readOnly) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+        disablePanelTextEditing(active);
+        focusRemoteTarget(active);
+        return true;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      closeConnectionPanel();
+      const toggle = $("connectionToggle");
+      if (toggle) requestAnimationFrame(() => focusRemoteTarget(toggle));
+      return true;
+    }
+
+    function handleConnectionPanelDirectionalKey(key, event) {
+      if (!isConnectionPanelOpen() || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return false;
+      const dock = $("connectionDock");
+      const body = $("connectionBody");
+      const toggle = $("connectionToggle");
+      if (!dock || !body) return false;
+      const active = document.activeElement;
+      const bodyItems = connectionPanelItems();
+      const inDock = active && dock.contains(active);
+      let target = null;
+      if (!inDock || active === toggle) {
+        target = key === "ArrowDown" ? bodyItems[0] || toggle : toggle || bodyItems[0];
+      } else if (body.contains(active)) {
+        target = nearestFocusableFromList(key, active, bodyItems);
+        if (!target && key === "ArrowUp") target = toggle || bodyItems[0];
+        if (!target) target = active;
+      } else {
+        target = bodyItems[0] || toggle;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (target) focusRemoteTarget(target);
+      return true;
+    }
+
+    function restoreConnectionPanelFocus() {
+      if (!isConnectionPanelOpen()) return false;
+      const dock = $("connectionDock");
+      const active = document.activeElement;
+      if (active && dock && dock.contains(active) && isVisibleFocusable(active)) return false;
+      const target = $("connectionToggle") || connectionPanelItems()[0];
+      if (!target) return false;
+      focusRemoteTarget(target);
+      return true;
+    }
+
+    function isConnectionPanelOpen() {
+      const dock = $("connectionDock");
+      const body = $("connectionBody");
+      return !!(dock && body && dock.classList.contains("open") && body.classList.contains("open"));
+    }
+
+    function connectionPanelItems() {
+      const body = $("connectionBody");
+      return body ? Array.from(body.querySelectorAll(".focusable,button,input,textarea")).filter(isVisibleFocusable) : [];
+    }
+
+    function nearestFocusableFromList(key, current, list) {
+      const items = (list || []).filter((item) => item && item !== current && isVisibleFocusable(item));
+      if (!current || !items.length) return null;
+      const from = center(current.getBoundingClientRect());
+      const vertical = key === "ArrowUp" || key === "ArrowDown";
+      const forward = key === "ArrowRight" || key === "ArrowDown";
+      let best = null;
+      let bestScore = Infinity;
+      for (const el of items) {
+        const to = center(el.getBoundingClientRect());
+        const main = vertical ? to.y - from.y : to.x - from.x;
+        const cross = vertical ? Math.abs(to.x - from.x) : Math.abs(to.y - from.y);
+        if (forward ? main <= 4 : main >= -4) continue;
+        const score = Math.abs(main) * 1.25 + cross * 1.9;
+        if (score < bestScore) {
+          best = el;
+          bestScore = score;
+        }
+      }
+      return best;
+    }
+
+    function focusPanTabFromResults() {
+      const tabs = $("panTabs");
+      if (!tabs) return false;
+      const target = findByDataset(tabs, "panType", state.pan.activeType) || tabs.querySelector(".chip.active") || tabs.querySelector(".chip");
+      if (!target) return false;
+      state.pan.focusMode = "tabs";
+      focusPanTarget(target);
+      return true;
+    }
+
+    function handlePanDirectionalKey(key, event) {
+      const tabs = $("panTabs");
+      const list = $("panResultList");
+      const active = document.activeElement;
+      if (!tabs || !list || !active) return false;
+      const inTabs = tabs.contains(active);
+      const inResults = list.contains(active);
+      if (!inTabs && !inResults) {
+        if (active === $("panSearchBtn") && key === "ArrowDown" && $("panSearchBlock") && $("panSearchBlock").classList.contains("active")) {
+          const target = tabs.querySelector(".chip.active") || tabs.querySelector(".chip") || list.querySelector(".pan-result-item");
+          if (target) {
+            event.preventDefault();
+            state.pan.focusMode = tabs.contains(target) ? "tabs" : "results";
+            focusPanTarget(target);
+            return true;
+          }
+        }
+        if ($("panSearchBlock") && $("panSearchBlock").classList.contains("active") && $("detailSheet") && $("detailSheet").contains(active)) {
+          const panRect = $("panSearchBlock").getBoundingClientRect();
+          const activeRect = active.getBoundingClientRect ? active.getBoundingClientRect() : null;
+          if (key === "ArrowDown" && activeRect && activeRect.bottom <= panRect.bottom + 8) {
+            event.preventDefault();
+            centerPanSearchBlock();
+            return true;
+          }
+        }
+        state.pan.focusMode = "";
+        return false;
+      }
+      let target = null;
+      if (inTabs && key === "ArrowDown") target = panResultByColumn(active) || list.querySelector(".pan-result-item");
+      else if (inResults && key === "ArrowUp" && isFirstVisiblePanResult(active)) target = findByDataset(tabs, "panType", state.pan.activeType) || tabs.querySelector(".chip.active") || tabs.querySelector(".chip");
+      else if (inTabs && (key === "ArrowLeft" || key === "ArrowRight")) target = siblingFocusable(tabs, active, key === "ArrowRight" ? 1 : -1);
+      else if (inResults && (key === "ArrowUp" || key === "ArrowDown")) target = siblingFocusable(list, active, key === "ArrowDown" ? 1 : -1);
+      if (!target) {
+        if (inTabs && key === "ArrowDown" || inResults && key === "ArrowDown") {
+          event.preventDefault();
+          centerPanSearchBlock();
+          return true;
+        }
+        return false;
+      }
+      event.preventDefault();
+      if (list.contains(target)) {
+        state.pan.focusKey = target.dataset.panKey || state.pan.focusKey;
+        state.pan.focusMode = "results";
+        focusPanTarget(target);
+      } else {
+        state.pan.focusMode = "tabs";
+        focusPanTarget(target);
+      }
+      return true;
+    }
+
+    function isPanFocusTarget(target) {
+      return !!(target && (($("panTabs") && $("panTabs").contains(target)) || ($("panResultList") && $("panResultList").contains(target))));
+    }
+
+    function panResultByColumn(tab) {
+      const list = $("panResultList");
+      const items = list ? Array.from(list.querySelectorAll(".pan-result-item")).filter(isVisibleFocusable) : [];
+      if (!items.length) return null;
+      const from = center(tab.getBoundingClientRect());
+      let best = null;
+      let bestScore = Infinity;
+      for (const item of items.slice(0, 5)) {
+        const rect = item.getBoundingClientRect();
+        const to = center(rect);
+        if (to.y < from.y - 4) continue;
+        const score = Math.abs(to.x - from.x) * 1.15 + Math.max(0, to.y - from.y) * .35;
+        if (score < bestScore) {
+          best = item;
+          bestScore = score;
+        }
+      }
+      return best || items[0];
+    }
+
+    function isFirstVisiblePanResult(el) {
+      const list = $("panResultList");
+      if (!list || !list.contains(el)) return false;
+      return Array.from(list.querySelectorAll(".pan-result-item")).filter(isVisibleFocusable)[0] === el;
+    }
+
+    function siblingFocusable(root, current, delta) {
+      if (!root || !current) return null;
+      const items = Array.from(root.querySelectorAll(".focusable,button,input,textarea")).filter(isVisibleFocusable);
+      const index = items.indexOf(current);
+      if (index < 0) return null;
+      return items[index + delta] || null;
+    }
+
+    function normalizeRemoteKey(event) {
+      if (["Enter", "Escape", "Backspace", "BrowserBack", "GoBack", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return event.key === "BrowserBack" || event.key === "GoBack" ? "Escape" : event.key;
+      const map = { 13: "Enter", 23: "Enter", 66: "Enter", 4: "Escape", 8: "Backspace", 27: "Escape", 10009: "Escape", 461: "Escape", 19: "ArrowUp", 20: "ArrowDown", 21: "ArrowLeft", 22: "ArrowRight" };
+      return map[event.keyCode || event.which] || "";
+    }
+
+    function focusRemoteTarget(target) {
+      if (!target) return;
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        target.focus();
+      }
+      keepFocusInView(target);
+    }
+
+    function keepFocusInView(target) {
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const height = window.innerHeight || document.documentElement.clientHeight || 0;
+      const width = window.innerWidth || document.documentElement.clientWidth || 0;
+      if (!height || !width) return;
+      if (rect.top >= 54 && rect.bottom <= height - 54 && rect.left >= 8 && rect.right <= width - 8) return;
+      try {
+        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      } catch (e) {
+        target.scrollIntoView(false);
+      }
+    }
+
+    function isVisibleFocusable(el) {
+      return !!(el && el.matches && el.matches(".focusable,button,input,textarea") && el.offsetParent !== null && !el.disabled && el.getAttribute("tabindex") !== "-1" && !el.closest('[aria-hidden="true"]'));
+    }
+
+    function rememberFocusReturn() {
+      const active = document.activeElement;
+      if (isVisibleFocusable(active)) state.focusReturnEl = active;
+    }
+
+    function restoreFocusReturn(fallback) {
+      const target = isVisibleFocusable(state.focusReturnEl) ? state.focusReturnEl : fallback || firstContentFocus();
+      state.focusReturnEl = null;
+      if (target) requestAnimationFrame(() => focusRemoteTarget(target));
+    }
+
+    function visibleFocusable() {
+      const root = focusScopeRoot();
+      return Array.from(root.querySelectorAll(".focusable,button,input,textarea"))
+        .filter(isVisibleFocusable);
+    }
+
+    function focusScopeRoot() {
+      if ($("imageViewer") && $("imageViewer").classList.contains("active")) return $("imageViewer");
+      if ($("syncSheet") && $("syncSheet").classList.contains("active")) return $("syncSheet");
+      if ($("detailSheet") && $("detailSheet").classList.contains("active")) return $("detailSheet");
+      return document;
+    }
+
+    function nearestFocusable(key, fromEl) {
+      const active = document.activeElement;
+      const current = fromEl || (isVisibleFocusable(active) ? active : null);
+      const list = visibleFocusable();
       if (!list.length) return null;
-      if (!current) return list[0];
+      if (!current) return firstContentFocus() || list[0];
       const from = center(current.getBoundingClientRect());
       const vertical = key === "ArrowUp" || key === "ArrowDown";
       const forward = key === "ArrowRight" || key === "ArrowDown";
@@ -5053,6 +6055,16 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         }
       }
       return best;
+    }
+
+    function firstContentFocus() {
+      const root = focusScopeRoot();
+      const selectors = ["#chips .chip.active", "#chips .chip", "#recommendRail .card", "#listStack .card", "#searchRail .card", ".focusable:not(#searchInput)"];
+      for (const selector of selectors) {
+        const target = Array.from(root.querySelectorAll(selector)).find(isVisibleFocusable);
+        if (target) return target;
+      }
+      return null;
     }
 
     function center(rect) {
@@ -5094,13 +6106,17 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         selected: state.selected ? normalizeSnapshot(state.selected) : null,
         detailScrollTop: detail ? Math.round(detail.scrollTop || 0) : 0,
         imageUrl: $("viewerImage") && $("viewerImage").style.display !== "none" ? $("viewerImage").getAttribute("src") || "" : "",
+        detailReturn: state.detailReturn || null,
         pan: {
           visible: !!($("panSearchBlock") && $("panSearchBlock").classList.contains("active")),
           keyword: state.pan.keyword || "",
           activeType: state.pan.activeType || "",
           results: compactPanResults(state.pan.results),
           health: state.pan.health || {},
-          listScrollTop: panList ? Math.round(panList.scrollTop || 0) : 0
+          listScrollTop: panList ? Math.round(panList.scrollTop || 0) : 0,
+          focusKey: state.pan.focusKey || "",
+          focusMode: state.pan.focusMode || "",
+          playbackReturn: state.pan.playbackReturn || null
         }
       };
     }
@@ -5127,6 +6143,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }
     }
 
+    function shouldRestoreUiSnapshot() {
+      try {
+        return new URLSearchParams(location.search || "").get("_fm_restore") === "1";
+      } catch (e) {
+        return /(?:^|[?&])_fm_restore=1(?:&|$)/.test(location.search || "");
+      }
+    }
+
     function restorePanSnapshot(pan) {
       if (!pan || !pan.keyword && !(pan.results || []).length) return;
       state.pan.loading = false;
@@ -5134,6 +6158,9 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       state.pan.activeType = pan.activeType || "";
       state.pan.results = Array.isArray(pan.results) ? pan.results.map((item, index) => Object.assign({ index }, item)) : [];
       state.pan.health = pan.health && typeof pan.health === "object" ? pan.health : {};
+      state.pan.focusKey = pan.focusKey || "";
+      state.pan.focusMode = pan.focusMode || "";
+      state.pan.playbackReturn = pan.playbackReturn || null;
       state.pan.pending = {};
       state.pan.queued.clear();
       state.pan.inFlight.clear();
@@ -5144,6 +6171,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         $("panSearchBlock").style.display = "";
       }
       renderPanResults();
+      updatePostPanFocusState();
       requestAnimationFrame(() => {
         if ($("panResultList")) $("panResultList").scrollTop = Number(pan.listScrollTop || 0);
       });
@@ -5158,6 +6186,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     async function restoreUiSnapshot(snapshot) {
       if (!snapshot) return false;
+      state.detailReturn = snapshot.detailReturn || null;
       restoreSearchSnapshot(snapshot.search);
       if (snapshot.activeList) state.activeList = snapshot.activeList;
       renderAll();
@@ -5194,6 +6223,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if ($("panSearchBlock") && $("panSearchBlock").classList.contains("active")) renderPanResults();
       renderAll();
       normalizeRails();
+      if (!restorePanPlaybackReturn()) restoreDetailReturn();
       updateBackTopButton();
       scheduleHistorySettlement();
       sampleWatchStatus();
@@ -5236,6 +6266,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     window.addEventListener("popstate", () => {
+      if (location.hash !== "#detail" && $("detailSheet").classList.contains("active") && state.pan.focusMode === "results") {
+        history.pushState({ sheet: "detail" }, "", "#detail");
+        focusPanTabFromResults();
+        return;
+      }
       if (location.hash !== "#image" && $("imageViewer").classList.contains("active")) closeImage(true);
       if (location.hash !== "#detail" && $("detailSheet").classList.contains("active")) closeDetail(true);
       if (location.hash !== "#sync" && $("syncSheet").classList.contains("active")) closeSync(true);
@@ -5299,15 +6334,18 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       hotLoadIndex().catch(() => {});
       await loadInfo();
       await loadCatalog();
-      const restored = await restoreUiSnapshot(await readUiSnapshot());
+      const canRestoreUi = shouldRestoreUiSnapshot();
+      const restored = canRestoreUi ? await restoreUiSnapshot(await readUiSnapshot()) : false;
       await ensureIdentity();
       await loadEvents();
       scheduleHistorySettlement();
       setTimeout(subscribeNostr, 600);
       renderMetrics();
       if (restored) handleWebHomeResume();
+      if (!canRestoreUi) scheduleUiSnapshotSave();
       updateBackTopButton();
-      setTimeout(() => document.querySelector(".focusable") && document.querySelector(".focusable").focus(), 80);
+      setTimeout(uiSnapshotRoute() === "home" ? focusInitialHomeNow : ensureRemoteInitialFocus, 80);
+      if (uiSnapshotRoute() === "home") setTimeout(focusInitialHomeNow, 260);
     }
 
     boot();

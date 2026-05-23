@@ -80,6 +80,7 @@ import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.bassaer.library.MDColor;
 
 import org.greenrobot.eventbus.Subscribe;
@@ -387,7 +388,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void checkId() {
-        if (getId().startsWith("push://")) getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", getId().substring(7));
+        if (getId().startsWith("push://")) {
+            String target = getId().substring(7);
+            SpiderDebug.log("push", "leanback checkId convert raw=%s target=%s", getId(), target);
+            getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", target);
+        }
         if (getId().isEmpty() || getId().startsWith("msearch:")) setEmpty(false);
         else getDetail();
     }

@@ -27,6 +27,7 @@ import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
+import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.net.HttpHeaders;
 
 import java.util.HashMap;
@@ -51,7 +52,10 @@ public class PlayerManager implements ParseCallback {
     private int retry;
 
     public PlayerManager(Callback callback) {
-        this.runnable = () -> callback.onError(ResUtil.getString(R.string.error_play_timeout));
+        this.runnable = () -> {
+            SpiderDebug.log("playback", "timeout state=%s key=%s url=%s", stateName(player == null ? Player.STATE_IDLE : player.getPlaybackState()), getKey(), getUrl());
+            callback.onError(ResUtil.getString(R.string.error_play_timeout));
+        };
         this.engine = new ExoPlayerEngine(PlayerEngine.HARD, listener);
         this.player = engine.getPlayer();
         this.callback = callback;
@@ -313,8 +317,10 @@ public class PlayerManager implements ParseCallback {
     private void setMediaItem(long timeout) {
         if (spec == null || spec.getUrl() == null) return;
         setDanmakus(spec.getDanmakus());
-        engine.start(spec.checkUa());
+        SpiderDebug.log("playback", "start timeout=%s key=%s format=%s url=%s headers=%s", timeout, spec.getKey(), spec.getFormat(), spec.getUrl(), spec.getHeaders());
+        App.removeCallbacks(runnable);
         App.post(runnable, timeout);
+        engine.start(spec.checkUa());
         callback.onPrepare();
         initTrack = false;
     }
@@ -366,6 +372,7 @@ public class PlayerManager implements ParseCallback {
 
         @Override
         public void onPlaybackStateChanged(int state) {
+            SpiderDebug.log("playback", "state=%s key=%s url=%s position=%s duration=%s", stateName(state), getKey(), getUrl(), player == null ? 0 : player.getCurrentPosition(), player == null ? 0 : player.getDuration());
             if (state != Player.STATE_IDLE) App.removeCallbacks(runnable);
         }
 
@@ -385,6 +392,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             PlayerEngine.ErrorAction action = engine.handleError(e);
+            SpiderDebug.log("playback", "error code=%s action=%s retry=%s message=%s cause=%s key=%s url=%s", e.errorCode, action, retry, engine.getErrorMessage(e), cause(e), getKey(), getUrl());
             if (action == PlayerEngine.ErrorAction.RECOVERED) return;
             if (++retry > 2) {
                 callback.onError(engine.getErrorMessage(e));
@@ -400,4 +408,20 @@ public class PlayerManager implements ParseCallback {
             }
         }
     };
+
+    private static String stateName(int state) {
+        return switch (state) {
+            case Player.STATE_BUFFERING -> "BUFFERING";
+            case Player.STATE_READY -> "READY";
+            case Player.STATE_ENDED -> "ENDED";
+            case Player.STATE_IDLE -> "IDLE";
+            default -> String.valueOf(state);
+        };
+    }
+
+    private static String cause(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null) cause = cause.getCause();
+        return cause.getClass().getSimpleName() + ": " + cause.getMessage();
+    }
 }

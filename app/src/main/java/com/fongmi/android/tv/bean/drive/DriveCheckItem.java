@@ -8,7 +8,7 @@ import java.util.Locale;
 
 public class DriveCheckItem {
 
-    @SerializedName("disk_type")
+    @SerializedName("type")
     private String diskType;
     @SerializedName("url")
     private String url;

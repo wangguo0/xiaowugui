@@ -20,6 +20,7 @@ import com.fongmi.android.tv.ui.activity.LiveActivity;
 import com.fongmi.android.tv.ui.activity.SearchActivity;
 import com.fongmi.android.tv.ui.activity.VideoActivity;
 import com.fongmi.android.tv.utils.Task;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Prefers;
 import com.google.gson.JsonObject;
@@ -79,6 +80,7 @@ public class HomeWebBridge {
 
     private void handle(String requestId, String method, JsonObject payload) {
         try {
+            SpiderDebug.log("webhome", "invoke method=%s payload=%s", method, payload);
             String result = switch (method) {
                 case "net.request" -> WebCall.request(payload);
                 case "net.resourceUrl" -> quote(resourceUrl(Json.safeString(payload, "url"), payload.toString()));
@@ -90,7 +92,8 @@ public class HomeWebBridge {
                 case "app.openLive" -> openLive();
                 case "app.openKeep" -> openKeep();
                 case "app.history" -> history();
-                case "app.checkLinks", "drive.check" -> checkLinks(payload);
+                case "pan.check" -> checkLinks(payload);
+                case "pan.play" -> playPan(payload);
                 case "cache.get" -> quote(Prefers.getString(cacheKey(payload)));
                 case "cache.set" -> cacheSet(payload);
                 case "cache.del" -> cacheDel(payload);
@@ -113,6 +116,7 @@ public class HomeWebBridge {
         if (payload.has("headers") || "include".equals(Json.safeString(payload, "credentials"))) url = resourceUrl(url, payload.toString());
         final String playUrl = url;
         final String playTitle = TextUtils.isEmpty(title) ? playUrl : title;
+        SpiderDebug.log("webhome", "player.playUrl title=%s url=%s", playTitle, playUrl);
         App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle));
         return "{}";
     }
@@ -177,7 +181,24 @@ public class HomeWebBridge {
         if (!Setting.isDriveCheck()) throw new IllegalStateException("网盘检测未开启");
         DriveCheckRequest request = App.gson().fromJson(payload, DriveCheckRequest.class);
         if (request == null || request.getItems().isEmpty()) throw new IllegalArgumentException("items不能为空");
+        SpiderDebug.log("webhome", "pan.check count=%s", request.getItems().size());
         return App.gson().toJson(DriveCheckService.get().check(request.getItems()));
+    }
+
+    private String playPan(JsonObject payload) {
+        String url = Json.safeString(payload, "url");
+        String title = Json.safeString(payload, "title");
+        String type = Json.safeString(payload, "type");
+        if (TextUtils.isEmpty(url)) throw new IllegalArgumentException("url不能为空");
+        final String playUrl = stripPush(url.trim());
+        final String playTitle = TextUtils.isEmpty(title) ? playUrl : title;
+        SpiderDebug.log("webhome", "pan.play route=%s type=%s title=%s url=%s", SiteApi.PUSH, type, playTitle, playUrl);
+        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle));
+        return "{}";
+    }
+
+    private String stripPush(String url) {
+        return url.regionMatches(true, 0, "push://", 0, 7) ? url.substring(7) : url;
     }
 
     private String cacheSet(JsonObject payload) {

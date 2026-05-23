@@ -303,15 +303,18 @@ public class HomeWebController {
                     set:(key,value,rule)=>invoke('cache.set',{key,value,rule}),
                     del:(key,rule)=>invoke('cache.del',{key,rule})
                   };
+                  const pan={
+                    check:(items)=>invoke('pan.check',{items}),
+                    play:(payload)=>invoke('pan.play',payload||{})
+                  };
                   window.fongmi={invoke,player,net,cache,
                     app:{
                       search:(keyword,options)=>invoke('app.search',Object.assign({},options||{},{keyword})),
                       openLive:()=>invoke('app.openLive',{}),
                       openKeep:()=>invoke('app.openKeep',{}),
-                      history:()=>invoke('app.history',{}),
-                      checkLinks:(items)=>invoke('app.checkLinks',{items})
+                      history:()=>invoke('app.history',{})
                     },
-                    drive:{check:(items)=>invoke('drive.check',{items})},
+                    pan,
                     device:{info:()=>invoke('device.info',{})},
                     site:{info:()=>invoke('site.info',{})},
                     config:{info:()=>invoke('config.info',{})},
@@ -331,7 +334,8 @@ public class HomeWebController {
                     openLive:window.fongmi.app.openLive,
                     openKeep:window.fongmi.app.openKeep,
                     history:window.fongmi.app.history,
-                    check:window.fongmi.drive.check,
+                    pan,
+                    check:window.fongmi.pan.check,
                     cache,
                     device:window.fongmi.device.info,
                     site:window.fongmi.site.info,

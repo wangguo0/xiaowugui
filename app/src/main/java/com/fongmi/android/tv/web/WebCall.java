@@ -3,6 +3,7 @@ package com.fongmi.android.tv.web;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Util;
 import com.google.gson.JsonElement;
@@ -44,10 +45,15 @@ public class WebCall {
             Request.Builder builder = new Request.Builder().url(url).headers(HeaderPolicy.of(headers));
             CookieBridge.apply(builder.build().url(), builder, include, HeaderPolicy.hasCookie(headers));
             builder.method(getMethod(method), getBody(getMethod(method), body, builder.build().headers()));
-            response = client(timeout).newCall(builder.build()).execute();
+            Request request = builder.build();
+            long start = System.currentTimeMillis();
+            SpiderDebug.log("webhome-net", "%s %s include=%s timeout=%ss headers=%s", request.method(), request.url(), include, timeout, request.headers().names());
+            response = client(timeout).newCall(request).execute();
+            SpiderDebug.log("webhome-net", "%s %s -> %s in %sms", request.method(), request.url(), response.code(), System.currentTimeMillis() - start);
             CookieBridge.set(url, response.headers());
             return toJson(response, responseType);
         } catch (Throwable e) {
+            SpiderDebug.log("webhome-net", e);
             return error(e);
         } finally {
             if (response != null) response.close();

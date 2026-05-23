@@ -5,12 +5,14 @@ import com.fongmi.android.tv.bean.Device;
 import com.fongmi.android.tv.server.impl.Process;
 import com.fongmi.android.tv.server.process.Action;
 import com.fongmi.android.tv.server.process.Cache;
+import com.fongmi.android.tv.server.process.DebugLogs;
 import com.fongmi.android.tv.server.process.DriveCheck;
 import com.fongmi.android.tv.server.process.Local;
 import com.fongmi.android.tv.server.process.Media;
 import com.fongmi.android.tv.server.process.Parse;
 import com.fongmi.android.tv.server.process.Proxy;
 import com.fongmi.android.tv.server.process.WebResourceGateway;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Asset;
 
 import java.io.InputStream;
@@ -36,6 +38,7 @@ public class Nano extends NanoHTTPD {
         process = new ArrayList<>();
         process.add(new Action());
         process.add(new Cache());
+        process.add(new DebugLogs());
         process.add(new DriveCheck());
         process.add(new Local());
         process.add(new Media());
@@ -65,6 +68,7 @@ public class Nano extends NanoHTTPD {
         String url = session.getUri().trim();
         Map<String, String> files = new HashMap<>();
         if (session.getMethod() == Method.POST) parse(session, files);
+        SpiderDebug.log("server", "%s %s params=%s", session.getMethod(), url, session.getParms());
         if (url.startsWith("/tvbus")) return ok(LiveConfig.getResp());
         if (url.startsWith("/device")) return ok(Device.get().toString());
         for (Process process : process) if (process.isRequest(session, url)) return process.doResponse(session, url, files);

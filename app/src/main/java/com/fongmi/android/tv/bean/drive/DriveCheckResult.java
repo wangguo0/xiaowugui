@@ -4,7 +4,7 @@ import com.google.gson.annotations.SerializedName;
 
 public class DriveCheckResult {
 
-    @SerializedName("disk_type")
+    @SerializedName("type")
     private String diskType;
     @SerializedName("url")
     private String url;

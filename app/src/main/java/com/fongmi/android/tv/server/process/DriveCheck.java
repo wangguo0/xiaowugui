@@ -8,6 +8,7 @@ import com.fongmi.android.tv.bean.drive.DriveCheckRequest;
 import com.fongmi.android.tv.server.Nano;
 import com.fongmi.android.tv.server.impl.Process;
 import com.fongmi.android.tv.service.DriveCheckService;
+import com.github.catvod.crawler.SpiderDebug;
 import com.google.gson.JsonObject;
 
 import java.util.Map;
@@ -20,7 +21,7 @@ public class DriveCheck implements Process {
 
     @Override
     public boolean isRequest(IHTTPSession session, String url) {
-        return url.startsWith("/check/links") || url.startsWith("/api/check/links");
+        return url.startsWith("/pan/check");
     }
 
     @Override
@@ -33,8 +34,10 @@ public class DriveCheck implements Process {
             if (TextUtils.isEmpty(body)) body = session.getParms().get("body");
             DriveCheckRequest request = App.gson().fromJson(body, DriveCheckRequest.class);
             if (request == null || request.getItems().isEmpty()) return cors(error(Response.Status.BAD_REQUEST, 400, "items不能为空"), session);
+            SpiderDebug.log("pan-check", "http /pan/check count=%s", request.getItems().size());
             return cors(json(Response.Status.OK, App.gson().toJson(DriveCheckService.get().check(request.getItems()))), session);
         } catch (Throwable e) {
+            SpiderDebug.log("pan-check", e);
             return cors(error(Response.Status.INTERNAL_ERROR, 500, e.getMessage()), session);
         }
     }

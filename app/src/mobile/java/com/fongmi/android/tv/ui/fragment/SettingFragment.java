@@ -101,7 +101,6 @@ public class SettingFragment extends BaseFragment implements ConfigCallback, Sit
     private void setOtherText() {
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
-        mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[Setting.getSize()]);
     }
 
@@ -123,6 +122,7 @@ public class SettingFragment extends BaseFragment implements ConfigCallback, Sit
         mBinding.size.setOnClickListener(this::setSize);
         mBinding.cache.setOnClickListener(this::onCache);
         mBinding.backup.setOnClickListener(this::onBackup);
+        mBinding.enhance.setOnClickListener(this::onEnhance);
         mBinding.player.setOnClickListener(this::onPlayer);
         mBinding.restore.setOnClickListener(this::onRestore);
         mBinding.version.setOnClickListener(this::onVersion);
@@ -132,7 +132,6 @@ public class SettingFragment extends BaseFragment implements ConfigCallback, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
-        mBinding.driveCheck.setOnClickListener(this::setDriveCheck);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -242,6 +241,10 @@ public class SettingFragment extends BaseFragment implements ConfigCallback, Sit
         getRoot().change(2);
     }
 
+    private void onEnhance(View view) {
+        getRoot().change(3);
+    }
+
     private void onVersion(View view) {
         Updater.create().force().start(requireActivity());
     }
@@ -265,11 +268,6 @@ public class SettingFragment extends BaseFragment implements ConfigCallback, Sit
     private void setIncognito(View view) {
         Setting.putIncognito(!Setting.isIncognito());
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
-    }
-
-    private void setDriveCheck(View view) {
-        Setting.putDriveCheck(!Setting.isDriveCheck());
-        mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
     }
 
     private void setSize(View view) {

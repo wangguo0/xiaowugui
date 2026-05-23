@@ -6,6 +6,7 @@ import com.fongmi.android.tv.server.Nano;
 import com.fongmi.android.tv.server.impl.Process;
 import com.fongmi.android.tv.web.CookieBridge;
 import com.fongmi.android.tv.web.HeaderPolicy;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 
 import java.io.InputStream;
@@ -39,11 +40,16 @@ public class WebResourceGateway implements Process {
             Request.Builder builder = new Request.Builder().url(target).headers(HeaderPolicy.of(headers));
             CookieBridge.apply(builder.build().url(), builder, "include".equals(params.get("credentials")), HeaderPolicy.hasCookie(headers));
             builder.method(getMethod(session), getBody(session, builder.build().headers(), files));
-            response = OkHttp.client().newCall(builder.build()).execute();
+            Request request = builder.build();
+            long start = System.currentTimeMillis();
+            SpiderDebug.log("web-resource", "%s %s", request.method(), request.url());
+            response = OkHttp.client().newCall(request).execute();
+            SpiderDebug.log("web-resource", "%s %s -> %s in %sms", request.method(), request.url(), response.code(), System.currentTimeMillis() - start);
             CookieBridge.set(target, response.headers());
             return cors(toResponse(response), session);
         } catch (Throwable e) {
             if (response != null) response.close();
+            SpiderDebug.log("web-resource", e);
             return cors(Nano.error(e.getMessage()), session);
         }
     }

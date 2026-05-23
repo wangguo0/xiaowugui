@@ -21,6 +21,7 @@ import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.github.catvod.net.OkHttp;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Path;
 
 import java.util.List;
@@ -42,6 +43,7 @@ public class Action implements Process {
     public Response doResponse(IHTTPSession session, String url, Map<String, String> files) {
         Map<String, String> params = session.getParms();
         String param = params.get("do");
+        SpiderDebug.log("action", "do=%s params=%s", param, params);
         if ("file".equals(param)) onFile(params);
         else if ("push".equals(param)) onPush(params);
         else if ("cast".equals(param)) onCast(params);

@@ -6,6 +6,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.bean.drive.DriveCheckItem;
 import com.fongmi.android.tv.bean.drive.DriveCheckResponse;
 import com.fongmi.android.tv.bean.drive.DriveCheckResult;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Prefers;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
@@ -100,6 +101,7 @@ public class DriveCheckService {
 
     public DriveCheckResponse check(List<DriveCheckItem> items) {
         if (items == null || items.isEmpty()) return new DriveCheckResponse(new ArrayList<>());
+        SpiderDebug.log("pan-check", "check count=%s batchSize=%s", items.size(), BATCH_SIZE);
         DriveCheckResult[] results = new DriveCheckResult[items.size()];
         for (int start = 0; start < items.size(); start += BATCH_SIZE) {
             checkBatch(items, results, start, Math.min(start + BATCH_SIZE, items.size()));
@@ -146,12 +148,15 @@ public class DriveCheckService {
         if (item == null) return result("", "", "", STATE_UNCERTAIN, false, "检测项为空");
         String diskType = item.getDiskType();
         String normalized = normalizeShareLink(diskType, item.getUrl(), item.getPassword());
-        if (diskType.isEmpty() || item.getUrl().isEmpty()) return result(diskType, item.getUrl(), normalized, STATE_UNCERTAIN, false, "disk_type 和 url 不能为空");
+        if (diskType.isEmpty() || item.getUrl().isEmpty()) return result(diskType, item.getUrl(), normalized, STATE_UNCERTAIN, false, "type 和 url 不能为空");
         if (normalized.isEmpty()) return result(diskType, item.getUrl(), "", STATE_UNCERTAIN, false, "链接格式无效");
 
         String key = diskType + "|" + normalized;
         DriveCheckResult cached = getCached(key);
-        if (cached != null) return cached.cacheHit();
+        if (cached != null) {
+            SpiderDebug.log("pan-check", "cache type=%s state=%s url=%s", diskType, cached.getState(), normalized);
+            return cached.cacheHit();
+        }
 
         ActiveCall call;
         synchronized (inflight) {
@@ -185,6 +190,7 @@ public class DriveCheckService {
             memory.put(key, checked);
             saveCache();
         }
+        SpiderDebug.log("pan-check", "result type=%s state=%s cacheable=%s url=%s summary=%s", diskType, checked.getState(), cacheable, normalized, checked.getSummary());
         synchronized (inflight) {
             call.result = checked;
             call.done = true;
@@ -539,9 +545,12 @@ public class DriveCheckService {
             requestBody = RequestBody.create(body == null ? "" : body, contentType != null && contentType.startsWith("application/x-www-form-urlencoded") ? FORM : JSON);
         }
         Request request = new Request.Builder().url(url).headers(Headers.of(nextHeaders)).method(verb, requestBody).build();
+        long start = System.currentTimeMillis();
+        SpiderDebug.log("pan-check-net", "%s %s", verb, url);
         try (Response response = client.newCall(request).execute()) {
             byte[] raw = response.body() == null ? new byte[0] : readAll(response.body().byteStream());
             byte[] decoded = decode(response.header("Content-Encoding"), raw);
+            SpiderDebug.log("pan-check-net", "%s %s -> %s raw=%s decoded=%s in %sms", verb, url, response.code(), raw.length, decoded.length, System.currentTimeMillis() - start);
             return new HttpResult(response.code(), new String(decoded, StandardCharsets.UTF_8));
         }
     }
