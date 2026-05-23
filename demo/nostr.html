@@ -5127,14 +5127,6 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }
     }
 
-    function shouldRestoreUiSnapshot() {
-      try {
-        return new URLSearchParams(location.search || "").get("_fm_restore") === "1";
-      } catch (e) {
-        return /(?:^|[?&])_fm_restore=1(?:&|$)/.test(location.search || "");
-      }
-    }
-
     function restorePanSnapshot(pan) {
       if (!pan || !pan.keyword && !(pan.results || []).length) return;
       state.pan.loading = false;
@@ -5307,15 +5299,13 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       hotLoadIndex().catch(() => {});
       await loadInfo();
       await loadCatalog();
-      const canRestoreUi = shouldRestoreUiSnapshot();
-      const restored = canRestoreUi ? await restoreUiSnapshot(await readUiSnapshot()) : false;
+      const restored = await restoreUiSnapshot(await readUiSnapshot());
       await ensureIdentity();
       await loadEvents();
       scheduleHistorySettlement();
       setTimeout(subscribeNostr, 600);
       renderMetrics();
       if (restored) handleWebHomeResume();
-      if (!canRestoreUi) scheduleUiSnapshotSave();
       updateBackTopButton();
       setTimeout(() => document.querySelector(".focusable") && document.querySelector(".focusable").focus(), 80);
     }

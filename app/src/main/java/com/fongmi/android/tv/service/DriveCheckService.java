@@ -549,7 +549,11 @@ public class DriveCheckService {
     private DriveCheckResult getCached(String key) {
         DriveCheckResult result = memory.get(key);
         if (result == null) return null;
-        if (System.currentTimeMillis() <= result.getExpiresAt()) return result;
+        DriveCheckResult capped = capCacheResult(result);
+        if (isCacheValid(capped)) {
+            if (capped != result) memory.put(key, capped);
+            return capped;
+        }
         memory.remove(key);
         saveCache();
         return null;
@@ -560,8 +564,10 @@ public class DriveCheckService {
             Type type = new TypeToken<Map<String, DriveCheckResult>>() {}.getType();
             Map<String, DriveCheckResult> cache = App.gson().fromJson(Prefers.getString(CACHE_KEY), type);
             if (cache == null) return;
-            long now = System.currentTimeMillis();
-            for (Map.Entry<String, DriveCheckResult> entry : cache.entrySet()) if (entry.getValue() != null && entry.getValue().getExpiresAt() > now) memory.put(entry.getKey(), entry.getValue());
+            for (Map.Entry<String, DriveCheckResult> entry : cache.entrySet()) {
+                DriveCheckResult result = capCacheResult(entry.getValue());
+                if (isCacheValid(result)) memory.put(entry.getKey(), result);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -571,14 +577,27 @@ public class DriveCheckService {
             List<Map.Entry<String, DriveCheckResult>> entries = new ArrayList<>(memory.entrySet());
             entries.sort((a, b) -> Long.compare(b.getValue().getCheckedAt(), a.getValue().getCheckedAt()));
             Map<String, DriveCheckResult> next = new LinkedHashMap<>();
-            long now = System.currentTimeMillis();
             for (Map.Entry<String, DriveCheckResult> entry : entries) {
                 if (next.size() >= CACHE_LIMIT) break;
-                if (entry.getValue().getExpiresAt() > now) next.put(entry.getKey(), entry.getValue());
+                DriveCheckResult result = capCacheResult(entry.getValue());
+                if (isCacheValid(result)) next.put(entry.getKey(), result);
             }
             Prefers.put(CACHE_KEY, App.gson().toJson(next));
         } catch (Throwable ignored) {
         }
+    }
+
+    private DriveCheckResult capCacheResult(DriveCheckResult result) {
+        if (result == null) return null;
+        long checkedAt = result.getCheckedAt();
+        if (checkedAt <= 0) return result;
+        long cappedExpiresAt = Math.min(result.getExpiresAt(), checkedAt + ttl(result.getState()));
+        if (cappedExpiresAt == result.getExpiresAt()) return result;
+        return new DriveCheckResult(result.getDiskType(), result.getUrl(), result.getNormalizedUrl(), result.getState(), result.isCacheHit(), checkedAt, cappedExpiresAt, result.getSummary());
+    }
+
+    private boolean isCacheValid(DriveCheckResult result) {
+        return result != null && System.currentTimeMillis() <= result.getExpiresAt();
     }
 
     private DriveCheckResult result(DriveCheckItem item, String normalized, String state, boolean cacheHit, String summary) {
@@ -592,7 +611,8 @@ public class DriveCheckService {
 
     private long ttl(String state) {
         return switch (state) {
-            case STATE_OK, STATE_UNSUPPORTED -> TimeUnit.HOURS.toMillis(24);
+            case STATE_OK -> TimeUnit.HOURS.toMillis(1);
+            case STATE_UNSUPPORTED -> TimeUnit.HOURS.toMillis(24);
             case STATE_BAD -> TimeUnit.HOURS.toMillis(6);
             case STATE_LOCKED -> TimeUnit.HOURS.toMillis(12);
             default -> TimeUnit.MINUTES.toMillis(30);
