@@ -1,7 +1,9 @@
 package com.fongmi.android.tv.player.engine;
 
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.MediaTitle;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
@@ -14,6 +16,7 @@ import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class ExoPlayerEngine implements PlayerEngine {
 
@@ -42,6 +45,16 @@ public class ExoPlayerEngine implements PlayerEngine {
     public Player rebuild(Player.Listener listener) {
         player.release();
         return player = ExoUtil.buildPlayer(decode, listener);
+    }
+
+    @Override
+    public boolean isRepeatOne() {
+        return player.getRepeatMode() == Player.REPEAT_MODE_ONE;
+    }
+
+    @Override
+    public void setRepeatOne(boolean repeat) {
+        player.setRepeatMode(repeat ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
     }
 
     @Override
@@ -78,12 +91,12 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     @Override
     public boolean isLive() {
-        return player.isCurrentMediaItemLive();
+        return player.getDuration() < TimeUnit.MINUTES.toMillis(1) || player.isCurrentMediaItemLive();
     }
 
     @Override
     public boolean isVod() {
-        return !player.isCurrentMediaItemLive();
+        return player.getDuration() > TimeUnit.MINUTES.toMillis(1) && !player.isCurrentMediaItemLive();
     }
 
     @Override
@@ -99,6 +112,16 @@ public class ExoPlayerEngine implements PlayerEngine {
     @Override
     public boolean haveTrack(int type) {
         return TrackUtil.count(getCurrentTracks(), type) > 0;
+    }
+
+    @Override
+    public boolean haveTitle() {
+        return !player.getCurrentMediaTitles().isEmpty();
+    }
+
+    @Override
+    public List<MediaTitle> getCurrentMediaTitles() {
+        return player.getCurrentMediaTitles();
     }
 
     @Override
@@ -122,7 +145,11 @@ public class ExoPlayerEngine implements PlayerEngine {
     }
 
     private void startInternal() {
-        player.setMediaItem(ExoUtil.getMediaItem(spec, decode));
+        startInternal(C.TIME_UNSET);
+    }
+
+    private void startInternal(long position) {
+        player.setMediaItem(ExoUtil.getMediaItem(spec, decode), position);
         player.prepare();
         player.play();
     }
@@ -135,7 +162,7 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     private ErrorAction retryFormat(int errorCode) {
         spec.setFormat(ExoUtil.getMimeType(errorCode));
-        startInternal();
+        startInternal(player.getCurrentPosition());
         return ErrorAction.RECOVERED;
     }
 }

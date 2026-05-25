@@ -6,7 +6,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import com.fongmi.android.tv.App;
-import com.fongmi.android.tv.Setting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.History;
@@ -140,7 +140,7 @@ public class HomeWebBridge {
             else if ("stop".equals(action)) service.dispatchStop();
             else if ("prev".equals(action)) service.dispatchPrev();
             else if ("next".equals(action)) service.dispatchNext();
-            else if ("loop".equals(action)) service.dispatchLoop();
+            else if ("loop".equals(action) || "repeat".equals(action)) service.dispatchRepeat();
             else if ("replay".equals(action)) service.dispatchReplay();
         });
         return "{}";

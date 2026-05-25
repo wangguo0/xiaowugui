@@ -3,7 +3,7 @@ package com.fongmi.android.tv.server.process;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
-import com.fongmi.android.tv.Setting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.bean.drive.DriveCheckRequest;
 import com.fongmi.android.tv.server.Nano;
 import com.fongmi.android.tv.server.impl.Process;

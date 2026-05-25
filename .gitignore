@@ -19,4 +19,6 @@ yarn.lock
 nostr_副本*.html
 *_副本*.html
 *.tmp
+third_party/maven/
+third_party/sources/
 *.log

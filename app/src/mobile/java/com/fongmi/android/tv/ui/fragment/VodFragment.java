@@ -1,15 +1,11 @@
 package com.fongmi.android.tv.ui.fragment;
 
-import android.app.Activity;
-import android.content.Intent;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -32,14 +28,13 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.event.StateEvent;
 import com.fongmi.android.tv.impl.Callback;
-import com.fongmi.android.tv.impl.ConfigCallback;
-import com.fongmi.android.tv.impl.FilterCallback;
-import com.fongmi.android.tv.impl.SiteCallback;
+import com.fongmi.android.tv.impl.ConfigListener;
+import com.fongmi.android.tv.impl.FilterListener;
+import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.ui.activity.HistoryActivity;
 import com.fongmi.android.tv.ui.activity.KeepActivity;
 import com.fongmi.android.tv.ui.activity.SearchActivity;
-import com.fongmi.android.tv.ui.activity.VideoActivity;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.FilterDialog;
@@ -47,10 +42,10 @@ import com.fongmi.android.tv.ui.dialog.HistoryDialog;
 import com.fongmi.android.tv.ui.dialog.LinkDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
-import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.HomeWebController;
 
 import org.greenrobot.eventbus.EventBus;
@@ -61,7 +56,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-public class VodFragment extends BaseFragment implements ConfigCallback, SiteCallback, FilterCallback, TypeAdapter.OnClickListener, HomeWebController.Listener {
+public class VodFragment extends BaseFragment implements ConfigListener, SiteListener, FilterListener, TypeAdapter.OnClickListener, HomeWebController.Listener {
 
     private FragmentVodBinding mBinding;
     private SiteViewModel mViewModel;
@@ -121,7 +116,7 @@ public class VodFragment extends BaseFragment implements ConfigCallback, SiteCal
             @Override
             public void onPageSelected(int position) {
                 mBinding.type.smoothScrollToPosition(position);
-                mAdapter.setActivated(position);
+                mAdapter.setSelected(position);
                 setFabVisible(position);
             }
         });
@@ -181,16 +176,16 @@ public class VodFragment extends BaseFragment implements ConfigCallback, SiteCal
     }
 
     private boolean onLink(View view) {
-        LinkDialog.create(this).launcher(launcher).show();
+        LinkDialog.show(this);
         return true;
     }
 
     private void onLogo(View view) {
-        HistoryDialog.create(this).readOnly().type(0).show();
+        HistoryDialog.create().vod().readOnly().show(this);
     }
 
     private void onSite(View view) {
-        SiteDialog.create(this).change().show();
+        SiteDialog.create().change().show(this);
     }
 
     private void onFilter(View view) {
@@ -329,7 +324,7 @@ public class VodFragment extends BaseFragment implements ConfigCallback, SiteCal
     @Override
     public void onItemClick(int position, Class item) {
         mBinding.pager.setCurrentItem(position);
-        mAdapter.setActivated(position);
+        mAdapter.setSelected(position);
     }
 
     @Override
@@ -395,11 +390,6 @@ public class VodFragment extends BaseFragment implements ConfigCallback, SiteCal
         mBinding.pager.setVisibility(View.VISIBLE);
         mBinding.homeWeb.setVisibility(View.GONE);
     }
-
-    private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
-        VideoActivity.file(requireActivity(), FileChooser.getPathFromUri(result.getData().getData()));
-    });
 
     class PageAdapter extends FragmentStatePagerAdapter {
 

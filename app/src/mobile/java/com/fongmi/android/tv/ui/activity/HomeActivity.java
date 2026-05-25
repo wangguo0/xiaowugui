@@ -37,6 +37,7 @@ import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
 import com.fongmi.android.tv.ui.fragment.SettingEnhanceFragment;
+import com.fongmi.android.tv.ui.fragment.SettingDanmakuFragment;
 import com.fongmi.android.tv.ui.fragment.SettingFragment;
 import com.fongmi.android.tv.ui.fragment.SettingPlayerFragment;
 import com.fongmi.android.tv.ui.fragment.VodFragment;
@@ -76,13 +77,13 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     @Override
     protected void initView(Bundle savedInstanceState) {
         orientation = getResources().getConfiguration().orientation;
-        initFragment(savedInstanceState);
+        mBinding.navigation.setOnItemSelectedListener(this);
+        initFragment(savedInstanceState == null);
         initConfig();
     }
 
     @Override
     protected void initEvent() {
-        mBinding.navigation.setOnItemSelectedListener(this);
         mBinding.navigation.findViewById(R.id.live).setOnLongClickListener(this::addShortcut);
     }
 
@@ -105,7 +106,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         }
     }
 
-    private void initFragment(Bundle savedInstanceState) {
+    private void initFragment(boolean init) {
         mManager = new FragmentStateManager(mBinding.container, getSupportFragmentManager()) {
             @Override
             public Fragment getItem(int position) {
@@ -113,10 +114,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
                 if (position == 1) return SettingFragment.newInstance();
                 if (position == 2) return SettingPlayerFragment.newInstance();
                 if (position == 3) return SettingEnhanceFragment.newInstance();
+                if (position == 4) return SettingDanmakuFragment.newInstance();
                 return null;
             }
         };
-        if (savedInstanceState == null) mManager.change(0);
+        if (init) change(0);
     }
 
     private void initConfig() {
@@ -169,7 +171,8 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void change(int position) {
-        mManager.change(position);
+        if (position < 2) mBinding.navigation.setSelectedItemId(position == 0 ? R.id.vod : R.id.setting);
+        else mManager.change(position);
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -188,6 +191,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onRefreshEvent(RefreshEvent event) {
+        if (event.getType() == RefreshEvent.Type.THEME) recreate();
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
     public void onServerEvent(ServerEvent event) {
         if (event.type() == ServerEvent.Type.PUSH) VideoActivity.push(this, event.text());
         if (event.type() == ServerEvent.Type.SEARCH) SearchActivity.start(this, event.text());
@@ -195,7 +203,6 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        if (mBinding.navigation.getSelectedItemId() == item.getItemId()) return false;
         if (item.getItemId() == R.id.setting) return mManager.change(1);
         if (item.getItemId() == R.id.vod) return mManager.change(0);
         if (item.getItemId() == R.id.live) return openLive();
@@ -219,10 +226,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     protected void onBackInvoked() {
         if (!mBinding.navigation.getMenu().findItem(R.id.vod).isVisible()) {
             setNavigation();
-        } else if (mManager.isVisible(2) || mManager.isVisible(3)) {
+        } else if (mManager.isVisible(2) || mManager.isVisible(3) || mManager.isVisible(4)) {
             change(1);
         } else if (mManager.isVisible(1)) {
-            mBinding.navigation.setSelectedItemId(R.id.vod);
+            change(0);
         } else if (mManager.canBack(0)) {
             if (PlaybackService.isRunning()) moveTaskToBack(true);
             else super.onBackInvoked();
