@@ -478,14 +478,7 @@
       object-fit: cover;
     }
 
-    .wide-poster {
-      aspect-ratio: 16 / 9;
-      width: 100%;
-      object-fit: cover;
-    }
-
-    .card > .poster,
-    .card > .wide-poster {
+    .card > .poster {
       width: calc(100% + 2px);
       max-width: calc(100% + 2px);
       margin: -1px -1px 0;
@@ -536,6 +529,87 @@
 
     .card-meta:empty {
       display: none;
+    }
+
+    .card.recent-card {
+      background: rgba(var(--panel-rgb), .26);
+    }
+
+    .card.recent-card > .poster {
+      width: calc(100% + 2px);
+      max-width: calc(100% + 2px);
+      margin: -1px;
+    }
+
+    .recent-card .card-body {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 2;
+      padding: 28px 9px 9px;
+      border-top: 0;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(5, 7, 9, .72) 46%, rgba(5, 7, 9, .88));
+    }
+
+    .recent-card .card-title,
+    .recent-card .card-meta,
+    .recent-badge {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .recent-card .card-title {
+      min-height: 0;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .recent-card .card-meta {
+      max-width: 100%;
+      margin-top: 4px;
+      color: rgba(238, 244, 250, .74);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .recent-badge {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      z-index: 2;
+      max-width: calc(100% - 14px);
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 7px;
+      border-radius: 999px;
+      background: rgba(6, 9, 12, .46);
+      border: 1px solid rgba(255, 255, 255, .16);
+      color: rgba(255, 255, 255, .9);
+      font-size: 11px;
+      font-weight: 780;
+      line-height: 1;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, .48);
+      backdrop-filter: blur(8px);
+    }
+
+    .recent-progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 3;
+      height: 3px;
+      background: rgba(255, 255, 255, .2);
+    }
+
+    .recent-progress span {
+      display: block;
+      width: var(--recent-progress, 0%);
+      height: 100%;
+      background: rgba(255, 255, 255, .82);
     }
 
     .card.has-people .card-body {
@@ -621,8 +695,22 @@
       max-height: 42vh;
       border-radius: var(--radius);
       overflow: hidden;
-      background: transparent;
+      background: rgba(var(--panel-rgb), .24);
       margin: 14px 0;
+    }
+
+    .detail-cover.loading::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(110deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .11), rgba(255, 255, 255, .04));
+      background-size: 220% 100%;
+      animation: cover-loading 1.25s ease-in-out infinite;
+    }
+
+    @keyframes cover-loading {
+      0% { background-position: 120% 0; }
+      100% { background-position: -120% 0; }
     }
 
     .detail-cover img {
@@ -631,7 +719,43 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      opacity: 0;
+      transition: opacity .42s ease;
+    }
+
+    .detail-cover img.active {
       opacity: 1;
+    }
+
+    .detail-cover.poster-mode {
+      background: rgba(var(--panel-rgb), .38);
+    }
+
+    .detail-cover.poster-mode::before {
+      content: "";
+      position: absolute;
+      inset: -18px;
+      background-image: var(--detail-cover-bg, none);
+      background-size: cover;
+      background-position: center;
+      filter: blur(18px) saturate(1.08);
+      opacity: .42;
+      transform: scale(1.06);
+    }
+
+    .detail-cover.poster-mode::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(0, 0, 0, .22), rgba(0, 0, 0, .02), rgba(0, 0, 0, .22));
+    }
+
+    .detail-cover.poster-mode img {
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      z-index: 1;
     }
 
     .detail-info {
@@ -1211,9 +1335,20 @@
       outline: none;
       border-color: var(--focus-line);
       box-shadow: none;
-      position: relative;
       z-index: 5;
       transition: border-color .06s ease, background-color .06s ease, opacity .06s ease;
+    }
+
+    .focusable:not(.back-top):focus,
+    button:not(.back-top):focus,
+    input:focus,
+    textarea:focus {
+      position: relative;
+    }
+
+    .back-top:focus {
+      position: fixed;
+      z-index: 55;
     }
 
     .card:focus,
@@ -1435,10 +1570,6 @@
       <div class="chips" id="seasonTabs"></div>
       <div class="rail" id="episodeRail"></div>
     </div>
-    <div class="detail-block" id="imageBlock" style="display:none">
-      <h3>剧照</h3>
-      <div class="rail" id="imageRail"></div>
-    </div>
     <div class="detail-block" id="castBlock" style="display:none">
       <h3>演职员表</h3>
       <div class="rail" id="castRail"></div>
@@ -1494,13 +1625,13 @@
         apiKey: "304ca56b1b7b57ca7a47d9b59946be94",
         apiBase: "https://api.tmdb.org/3",
         language: "zh-CN",
-        imageBase: "https://image.tmdb.org/t/p/w500",
-        backdropBase: "https://image.tmdb.org/t/p/w1280",
+        imageBase: "https://image.tmdb.org/t/p/w342",
+        backdropBase: "https://image.tmdb.org/t/p/w780",
         lists: [
           {
             id: "cn-movie",
-            title: "大陆电影",
-            hint: "院线与网络电影",
+            title: "电影",
+            hint: "大陆电影优先",
             mediaType: "movie",
             endpoint: "discover/movie",
             params: {
@@ -1516,8 +1647,8 @@
           },
           {
             id: "cn-tv",
-            title: "大陆剧集",
-            hint: "国产剧优先",
+            title: "剧集",
+            hint: "大陆剧集优先",
             mediaType: "tv",
             endpoint: "discover/tv",
             params: {
@@ -1531,7 +1662,7 @@
           },
           {
             id: "western-animation",
-            title: "欧美动漫",
+            title: "美漫",
             hint: "英文动画剧集",
             mediaType: "tv",
             endpoint: "discover/tv",
@@ -1553,10 +1684,10 @@
         nsecKey: "fish2018_home_v1_nsec",
         relays: [
           "wss://relay-sgp.signedbyme.com",
-          "wss://nostr.spacecitynode.com",
-          "ws://139.162.37.202",
           "wss://relay.lovelana.org",
           "wss://relay.nostr.moe",
+          "wss://nostr.spacecitynode.com",
+          // "ws://139.162.37.202",
           // "wss://nos.lol",
           // "wss://relay.snort.social",
           // "wss://nostr.mom",
@@ -1602,6 +1733,7 @@
       activeList: "all",
       catalog: {},
       catalogPage: {},
+      recent: { items: [], loading: false, loaded: false, error: "", refreshedAt: 0 },
       fallback: [],
       fallbackPage: { sourceIndex: 0, page: 0, loading: false, loaded: false, done: false },
       loadingMore: false,
@@ -1621,13 +1753,15 @@
       },
       pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
+      detailCover: { images: [], index: 0, timer: 0, token: 0 },
       detailReturn: null,
       focusReturnEl: null,
       remoteInitialFocused: false,
       renderTimer: 0,
       scrollingUntil: 0,
       infiniteObserver: null,
-      scrollLoadTimer: 0
+      scrollLoadTimer: 0,
+      resume: { timer: 0, lastAt: 0 }
     };
 
     const WATCH_HEAT_MS = 10 * 60 * 1000;
@@ -1697,6 +1831,7 @@
         search: async (kw) => toast("原生搜索：" + kw),
         openKeep: async () => toast("请在 App 中打开收藏"),
         history: async () => [],
+        vod: async (siteKey, vodId, title) => toast("原生播放：" + (title || vodId || siteKey || "")),
         pan: { check, play },
         check,
         cache: {
@@ -2790,9 +2925,47 @@
       return (backdrop ? window.WEBHOME_CONFIG.tmdb.backdropBase : window.WEBHOME_CONFIG.tmdb.imageBase) + path;
     }
 
+    function tmdbImageUrl(path, size) {
+      if (!path) return "";
+      const value = String(path || "").trim();
+      const imagePath = value.startsWith("/") ? value : tmdbImagePath(value);
+      if (!imagePath) return value;
+      return `https://image.tmdb.org/t/p/${size || "w342"}${imagePath}`;
+    }
+
+    function tmdbImagePath(url) {
+      const value = String(url || "").trim();
+      if (!value) return "";
+      if (value.startsWith("/")) return value;
+      try {
+        const parsed = new URL(value);
+        if (parsed.hostname !== "image.tmdb.org") return "";
+        return parsed.pathname.replace(/^\/t\/p\/[^/]+/, "") || "";
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function isTmdbImage(url) {
+      return !!tmdbImagePath(url);
+    }
+
+    function displayImage(url, options) {
+      if (!url) return "";
+      const opts = options || {};
+      const tmdbPath = tmdbImagePath(url);
+      if (tmdbPath) return tmdbImageUrl(tmdbPath, opts.size || "w342");
+      return nativeImage(url);
+    }
+
     function nativeImage(url) {
       if (!url) return "";
+      if (isTmdbImage(url)) return url;
       try { return sdk().res(url, { credentials: "include" }); } catch (e) { return url; }
+    }
+
+    function imageAttrs(src) {
+      return `src="${escapeAttr(src)}" decoding="async"`;
     }
 
     function normalizeTmdb(item, list, index) {
@@ -2808,6 +2981,7 @@
         listTitle: list.title || "搜索",
         title,
         pic: imageUrl(item.poster_path, false),
+        landscape: imageUrl(item.backdrop_path, true),
         image: imageUrl(item.backdrop_path, true) || imageUrl(item.poster_path, false),
         remark: "",
         desc: item.overview || `${list.title || "搜索"} · ${title}`,
@@ -2816,6 +2990,143 @@
         voteAverage: item.vote_average || 0,
         baseRank: index + 1
       };
+    }
+
+    function historyKeyParts(history) {
+      const key = String(history && history.key || "");
+      const parts = key.split("@@@");
+      return {
+        key,
+        siteKey: history && history.siteKey || parts[0] || "",
+        vodId: history && history.vodId || parts.slice(1).join("@@@") || ""
+      };
+    }
+
+    function validHistoryMs(value) {
+      const ms = Number(value || 0);
+      return Number.isFinite(ms) && ms > 0 && ms < 7 * 24 * 60 * 60 * 1000 ? ms : 0;
+    }
+
+    function isRestorableHistory(history) {
+      const parts = historyKeyParts(history);
+      const title = String(history && (history.vodName || history.title || history.name) || "").trim();
+      if (!parts.siteKey || !parts.vodId || !title) return false;
+      if (parts.siteKey === "push_agent") return false;
+      if (/^(push|https?|file|magnet|ed2k|thunder|video):/i.test(parts.siteKey)) return false;
+      return true;
+    }
+
+    function isExpiredHistory(history) {
+      const parts = historyKeyParts(history);
+      if (!isRestorableHistory(history)) return true;
+      const pic = String(history && (history.vodPic || history.pic || "") || "").trim();
+      if (isExpiredPosterSource(pic, parts)) return true;
+      const statusText = [history && history.vodRemarks, history && history.remark, history && history.desc, history && history.status, history && history.summary, history && history.episodeUrl]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (/(已过期|已失效|链接失效|资源失效|分享已取消|取消分享|文件不存在|内容不存在|资源不存在|不存在|被删除|已删除|违规|notfound|not found|expired|invalid|forbidden|cancelled|canceled|shareexpirederror|sharenotfound|shareinfonotfound|filenotfound|foldernotfound)/i.test(statusText)) return true;
+      const title = String(history && (history.vodName || history.title || history.name) || "").trim();
+      return /^(已过期|已失效|链接失效|资源失效|文件不存在|内容不存在|资源不存在|不存在)$/.test(title);
+    }
+
+    function isExpiredPosterSource(pic, parts) {
+      const value = String(pic || "").trim();
+      if (!value) return false;
+      const lower = value.slice(0, 500).toLowerCase();
+      if (/(已过期|已失效|链接失效|资源失效|expired|notfound|not-found|invalid|forbidden)/i.test(lower)) return true;
+      if ((parts && parts.siteKey === "push_agent") && /^data:image\//i.test(value)) return true;
+      return /^data:image\/jpeg;base64,\/9j\/4AAQSkZJRgABAQEAYABgAAD\/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQo/i.test(value);
+    }
+
+    function formatHistoryTime(ms) {
+      const total = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+      const h = Math.floor(total / 3600);
+      const m = Math.floor(total % 3600 / 60);
+      const sec = total % 60;
+      if (h > 0) return h + ":" + String(m).padStart(2, "0") + ":" + String(sec).padStart(2, "0");
+      return m + ":" + String(sec).padStart(2, "0");
+    }
+
+    function historyProgressText(history) {
+      const position = validHistoryMs(history && history.position);
+      const duration = validHistoryMs(history && history.duration);
+      if (duration > 0 && position > 0) return "已看 " + Math.min(99, Math.max(1, Math.round(position / duration * 100))) + "%";
+      return position > 0 ? "看到 " + formatHistoryTime(position) : "";
+    }
+
+    function historyProgressPercent(history) {
+      const position = validHistoryMs(history && history.position);
+      const duration = validHistoryMs(history && history.duration);
+      if (duration <= 0 || position <= 0) return 0;
+      return Math.min(100, Math.max(1, Math.round(position / duration * 100)));
+    }
+
+    function normalizeHistoryItem(history, index) {
+      const parts = historyKeyParts(history);
+      const title = String(history && (history.vodName || history.title || history.name) || "最近观看").trim();
+      const pic = history && (history.vodPic || history.pic || "") || "";
+      const badge = String(history && history.vodRemarks || "").trim();
+      const progressText = historyProgressText(history);
+      return {
+        id: "history:" + (parts.key || index),
+        source: "history",
+        historyKey: parts.key,
+        siteKey: parts.siteKey,
+        vodId: parts.vodId,
+        title,
+        pic,
+        image: pic,
+        remark: progressText || (badge ? "继续观看" : ""),
+        badge,
+        progress: historyProgressPercent(history),
+        desc: [badge, progressText].filter(Boolean).join(" · ") || title,
+        releaseDate: "",
+        voteAverage: 0,
+        popularity: Number(history && history.createTime || 0),
+        baseRank: index + 1,
+        createTime: Number(history && history.createTime || 0)
+      };
+    }
+
+    function normalizeHistoryList(list) {
+      const seen = new Set();
+      return (Array.isArray(list) ? list : [])
+        .slice()
+        .sort((a, b) => Number(b && b.createTime || 0) - Number(a && a.createTime || 0))
+        .filter((history) => !isExpiredHistory(history))
+        .map(normalizeHistoryItem)
+        .filter((item) => {
+          const key = item.historyKey || (item.siteKey && item.vodId ? item.siteKey + "@@@" + item.vodId : item.title);
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    }
+
+    async function loadRecentList(options) {
+      const opts = options || {};
+      if (state.recent.loading) return;
+      if (state.recent.loaded && !opts.refresh) return;
+      state.recent.loading = true;
+      state.recent.error = "";
+      if (!opts.silent) setStatus("tmdb", "读取最近观看");
+      if (state.activeList === "recent") renderActiveGrid();
+      try {
+        const list = await sdk().history();
+        state.recent.items = normalizeHistoryList(list);
+        state.recent.loaded = true;
+        state.recent.refreshedAt = Date.now();
+        if (!opts.silent) setStatus("tmdb", "最近观看 " + state.recent.items.length + " 条");
+      } catch (e) {
+        state.recent.items = [];
+        state.recent.loaded = true;
+        state.recent.error = e.message || "unknown";
+        if (!opts.silent) setStatus("tmdb", "最近观看读取失败");
+      } finally {
+        state.recent.loading = false;
+        if (state.activeList === "recent") renderActiveGrid();
+      }
     }
 
     async function loadInfo() {
@@ -2836,6 +3147,7 @@
 
     async function loadCatalog() {
       setStatus("tmdb", "等待按需请求");
+      loadRecentList({ silent: true }).catch(() => {});
       renderAll();
     }
 
@@ -2987,7 +3299,7 @@
     }
 
     function loadMoreVisible() {
-      if (state.loadingMore) return;
+      if (state.loadingMore || state.activeList === "recent") return;
       if (state.activeList === "all") {
         if (preferenceItems().length) {
           useNostrRecommendationsIfReady();
@@ -3113,7 +3425,7 @@
     }
 
     function renderChips() {
-      const chips = [{ id: "all", title: "Nostr推荐" }].concat(window.WEBHOME_CONFIG.tmdb.lists.map((item) => ({ id: item.id, title: item.title })));
+      const chips = [{ id: "all", title: "Nostr推荐" }, { id: "recent", title: "最近" }].concat(window.WEBHOME_CONFIG.tmdb.lists.map((item) => ({ id: item.id, title: item.title })));
       const root = $("chips");
       const keys = chips.map((chip) => chip.id + ":" + chip.title).join("\n");
       if (root.dataset.renderKeys !== keys) {
@@ -3139,7 +3451,8 @@
       if (!id || state.activeList === id) return;
       state.activeList = id;
       renderAll();
-      if (id !== "all") loadCatalogList(id);
+      if (id === "recent") loadRecentList({ refresh: true });
+      else if (id !== "all") loadCatalogList(id);
       scheduleUiSnapshotSave();
       if (opts.keepFocus) requestAnimationFrame(() => {
         const target = findByDataset($("chips"), "chipId", id);
@@ -3179,6 +3492,10 @@
     }
 
     function renderLists() {
+      if (state.activeList === "recent") {
+        renderRecentList();
+        return;
+      }
       const lists = window.WEBHOME_CONFIG.tmdb.lists.filter((list) => list.id === state.activeList);
       if (!lists.length) {
         $("listStack").replaceChildren();
@@ -3215,6 +3532,38 @@
         grid.replaceChildren(emptyNode("点击后加载片单"));
       } else {
         fillGrid(grid, state.catalog[grid.dataset.listId] || []);
+      }
+    }
+
+    function renderRecentList() {
+      let grid = Array.from($("listStack").querySelectorAll(".media-grid"))
+        .find((item) => item.dataset.listId === "recent");
+      if (!grid || $("listStack").children.length !== 1) {
+        const block = document.createElement("div");
+        block.className = "list-block";
+        block.innerHTML = `
+          <div class="subsection-head">
+            <h4>最近</h4>
+            <span>继续观看</span>
+          </div>
+        `;
+        grid = document.createElement("div");
+        grid.className = "media-grid";
+        grid.dataset.listId = "recent";
+        block.appendChild(grid);
+        $("listStack").replaceChildren(block);
+      }
+      if (state.recent.loading && !state.recent.loaded) {
+        grid.dataset.renderKeys = "";
+        grid.replaceChildren(emptyNode("读取最近观看..."));
+      } else if (state.recent.error) {
+        grid.dataset.renderKeys = "";
+        grid.replaceChildren(emptyNode("最近观看读取失败"));
+      } else if (!state.recent.loaded) {
+        grid.dataset.renderKeys = "";
+        grid.replaceChildren(emptyNode("点击后读取最近观看"));
+      } else {
+        fillGrid(grid, state.recent.items || []);
       }
     }
 
@@ -3300,16 +3649,39 @@
       return true;
     }
 
-    function focusInitialHomeNow() {
+    function focusInitialHomeNow(options) {
       const target = initialHomeFocus();
+      focusHomeTopTarget(target, options);
+    }
+
+    function focusCurrentHomeTop(options) {
+      const target = currentHomeFocus() || initialHomeFocus();
+      focusHomeTopTarget(target, options);
+    }
+
+    function focusHomeTopTarget(target, options) {
       if (!target) return;
+      const opts = options || {};
       state.remoteInitialFocused = true;
-      focusRemoteTarget(target);
+      if (opts.preventScroll) {
+        try {
+          target.focus({ preventScroll: true });
+        } catch (e) {
+          target.focus();
+        }
+      } else {
+        focusRemoteTarget(target);
+      }
     }
 
     function initialHomeFocus() {
       if (focusScopeRoot() !== document) return null;
       return findByDataset($("chips"), "chipId", "all") || $("chips").querySelector(".chip.active") || $("chips").querySelector(".chip");
+    }
+
+    function currentHomeFocus() {
+      if (focusScopeRoot() !== document) return null;
+      return findByDataset($("chips"), "chipId", state.activeList) || $("chips").querySelector(".chip.active") || initialHomeFocus();
     }
 
     function observeInfiniteScroll() {
@@ -3327,6 +3699,7 @@
 
     function canLoadMore() {
       if (state.loadingMore) return false;
+      if (state.activeList === "recent") return false;
       if (state.activeList === "all") return !preferenceItems().length && state.recommendationSource === "fallback" && !state.fallbackPage.done;
       const page = state.catalogPage[state.activeList];
       return !!(page && !page.loading && page.page < page.total);
@@ -3350,12 +3723,23 @@
       const button = document.createElement("button");
       const people = Number(item.people || 0);
       const key = mediaDomKey(item);
-      button.className = "card focusable" + (people > 0 ? " has-people" : "");
+      const recent = item.source === "history";
+      button.className = "card focusable" + (people > 0 ? " has-people" : "") + (recent ? " recent-card" : "");
       button.type = "button";
       if (key) button.dataset.mediaKey = key;
       const rating = item.voteAverage ? Number(item.voteAverage).toFixed(1) : "";
-      button.innerHTML = `
-        <img class="poster" alt="" src="${escapeAttr(nativeImage(item.pic))}">
+      const poster = displayImage(item.pic, { size: "w342" });
+      const progress = Math.min(100, Math.max(0, Number(item.progress || 0)));
+      button.innerHTML = recent ? `
+        <img class="poster" alt="" ${imageAttrs(poster)}>
+        ${item.badge ? `<span class="recent-badge">${escapeHtml(item.badge)}</span>` : ""}
+        <div class="card-body">
+          <div class="card-title">${escapeHtml(item.title)}</div>
+          <div class="card-meta">${escapeHtml(item.remark)}</div>
+        </div>
+        ${progress > 0 ? `<div class="recent-progress" aria-hidden="true"><span style="--recent-progress:${escapeAttr(progress + "%")}"></span></div>` : ""}
+      ` : `
+        <img class="poster" alt="" ${imageAttrs(poster)}>
         ${rating ? `<span class="rating-badge">${escapeHtml(rating)}</span>` : ""}
         ${people > 0 ? `<span class="card-people">${escapeHtml(people)}人</span>` : ""}
         <div class="card-body">
@@ -3363,8 +3747,25 @@
           <div class="card-meta">${escapeHtml(item.remark)}</div>
         </div>
       `;
-      button.addEventListener("click", () => openDetail(item));
+      button.addEventListener("click", () => {
+        if (item.source === "history") openRecentItem(item);
+        else openDetail(item);
+      });
       return button;
+    }
+
+    async function openRecentItem(item) {
+      if (!item || !item.siteKey || !item.vodId) {
+        toast("最近观看缺少播放信息");
+        return;
+      }
+      try {
+        rememberWatchIntent(item, "view");
+        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic);
+        startWatchTracking(item);
+      } catch (e) {
+        toast("打开最近观看失败：" + (e.message || "unknown"));
+      }
     }
 
     function mediaDomKey(item) {
@@ -3396,6 +3797,7 @@
         listTitle: item.listTitle || "",
         title: item.title || "",
         pic: item.pic || "",
+        landscape: item.landscape || "",
         image: item.image || item.pic || "",
         desc: item.desc || "",
         releaseDate: item.releaseDate || "",
@@ -3584,7 +3986,95 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         span.textContent = text;
         return span;
       }));
-      $("detailImage").src = nativeImage(item.image || item.pic);
+      setDetailCoverCarousel(item.landscape ? [item.landscape] : [], "", { allowPoster: false });
+    }
+
+    function setDetailCoverCarousel(landscapes, poster, options) {
+      const images = uniqueCoverImages(Array.isArray(landscapes) ? landscapes : [landscapes]);
+      pauseDetailCoverCarousel();
+      state.detailCover.images = images;
+      state.detailCover.index = 0;
+      state.detailCover.token += 1;
+      setDetailCoverImage(images[0] || "", poster, options);
+      if (images.length > 1) {
+        const token = state.detailCover.token;
+        state.detailCover.timer = setInterval(() => {
+          if (token !== state.detailCover.token || !$('detailSheet').classList.contains('active') || document.visibilityState === 'hidden') return;
+          state.detailCover.index = (state.detailCover.index + 1) % state.detailCover.images.length;
+          setDetailCoverImage(state.detailCover.images[state.detailCover.index], "", { allowPoster: false, keepLoading: false });
+        }, 5200);
+      }
+    }
+
+    function restartDetailCoverCarousel() {
+      if (!$('detailSheet').classList.contains('active') || state.detailCover.timer || state.detailCover.images.length <= 1) return;
+      const images = state.detailCover.images.slice();
+      const current = Math.max(0, Math.min(state.detailCover.index, images.length - 1));
+      state.detailCover.images = [];
+      setDetailCoverCarousel(images.slice(current).concat(images.slice(0, current)), "", { allowPoster: false, keepLoading: false });
+    }
+
+    function setDetailCoverImage(landscape, poster, options) {
+      const opts = options || {};
+      const cover = $("detailImage").parentElement;
+      const image = $("detailImage");
+      const land = String(landscape || "").trim();
+      const post = String(poster || "").trim();
+      const allowPoster = opts.allowPoster !== false;
+      const usePoster = allowPoster && (!land || isSameImageSource(land, post));
+      const src = usePoster ? post || land : land;
+      cover.classList.toggle("loading", !src && opts.keepLoading !== false);
+      cover.classList.toggle("poster-mode", !!usePoster && !!src);
+      cover.style.setProperty("--detail-cover-bg", src ? `url("${cssUrl(src)}")` : "none");
+      image.classList.remove("active");
+      if (src) {
+        image.onload = () => image.classList.add("active");
+        image.src = displayImage(src, { size: usePoster ? "w780" : "w780" });
+      } else {
+        image.onload = null;
+        image.removeAttribute("src");
+      }
+    }
+
+    function pauseDetailCoverCarousel() {
+      if (state.detailCover.timer) clearInterval(state.detailCover.timer);
+      state.detailCover.timer = 0;
+      state.detailCover.token += 1;
+    }
+
+    function stopDetailCoverCarousel(clearImage) {
+      pauseDetailCoverCarousel();
+      state.detailCover.images = [];
+      state.detailCover.index = 0;
+      if (clearImage) {
+        const image = $("detailImage");
+        const cover = image.parentElement;
+        image.onload = null;
+        image.classList.remove("active");
+        image.removeAttribute("src");
+        cover.classList.remove("loading", "poster-mode");
+        cover.style.setProperty("--detail-cover-bg", "none");
+      }
+    }
+
+    function uniqueCoverImages(items) {
+      const seen = new Set();
+      return (items || []).map((item) => String(item || "").trim()).filter((item) => {
+        const key = tmdbImagePath(item) || item;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function isSameImageSource(a, b) {
+      const left = tmdbImagePath(a) || String(a || "").trim();
+      const right = tmdbImagePath(b) || String(b || "").trim();
+      return !!left && !!right && left === right;
+    }
+
+    function cssUrl(value) {
+      return String(value || "").replace(/["\\\n\r]/g, "");
     }
 
     function detailMeta(item) {
@@ -3592,8 +4082,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function clearDetailExtras() {
-      ["seasonBlock", "imageBlock", "castBlock", "personWorkBlock"].forEach((id) => $(id).style.display = "none");
-      ["seasonTabs", "episodeRail", "imageRail", "castRail", "personWorkRail"].forEach((id) => $(id).replaceChildren());
+      ["seasonBlock", "castBlock", "personWorkBlock"].forEach((id) => $(id).style.display = "none");
+      ["seasonTabs", "episodeRail", "castRail", "personWorkRail"].forEach((id) => $(id).replaceChildren());
     }
 
     async function loadDetail(item) {
@@ -3611,28 +4101,41 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     function renderDetailExtras(item, detail) {
       const overview = detail.overview || item.desc || item.remark;
       if (overview) $("detailText").textContent = overview;
-      renderImages(detail);
+      const detailLandscapes = bestDetailBackdrops(detail, 8);
+      const detailLandscape = detailLandscapes[0] || "";
+      const detailPoster = imageUrl(detail.poster_path, false) || item.pic;
+      if (detailLandscapes.length || detailPoster) {
+        item.landscape = detailLandscape || item.landscape || "";
+        item.pic = item.pic || detailPoster || "";
+        setDetailCoverCarousel(detailLandscapes.length ? detailLandscapes : item.landscape ? [item.landscape] : [], detailPoster || item.pic, { allowPoster: !detailLandscapes.length && !item.landscape });
+      }
       renderCast(detail.credits && detail.credits.cast || []);
       if (item.mediaType === "tv") renderSeasons(item, detail);
       normalizeRails();
       updatePostPanFocusState();
     }
 
-    function renderImages(detail) {
-      const backdrops = (detail.images && detail.images.backdrops || []).map((img) => ({ image: img, backdrop: true }));
-      const posters = (detail.images && detail.images.posters || []).map((img) => ({ image: img, backdrop: false }));
-      const images = backdrops.concat(posters).filter((item) => item.image.file_path).slice(0, 16);
-      if (!images.length) return;
-      $("imageBlock").style.display = "";
-      $("imageRail").replaceChildren(...images.map((item) => {
-        const full = nativeImage(imageUrl(item.image.file_path, item.backdrop));
-        const button = document.createElement("button");
-        button.className = "card focusable";
-        button.type = "button";
-        button.innerHTML = `<img class="wide-poster" alt="" src="${escapeAttr(full)}">`;
-        button.addEventListener("click", () => openImage(full));
-        return button;
-      }));
+    function bestDetailBackdrops(detail, limit) {
+      const candidates = [];
+      if (detail && detail.backdrop_path) candidates.push({ file_path: detail.backdrop_path, vote_average: 11, vote_count: Number.MAX_SAFE_INTEGER, width: 1280, height: 720 });
+      (detail && detail.images && detail.images.backdrops || []).forEach((img) => {
+        if (img && img.file_path) candidates.push(img);
+      });
+      return candidates
+        .filter((img) => img && img.file_path)
+        .sort((a, b) => backdropScore(b) - backdropScore(a))
+        .slice(0, limit || 8)
+        .map((img) => imageUrl(img.file_path, true));
+    }
+
+    function backdropScore(img) {
+      const vote = Number(img && img.vote_average || 0);
+      const count = Number(img && img.vote_count || 0);
+      const width = Number(img && img.width || 0);
+      const height = Number(img && img.height || 0);
+      const ratio = width > 0 && height > 0 ? width / height : 16 / 9;
+      const ratioPenalty = Math.abs(ratio - 16 / 9) * 1.4;
+      return vote * 1000 + Math.min(count, 1000) * 2 + Math.min(width, 3840) / 20 - ratioPenalty * 100;
     }
 
     function renderCast(cast) {
@@ -3643,8 +4146,9 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         const button = document.createElement("button");
         button.className = "person-card focusable";
         button.type = "button";
+        const profile = displayImage(imageUrl(person.profile_path, false), { size: "w185" });
         button.innerHTML = `
-          <img alt="" src="${escapeAttr(nativeImage(imageUrl(person.profile_path, false)))}">
+          <img alt="" ${imageAttrs(profile)}>
           <div><b>${escapeHtml(person.name)}</b><span>${escapeHtml(person.character || person.known_for_department || "")}</span></div>
         `;
         button.addEventListener("click", () => loadPersonWorks(person));
@@ -3695,20 +4199,22 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         return;
       }
       $("episodeRail").replaceChildren(...episodes.map((ep) => {
-        const still = ep.still_path ? nativeImage(imageUrl(ep.still_path, true)) : "";
+        const stillSource = ep.still_path ? imageUrl(ep.still_path, true) : "";
+        const still = stillSource ? displayImage(stillSource, { size: "w300" }) : "";
+        const fullStill = stillSource ? displayImage(stillSource, { size: "w780" }) : "";
         const button = document.createElement("button");
         button.className = "episode-card focusable" + (still ? " has-still" : "");
         button.type = "button";
         button.dataset.episodeNumber = String(ep.episode_number || "");
         button.innerHTML = `
-          ${still ? `<img class="episode-still" alt="" src="${escapeAttr(still)}">` : ""}
+          ${still ? `<img class="episode-still" alt="" ${imageAttrs(still)}>` : ""}
           <div class="episode-body">
             <b>${ep.episode_number}. ${escapeHtml(ep.name || "未命名")}</b>
             <span>${escapeHtml(ep.air_date || "")}</span>
             <p>${escapeHtml(ep.overview || "暂无剧情")}</p>
           </div>
         `;
-        button.addEventListener("click", () => openEpisodeViewer(ep, still));
+        button.addEventListener("click", () => openEpisodeViewer(ep, fullStill));
         return button;
       }));
       if (restoreEpisode) requestAnimationFrame(() => focusRemoteTarget(findByDataset($("episodeRail"), "episodeNumber", restoreEpisode) || $("episodeRail").querySelector(".episode-card")));
@@ -4056,7 +4562,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     function updatePostPanFocusState() {
       const panActive = !!($("panSearchBlock") && $("panSearchBlock").classList.contains("active") && $("panSearchBlock").style.display !== "none");
-      ["seasonBlock", "imageBlock", "castBlock", "personWorkBlock"].forEach((id) => {
+      ["seasonBlock", "castBlock", "personWorkBlock"].forEach((id) => {
         const block = $(id);
         if (!block) return;
         block.setAttribute("aria-hidden", panActive ? "true" : "false");
@@ -4240,7 +4746,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       await saveUiSnapshotNow();
     }
 
-    function restorePanPlaybackReturn() {
+    function restorePanPlaybackReturn(options) {
+      const opts = options || {};
       const saved = state.pan.playbackReturn;
       if (!saved) return false;
       if (Date.now() - Number(saved.at || 0) > PAN_PLAYBACK_RETURN_TTL_MS) {
@@ -4253,7 +4760,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (saved.activeType) state.pan.activeType = saved.activeType;
       state.pan.focusKey = saved.key || state.pan.focusKey || "";
       state.pan.focusMode = "results";
-      renderPanResults();
+      if (!opts.skipRender) renderPanResults();
       const apply = () => {
         const currentDetail = $("detailSheet");
         const currentList = $("panResultList");
@@ -4449,6 +4956,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("detailSheet").classList.remove("active");
       $("detailSheet").setAttribute("aria-hidden", "true");
       state.detailReturn = null;
+      stopDetailCoverCarousel(true);
       resetPanSearch();
       scheduleUiSnapshotSave();
       if (!fromPopState && location.hash === "#detail") history.back();
@@ -4486,7 +4994,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         const still = episode.still || url || "";
         episodeBox.style.display = "grid";
         episodeBox.innerHTML = `
-          ${still ? `<img alt="" src="${escapeAttr(still)}">` : ""}
+          ${still ? `<img alt="" ${imageAttrs(still)}>` : ""}
           <div>
             <h3>${escapeHtml(episode.title || "分集剧情")}</h3>
             ${episode.meta ? `<span>${escapeHtml(episode.meta)}</span>` : ""}
@@ -5497,15 +6005,19 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         searchPanResources(state.selected);
       });
       $("backTopBtn").addEventListener("click", () => {
-        try {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        } catch (e) {
-          window.scrollTo(0, 0);
-          document.documentElement.scrollTop = 0;
-          document.body.scrollTop = 0;
-        }
-        setTimeout(updateBackTopButton, 260);
+        scrollHomeToTop();
       });
+    }
+
+    function scrollHomeToTop() {
+      try {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (e) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
+      setTimeout(updateBackTopButton, 260);
     }
 
     function installRemoteKeys() {
@@ -5531,6 +6043,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         }
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) {
           if (handleSearchSuggestDirectionalKey(key, event)) return;
+          if (handleSearchFormDirectionalKey(key, event)) return;
           if (handleConnectionPanelDirectionalKey(key, event)) return;
         }
         if ((key === "Escape" || key === "Backspace") && handleConnectionPanelBackKey(event)) return;
@@ -5744,6 +6257,24 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       event.preventDefault();
       event.stopPropagation();
       if (target) focusSearchSuggestTarget(target);
+      return true;
+    }
+
+    function handleSearchFormDirectionalKey(key, event) {
+      if (!$("searchForm")) return false;
+      const input = $("searchInput");
+      const submit = $("searchForm").querySelector("button[type='submit']");
+      const active = document.activeElement;
+      let target = null;
+      if (active === submit && key === "ArrowLeft") target = input;
+      else if (active === input && key === "ArrowRight") target = submit;
+      else if (active === input && key === "ArrowDown") target = currentHomeFocus();
+      else if (active === submit && key === "ArrowDown") target = currentHomeFocus();
+      if (!target) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (target === input && input.readOnly) hideSearchSuggest();
+      focusRemoteTarget(target);
       return true;
     }
 
@@ -6004,7 +6535,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function isVisibleFocusable(el) {
-      return !!(el && el.matches && el.matches(".focusable,button,input,textarea") && el.offsetParent !== null && !el.disabled && el.getAttribute("tabindex") !== "-1" && !el.closest('[aria-hidden="true"]'));
+      if (!el || !el.matches || !el.matches(".focusable,button,input,textarea")) return false;
+      if (el.disabled || el.getAttribute("tabindex") === "-1" || el.closest('[aria-hidden="true"]')) return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (style && (style.visibility === "hidden" || style.display === "none" || style.pointerEvents === "none")) return false;
+      return !!(el.offsetParent !== null || el.getClientRects().length);
     }
 
     function rememberFocusReturn() {
@@ -6215,22 +6750,38 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       return true;
     }
 
-    function handleWebHomeResume() {
+    function scheduleWebHomeResume(options) {
+      const opts = options || {};
+      clearTimeout(state.resume.timer);
+      state.resume.timer = setTimeout(() => handleWebHomeResume(opts), opts.delay == null ? 80 : opts.delay);
+    }
+
+    function handleWebHomeResume(options) {
+      const opts = options || {};
+      const now = Date.now();
+      if (!opts.force && now - Number(state.resume.lastAt || 0) < 650) return;
+      state.resume.lastAt = now;
+      const isPanPlaybackReturn = !!(state.pan.playbackReturn && $("detailSheet") && $("detailSheet").classList.contains("active") && $("panSearchBlock") && $("panSearchBlock").classList.contains("active"));
       lockViewportWidth();
       fitConnectionPanel();
       renderConnection();
-      if ($("detailSheet") && $("detailSheet").classList.contains("active") && state.selected) renderDetailBase(state.selected);
-      if ($("panSearchBlock") && $("panSearchBlock").classList.contains("active")) renderPanResults();
-      renderAll();
-      normalizeRails();
-      if (!restorePanPlaybackReturn()) restoreDetailReturn();
+      if (!isPanPlaybackReturn) {
+        if ($("detailSheet") && $("detailSheet").classList.contains("active") && state.selected) renderDetailBase(state.selected);
+        if ($("panSearchBlock") && $("panSearchBlock").classList.contains("active")) renderPanResults();
+        renderAll();
+        normalizeRails();
+      }
+      if (!restorePanPlaybackReturn({ skipRender: isPanPlaybackReturn })) restoreDetailReturn();
       updateBackTopButton();
       scheduleHistorySettlement();
+      loadRecentList({ refresh: true, silent: true }).catch(() => {});
       sampleWatchStatus();
-      const home = $("home");
-      if (home) {
-        home.style.transform = "translateZ(0)";
-        requestAnimationFrame(() => home.style.transform = "");
+      if (!isPanPlaybackReturn) {
+        const home = $("home");
+        if (home) {
+          home.style.transform = "translateZ(0)";
+          requestAnimationFrame(() => home.style.transform = "");
+        }
       }
       scheduleUiSnapshotSave();
     }
@@ -6300,20 +6851,27 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     window.addEventListener("pagehide", () => {
       saveUiSnapshotNow();
       clearRelayBackfillTimers();
+      pauseDetailCoverCarousel();
       stopWatchTracking(true);
     });
-    window.addEventListener("pageshow", handleWebHomeResume);
+    window.addEventListener("pageshow", () => scheduleWebHomeResume());
     window.addEventListener("fmsdk", () => {
       initPanConfig({ preserveDirty: true, timeout: 0 })
         .then(loadInfo)
-        .then(handleWebHomeResume)
+        .then(() => scheduleWebHomeResume({ force: true }))
         .catch(() => {});
     });
-    window.addEventListener("fmresume", () => { loadInfo().finally(handleWebHomeResume); });
+    window.addEventListener("fmresume", () => { loadInfo().finally(() => scheduleWebHomeResume()); });
     window.addEventListener("fmpause", saveUiSnapshotNow);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") saveUiSnapshotNow();
-      if (document.visibilityState === "visible") handleWebHomeResume();
+      if (document.visibilityState === "hidden") {
+        saveUiSnapshotNow();
+        pauseDetailCoverCarousel();
+      }
+      if (document.visibilityState === "visible") {
+        restartDetailCoverCarousel();
+        scheduleWebHomeResume();
+      }
     });
 
     function lockViewportWidth() {
@@ -6341,7 +6899,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       scheduleHistorySettlement();
       setTimeout(subscribeNostr, 600);
       renderMetrics();
-      if (restored) handleWebHomeResume();
+      if (restored) scheduleWebHomeResume({ force: true });
       if (!canRestoreUi) scheduleUiSnapshotSave();
       updateBackTopButton();
       setTimeout(uiSnapshotRoute() === "home" ? focusInitialHomeNow : ensureRemoteInitialFocus, 80);
