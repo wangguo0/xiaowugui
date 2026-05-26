@@ -19,6 +19,6 @@ yarn.lock
 nostr_副本*.html
 *_副本*.html
 *.tmp
+*.log
 third_party/maven/
 third_party/sources/
-*.log

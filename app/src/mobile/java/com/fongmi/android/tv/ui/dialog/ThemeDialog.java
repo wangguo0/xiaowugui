@@ -44,3 +44,4 @@ public class ThemeDialog extends BaseAlertDialog implements ThemeAdapter.OnClick
         void setTheme(int color);
     }
 }
+

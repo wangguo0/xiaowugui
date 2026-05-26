@@ -64,10 +64,10 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void release() {
-        App.removeCallbacks(runnable);
-        if (engine == null) return;
         player.removeListener(listener);
+        App.removeCallbacks(runnable);
         releaseDanmakuController();
+        if (engine == null) return;
         engine.release();
         engine = null;
         player = null;
@@ -289,6 +289,10 @@ public class PlayerManager implements ParseCallback {
         stopParse();
     }
 
+    public void clearMediaItems() {
+        player.clearMediaItems();
+    }
+
     public boolean isRepeatOne() {
         return engine.isRepeatOne();
     }
@@ -299,6 +303,24 @@ public class PlayerManager implements ParseCallback {
 
     public void seekTo(long time) {
         player.seekTo(time);
+    }
+
+    public long getTextOffsetMs() {
+        if (player.isCommandAvailable(Player.COMMAND_GET_TEXT_OFFSET)) return player.getTextOffsetMs();
+        return 0;
+    }
+
+    public void setTextOffsetMs(long offsetMs) {
+        if (player.isCommandAvailable(Player.COMMAND_SET_TEXT_OFFSET)) player.setTextOffsetMs(offsetMs);
+    }
+
+    public long getAudioOffsetMs() {
+        if (player.isCommandAvailable(Player.COMMAND_GET_AUDIO_OFFSET)) return player.getAudioOffsetMs();
+        return 0;
+    }
+
+    public void setAudioOffsetMs(long offsetMs) {
+        if (player.isCommandAvailable(Player.COMMAND_SET_AUDIO_OFFSET)) player.setAudioOffsetMs(offsetMs);
     }
 
     public void reset() {
@@ -444,19 +466,12 @@ public class PlayerManager implements ParseCallback {
             SpiderDebug.log("playback", "error code=%s action=%s retry=%s message=%s cause=%s key=%s url=%s", e.errorCode, action, retry, engine.getErrorMessage(e), cause(e), getKey(), getUrl());
             if (action == PlayerEngine.ErrorAction.RECOVERED) {
                 if (spec != null) setDanmakus(spec.getDanmakus());
-                return;
-            }
-            if (++retry > 2) {
+            } else if (action == PlayerEngine.ErrorAction.FATAL) {
                 callback.onError(engine.getErrorMessage(e));
-                return;
-            }
-            switch (action) {
-                case DECODE:
-                    toggleDecode();
-                    break;
-                case FATAL:
-                    callback.onError(engine.getErrorMessage(e));
-                    break;
+            } else if (++retry > 1) {
+                callback.onError(engine.getErrorMessage(e));
+            } else {
+                toggleDecode();
             }
         }
     };
