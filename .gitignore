@@ -8,7 +8,6 @@ out/
 Release/
 *.apk
 *.aab
-*.aar
 *.jks
 *.keystore
 local.properties
@@ -20,5 +19,4 @@ nostr_副本*.html
 *_副本*.html
 *.tmp
 *.log
-third_party/maven/
 third_party/sources/
