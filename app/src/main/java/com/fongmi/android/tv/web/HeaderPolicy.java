@@ -2,7 +2,7 @@ package com.fongmi.android.tv.web;
 
 import android.text.TextUtils;
 
-import com.fongmi.android.tv.Setting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.github.catvod.utils.Json;
 import com.google.common.net.HttpHeaders;

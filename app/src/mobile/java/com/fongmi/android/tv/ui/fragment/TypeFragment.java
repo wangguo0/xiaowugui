@@ -13,7 +13,6 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.Product;
-import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Site;
@@ -96,7 +95,6 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
 
     @Override
     protected void initView() {
-        mBinding.swipeLayout.setColorSchemeResources(R.color.accent);
         mBinding.progressLayout.showProgress();
         mScroller = new CustomScroller(this);
         mExtends = getExtend();
@@ -162,8 +160,8 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
 
     private void checkMore() {
         mBinding.recycler.post(() -> {
-            if (mScroller.isDisable() || mBinding.recycler.canScrollVertically(1) || mBinding.recycler.getScrollState() != 0 || isHome()) return;
-            getVideo(getTypeId(), String.valueOf(mScroller.addPage()));
+            if (isHome()) return;
+            mScroller.checkMore(mBinding.recycler);
         });
     }
 
@@ -172,7 +170,7 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
     }
 
     public void setFilter(String key, Value value) {
-        if (value.isActivated()) mExtends.put(key, value.getV());
+        if (value.isSelected()) mExtends.put(key, value.getV());
         else mExtends.remove(key);
         onRefresh();
     }
@@ -184,10 +182,10 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
     }
 
     @Override
-    public void onLoadMore(String page) {
-        if (isHome()) return;
-        mScroller.setLoading(true);
+    public boolean onLoadMore(String page) {
+        if (isHome()) return false;
         getVideo(getTypeId(), page);
+        return true;
     }
 
     @Override

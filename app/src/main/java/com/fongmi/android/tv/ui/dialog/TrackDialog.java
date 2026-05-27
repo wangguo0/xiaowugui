@@ -31,19 +31,17 @@ import com.fongmi.android.tv.ui.adapter.TrackAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public final class TrackDialog extends BaseDialog implements TrackAdapter.OnClickListener {
+public final class TrackDialog extends BaseBottomSheetDialog implements TrackAdapter.OnClickListener {
 
     private final TrackNameProvider provider;
     private final TrackAdapter adapter;
     private DialogTrackBinding binding;
     private PlayerManager player;
-    private Listener listener;
     private int type;
 
     public static TrackDialog create() {
@@ -66,9 +64,20 @@ public final class TrackDialog extends BaseDialog implements TrackAdapter.OnClic
     }
 
     public void show(FragmentActivity activity) {
-        for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof BottomSheetDialogFragment) return;
+        for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof TrackDialog) return;
         show(activity.getSupportFragmentManager(), null);
-        this.listener = (Listener) activity;
+    }
+
+    private boolean hasChoose() {
+        return type == C.TRACK_TYPE_TEXT && player.isVod();
+    }
+
+    private boolean hasText() {
+        return type == C.TRACK_TYPE_TEXT && player.haveTrack(type);
+    }
+
+    private boolean hasAudio() {
+        return type == C.TRACK_TYPE_AUDIO && player.haveTrack(type);
     }
 
     @Override
@@ -82,27 +91,35 @@ public final class TrackDialog extends BaseDialog implements TrackAdapter.OnClic
         binding.recycler.setHasFixedSize(true);
         binding.recycler.setAdapter(adapter.addAll(getTrack()));
         binding.recycler.addItemDecoration(new SpaceItemDecoration(1, 16));
+        binding.title.setText(ResUtil.getStringArray(R.array.select_track)[type - 1]);
         binding.recycler.post(() -> binding.recycler.scrollToPosition(adapter.getSelected()));
         binding.recycler.setVisibility(adapter.getItemCount() == 0 ? View.GONE : View.VISIBLE);
-        binding.choose.setVisibility(type == C.TRACK_TYPE_TEXT && player.isVod() ? View.VISIBLE : View.GONE);
-        binding.subtitle.setVisibility(type == C.TRACK_TYPE_TEXT && player.haveTrack(C.TRACK_TYPE_TEXT) ? View.VISIBLE : View.GONE);
-        binding.title.setText(ResUtil.getStringArray(R.array.select_track)[type - 1]);
+        binding.offset.setVisibility(hasText() || hasAudio() ? View.VISIBLE : View.GONE);
+        binding.choose.setVisibility(hasChoose() ? View.VISIBLE : View.GONE);
+        binding.subtitle.setVisibility(hasText() ? View.VISIBLE : View.GONE);
     }
 
     @Override
     protected void initEvent() {
-        binding.choose.setOnClickListener(this::showChooser);
+        binding.offset.setOnClickListener(this::onOffset);
+        binding.choose.setOnClickListener(this::onChoose);
         binding.subtitle.setOnClickListener(this::onSubtitle);
     }
 
-    private void onSubtitle(View view) {
-        App.post(() -> listener.onSubtitleClick(), 100);
+    private void onOffset(View view) {
+        OffsetDialog.create().player(player).type(type).show(requireActivity());
         dismiss();
     }
 
-    private void showChooser(View view) {
+    private void onChoose(View view) {
         FileChooser.from(launcher).show(new String[]{MimeTypes.APPLICATION_SUBRIP, MimeTypes.TEXT_SSA, MimeTypes.TEXT_VTT, MimeTypes.APPLICATION_TTML, "audio/*", "text/*", "application/octet-stream"});
         player.pause();
+    }
+
+    private void onSubtitle(View view) {
+        Listener listener = (Listener) requireActivity();
+        App.post(listener::onSubtitleClick, 100);
+        dismiss();
     }
 
     private List<Track> getTrack() {

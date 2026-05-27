@@ -17,7 +17,6 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.net.CookieStore;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Prefers;
 import com.github.catvod.utils.Util;
@@ -31,7 +30,6 @@ import java.util.Map;
 import java.util.Objects;
 
 import okhttp3.Call;
-import okhttp3.HttpUrl;
 import okhttp3.Response;
 
 public class SiteApi {
@@ -122,7 +120,6 @@ public class SiteApi {
             vod.setPlayFrom(ResUtil.getString(R.string.push));
             vod.setPic(ResUtil.getString(R.string.push_image));
             Source.get().parse(vod.setFlags());
-            SpiderDebug.log("push", "detail id=%s playUrl=%s flags=%s", id, vod.getPlayUrl(), vod.getFlags().size());
             return Result.vod(vod);
         } else if (isSpider(site)) {
             String detailContent = site.recent().spider().detailContent(Arrays.asList(id));
@@ -155,7 +152,6 @@ public class SiteApi {
             result.setUrl(Source.get().fetch(result));
             result.setHeader(site.getHeader());
             result.setKey(key);
-            saveResultCookie(result);
             return result;
         } else if (site.getType() == 4) {
             ArrayMap<String, String> params = new ArrayMap<>();
@@ -167,15 +163,14 @@ public class SiteApi {
             if (result.getFlag().isEmpty()) result.setFlag(flag);
             result.setUrl(Source.get().fetch(result));
             result.setHeader(site.getHeader());
-            saveResultCookie(result);
             return result;
-        } else if (site.isEmpty() && PUSH.equals(key)) {
+        } else if (site.isEmpty() && "push_agent".equals(key)) {
             Result result = new Result();
             result.setUrl(id);
             result.setParse(0);
             result.setFlag(flag);
             result.setUrl(Source.get().fetch(result));
-            SpiderDebug.log("push", "player flag=%s id=%s result=%s", flag, id, result.toString());
+            SpiderDebug.log("player", result.toString());
             return result;
         } else {
             Result result = new Result();
@@ -186,18 +181,7 @@ public class SiteApi {
             result.setParse(Sniffer.isVideoFormat(id) && result.getPlayUrl().isEmpty() ? 0 : 1);
             result.setUrl(Source.get().fetch(result));
             SpiderDebug.log("player", result.toString());
-            saveResultCookie(result);
             return result;
-        }
-    }
-
-    private static void saveResultCookie(Result result) {
-        try {
-            String cookie = result.getHeader().entrySet().stream().filter(entry -> "Cookie".equalsIgnoreCase(entry.getKey())).map(Map.Entry::getValue).findFirst().orElse("");
-            if (cookie.isEmpty()) return;
-            HttpUrl url = HttpUrl.parse(result.getRealUrl());
-            if (url != null) CookieStore.save(url, cookie);
-        } catch (Throwable ignored) {
         }
     }
 

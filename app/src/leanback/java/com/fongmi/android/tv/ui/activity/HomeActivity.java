@@ -120,6 +120,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         mResult = Result.empty();
         mClock = Clock.create(mBinding.clock);
         mBinding.progressLayout.showProgress();
+        PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
         DLNARendererService.start(this);
         setRecyclerView();
         setWebView();
@@ -449,7 +450,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void showDialog() {
-        SiteDialog.create(this).show();
+        SiteDialog.create().show(this);
     }
 
     @Override

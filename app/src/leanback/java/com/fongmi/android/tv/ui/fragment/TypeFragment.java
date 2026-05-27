@@ -107,7 +107,6 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
 
     @Override
     protected void initView() {
-        mBinding.swipeLayout.setColorSchemeResources(R.color.accent);
         mScroller = new CustomScroller(this);
         mExtends = getExtend();
         mFilters = getFilter();
@@ -143,15 +142,15 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
     private void setFilters() {
         for (Filter filter : mFilters) {
             if (mExtends.containsKey(filter.getKey())) {
-                filter.setActivated(mExtends.get(filter.getKey()));
+                filter.setSelected(mExtends.get(filter.getKey()));
             }
         }
     }
 
     private void setClick(ArrayObjectAdapter adapter, String key, Value item) {
-        for (int i = 0; i < adapter.size(); i++) ((Value) adapter.get(i)).setActivated(item);
+        for (int i = 0; i < adapter.size(); i++) ((Value) adapter.get(i)).setSelected(item);
         adapter.notifyArrayItemRangeChanged(0, adapter.size());
-        if (item.isActivated()) mExtends.put(key, item.getV());
+        if (item.isSelected()) mExtends.put(key, item.getV());
         else mExtends.remove(key);
         onRefresh();
     }
@@ -186,7 +185,7 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
 
     private void checkMore() {
         if (mScroller.isDisable() || mAdapter.size() >= 5) return;
-        getVideo(getTypeId(), String.valueOf(mScroller.addPage()));
+        mScroller.checkMore();
     }
 
     private boolean checkLastSize(List<Vod> items, Style style) {
@@ -270,9 +269,9 @@ public class TypeFragment extends BaseFragment implements CustomScroller.Callbac
     }
 
     @Override
-    public void onLoadMore(String page) {
-        mScroller.setLoading(true);
+    public boolean onLoadMore(String page) {
         getVideo(getTypeId(), page);
+        return true;
     }
 
     @Override

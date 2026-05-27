@@ -1,7 +1,9 @@
 package com.fongmi.android.tv.player.engine;
 
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.MediaTitle;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
@@ -12,8 +14,10 @@ import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.github.catvod.crawler.SpiderDebug;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class ExoPlayerEngine implements PlayerEngine {
 
@@ -41,7 +45,18 @@ public class ExoPlayerEngine implements PlayerEngine {
     @Override
     public Player rebuild(Player.Listener listener) {
         player.release();
+        SpiderDebug.log("player-engine", "rebuild decode=%d", decode);
         return player = ExoUtil.buildPlayer(decode, listener);
+    }
+
+    @Override
+    public boolean isRepeatOne() {
+        return player.getRepeatMode() == Player.REPEAT_MODE_ONE;
+    }
+
+    @Override
+    public void setRepeatOne(boolean repeat) {
+        player.setRepeatMode(repeat ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
     }
 
     @Override
@@ -67,6 +82,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     @Override
     public void start(PlaySpec spec) {
         this.spec = spec;
+        SpiderDebug.log("player-engine", "start decode=%d url=%s format=%s headers=%s", decode, spec.getUrl(), spec.getFormat(), spec.getHeaders());
         startInternal();
     }
 
@@ -78,12 +94,12 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     @Override
     public boolean isLive() {
-        return player.isCurrentMediaItemLive();
+        return player.getDuration() < TimeUnit.MINUTES.toMillis(1) || player.isCurrentMediaItemLive();
     }
 
     @Override
     public boolean isVod() {
-        return !player.isCurrentMediaItemLive();
+        return player.getDuration() > TimeUnit.MINUTES.toMillis(1) && !player.isCurrentMediaItemLive();
     }
 
     @Override
@@ -107,22 +123,39 @@ public class ExoPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public boolean haveTitle() {
+        return !player.getCurrentMediaTitles().isEmpty();
+    }
+
+    @Override
+    public List<MediaTitle> getCurrentMediaTitles() {
+        return player.getCurrentMediaTitles();
+    }
+
+    @Override
     public String getErrorMessage(PlaybackException e) {
         return provider.get(e);
     }
 
     @Override
     public ErrorAction handleError(PlaybackException e) {
-        return switch (e.errorCode) {
+        ErrorAction action = switch (e.errorCode) {
             case PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW -> seekToDefaultPosition();
             case PlaybackException.ERROR_CODE_DECODER_INIT_FAILED, PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED, PlaybackException.ERROR_CODE_DECODING_FAILED -> ErrorAction.DECODE;
             case PlaybackException.ERROR_CODE_IO_UNSPECIFIED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED, PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> retryFormat(e.errorCode);
             default -> ErrorAction.FATAL;
         };
+        SpiderDebug.log("player-engine", "handleError code=%d action=%s decode=%d url=%s format=%s", e.errorCode, action, decode, spec == null ? null : spec.getUrl(), spec == null ? null : spec.getFormat());
+        return action;
     }
 
     private void startInternal() {
-        player.setMediaItem(ExoUtil.getMediaItem(spec, decode));
+        startInternal(C.TIME_UNSET);
+    }
+
+    private void startInternal(long position) {
+        SpiderDebug.log("player-engine", "prepare position=%d decode=%d url=%s format=%s", position, decode, spec.getUrl(), spec.getFormat());
+        player.setMediaItem(ExoUtil.getMediaItem(spec, decode), position);
         player.prepare();
         player.play();
     }
@@ -135,7 +168,8 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     private ErrorAction retryFormat(int errorCode) {
         spec.setFormat(ExoUtil.getMimeType(errorCode));
-        startInternal();
+        SpiderDebug.log("player-engine", "retryFormat errorCode=%d newFormat=%s position=%d", errorCode, spec.getFormat(), player.getCurrentPosition());
+        startInternal(player.getCurrentPosition());
         return ErrorAction.RECOVERED;
     }
 }
