@@ -86,6 +86,7 @@ import com.fongmi.android.tv.ui.dialog.EpisodeListDialog;
 import com.fongmi.android.tv.ui.dialog.InfoDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
+import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.FileChooser;
@@ -98,7 +99,6 @@ import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Timer;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
-import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import org.greenrobot.eventbus.Subscribe;
@@ -428,11 +428,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void checkId() {
-        if (getId().startsWith("push://")) {
-            String target = getId().substring(7);
-            SpiderDebug.log("push", "mobile checkId convert raw=%s target=%s", getId(), target);
-            getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", target);
-        }
+        if (getId().startsWith("push://")) getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", getId().substring(7));
         if (getId().isEmpty() || getId().startsWith("msearch:")) setEmpty(false);
         else getDetail();
     }
@@ -745,6 +741,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onTitle() {
+        TitleDialog.create().player(player()).show(this);
         hideControl();
     }
 
@@ -1325,7 +1322,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setTitleVisible() {
-        mBinding.control.action.title.setVisibility(View.GONE);
+        mBinding.control.action.title.setVisibility(player().haveTitle() ? View.VISIBLE : View.GONE);
     }
 
     private MediaMetadata buildMetadata() {

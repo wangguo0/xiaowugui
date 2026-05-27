@@ -3,11 +3,16 @@ package com.github.catvod.net;
 import android.annotation.SuppressLint;
 
 import androidx.collection.ArrayMap;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.github.catvod.net.interceptor.AuthInterceptor;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.interceptor.RequestInterceptor;
 import com.github.catvod.net.interceptor.ResponseInterceptor;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.Map;
@@ -19,11 +24,14 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
 import okhttp3.Call;
+import okhttp3.Connection;
+import okhttp3.EventListener;
 import okhttp3.FormBody;
 import okhttp3.Headers;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.Protocol;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -82,7 +90,7 @@ public class OkHttp {
 
     public static synchronized OkHttpClient player() {
         if (get().player != null) return get().player;
-        return get().player = getBuilder().build();
+        return get().player = getBuilder().eventListenerFactory(call -> new DebugEventListener()).build();
     }
 
     public static OkHttpClient client(long timeout) {
@@ -221,6 +229,76 @@ public class OkHttp {
                 return new X509Certificate[0];
             }
         };
+    }
+
+    private static class DebugEventListener extends EventListener {
+
+        private final long startNs;
+
+        private DebugEventListener() {
+            this.startNs = System.nanoTime();
+        }
+
+        @Override
+        public void callStart(@NonNull Call call) {
+            log(call, "start", "method=" + call.request().method() + ", headers=" + call.request().headers());
+        }
+
+        @Override
+        public void connectStart(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy) {
+            log(call, "connectStart", "address=" + inetSocketAddress + ", proxy=" + proxy);
+        }
+
+        @Override
+        public void connectEnd(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy, @Nullable Protocol protocol) {
+            log(call, "connectEnd", "address=" + inetSocketAddress + ", proxy=" + proxy + ", protocol=" + protocol);
+        }
+
+        @Override
+        public void connectFailed(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy, @Nullable Protocol protocol, @NonNull IOException ioe) {
+            log(call, "connectFailed", "address=" + inetSocketAddress + ", proxy=" + proxy + ", protocol=" + protocol + ", error=" + error(ioe));
+        }
+
+        @Override
+        public void connectionAcquired(@NonNull Call call, @NonNull Connection connection) {
+            log(call, "connectionAcquired", "route=" + connection.route());
+        }
+
+        @Override
+        public void responseHeadersEnd(@NonNull Call call, @NonNull Response response) {
+            log(call, "response", "code=" + response.code() + ", message=" + response.message() + ", contentLength=" + response.header("Content-Length") + ", contentType=" + response.header("Content-Type") + ", contentRange=" + response.header("Content-Range"));
+        }
+
+        @Override
+        public void callEnd(@NonNull Call call) {
+            log(call, "end", "elapsedMs=" + elapsedMs());
+        }
+
+        @Override
+        public void callFailed(@NonNull Call call, @NonNull IOException ioe) {
+            log(call, "failed", "elapsedMs=" + elapsedMs() + ", error=" + error(ioe));
+        }
+
+        private void log(Call call, String event, String message) {
+            SpiderDebug.log("okhttp-player", "%s url=%s %s", event, call.request().url(), message);
+        }
+
+        private long elapsedMs() {
+            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs);
+        }
+
+        private String error(Throwable error) {
+            StringBuilder builder = new StringBuilder();
+            Throwable current = error;
+            int depth = 0;
+            while (current != null && depth++ < 8) {
+                if (builder.length() > 0) builder.append(" <- ");
+                builder.append(current.getClass().getName());
+                if (current.getMessage() != null) builder.append(": ").append(current.getMessage());
+                current = current.getCause();
+            }
+            return builder.toString();
+        }
     }
 
     public void clear() {

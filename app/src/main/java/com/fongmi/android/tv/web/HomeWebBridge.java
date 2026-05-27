@@ -140,7 +140,7 @@ public class HomeWebBridge {
             else if ("stop".equals(action)) service.dispatchStop();
             else if ("prev".equals(action)) service.dispatchPrev();
             else if ("next".equals(action)) service.dispatchNext();
-            else if ("loop".equals(action) || "repeat".equals(action)) service.dispatchRepeat();
+            else if ("loop".equals(action)) service.dispatchRepeat();
             else if ("replay".equals(action)) service.dispatchReplay();
         });
         return "{}";

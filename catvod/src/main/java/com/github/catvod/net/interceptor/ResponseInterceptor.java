@@ -4,8 +4,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.github.catvod.bean.Header;
-import com.github.catvod.crawler.SpiderDebug;
-import com.github.catvod.net.CookieStore;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Util;
 import com.google.common.net.HttpHeaders;
@@ -49,18 +47,7 @@ public class ResponseInterceptor implements Interceptor {
     @Override
     public Response intercept(@NonNull Chain chain) throws IOException {
         Request request = check(chain.request());
-        long start = System.currentTimeMillis();
-        SpiderDebug.log("okhttp", "%s %s headers=%s", request.method(), request.url(), request.headers().names());
-        CookieStore.save(request);
-        Response response;
-        try {
-            response = chain.proceed(request);
-        } catch (IOException e) {
-            SpiderDebug.log("okhttp", "%s %s failed in %sms: %s", request.method(), request.url(), System.currentTimeMillis() - start, e.getMessage());
-            throw e;
-        }
-        SpiderDebug.log("okhttp", "%s %s -> %s in %sms", request.method(), request.url(), response.code(), System.currentTimeMillis() - start);
-        CookieStore.save(response);
+        Response response = chain.proceed(request);
         String encoding = response.header(HttpHeaders.CONTENT_ENCODING);
         if ("deflate".equalsIgnoreCase(encoding)) return deflate(response);
         if (response.code() == 406 && redirectMap.containsKey(request.url().toString())) return redirect(request, response);

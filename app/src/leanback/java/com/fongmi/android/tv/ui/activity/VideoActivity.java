@@ -70,6 +70,7 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
+import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
 import com.fongmi.android.tv.utils.Clock;
 import com.fongmi.android.tv.utils.FileChooser;
@@ -82,7 +83,6 @@ import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
-import com.github.catvod.crawler.SpiderDebug;
 import com.github.bassaer.library.MDColor;
 
 import org.greenrobot.eventbus.Subscribe;
@@ -389,11 +389,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void checkId() {
-        if (getId().startsWith("push://")) {
-            String target = getId().substring(7);
-            SpiderDebug.log("push", "leanback checkId convert raw=%s target=%s", getId(), target);
-            getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", target);
-        }
+        if (getId().startsWith("push://")) getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", getId().substring(7));
         if (getId().isEmpty() || getId().startsWith("msearch:")) setEmpty(false);
         else getDetail();
     }
@@ -817,6 +813,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void onTitle() {
+        TitleDialog.create().player(player()).show(this);
         hideControl();
     }
 
@@ -1163,7 +1160,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setTitleVisible() {
-        mBinding.control.action.title.setVisibility(View.GONE);
+        mBinding.control.action.title.setVisibility(player().haveTitle() ? View.VISIBLE : View.GONE);
     }
 
     private MediaMetadata buildMetadata() {

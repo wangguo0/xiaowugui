@@ -159,12 +159,12 @@
             android:screenOrientation="sensorLandscape" />
 
         <activity
-            android:name=".ui.activity.SettingEnhanceActivity"
+            android:name=".ui.activity.SettingDanmakuActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:screenOrientation="sensorLandscape" />
 
         <activity
-            android:name=".ui.activity.SettingDanmakuActivity"
+            android:name=".ui.activity.SettingEnhanceActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:screenOrientation="sensorLandscape" />
 

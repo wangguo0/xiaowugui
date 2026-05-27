@@ -59,6 +59,10 @@ public final class SubtitleDialog extends BaseBottomSheetDialog {
 
     @Override
     protected void initEvent() {
+        binding.up.setOnClickListener(this::onUp);
+        binding.down.setOnClickListener(this::onDown);
+        binding.large.setOnClickListener(this::onLarge);
+        binding.small.setOnClickListener(this::onSmall);
         binding.reset.setOnClickListener(this::onReset);
     }
 

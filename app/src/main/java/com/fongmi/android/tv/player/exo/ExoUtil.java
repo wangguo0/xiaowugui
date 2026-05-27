@@ -42,6 +42,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory;
+
 public class ExoUtil {
 
     public static void setPlayerView(PlayerView view) {
@@ -69,14 +71,17 @@ public class ExoUtil {
         builder.setDrmConfiguration(buildDrmConfig(spec.getDrm()));
         builder.setRequestMetadata(buildRequestMetadata(spec));
         builder.setMediaMetadata(spec.getMetadata());
+        builder.setAdblock(Setting.isAdblock());
         builder.setMimeType(spec.getFormat());
         builder.setImageDurationMs(15000);
         builder.setMediaId(spec.getKey());
+        builder.setDecode(decode);
         return builder.build();
     }
 
     public static String getMimeType(int errorCode) {
         if (errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED || errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED || errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED) return MimeTypes.APPLICATION_M3U8;
+        if (errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED || errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED) return MimeTypes.APPLICATION_OCTET_STREAM;
         return null;
     }
 
@@ -110,7 +115,7 @@ public class ExoUtil {
     }
 
     private static RenderersFactory buildRenderersFactory(int renderMode) {
-        return new PreferRenderersFactory(App.get(), PlayerSetting.isAudioPrefer(), PlayerSetting.isVideoPrefer()).setEnableDecoderFallback(true).setExtensionRendererMode(renderMode);
+        return new NextRenderersFactory(App.get()).setAudioPrefer(PlayerSetting.isAudioPrefer()).setVideoPrefer(PlayerSetting.isVideoPrefer()).setEnableDecoderFallback(true).setExtensionRendererMode(renderMode);
     }
 
     private static MediaSource.Factory buildMediaSourceFactory() {

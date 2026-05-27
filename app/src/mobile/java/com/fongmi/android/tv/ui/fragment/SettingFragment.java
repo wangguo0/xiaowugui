@@ -251,17 +251,18 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
         getRoot().change(2);
     }
 
-    private void onEnhance(View view) {
+    private void onDanmaku(View view) {
         getRoot().change(3);
     }
 
-    private void onDanmaku(View view) {
+    private void onEnhance(View view) {
         getRoot().change(4);
     }
 
     private void onThemeColor(View view) {
         ThemeDialog.show(this);
     }
+
 
     private void onVersion(View view) {
         Updater.create().force().start(requireActivity());

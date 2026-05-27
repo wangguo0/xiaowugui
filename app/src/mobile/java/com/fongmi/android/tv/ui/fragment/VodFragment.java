@@ -45,7 +45,6 @@ import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.HomeWebController;
 
 import org.greenrobot.eventbus.EventBus;
@@ -390,6 +389,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.pager.setVisibility(View.VISIBLE);
         mBinding.homeWeb.setVisibility(View.GONE);
     }
+
 
     class PageAdapter extends FragmentStatePagerAdapter {
 

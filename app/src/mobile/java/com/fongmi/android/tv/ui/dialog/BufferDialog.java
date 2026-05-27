@@ -6,7 +6,6 @@ import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
-import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.databinding.DialogBufferBinding;
 import com.fongmi.android.tv.impl.BufferListener;
 import com.fongmi.android.tv.setting.PlayerSetting;

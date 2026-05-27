@@ -54,10 +54,7 @@ public class PlayerManager implements ParseCallback {
     private int retry;
 
     public PlayerManager(Callback callback) {
-        this.runnable = () -> {
-            SpiderDebug.log("playback", "timeout state=%s key=%s url=%s", stateName(player == null ? Player.STATE_IDLE : player.getPlaybackState()), getKey(), getUrl());
-            callback.onError(ResUtil.getString(R.string.error_play_timeout));
-        };
+        this.runnable = () -> callback.onError(ResUtil.getString(R.string.error_play_timeout));
         this.engine = new ExoPlayerEngine(PlayerEngine.HARD, listener);
         this.player = engine.getPlayer();
         this.callback = callback;
@@ -66,7 +63,6 @@ public class PlayerManager implements ParseCallback {
     public void release() {
         player.removeListener(listener);
         App.removeCallbacks(runnable);
-        releaseDanmakuController();
         if (engine == null) return;
         engine.release();
         engine = null;
@@ -229,7 +225,6 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void setDanmakuController(DanmakuController controller) {
-        releaseDanmakuController();
         danmakuController = controller;
         danmakuController.setOkHttpClient(OkHttp.player());
         danmakuController.setConfig(DanmakuSetting.getConfig());
@@ -376,11 +371,10 @@ public class PlayerManager implements ParseCallback {
 
     private void setMediaItem(long timeout) {
         if (spec == null || spec.getUrl() == null) return;
+        SpiderDebug.log("player", "setMediaItem timeout=%d spec=%s", timeout, debugSpec());
         setDanmakus(spec.getDanmakus());
-        SpiderDebug.log("playback", "start timeout=%s key=%s format=%s url=%s headers=%s", timeout, spec.getKey(), spec.getFormat(), spec.getUrl(), spec.getHeaders());
-        App.removeCallbacks(runnable);
-        App.post(runnable, timeout);
         engine.start(spec.checkUa());
+        App.post(runnable, timeout);
         callback.onPrepare();
         initTrack = false;
     }
@@ -396,12 +390,6 @@ public class PlayerManager implements ParseCallback {
         else danmakuController.setDataSource(Uri.parse(item.getRealUrl()));
     }
 
-    private void releaseDanmakuController() {
-        if (danmakuController == null) return;
-        danmakuController.release();
-        danmakuController = null;
-    }
-
     public void addDanmaku(Danmaku item) {
         if (danmakuController == null || item.isEmpty()) return;
         if (spec != null) spec.addDanmaku(item);
@@ -410,6 +398,7 @@ public class PlayerManager implements ParseCallback {
     @Override
     public void onParseSuccess(Map<String, String> headers, String url, String from) {
         if (!TextUtils.isEmpty(from)) Notify.show(ResUtil.getString(R.string.parse_from, from));
+        SpiderDebug.log("player", "parseSuccess from=%s url=%s headers=%s", from, url, headers);
         if (headers != null) headers.remove(HttpHeaders.RANGE);
         if (spec != null) spec.setHeaders(headers);
         if (spec != null) spec.setUrl(url);
@@ -419,6 +408,40 @@ public class PlayerManager implements ParseCallback {
     @Override
     public void onParseError() {
         callback.onError(ResUtil.getString(R.string.error_play_parse));
+    }
+
+    private String debugSpec() {
+        if (spec == null) return "null";
+        return "key=" + spec.getKey() +
+                ", url=" + spec.getUrl() +
+                ", format=" + spec.getFormat() +
+                ", headers=" + spec.getHeaders() +
+                ", subs=" + (spec.getSubs() == null ? 0 : spec.getSubs().size()) +
+                ", danmakus=" + (spec.getDanmakus() == null ? 0 : spec.getDanmakus().size());
+    }
+
+    private static String stateName(int state) {
+        return switch (state) {
+            case Player.STATE_IDLE -> "IDLE";
+            case Player.STATE_BUFFERING -> "BUFFERING";
+            case Player.STATE_READY -> "READY";
+            case Player.STATE_ENDED -> "ENDED";
+            default -> String.valueOf(state);
+        };
+    }
+
+    private static String causeChain(Throwable error) {
+        if (error == null) return "null";
+        StringBuilder builder = new StringBuilder();
+        Throwable current = error;
+        int depth = 0;
+        while (current != null && depth++ < 8) {
+            if (builder.length() > 0) builder.append(" <- ");
+            builder.append(current.getClass().getName());
+            if (!TextUtils.isEmpty(current.getMessage())) builder.append(": ").append(current.getMessage());
+            current = current.getCause();
+        }
+        return builder.toString();
     }
 
     public interface Callback {
@@ -438,8 +461,8 @@ public class PlayerManager implements ParseCallback {
 
         @Override
         public void onPlaybackStateChanged(int state) {
-            SpiderDebug.log("playback", "state=%s key=%s url=%s position=%s duration=%s", stateName(state), getKey(), getUrl(), player == null ? 0 : player.getCurrentPosition(), player == null ? 0 : player.getDuration());
             if (state != Player.STATE_IDLE) App.removeCallbacks(runnable);
+            SpiderDebug.log("player", "state=%s spec=%s", stateName(state), debugSpec());
         }
 
         @Override
@@ -463,10 +486,12 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             PlayerEngine.ErrorAction action = engine.handleError(e);
-            SpiderDebug.log("playback", "error code=%s action=%s retry=%s message=%s cause=%s key=%s url=%s", e.errorCode, action, retry, engine.getErrorMessage(e), cause(e), getKey(), getUrl());
+            SpiderDebug.log("player", "error code=%d message=%s action=%s retry=%d spec=%s cause=%s", e.errorCode, e.getMessage(), action, retry, debugSpec(), causeChain(e));
             if (action == PlayerEngine.ErrorAction.RECOVERED) {
                 if (spec != null) setDanmakus(spec.getDanmakus());
-            } else if (action == PlayerEngine.ErrorAction.FATAL) {
+                return;
+            }
+            if (action == PlayerEngine.ErrorAction.FATAL) {
                 callback.onError(engine.getErrorMessage(e));
             } else if (++retry > 1) {
                 callback.onError(engine.getErrorMessage(e));
@@ -475,20 +500,4 @@ public class PlayerManager implements ParseCallback {
             }
         }
     };
-
-    private static String stateName(int state) {
-        return switch (state) {
-            case Player.STATE_BUFFERING -> "BUFFERING";
-            case Player.STATE_READY -> "READY";
-            case Player.STATE_ENDED -> "ENDED";
-            case Player.STATE_IDLE -> "IDLE";
-            default -> String.valueOf(state);
-        };
-    }
-
-    private static String cause(Throwable e) {
-        Throwable cause = e;
-        while (cause.getCause() != null) cause = cause.getCause();
-        return cause.getClass().getSimpleName() + ": " + cause.getMessage();
-    }
 }
