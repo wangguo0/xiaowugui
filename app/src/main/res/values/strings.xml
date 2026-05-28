@@ -210,6 +210,7 @@
 
     <!-- Search -->
     <string name="search_keyword">Keywords…</string>
+    <string name="site_search_hint">Search sites…</string>
     <string name="search_record">History</string>
     <string name="search_suggest">Suggest</string>
     <string name="search_hot">Hot</string>

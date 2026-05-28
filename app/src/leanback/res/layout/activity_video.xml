@@ -256,25 +256,26 @@
                 tools:visibility="visible" />
 
             <androidx.leanback.widget.HorizontalGridView
-                android:id="@+id/episode"
+                android:id="@+id/array"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="12dp"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:visibility="gone" />
 
-            <androidx.leanback.widget.HorizontalGridView
-                android:id="@+id/array"
+            <androidx.leanback.widget.VerticalGridView
+                android:id="@+id/episode"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="188dp"
                 android:layout_marginBottom="16dp"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
+                android:paddingBottom="8dp"
                 android:visibility="gone" />
 
             <androidx.leanback.widget.HorizontalGridView

@@ -99,8 +99,7 @@ public class CollectActivity extends BaseActivity {
     }
 
     private void setRecyclerView() {
-        mBinding.recycler.setHorizontalSpacing(ResUtil.dp2px(16));
-        mBinding.recycler.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
+        mBinding.recycler.setVerticalSpacing(ResUtil.dp2px(12));
         mBinding.recycler.setAdapter(mAdapter = new CollectAdapter());
     }
 

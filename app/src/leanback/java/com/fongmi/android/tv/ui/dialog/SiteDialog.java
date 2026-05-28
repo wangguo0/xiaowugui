@@ -7,13 +7,18 @@ import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
+import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.DialogSiteBinding;
+import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.SiteAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
+import com.fongmi.android.tv.utils.Notify;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickListener {
@@ -75,7 +80,11 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     @Override
     protected void initView() {
         adapter = new SiteAdapter(this);
-        if (action) binding.action.setVisibility(View.VISIBLE);
+        binding.action.setVisibility(View.VISIBLE);
+        binding.search.setVisibility(action ? View.VISIBLE : View.GONE);
+        binding.change.setVisibility(action ? View.VISIBLE : View.GONE);
+        binding.select.setVisibility(action ? View.VISIBLE : View.GONE);
+        binding.cancel.setVisibility(action ? View.VISIBLE : View.GONE);
         setType(type);
         setRecyclerView();
         setMode();
@@ -83,11 +92,25 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
 
     @Override
     protected void initEvent() {
+        binding.config.setOnClickListener(v -> {
+            FragmentActivity activity = requireActivity();
+            dismiss();
+            App.post(() -> HistoryDialog.create().vod().readOnly().show(activity, item -> loadConfig(activity, item)), 100);
+        });
         binding.mode.setOnClickListener(this::onMode);
         binding.select.setOnClickListener(v -> adapter.selectAll());
         binding.cancel.setOnClickListener(v -> adapter.cancelAll());
         binding.search.setOnClickListener(v -> setType(v.isSelected() ? 0 : 1));
         binding.change.setOnClickListener(v -> setType(v.isSelected() ? 0 : 2));
+        binding.keyword.addTextChangedListener(new com.fongmi.android.tv.ui.custom.CustomTextListener() {
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.filter(s.toString());
+                setRecyclerView();
+                setMode();
+                setWidth();
+            }
+        });
     }
 
     private void setRecyclerView() {
@@ -129,6 +152,28 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     public void onItemClick(Site item) {
         if (listener != null) listener.setSite(item);
         dismiss();
+    }
+
+    private void loadConfig(FragmentActivity activity, Config config) {
+        if (config.getUrl().equals(VodConfig.getUrl())) return;
+        VodConfig.load(config, new Callback() {
+            @Override
+            public void start() {
+                Notify.progress(activity);
+            }
+
+            @Override
+            public void success() {
+                Notify.dismiss();
+                LiveConfig.get().clear();
+            }
+
+            @Override
+            public void error(String msg) {
+                Notify.dismiss();
+                Notify.show(msg);
+            }
+        });
     }
 
     @Override

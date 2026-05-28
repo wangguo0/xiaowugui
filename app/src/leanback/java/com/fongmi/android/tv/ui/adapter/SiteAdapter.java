@@ -15,15 +15,18 @@ import com.fongmi.android.tv.setting.Setting;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
 
     private final OnClickListener listener;
+    private final List<Site> allItems;
     private final List<Site> mItems;
     private int type;
 
     public SiteAdapter(OnClickListener listener) {
         this.listener = listener;
+        this.allItems = new ArrayList<>();
         this.mItems = new ArrayList<>();
         this.addAll();
     }
@@ -38,6 +41,13 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         notifyDataSetChanged();
     }
 
+    public void filter(String keyword) {
+        String text = keyword == null ? "" : keyword.trim().toLowerCase(Locale.getDefault());
+        mItems.clear();
+        for (Site site : allItems) if (text.isEmpty() || site.getName().toLowerCase(Locale.getDefault()).contains(text) || site.getKey().toLowerCase(Locale.getDefault()).contains(text)) mItems.add(site);
+        notifyDataSetChanged();
+    }
+
     public void selectAll() {
         setEnable(type != 3);
     }
@@ -47,7 +57,8 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
     }
 
     private void addAll() {
-        for (Site site : VodConfig.get().getSites()) if (!site.isHide()) mItems.add(site);
+        for (Site site : VodConfig.get().getSites()) if (!site.isHide()) allItems.add(site);
+        mItems.addAll(allItems);
     }
 
     public List<Site> getItems() {
