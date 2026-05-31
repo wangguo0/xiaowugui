@@ -18,51 +18,66 @@ public class ProxySetting {
 
     public static void apply() {
         OkHttp.selector().remove(NAME);
-        if (!Setting.isShellProxy()) return;
+        OkHttp.closeIdleConnections();
+        if (!Setting.isShellProxy()) {
+            SpiderDebug.log("proxy", "app proxy disabled");
+            return;
+        }
         List<Proxy> rules = getRules();
-        if (rules.isEmpty()) return;
+        if (rules.isEmpty()) {
+            SpiderDebug.log("proxy", "app proxy enabled but no valid rules defaultUrl=%s rulesLength=%s", safeUrl(Setting.getShellProxyUrl()), Setting.getShellProxyRules().length());
+            return;
+        }
         OkHttp.selector().addAll(rules);
-        SpiderDebug.log("proxy", "app proxy enabled rules=%s", rules.size());
+        SpiderDebug.log("proxy", "app proxy enabled rules=%s defaultUrl=%s", rules.size(), safeUrl(Setting.getShellProxyUrl()));
     }
 
     public static List<Proxy> getRules() {
         String rules = Setting.getShellProxyRules().trim();
-        if (!TextUtils.isEmpty(rules)) return parse(rules, Setting.getShellProxyUrl().trim());
+        if (!TextUtils.isEmpty(rules)) return parse(rules, cleanUrl(Setting.getShellProxyUrl()));
         return legacy();
     }
 
     private static List<Proxy> legacy() {
-        String url = Setting.getShellProxyUrl().trim();
+        String url = cleanUrl(Setting.getShellProxyUrl());
         if (TextUtils.isEmpty(url) || !isValid(url)) return List.of();
         return Proxy.arrayFrom(legacy(url));
     }
 
     private static List<Proxy> parse(String rules, String defaultUrl) {
         try {
-            if (Json.isArray(rules)) return Proxy.arrayFrom(normalize(Json.parse(rules).getAsJsonArray()));
-            if (Json.isObj(rules)) return parseObject(Json.parse(rules).getAsJsonObject());
+            if (Json.isArray(rules)) return Proxy.arrayFrom(normalize(Json.parse(rules).getAsJsonArray(), defaultUrl));
+            if (Json.isObj(rules)) return parseObject(Json.parse(rules).getAsJsonObject(), defaultUrl);
             return Proxy.arrayFrom(parseLines(rules, defaultUrl));
         } catch (Exception e) {
+            SpiderDebug.log("proxy", "parse failed rulesLength=%s error=%s", rules.length(), e.getMessage());
             return List.of();
         }
     }
 
-    private static List<Proxy> parseObject(JsonObject object) {
-        if (object.has("proxy")) return Proxy.arrayFrom(normalize(object.getAsJsonArray("proxy")));
+    private static List<Proxy> parseObject(JsonObject object, String defaultUrl) {
+        if (object.has("proxy")) return Proxy.arrayFrom(normalize(object.getAsJsonArray("proxy"), defaultUrl));
         JsonArray array = new JsonArray();
         array.add(object);
-        return Proxy.arrayFrom(normalize(array));
+        return Proxy.arrayFrom(normalize(array, defaultUrl));
     }
 
-    private static JsonArray normalize(JsonArray input) {
+    private static JsonArray normalize(JsonArray input, String defaultUrl) {
         JsonArray output = new JsonArray();
         for (int i = 0; i < input.size(); i++) {
             if (!input.get(i).isJsonObject()) continue;
             JsonObject object = input.get(i).getAsJsonObject().deepCopy();
             object.addProperty("name", NAME);
+            fillDefaultUrl(object, defaultUrl);
             output.add(object);
         }
         return output;
+    }
+
+    private static void fillDefaultUrl(JsonObject object, String defaultUrl) {
+        if (object.has("urls") && object.get("urls").isJsonArray() && !object.getAsJsonArray("urls").isEmpty()) return;
+        if (TextUtils.isEmpty(defaultUrl)) return;
+        object.add("urls", urls(defaultUrl));
     }
 
     private static JsonArray parseLines(String rules, String defaultUrl) {
@@ -120,7 +135,20 @@ public class ProxySetting {
         return array;
     }
 
+    public static String cleanUrl(String url) {
+        String value = url == null ? "" : url.trim();
+        return "socks5://".equalsIgnoreCase(value) ? "" : value;
+    }
+
+    private static String safeUrl(String url) {
+        String value = cleanUrl(url);
+        if (TextUtils.isEmpty(value)) return "";
+        Uri uri = Uri.parse(value);
+        return uri.getScheme() + "://" + uri.getHost() + ":" + uri.getPort();
+    }
+
     public static boolean isValid(String url) {
+        url = cleanUrl(url);
         if (TextUtils.isEmpty(url)) return false;
         Uri uri = Uri.parse(url);
         String scheme = uri.getScheme();
@@ -135,7 +163,7 @@ public class ProxySetting {
 
     public static boolean isValidRules(String rules, String defaultUrl) {
         String text = rules == null ? "" : rules.trim();
-        String url = defaultUrl == null ? "" : defaultUrl.trim();
+        String url = cleanUrl(defaultUrl);
         if (TextUtils.isEmpty(text)) return TextUtils.isEmpty(url) || isValid(url);
         if (!TextUtils.isEmpty(url) && !isValid(url)) return false;
         List<Proxy> items = parse(text, url);

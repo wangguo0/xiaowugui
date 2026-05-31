@@ -164,7 +164,7 @@ public class ShellProxyDialog extends BaseAlertDialog {
     }
 
     private String getDefaultUrl() {
-        return binding.defaultUrl.getText() == null ? "" : binding.defaultUrl.getText().toString().trim();
+        return ProxySetting.cleanUrl(binding.defaultUrl.getText() == null ? "" : binding.defaultUrl.getText().toString());
     }
 
     private String getRuleText() {
