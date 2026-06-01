@@ -248,8 +248,36 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private boolean closeAndSave(boolean validate) {
         if (!save(validate)) return false;
+        focusBeforeDismiss();
         dismiss();
         return true;
+    }
+
+    private void focusBeforeDismiss() {
+        if (binding == null) return;
+        View focus = binding.root.findFocus();
+        if (focus != null) focus.clearFocus();
+        binding.positive.requestFocus();
+    }
+
+    private void focusBeforeRemove(View removed) {
+        if (binding == null || removed == null) return;
+        View focus = binding.root.findFocus();
+        if (isDescendant(focus, removed)) {
+            focus.clearFocus();
+            binding.add.requestFocus();
+        }
+    }
+
+    private boolean isDescendant(View child, View parent) {
+        if (child == null || parent == null) return false;
+        if (child == parent) return true;
+        ViewParent viewParent = child.getParent();
+        while (viewParent instanceof View) {
+            if (viewParent == parent) return true;
+            viewParent = viewParent.getParent();
+        }
+        return false;
     }
 
     private boolean save(boolean validate) {
@@ -429,9 +457,10 @@ public class CustomCspDialog extends BaseAlertDialog {
             notifyItemMoved(from, to);
         }
 
-        void remove(int position) {
+        void remove(int position, View removed) {
             if (position < 0 || position >= items.size()) return;
             syncAllVisibleRows();
+            focusBeforeRemove(removed);
             CustomCspSetting.Item item = items.remove(position);
             if (item.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey("");
             notifyItemRemoved(position);
@@ -491,7 +520,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 binding.link.setOnClickListener(view -> editLink(item));
                 binding.up.setOnClickListener(view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1));
                 binding.down.setOnClickListener(view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1));
-                binding.delete.setOnClickListener(view -> remove(getBindingAdapterPosition()));
+                binding.delete.setOnClickListener(view -> remove(getBindingAdapterPosition(), itemView));
             }
 
             void bind(CustomCspSetting.Item item) {
