@@ -64,7 +64,9 @@ public class Manage implements Process {
         try {
             ManageService.touch();
             if (url.equals("/manage/session")) return session(session.getParms());
+            if (url.equals("/manage/background/settings")) return backgroundSettings(session);
             if (url.equals("/manage/devices")) return devices(session.getParms());
+            if (url.equals("/manage/remote/ping")) return remotePing(session.getParms());
             if (url.equals("/manage/action")) return forwardTo(session, "/action");
             if (url.equals("/manage/remote/file")) return remoteFile(session.getParms());
             if (url.equals("/manage/remote/archive")) return remoteArchive(session.getParms());
@@ -81,6 +83,7 @@ public class Manage implements Process {
                 case "/manage/sync/start" -> syncStart(session.getParms());
                 case "/manage/file/archive" -> fileArchive(session.getParms());
                 case "/manage/proxy" -> proxy(session.getParms());
+                case "/manage/csp/page" -> cspPage(session.getParms());
                 case "/manage/csp" -> csp(session.getParms());
                 default -> Nano.error(Status.NOT_FOUND, "Not found");
             };
@@ -99,11 +102,26 @@ public class Manage implements Process {
         object.addProperty("localUrl", ManageService.getLocalUrl());
         object.addProperty("lanUrl", ManageService.getLanUrl());
         object.addProperty("batteryOptimized", !ManageService.isIgnoringBatteryOptimizations(App.get()));
+        object.addProperty("backgroundSettingsNeeded", ManageService.shouldOpenBackgroundPowerSettings(App.get()));
+        object.addProperty("backgroundGuided", ManageService.isBackgroundPowerGuided());
+        object.addProperty("backgroundGuide", ManageService.getBackgroundPowerGuide(App.get()));
         object.addProperty("wakeLock", ManageService.isWakeLockHeld());
         object.addProperty("wifiLock", ManageService.isWifiLockHeld());
         object.addProperty("lastAccess", ManageService.getLastAccess());
         object.addProperty("idleTimeout", ManageService.getIdleTimeout());
         object.addProperty("time", System.currentTimeMillis());
+        return json(object);
+    }
+
+    private Response backgroundSettings(IHTTPSession session) throws IOException {
+        String target = session.getParms().get("target");
+        if (!TextUtils.isEmpty(target)) return forwardTo(session, "/manage/background/settings");
+        boolean opened = ManageService.openBackgroundPowerSettings(App.get());
+        JsonObject object = new JsonObject();
+        object.addProperty("opened", opened);
+        object.addProperty("backgroundSettingsNeeded", ManageService.shouldOpenBackgroundPowerSettings(App.get()));
+        object.addProperty("batteryOptimized", !ManageService.isIgnoringBatteryOptimizations(App.get()));
+        object.addProperty("guide", ManageService.getBackgroundPowerGuide(App.get()));
         return json(object);
     }
 
@@ -118,6 +136,29 @@ public class Manage implements Process {
         JsonArray devices = new JsonArray();
         for (Device device : Device.getAll()) if (device.isApp() && !Device.get().equals(device)) devices.add(App.gson().toJsonTree(device));
         object.add("devices", devices);
+        return json(object);
+    }
+
+    private Response remotePing(Map<String, String> params) {
+        String target = params.get("target");
+        JsonObject object = new JsonObject();
+        object.addProperty("target", target == null ? "" : target);
+        object.addProperty("time", System.currentTimeMillis());
+        if (TextUtils.isEmpty(target)) {
+            object.addProperty("ok", false);
+            object.addProperty("message", "Missing target");
+            return json(object);
+        }
+        try (okhttp3.Response response = OkHttp.client(1200).newCall(new Request.Builder().url(target.replaceAll("/+$", "") + "/device").build()).execute()) {
+            ResponseBody body = response.body();
+            String text = body == null ? "" : body.string();
+            object.addProperty("ok", response.isSuccessful() && !TextUtils.isEmpty(text));
+            if (!response.isSuccessful()) object.addProperty("message", "HTTP " + response.code());
+            else if (!TextUtils.isEmpty(text)) object.add("device", App.gson().toJsonTree(Device.objectFrom(text)));
+        } catch (Exception e) {
+            object.addProperty("ok", false);
+            object.addProperty("message", e.getClass().getSimpleName());
+        }
         return json(object);
     }
 
@@ -443,6 +484,25 @@ public class Manage implements Process {
         object.addProperty("active", count.active());
         object.addProperty("enabledCount", count.enabled());
         object.addProperty("itemsCount", registry.getItems().size());
+        return json(object);
+    }
+
+    private Response cspPage(Map<String, String> params) {
+        String id = params.get("id");
+        if (TextUtils.isEmpty(id)) return Nano.error(Status.BAD_REQUEST, "Missing id");
+        String safeId = id.replaceAll("[^A-Za-z0-9_.-]", "_");
+        String link = params.get("link");
+        String code = params.get("code");
+        String homePage;
+        if (!TextUtils.isEmpty(link)) {
+            homePage = link.trim();
+        } else {
+            Path.write(CustomCspSetting.file(safeId, "index.html"), (code == null ? "" : code).getBytes(StandardCharsets.UTF_8));
+            homePage = CustomCspSetting.localUrl(safeId, "index.html");
+        }
+        JsonObject object = new JsonObject();
+        object.addProperty("id", safeId);
+        object.addProperty("homePage", homePage);
         return json(object);
     }
 

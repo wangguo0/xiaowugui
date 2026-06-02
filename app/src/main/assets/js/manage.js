@@ -14,10 +14,15 @@ let syncPaths = [];
 let syncLoadedKey = '';
 let cspRegistry = null;
 let cspLoadedKey = '';
+let cspRawDirty = false;
+let pendingCspIndex = -1;
 let proxyLoadedKey = '';
 let dialogClosing = false;
 let loadingCount = 0;
 let heartbeatTimer = null;
+let remoteHealthTimer = null;
+let remoteHealth = {};
+let remoteHealthPending = {};
 let fileSelection = new Set();
 let currentFiles = [];
 let devicePanelOpen = false;
@@ -30,6 +35,8 @@ const REQUEST_TIMEOUT = 12000;
 const FILE_TIMEOUT = 15000;
 const UPLOAD_TIMEOUT = 60000;
 const SYNC_TIMEOUT = 600000;
+const REMOTE_HEALTH_INTERVAL = 6000;
+const REMOTE_HEALTH_BLOCK_MS = 18000;
 
 function escPath(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -38,6 +45,7 @@ function remoteManageActive() { return mode === 'remote' && currentView !== 'syn
 function targetParam() { return remoteManageActive() ? { target } : {}; }
 function targetQuery(extra = {}) { return new URLSearchParams({ ...targetParam(), ...extra }).toString(); }
 function activeKey() { return mode + ':' + target; }
+function healthKey(url = target) { return String(url || '').replace(/\/+$/, ''); }
 
 function fileApi(path, download = false) {
     if (mode === 'remote' && target) return '/manage/remote/file?' + new URLSearchParams({ target, path, download: download ? '1' : '' }).toString();
@@ -63,11 +71,12 @@ function heartbeat(close = false) {
 
 function renderServiceStatus(data) {
     const running = !!(data && data.running && data.serverRunning !== false);
-    const optimized = !!(data && data.batteryOptimized);
+    const optimized = !!(data && (data.backgroundSettingsNeeded != null ? data.backgroundSettingsNeeded : data.batteryOptimized));
     const missingLock = !!(data && running && (!data.wakeLock || !data.wifiLock));
-    const text = !running ? '页面已关闭' : optimized ? '后台受限' : missingLock ? '保活异常' : '页面运行中';
+    const text = !running ? '页面已关闭' : optimized ? '后台设置' : missingLock ? '保活异常' : '页面运行中';
     const title = running ? `后台受限: ${optimized ? '是' : '否'}，CPU锁: ${data.wakeLock ? '是' : '否'}，Wi-Fi锁: ${data.wifiLock ? '是' : '否'}` : '管理页服务未运行';
     $('#serviceStatus').text(text).toggleClass('off', !running).toggleClass('warn', running && (optimized || missingLock)).attr('title', title);
+    $('#backgroundGuideText').text(data && data.backgroundGuide ? data.backgroundGuide : 'App 进入后台后可能断开连接，请允许后台高耗电或后台运行。');
     $('#keepAliveHint').css('display', running && optimized ? 'flex' : 'none');
 }
 
@@ -77,11 +86,116 @@ function startHeartbeat() {
     heartbeatTimer = setInterval(() => heartbeat(false), 20000);
 }
 
+function startRemoteHealth() {
+    if (remoteHealthTimer) clearInterval(remoteHealthTimer);
+    remoteHealthTimer = null;
+    if (!target || !(mode === 'remote' || currentView === 'sync')) {
+        updateTargetHealthUi();
+        return;
+    }
+    pingRemote(true);
+    remoteHealthTimer = setInterval(() => pingRemote(false), REMOTE_HEALTH_INTERVAL);
+}
+
+function pingRemote(force = false, callback) {
+    const key = healthKey();
+    if (!key) { if (callback) callback(false); return; }
+    if (remoteHealthPending[key]) {
+        if (callback) setTimeout(() => {
+            const state = targetHealth(key);
+            if (state && state.ok != null && !state.checking) callback(!!state.ok);
+            else pingRemote(force, callback);
+        }, 500);
+        return;
+    }
+    remoteHealthPending[key] = true;
+    if (!remoteHealth[key]) remoteHealth[key] = { checking: true, time: 0 };
+    else remoteHealth[key].checking = true;
+    updateTargetHealthUi();
+    $.ajax({ url: '/manage/remote/ping', data: { target: key }, timeout: 1800, cache: false })
+        .done(res => {
+            let data = {};
+            try { data = parseJson(res); } catch (e) {}
+            const device = data.device || {};
+            remoteHealth[key] = {
+                ok: !!data.ok,
+                checking: false,
+                time: Date.now(),
+                message: data.message || '',
+                name: device.name || ''
+            };
+            if (target === key && device.name && !targetName) targetName = device.name;
+        })
+        .fail((xhr, status) => {
+            remoteHealth[key] = { ok: false, checking: false, time: Date.now(), message: status || 'failed' };
+        })
+        .always(() => {
+            remoteHealthPending[key] = false;
+            updateTargetText();
+            updateTargetHealthUi();
+            renderDeviceHealth();
+            if (callback) callback(!!(remoteHealth[key] && remoteHealth[key].ok));
+        });
+}
+
+function targetHealth(url = target) {
+    return remoteHealth[healthKey(url)] || null;
+}
+
+function isRemoteOffline(url = target) {
+    const state = targetHealth(url);
+    return !!(state && state.ok === false && Date.now() - state.time < REMOTE_HEALTH_BLOCK_MS);
+}
+
+function isRemoteRequest(url, data) {
+    if (url === '/manage/remote/ping') return false;
+    if (data && data.target) return true;
+    if (String(url || '').includes('target=')) return true;
+    return String(url || '').startsWith('/manage/remote/');
+}
+
+function blockOfflineRemote(url, data) {
+    const remote = data && data.target ? data.target : target;
+    if (!isRemoteRequest(url, data) || !isRemoteOffline(remote)) return false;
+    warnToast('远端设备离线，已停止操作');
+    pingRemote(true);
+    return true;
+}
+
+function updateTargetHealthUi() {
+    const state = targetHealth();
+    const selected = !!target;
+    const offline = selected && state && state.ok === false;
+    const online = selected && state && state.ok === true;
+    const checking = selected && (!state || state.checking);
+    $('#remotePicker').toggleClass('remote-offline', !!offline).toggleClass('remote-online', !!online).toggleClass('remote-checking', !!checking);
+    $('#targetStatusDot').toggleClass('ok-dot', !!online).toggleClass('offline-dot', !!offline).toggleClass('pending-dot', !online && !offline);
+    $('#targetStatusText').text(!selected ? '远端设备' : offline ? '远端离线' : online ? '远端在线' : '检测中');
+}
+
+function renderDeviceHealth() {
+    $('#deviceList .device-item').each(function () {
+        const key = healthKey($(this).data('ip'));
+        const state = remoteHealth[key];
+        $(this).toggleClass('offline', !!(state && state.ok === false)).toggleClass('online', !!(state && state.ok === true));
+    });
+}
+
 function stopManagePage() {
     postAction('/manage/session', { stop: 'true' }, () => {
         $('#serviceStatus').text('页面已关闭').addClass('off');
         warnToast('管理页面已关闭');
     }, '关闭失败');
+}
+
+function openBackgroundSettings() {
+    const data = mode === 'remote' && target ? { target } : {};
+    postAction('/manage/background/settings', data, res => {
+        let info = {};
+        try { info = parseJson(res); } catch (e) {}
+        warnToast(info.opened ? '已尝试打开后台设置' : (info.guide || '未找到可直达的后台设置页'));
+        heartbeat(false);
+    }, '后台设置打开失败');
 }
 
 function showLoading() { loadingCount++; $('#loadingToast').show(); }
@@ -109,14 +223,18 @@ function ajaxJson(options, done, failText = '加载失败') {
 }
 
 function getJson(url, done, failText = '加载失败') {
+    if (blockOfflineRemote(url, null)) return;
     ajaxJson({ url }, done, failText);
 }
 
 function postJson(url, data, done, failText = '保存失败') {
-    ajaxJson({ url, type: 'post', data: { ...targetParam(), ...data } }, done, failText);
+    const payload = { ...targetParam(), ...data };
+    if (blockOfflineRemote(url, payload)) return;
+    ajaxJson({ url, type: 'post', data: payload }, done, failText);
 }
 
 function postAction(url, data, done, failText = '操作失败') {
+    if (blockOfflineRemote(url, data)) return;
     showLoading();
     $.ajax({ url, type: 'post', data, timeout: REQUEST_TIMEOUT, cache: false })
         .done(done)
@@ -130,18 +248,20 @@ function setManageMode(next) {
     if (fallbackView) currentView = 'files';
     $('#modeLocal').toggleClass('active', mode === 'local');
     $('#modeRemote').toggleClass('active', mode === 'remote');
-    $('.remote-only').toggle(mode === 'remote');
+    $('body').toggleClass('remote-mode', mode === 'remote').toggleClass('local-mode', mode === 'local');
     if (fallbackView) activateManageView('files');
     updateRemotePicker();
     updateTargetText();
     resetViewState();
     if (mode === 'remote' || currentView === 'sync') loadDevices();
-    loadCurrentView(true);
+    startRemoteHealth();
+    if (mode === 'remote' && target) pingRemote(true, ok => { if (ok) loadCurrentView(true); else warnToast('远端设备离线'); });
+    else loadCurrentView(true);
 }
 
 function updateTargetText() {
     $('#manageTargetText').text(mode === 'remote' ? (target ? '远端管理 · ' + targetName : '远端管理 · 请选择设备') : '本机管理 · 当前 App 设备');
-    $('#targetDeviceText').text(target ? `${targetName || target} · ${target}` : '请选择设备');
+    $('#targetDeviceText').html(target ? `<span>${escHtml(targetName || target)}</span><small>${escHtml(target)}</small>` : '<span>请选择设备</span>');
     $('#syncTargetText').text(targetName || target || '未选择');
 }
 
@@ -171,9 +291,12 @@ function scanDevices() {
 function renderDevices(devices) {
     $('#deviceList').html(devices.map(device => {
         const active = target === device.ip ? ' active' : '';
-        return `<button class="device-item${active}" type="button" onclick="selectDevice('${escPath(device.ip)}','${escPath(device.name || device.ip)}')"><span>${escHtml(device.name || device.ip)}</span><small>${escHtml(device.ip || '')}</small></button>`;
+        const state = targetHealth(device.ip);
+        const health = state && state.ok === false ? ' offline' : state && state.ok === true ? ' online' : '';
+        return `<button class="device-item${active}${health}" data-ip="${escHtml(device.ip || '')}" type="button" onclick="selectDevice('${escPath(device.ip)}','${escPath(device.name || device.ip)}')"><i class="device-dot"></i><span>${escHtml(device.name || device.ip)}</span><small>${escHtml(device.ip || '')}</small></button>`;
     }).join('') || '<div class="empty-state">未发现设备，请确认电视和手机在同一局域网，并已打开 App</div>');
     updateRemotePicker();
+    renderDeviceHealth();
 }
 
 function selectDevice(ip, name) {
@@ -183,7 +306,8 @@ function selectDevice(ip, name) {
     updateTargetText();
     updateRemotePicker();
     resetViewState();
-    loadCurrentView(true);
+    startRemoteHealth();
+    pingRemote(true, ok => { if (ok) loadCurrentView(true); else warnToast('远端设备离线，稍后会自动重试'); });
     loadDevices();
 }
 
@@ -206,7 +330,17 @@ function showManageView(view) {
     activateManageView(view);
     updateRemotePicker();
     if (currentView === 'sync') loadDevices();
-    loadCurrentView(false);
+    startRemoteHealth();
+    if (mode === 'remote' && currentView !== 'sync' && target) {
+        if (isRemoteOffline(target)) {
+            warnToast('远端设备离线，已停止加载');
+            pingRemote(true);
+            return;
+        }
+        pingRemote(true, ok => { if (ok) loadCurrentView(false); else warnToast('远端设备离线'); });
+    } else {
+        loadCurrentView(false);
+    }
 }
 
 function activateManageView(view) {
@@ -285,6 +419,7 @@ function updateFileSelection() {
 
 function listFile(path = '') {
     if (!ensureTarget()) return;
+    if (blockOfflineRemote(fileApi(path), null)) return;
     showLoading();
     $.ajax({ url: fileApi(path), timeout: FILE_TIMEOUT, cache: false })
         .done(res => {
@@ -322,6 +457,7 @@ function confirmUpload(yes) {
     const formData = new FormData();
     formData.append('path', currentRoot);
     const remote = mode === 'remote' && !!target;
+    if (blockOfflineRemote(remote ? '/manage/remote/upload' : '/upload', remote ? { target } : {})) return;
     if (remote) formData.append('target', target);
     Array.from(files).forEach((file, index) => formData.append('files-' + index, file));
     showLoading();
@@ -363,6 +499,7 @@ function selectFile(path) { currentFile = path; $('#fileUrl').text('file:/' + pa
 function downloadFile() { closeDialog('fileInfoDialog'); downloadPath(currentFile); }
 function downloadPath(path) {
     if (!path) return;
+    if (blockOfflineRemote(fileApi(path, true), null)) return;
     const a = document.createElement('a');
     a.href = fileApi(path, true);
     a.download = path.split('/').filter(Boolean).pop() || 'download';
@@ -375,6 +512,7 @@ function downloadSelectedArchive() { downloadArchive(Array.from(fileSelection));
 function downloadArchive(paths) {
     if (!paths || !paths.length) return;
     const query = new URLSearchParams({ ...targetParam(), paths: paths.join('\n') }).toString();
+    if (blockOfflineRemote(archiveApi(), targetParam())) return;
     const a = document.createElement('a');
     a.href = archiveApi() + '?' + query;
     a.download = paths.length === 1 ? (paths[0].split('/').filter(Boolean).pop() || 'files') + '.zip' : 'webhtv-files.zip';
@@ -460,6 +598,11 @@ function startSyncManage() {
         warnToast('至少选择一项同步内容');
         return;
     }
+    if (isRemoteOffline(target)) {
+        warnToast('远端设备离线，已停止同步');
+        pingRemote(true);
+        return;
+    }
     showLoading();
     $.ajax({
         url: '/manage/sync/start',
@@ -522,6 +665,7 @@ function normalizeCspItem(item, index = 0) {
     item.style = item.style || item.site.style || {};
     item.headerText = JSON.stringify(item.header || {}, null, 2);
     item.styleText = JSON.stringify(item.style || {}, null, 2);
+    item.siteText = JSON.stringify(item.site || {}, null, 2);
     syncCspSite(item);
     return item;
 }
@@ -554,13 +698,14 @@ function syncCspSite(item) {
         site.style = item.style || {};
     }
     item.site = site;
+    item.siteText = JSON.stringify(site || {}, null, 2);
 }
 function stripCspMeta(registry) {
     const copy = JSON.parse(JSON.stringify(registry || {}));
     delete copy.active;
     delete copy.enabledCount;
     delete copy.itemsCount;
-    (copy.items || []).forEach(item => { delete item.headerText; delete item.styleText; });
+    (copy.items || []).forEach(item => { delete item.headerText; delete item.styleText; delete item.siteText; });
     return copy;
 }
 function renderCspManage() {
@@ -569,14 +714,20 @@ function renderCspManage() {
     $('#cspSummary').text(`${cspRegistry.active || 0}/${cspRegistry.enabledCount || 0} 可用 · ${cspRegistry.items.length} 条`);
     $('#cspList').html(cspRegistry.items.map(buildCspCard).join('') || '<div class="empty-state">还没有站点注入条目</div>');
     $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+    cspRawDirty = false;
 }
 function buildCspCard(item, index) {
     const invalid = item.enabled && !(item.webHome ? item.homePage : item.api) ? ' invalid' : '';
-    return `<div class="manage-card csp-card${invalid}" data-index="${index}"><div class="card-line"><label class="check-row"><input class="csp-field" data-key="enabled" type="checkbox" ${item.enabled ? 'checked' : ''}><span>${item.webHome ? 'WebHome' : '通用 CSP'}</span></label><button class="file-action" type="button" onclick="moveCspItem(${index},-1)">上移</button><button class="file-action" type="button" onclick="moveCspItem(${index},1)">下移</button><button class="file-action danger" type="button" onclick="removeCspItem(${index})">删除</button></div><div class="field-row compact"><input class="md-input csp-field" data-key="name" value="${escHtml(item.name)}" placeholder="名称"><input class="md-input csp-field" data-key="key" value="${escHtml(item.key)}" placeholder="Key"></div>${buildHomeCheck(item, index)}<div class="md-field"><input class="md-input csp-field" data-key="homePage" value="${escHtml(item.homePage)}" placeholder="${item.webHome ? 'WebHome 地址' : 'WebHome 首页地址，可选'}"></div>${item.webHome ? '' : buildCommonCspFields(item)}</div>`;
+    const source = item.webHome ? `<div class="source-actions"><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="chooseCspFile(${index})">文件</button><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="openCspCode(${index})">代码</button><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="openCspLink(${index})">链接</button></div>` : '';
+    return `<div class="manage-card csp-card${invalid}" data-index="${index}"><div class="csp-head"><div class="csp-title-block"><label class="check-row"><input class="csp-field" data-key="enabled" type="checkbox" ${item.enabled ? 'checked' : ''}><span>${escHtml(item.name || (item.webHome ? 'WebHome' : '通用 CSP'))}</span></label><div class="segmented csp-type-toggle"><button class="segment ${item.webHome ? 'active' : ''}" onclick="setCspKind(${index},true)" type="button">WebHome</button><button class="segment ${item.webHome ? '' : 'active'}" onclick="setCspKind(${index},false)" type="button">通用 CSP</button></div></div><div class="card-actions"><button class="file-action" type="button" onclick="moveCspItem(${index},-1)">上移</button><button class="file-action" type="button" onclick="moveCspItem(${index},1)">下移</button><button class="file-action danger" type="button" onclick="removeCspItem(${index})">删除</button></div></div><div class="field-row compact"><input class="md-input csp-field" data-key="name" value="${escHtml(item.name)}" placeholder="名称"><input class="md-input csp-field" data-key="key" value="${escHtml(item.key)}" placeholder="Key"></div><div class="csp-home-line">${buildHomeCheck(item, index)}${source}</div><div class="md-field"><input class="md-input csp-field" data-key="homePage" value="${escHtml(item.homePage)}" placeholder="${item.webHome ? 'WebHome 地址' : 'WebHome 首页地址，可选'}"></div>${item.webHome ? buildAdvancedSiteFields(item) : buildCommonCspFields(item)}</div>`;
 }
 function buildHomeCheck(item, index) { return `<label class="check-row"><input class="csp-home" type="checkbox" ${cspRegistry.homeKey === item.key ? 'checked' : ''} onchange="setCspHome(${index},this.checked)"><span>设为首页</span></label>`; }
 function buildCommonCspFields(item) {
-    return `<div class="field-row compact"><input class="md-input mini-input csp-field" data-key="type" type="number" value="${escHtml(item.type)}" placeholder="类型"><input class="md-input csp-field" data-key="api" value="${escHtml(item.api)}" placeholder="API / CSP 类名"></div><div class="field-row compact"><input class="md-input csp-field" data-key="jar" value="${escHtml(item.jar)}" placeholder="Jar"><input class="md-input csp-field" data-key="ext" value="${escHtml(typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext))}" placeholder="Ext"></div><div class="field-row compact"><input class="md-input csp-field" data-key="click" value="${escHtml(item.click)}" placeholder="点击脚本"><input class="md-input csp-field" data-key="playUrl" value="${escHtml(item.playUrl)}" placeholder="播放前缀"></div><div class="field-row compact"><input class="md-input mini-input csp-field" data-key="indexs" type="number" value="${escHtml(item.indexs)}" placeholder="索引"><input class="md-input mini-input csp-field" data-key="timeout" type="number" value="${escHtml(item.timeout)}" placeholder="超时秒"><input class="md-input csp-field" data-key="categories" value="${escHtml((item.categories || []).join(','))}" placeholder="分类，逗号分隔"></div><textarea class="code-area csp-field" data-key="headerText" spellcheck="false" placeholder="Header JSON">${escHtml(item.headerText)}</textarea><textarea class="code-area csp-field" data-key="styleText" spellcheck="false" placeholder="Style JSON">${escHtml(item.styleText)}</textarea><div class="flag-grid"><label class="check-row"><input class="csp-field" data-key="hide" type="checkbox" ${item.hide ? 'checked' : ''}><span>隐藏</span></label><label class="check-row"><input class="csp-field" data-key="searchable" type="checkbox" ${item.searchable ? 'checked' : ''}><span>搜索</span></label><label class="check-row"><input class="csp-field" data-key="changeable" type="checkbox" ${item.changeable ? 'checked' : ''}><span>换源</span></label><label class="check-row"><input class="csp-field" data-key="quickSearch" type="checkbox" ${item.quickSearch ? 'checked' : ''}><span>快搜</span></label></div>`;
+    return `<div class="field-row compact"><input class="md-input mini-input csp-field" data-key="type" type="number" value="${escHtml(item.type)}" placeholder="类型"><input class="md-input csp-field" data-key="api" value="${escHtml(item.api)}" placeholder="API / CSP 类名"></div><div class="field-row compact"><input class="md-input csp-field" data-key="jar" value="${escHtml(item.jar)}" placeholder="Jar"><input class="md-input csp-field" data-key="ext" value="${escHtml(typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext))}" placeholder="Ext"></div><div class="field-row compact"><input class="md-input csp-field" data-key="click" value="${escHtml(item.click)}" placeholder="点击脚本"><input class="md-input csp-field" data-key="playUrl" value="${escHtml(item.playUrl)}" placeholder="播放前缀"></div><div class="field-row compact"><input class="md-input mini-input csp-field" data-key="indexs" type="number" value="${escHtml(item.indexs)}" placeholder="索引"><input class="md-input mini-input csp-field" data-key="timeout" type="number" value="${escHtml(item.timeout)}" placeholder="超时秒"><input class="md-input csp-field" data-key="categories" value="${escHtml((item.categories || []).join(','))}" placeholder="分类，逗号分隔"></div><div class="flag-grid"><label class="check-row"><input class="csp-field" data-key="hide" type="checkbox" ${item.hide ? 'checked' : ''}><span>隐藏</span></label><label class="check-row"><input class="csp-field" data-key="searchable" type="checkbox" ${item.searchable ? 'checked' : ''}><span>搜索</span></label><label class="check-row"><input class="csp-field" data-key="changeable" type="checkbox" ${item.changeable ? 'checked' : ''}><span>换源</span></label><label class="check-row"><input class="csp-field" data-key="quickSearch" type="checkbox" ${item.quickSearch ? 'checked' : ''}><span>快搜</span></label></div><details class="advanced-panel"><summary>高级参数</summary><label class="form-label">Header JSON</label><textarea class="code-area csp-field compact-code" data-key="headerText" spellcheck="false" placeholder="Header JSON">${escHtml(item.headerText)}</textarea><label class="form-label">Style JSON</label><textarea class="code-area csp-field compact-code" data-key="styleText" spellcheck="false" placeholder="Style JSON">${escHtml(item.styleText)}</textarea>${buildAdvancedSiteFields(item, false)}</details>`;
+}
+function buildAdvancedSiteFields(item, wrap = true) {
+    const field = `<label class="form-label">完整 Site JSON</label><textarea class="code-area csp-field compact-code" data-key="siteText" spellcheck="false" placeholder="完整站点 JSON，可填写 docs/应用完整开发文档.md 里的其它字段">${escHtml(item.siteText)}</textarea>`;
+    return wrap ? `<details class="advanced-panel"><summary>高级 Site JSON</summary>${field}</details>` : field;
 }
 function updateCspGlobal() {
     if (!cspRegistry) return;
@@ -600,11 +751,15 @@ function syncCspFromCards(updateRaw = true) {
             else if (key === 'categories') item[key] = this.value.split(',').map(x => x.trim()).filter(Boolean);
             else if (key === 'headerText') item.header = parseJsonField(this.value, {});
             else if (key === 'styleText') item.style = parseJsonField(this.value, {});
+            else if (key === 'siteText') item.site = parseJsonField(this.value, item.site || {});
             else item[key] = this.value.trim();
         });
         syncCspSite(item);
     });
-    if (updateRaw) $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+    if (updateRaw) {
+        $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+        cspRawDirty = false;
+    }
 }
 function parseJsonField(text, fallback) { try { return text && text.trim() ? JSON.parse(text) : fallback; } catch (e) { warnToast('JSON 格式无效，已保留为空对象'); return fallback; } }
 function addCspItem(webHome) {
@@ -617,8 +772,80 @@ function addCspItem(webHome) {
 function removeCspItem(index) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (item && cspRegistry.homeKey === item.key) cspRegistry.homeKey = ''; cspRegistry.items.splice(index, 1); renderCspManage(); }
 function moveCspItem(index, delta) { syncCspFromCards(false); const targetIndex = index + delta; if (targetIndex < 0 || targetIndex >= cspRegistry.items.length) return; const item = cspRegistry.items.splice(index, 1)[0]; cspRegistry.items.splice(targetIndex, 0, item); renderCspManage(); }
 function setCspHome(index, checked) { syncCspFromCards(false); cspRegistry.homeKey = checked && cspRegistry.items[index] ? cspRegistry.items[index].key : ''; renderCspManage(); }
-function saveCspManage() {
+function setCspKind(index, webHome) {
     syncCspFromCards(false);
+    const item = cspRegistry.items[index];
+    if (!item || item.webHome === webHome) return;
+    const oldAuto = /^WebHome \d+$/.test(item.name || '') || /^通用 CSP \d+$/.test(item.name || '');
+    item.webHome = webHome;
+    if (webHome) {
+        item.api = '';
+        item.ext = '';
+        item.jar = '';
+        item.searchable = 0;
+        item.quickSearch = 0;
+    } else {
+        item.searchable = 1;
+        item.quickSearch = 1;
+    }
+    if (oldAuto) {
+        const n = cspRegistry.items.filter((x, i) => i !== index && (x.webHome !== false) === webHome).length + 1;
+        item.name = webHome ? 'WebHome ' + n : '通用 CSP ' + n;
+    }
+    syncCspSite(item);
+    renderCspManage();
+}
+function chooseCspFile(index) {
+    syncCspFromCards(false);
+    pendingCspIndex = index;
+    $('#csp_file_uploader').val('').click();
+}
+function onCspFileSelected() {
+    const file = $('#csp_file_uploader')[0].files[0];
+    if (!file || pendingCspIndex < 0) return;
+    const reader = new FileReader();
+    reader.onload = e => saveCspPage(pendingCspIndex, { code: e.target.result || '' }, '文件已载入');
+    reader.onerror = () => warnToast('文件读取失败');
+    reader.readAsText(file);
+}
+function openCspCode(index) {
+    syncCspFromCards(false);
+    pendingCspIndex = index;
+    $('#cspCodeContent').val('');
+    openDialog('cspCodeDialog');
+}
+function confirmCspCode(yes) {
+    closeDialog('cspCodeDialog');
+    if (yes !== 1 || pendingCspIndex < 0) return;
+    saveCspPage(pendingCspIndex, { code: $('#cspCodeContent').val() }, '代码已保存');
+}
+function openCspLink(index) {
+    syncCspFromCards(false);
+    pendingCspIndex = index;
+    const item = cspRegistry.items[index] || {};
+    $('#cspLinkContent').val(/^file:\/\//i.test(item.homePage || '') ? '' : (item.homePage || ''));
+    openDialog('cspLinkDialog');
+}
+function confirmCspLink(yes) {
+    closeDialog('cspLinkDialog');
+    const link = $('#cspLinkContent').val().trim();
+    if (yes !== 1 || pendingCspIndex < 0 || !link) return;
+    saveCspPage(pendingCspIndex, { link }, '链接已设置');
+}
+function saveCspPage(index, data, message) {
+    const item = cspRegistry && cspRegistry.items[index];
+    if (!item) return;
+    postJson('/manage/csp/page', { id: item.id, ...data }, res => {
+        item.id = res.id || item.id;
+        item.homePage = res.homePage || item.homePage;
+        syncCspSite(item);
+        renderCspManage();
+        warnToast(message || 'WebHome 已更新，请保存生效');
+        pendingCspIndex = -1;
+    }, 'WebHome 保存失败');
+}
+function saveCspManage() {
+    if (!cspRawDirty) syncCspFromCards(true);
     try { cspRegistry = normalizeCspRegistry(JSON.parse($('#cspRaw').val().trim() || '{}')); }
     catch (e) { warnToast('站点注入 JSON 格式无效'); return; }
     cspRegistry.items.forEach(syncCspSite);
@@ -778,6 +1005,8 @@ $(function () {
     setManageMode('local');
     updateSyncPathsVisible();
     $('#newFolderContent').on('keydown', function (e) { if (e.key === 'Enter') { this.blur(); confirmNewFolder(1); } });
-    $(document).on('input change', '#cspList .csp-field', function () { syncCspFromCards(); });
+    $(document).on('input', '#cspList input.csp-field', function () { syncCspFromCards(); });
+    $(document).on('change', '#cspList .csp-field', function () { syncCspFromCards(); });
+    $('#cspRaw').on('input', function () { cspRawDirty = true; });
     $(document).on('change', '#viewSync input[type=checkbox]', updateSyncPathsVisible);
 });

@@ -138,6 +138,10 @@ public class ManageService extends Service {
         return shouldRequestBatteryOptimizations(context) || isStrictBackgroundBrand();
     }
 
+    public static boolean isBackgroundPowerGuided() {
+        return backgroundPowerGuided;
+    }
+
     public static boolean requestIgnoreBatteryOptimizations(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
         Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + context.getPackageName()));
@@ -149,8 +153,15 @@ public class ManageService extends Service {
             confirmBackgroundPowerHandled();
             return true;
         }
-        if (isVivoLike()) return false;
-        return requestIgnoreBatteryOptimizations(context);
+        if (!isVivoLike() && requestIgnoreBatteryOptimizations(context)) {
+            confirmBackgroundPowerHandled();
+            return true;
+        }
+        if (openBatterySettings(context) || openAppDetailsSettings(context) || openSystemSettings(context)) {
+            confirmBackgroundPowerHandled();
+            return true;
+        }
+        return false;
     }
 
     public static String getBackgroundPowerGuide(Context context) {
@@ -321,6 +332,22 @@ public class ManageService extends Service {
             if (startActivity(context, intent)) return true;
         }
         return false;
+    }
+
+    private static boolean openBatterySettings(Context context) {
+        return openKnownActivity(context,
+                new Intent("android.settings.BATTERY_SETTINGS"),
+                new Intent(Intent.ACTION_POWER_USAGE_SUMMARY),
+                new Intent("android.settings.POWER_USAGE_SUMMARY"),
+                new Intent("android.settings.BATTERY_SAVER_SETTINGS"));
+    }
+
+    private static boolean openAppDetailsSettings(Context context) {
+        return startActivity(context, new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.getPackageName())));
+    }
+
+    private static boolean openSystemSettings(Context context) {
+        return startActivity(context, new Intent(Settings.ACTION_SETTINGS));
     }
 
     private static boolean startActivity(Context context, Intent intent) {

@@ -227,6 +227,12 @@
     <string name="sync_paths_edit">编辑</string>
     <string name="sync_paths_desc">每行一个外置存储相对路径，默认同步 TV、TVBox、TVData。可加入本地包目录；目录内容会随 Jar/脚本保存数据一起同步。</string>
     <string name="sync_paths_hint">TV&#10;TVBox&#10;TVData</string>
+    <string name="sync_paths_up">上级</string>
+    <string name="sync_paths_refresh">刷新</string>
+    <string name="sync_paths_enter">打开目录</string>
+    <string name="sync_paths_empty">当前目录没有可选文件夹</string>
+    <string name="sync_paths_selected">已选：%1$s</string>
+    <string name="sync_paths_selected_empty">未选择目录</string>
     <string name="sync_device_mobile">手机</string>
     <string name="sync_device_tv">电视</string>
     <string name="sync_discovering">正在发现设备...</string>

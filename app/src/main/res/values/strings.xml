@@ -244,6 +244,12 @@
     <string name="sync_paths_edit">Edit</string>
     <string name="sync_paths_desc">One external-storage relative path per line. TV, TVBox and TVData are synced by default. You can add local package folders; folder contents are synced with Jar/script saved data.</string>
     <string name="sync_paths_hint">TV&#10;TVBox&#10;TVData</string>
+    <string name="sync_paths_up">Up</string>
+    <string name="sync_paths_refresh">Refresh</string>
+    <string name="sync_paths_enter">Open folder</string>
+    <string name="sync_paths_empty">No folders in this directory</string>
+    <string name="sync_paths_selected">Selected: %1$s</string>
+    <string name="sync_paths_selected_empty">No folders selected</string>
 
     <!-- Player -->
     <string name="player">Player</string>
