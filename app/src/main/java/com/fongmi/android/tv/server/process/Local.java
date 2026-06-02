@@ -17,6 +17,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Map;
@@ -35,22 +37,28 @@ public class Local implements Process {
 
     @Override
     public Response doResponse(IHTTPSession session, String url, Map<String, String> files) {
-        if (url.startsWith("/file")) return getFile(session.getHeaders(), url);
+        if (url.startsWith("/file")) return getFile(session.getHeaders(), session.getParms(), url);
         if (url.startsWith("/upload")) return upload(session.getParms(), files);
         if (url.startsWith("/newFolder")) return newFolder(session.getParms());
         if (url.startsWith("/delFolder") || url.startsWith("/delFile")) return delete(session.getParms());
         return null;
     }
 
-    private Response getFile(Map<String, String> headers, String path) {
+    private Response getFile(Map<String, String> headers, Map<String, String> params, String path) {
         try {
             File file = Path.local(path.substring(5));
             if (file.isDirectory()) return getFolder(file);
-            if (file.isFile()) return getFile(headers, file, getMimeTypeForFile(path));
+            if (file.isFile()) return getFile(headers, params, file, getMimeTypeForFile(path));
             throw new FileNotFoundException();
         } catch (Exception e) {
             return Nano.error(e.getMessage());
         }
+    }
+
+    private Response getFile(Map<String, String> headers, Map<String, String> params, File file, String mime) throws IOException {
+        Response response = getFile(headers, file, mime);
+        if (isDownload(params)) addDownloadHeader(response, file.getName());
+        return response;
     }
 
     private Response upload(Map<String, String> params, Map<String, String> files) {
@@ -87,6 +95,7 @@ public class Local implements Process {
             obj.addProperty("path", relativeTo(file, rootPath));
             obj.addProperty("time", Formatters.LOCAL_DATETIME.format(Instant.ofEpochMilli(file.lastModified()).atZone(ZoneId.systemDefault())));
             obj.addProperty("dir", file.isDirectory() ? 1 : 0);
+            obj.addProperty("size", file.isDirectory() ? 0 : file.length());
             files.add(obj);
         }
         JsonObject info = new JsonObject();
@@ -117,6 +126,23 @@ public class Local implements Process {
         res.addHeader("Accept-Ranges", "bytes");
         res.addHeader("ETag", etag);
         return res;
+    }
+
+    private boolean isDownload(Map<String, String> params) {
+        String value = params.get("download");
+        return "1".equals(value) || "true".equalsIgnoreCase(value);
+    }
+
+    private void addDownloadHeader(Response response, String name) {
+        String fallback = name.replaceAll("[\\\\\"\\r\\n]", "_");
+        String encoded;
+        try {
+            encoded = URLEncoder.encode(name, StandardCharsets.UTF_8.name()).replace("+", "%20");
+        } catch (Exception e) {
+            encoded = fallback;
+        }
+        response.addHeader("Content-Disposition", "attachment; filename=\"" + fallback + "\"; filename*=UTF-8''" + encoded);
+        response.addHeader("X-Content-Type-Options", "nosniff");
     }
 
     private String etag(File file, long fileLen) {

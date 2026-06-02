@@ -125,6 +125,7 @@
     <string name="setting_danmaku">Danmaku setting</string>
     <string name="setting_enhance">Enhancements</string>
     <string name="setting_debug_log">Debug log</string>
+    <string name="setting_manage_page">Management page</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">Site Injection</string>
@@ -315,6 +316,26 @@
     <string name="debug_log_copy_url">Copy URL</string>
     <string name="debug_log_no_browser">No browser app found. Use the LAN URL from another device.</string>
     <string name="debug_log_url_copied">Debug log URL copied</string>
+    <string name="manage_page_web">Web page</string>
+    <string name="manage_page_dialog_message">Management page is running.\n\nLAN URL:\n%1$s\n\nLocal URL:\n%2$s\n\nKeep this page open while managing files or settings. The service stops automatically after the browser page is closed for a while, or you can stop it manually.</string>
+    <string name="manage_page_open_browser">Open browser</string>
+    <string name="manage_page_copy_url">Copy URL</string>
+    <string name="manage_page_stop">Stop page</string>
+    <string name="manage_page_notification_title">Management page running</string>
+    <string name="manage_page_no_browser">No browser app found. Use the LAN URL from another device.</string>
+    <string name="manage_page_url_copied">Management page URL copied</string>
+    <string name="manage_page_battery_title">Background access</string>
+    <string name="manage_page_battery_message">This device may restrict network access after the app moves to the background, which can make the browser management page unreachable. Open settings only tries known background running or battery management pages for this device brand. If the system does not allow a direct page, use this manual path:\n\n%1$s</string>
+    <string name="manage_page_battery_allow">Open settings</string>
+    <string name="manage_page_open_anyway">Open anyway</string>
+    <string name="manage_page_battery_open_failed">No direct background settings page was found. Use the manual path shown in the dialog.</string>
+    <string name="manage_page_battery_guide_vivo">vivo/iQOO: Settings > Battery > Background power consumption management / High background power consumption > find this app > set it to allow high background power usage. If the direct page fails, search system Settings for Background power consumption management.</string>
+    <string name="manage_page_battery_guide_xiaomi">Xiaomi/Redmi/POCO: Settings > Apps > Permissions > Autostart > allow this app. Then set this app battery usage to unrestricted.</string>
+    <string name="manage_page_battery_guide_oppo">OPPO/realme/OnePlus: Settings > Apps > Autostart or associated launch > allow this app. Then allow background running in Battery > App battery management.</string>
+    <string name="manage_page_battery_guide_huawei">Huawei/Honor: Phone Manager or Settings > App launch > this app > disable automatic management, then allow autostart, secondary launch, and background running.</string>
+    <string name="manage_page_battery_guide_samsung">Samsung: Settings > Apps > this app > Battery > Unrestricted. Also make sure this app is not in sleeping/deep sleeping apps.</string>
+    <string name="manage_page_battery_guide_meizu">Meizu: Phone Manager > Permission/background management > this app > allow background running. Then set this app to unrestricted in power management.</string>
+    <string name="manage_page_battery_guide_default">Settings > Apps > this app > Battery > choose unrestricted or not optimized. If autostart/background running options exist, allow them for this app.</string>
 
     <!-- UNIT -->
     <string name="all">All</string>

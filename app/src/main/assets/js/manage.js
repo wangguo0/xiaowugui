@@ -1,0 +1,783 @@
+const icDir = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F5A623'><path d='M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z'/></svg>`;
+const icFile = `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23717970'><path d='M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z'/></svg>`;
+
+let mode = 'local';
+let currentView = 'files';
+let target = '';
+let targetName = '';
+let currentRoot = '';
+let currentParent = '';
+let currentFile = '';
+let pendingDelFolder = null;
+let warnToastTimer = null;
+let syncPaths = [];
+let syncLoadedKey = '';
+let cspRegistry = null;
+let cspLoadedKey = '';
+let proxyLoadedKey = '';
+let dialogClosing = false;
+let loadingCount = 0;
+let heartbeatTimer = null;
+let fileSelection = new Set();
+let currentFiles = [];
+let devicePanelOpen = false;
+let syncMode = 'push';
+let proxyEnabled = false;
+let proxyMode = 'form';
+let proxyRules = [];
+
+const REQUEST_TIMEOUT = 12000;
+const FILE_TIMEOUT = 15000;
+const UPLOAD_TIMEOUT = 60000;
+const SYNC_TIMEOUT = 600000;
+
+function escPath(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function itemId(path) { return String(path || '').replace(/[^a-zA-Z0-9_-]/g, '_'); }
+function remoteManageActive() { return mode === 'remote' && currentView !== 'sync' && !!target; }
+function targetParam() { return remoteManageActive() ? { target } : {}; }
+function targetQuery(extra = {}) { return new URLSearchParams({ ...targetParam(), ...extra }).toString(); }
+function activeKey() { return mode + ':' + target; }
+
+function fileApi(path, download = false) {
+    if (mode === 'remote' && target) return '/manage/remote/file?' + new URLSearchParams({ target, path, download: download ? '1' : '' }).toString();
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    return '/file' + encoded + (download ? '?download=1' : '');
+}
+
+function archiveApi() {
+    return mode === 'remote' && target ? '/manage/remote/archive' : '/manage/file/archive';
+}
+
+function heartbeat(close = false) {
+    $.ajax({ url: '/manage/session', type: 'post', data: close ? { close: 'true' } : {}, timeout: 3000, cache: false })
+        .done(res => {
+            const data = parseJson(res);
+            renderServiceStatus(data);
+        })
+        .fail(() => {
+            $('#serviceStatus').text('连接异常').addClass('off').removeClass('warn');
+            $('#keepAliveHint').css('display', 'flex');
+        });
+}
+
+function renderServiceStatus(data) {
+    const running = !!(data && data.running && data.serverRunning !== false);
+    const optimized = !!(data && data.batteryOptimized);
+    const missingLock = !!(data && running && (!data.wakeLock || !data.wifiLock));
+    const text = !running ? '页面已关闭' : optimized ? '后台受限' : missingLock ? '保活异常' : '页面运行中';
+    const title = running ? `后台受限: ${optimized ? '是' : '否'}，CPU锁: ${data.wakeLock ? '是' : '否'}，Wi-Fi锁: ${data.wifiLock ? '是' : '否'}` : '管理页服务未运行';
+    $('#serviceStatus').text(text).toggleClass('off', !running).toggleClass('warn', running && (optimized || missingLock)).attr('title', title);
+    $('#keepAliveHint').css('display', running && optimized ? 'flex' : 'none');
+}
+
+function startHeartbeat() {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeat(false);
+    heartbeatTimer = setInterval(() => heartbeat(false), 20000);
+}
+
+function stopManagePage() {
+    postAction('/manage/session', { stop: 'true' }, () => {
+        $('#serviceStatus').text('页面已关闭').addClass('off');
+        warnToast('管理页面已关闭');
+    }, '关闭失败');
+}
+
+function showLoading() { loadingCount++; $('#loadingToast').show(); }
+function hideLoading() { loadingCount = Math.max(0, loadingCount - 1); if (loadingCount === 0) $('#loadingToast').hide(); }
+
+function requestError(xhr, status, fallback) {
+    if (status === 'timeout') return '请求超时，请确认 App 仍在前台或设备未被系统限制后台运行';
+    if (status === 'abort') return '请求已取消';
+    return xhr && xhr.responseText ? xhr.responseText : fallback;
+}
+
+function parseJson(res) {
+    return typeof res === 'string' ? JSON.parse(res) : res;
+}
+
+function ajaxJson(options, done, failText = '加载失败') {
+    showLoading();
+    $.ajax({ timeout: REQUEST_TIMEOUT, cache: false, ...options })
+        .done(res => {
+            try { done(parseJson(res)); }
+            catch (e) { warnToast('响应格式错误'); }
+        })
+        .fail((xhr, status) => warnToast(requestError(xhr, status, failText)))
+        .always(hideLoading);
+}
+
+function getJson(url, done, failText = '加载失败') {
+    ajaxJson({ url }, done, failText);
+}
+
+function postJson(url, data, done, failText = '保存失败') {
+    ajaxJson({ url, type: 'post', data: { ...targetParam(), ...data } }, done, failText);
+}
+
+function postAction(url, data, done, failText = '操作失败') {
+    showLoading();
+    $.ajax({ url, type: 'post', data, timeout: REQUEST_TIMEOUT, cache: false })
+        .done(done)
+        .fail((xhr, status) => warnToast(requestError(xhr, status, failText)))
+        .always(hideLoading);
+}
+
+function setManageMode(next) {
+    mode = next;
+    const fallbackView = mode === 'local' && (currentView === 'push' || currentView === 'search');
+    if (fallbackView) currentView = 'files';
+    $('#modeLocal').toggleClass('active', mode === 'local');
+    $('#modeRemote').toggleClass('active', mode === 'remote');
+    $('.remote-only').toggle(mode === 'remote');
+    if (fallbackView) activateManageView('files');
+    updateRemotePicker();
+    updateTargetText();
+    resetViewState();
+    if (mode === 'remote' || currentView === 'sync') loadDevices();
+    loadCurrentView(true);
+}
+
+function updateTargetText() {
+    $('#manageTargetText').text(mode === 'remote' ? (target ? '远端管理 · ' + targetName : '远端管理 · 请选择设备') : '本机管理 · 当前 App 设备');
+    $('#targetDeviceText').text(target ? `${targetName || target} · ${target}` : '请选择设备');
+    $('#syncTargetText').text(targetName || target || '未选择');
+}
+
+function resetViewState() {
+    currentRoot = '';
+    currentParent = '';
+    syncLoadedKey = '';
+    cspLoadedKey = '';
+    proxyLoadedKey = '';
+    $('#file_list').html('');
+    currentFiles = [];
+    clearFileSelection();
+}
+
+function loadDevices(scan = false) {
+    getJson('/manage/devices' + (scan ? '?scan=true' : ''), data => renderDevices(data.devices || []), '设备列表加载失败');
+}
+
+function scanDevices() {
+    devicePanelOpen = true;
+    updateRemotePicker();
+    loadDevices(true);
+    setTimeout(loadDevices, 1200);
+    setTimeout(loadDevices, 2600);
+}
+
+function renderDevices(devices) {
+    $('#deviceList').html(devices.map(device => {
+        const active = target === device.ip ? ' active' : '';
+        return `<button class="device-item${active}" type="button" onclick="selectDevice('${escPath(device.ip)}','${escPath(device.name || device.ip)}')"><span>${escHtml(device.name || device.ip)}</span><small>${escHtml(device.ip || '')}</small></button>`;
+    }).join('') || '<div class="empty-state">未发现设备，请确认电视和手机在同一局域网，并已打开 App</div>');
+    updateRemotePicker();
+}
+
+function selectDevice(ip, name) {
+    target = ip;
+    targetName = name;
+    devicePanelOpen = false;
+    updateTargetText();
+    updateRemotePicker();
+    resetViewState();
+    loadCurrentView(true);
+    loadDevices();
+}
+
+function toggleDevicePanel() {
+    devicePanelOpen = !devicePanelOpen;
+    updateRemotePicker();
+    if (devicePanelOpen) loadDevices();
+}
+
+function updateRemotePicker() {
+    const visible = mode === 'remote' || currentView === 'sync';
+    $('#remotePicker').css('display', visible ? 'grid' : 'none');
+    $('#deviceList').toggle(visible && devicePanelOpen);
+    $('#changeDeviceBtn').text(target ? (devicePanelOpen ? '收起列表' : '更换设备') : (devicePanelOpen ? '收起列表' : '选择设备'));
+    updateTargetText();
+}
+
+function showManageView(view) {
+    currentView = view;
+    activateManageView(view);
+    updateRemotePicker();
+    if (currentView === 'sync') loadDevices();
+    loadCurrentView(false);
+}
+
+function activateManageView(view) {
+    $('.manage-view').removeClass('active');
+    $('#view' + view.charAt(0).toUpperCase() + view.slice(1)).addClass('active');
+    $('.manage-nav .md-nav-item').removeClass('active');
+    $('#nav' + view.charAt(0).toUpperCase() + view.slice(1)).addClass('active');
+}
+
+function ensureTarget() {
+    if (mode !== 'remote' || currentView === 'sync' || target) return true;
+    warnToast('请先选择远端设备');
+    devicePanelOpen = true;
+    updateRemotePicker();
+    loadDevices();
+    return false;
+}
+
+function loadCurrentView(force) {
+    if (!ensureTarget()) return;
+    if (currentView === 'files') listFile(force ? '' : currentRoot);
+    if (currentView === 'sync') loadSyncManage(force);
+    if (currentView === 'csp') loadCspManage(force);
+    if (currentView === 'proxy') loadProxyManage(force);
+}
+
+function formatFileSize(size, isDir) {
+    if (isDir) return '文件夹';
+    const value = Number(size);
+    if (!Number.isFinite(value) || value < 0) return '-';
+    if (value < 1024) return value + ' B';
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let n = value / 1024;
+    let unit = units[0];
+    for (let i = 1; i < units.length && n >= 1024; i++) { n /= 1024; unit = units[i]; }
+    return (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)).replace(/\.0+$/, '') + ' ' + unit;
+}
+
+function renderFileBreadcrumb(path) {
+    const parts = String(path || '').split('/').filter(Boolean);
+    const rows = [`<button class="crumb" type="button" onclick="listFile('')">全部文件</button>`];
+    let current = '';
+    parts.forEach(part => {
+        current += '/' + part;
+        rows.push(`<span class="crumb-sep">/</span><button class="crumb" type="button" onclick="listFile('${escPath(current)}')">${escHtml(part)}</button>`);
+    });
+    $('#fileBreadcrumb').html(rows.join(''));
+    $('#fileUpBtn').prop('disabled', currentParent === '.');
+}
+
+function buildDirItem(name, time, path, size) {
+    const ep = escPath(path);
+    const checked = fileSelection.has(path) ? ' checked' : '';
+    return `<div class="file-item file-row is-dir"><label class="tree-check file-check"><input type="checkbox" aria-label="选择 ${escHtml(name)}" onchange="toggleFileSelection('${ep}',this.checked)"${checked}></label><button class="file-main file-name-cell" type="button" onclick="listFile('${ep}')"><img class="file-icon" src="${icDir}" alt=""><div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time mobile-meta">${escHtml(time)} · ${formatFileSize(size, true)}</div></div></button><div class="file-time file-time-cell">${escHtml(time)}</div><div class="file-size-cell">${formatFileSize(size, true)}</div><div class="file-actions-cell"><button class="file-action" type="button" onclick="downloadArchive(['${ep}'])">打包</button><button class="file-action danger" type="button" onclick="showDelFolderDialog('${ep}',currentRoot)">删除</button></div></div>`;
+}
+
+function buildFileItem(name, time, path, size) {
+    const ep = escPath(path);
+    const checked = fileSelection.has(path) ? ' checked' : '';
+    return `<div class="file-item file-row"><label class="tree-check file-check"><input type="checkbox" aria-label="选择 ${escHtml(name)}" onchange="toggleFileSelection('${ep}',this.checked)"${checked}></label><button class="file-main file-name-cell" type="button" onclick="selectFile('${ep}')"><img class="file-icon" src="${icFile}" alt=""><div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time mobile-meta">${escHtml(time)} · ${formatFileSize(size, false)}</div></div></button><div class="file-time file-time-cell">${escHtml(time)}</div><div class="file-size-cell">${formatFileSize(size, false)}</div><div class="file-actions-cell"><button class="file-action" type="button" onclick="downloadPath('${ep}')">下载</button><button class="file-action danger" type="button" onclick="showDelFileDialog('${ep}')">删除</button></div></div>`;
+}
+
+function toggleFileSelection(path, checked) { checked ? fileSelection.add(path) : fileSelection.delete(path); updateFileSelection(); }
+function toggleSelectAll(checked) { fileSelection = checked ? new Set(currentFiles) : new Set(); $('#file_list input[type=checkbox]').prop('checked', checked); updateFileSelection(); }
+function clearFileSelection() { fileSelection.clear(); $('#file_list input[type=checkbox],#fileSelectAll').prop('checked', false); updateFileSelection(); }
+function updateFileSelection() {
+    const count = fileSelection.size;
+    const total = currentFiles.length;
+    const all = total > 0 && count === total;
+    const partial = count > 0 && count < total;
+    $('#fileSelectionText').text(count ? `已选择 ${count} 项` : `${total} 项`);
+    $('#fileZipBtn,#fileClearBtn').prop('disabled', count === 0);
+    $('#fileSelectionBar').toggleClass('active', count > 0);
+    $('#fileSelectAll').prop('checked', all).prop('indeterminate', partial);
+}
+
+function listFile(path = '') {
+    if (!ensureTarget()) return;
+    showLoading();
+    $.ajax({ url: fileApi(path), timeout: FILE_TIMEOUT, cache: false })
+        .done(res => {
+        let info;
+        try { info = parseJson(res); }
+        catch (e) { warnToast('响应格式错误'); return; }
+        currentRoot = path;
+        currentParent = info.parent || '';
+        const files = info.files || [];
+        currentFiles = files.map(node => node.path).filter(Boolean);
+        renderFileBreadcrumb(path);
+        fileSelection.clear();
+        updateFileSelection();
+        const rows = [];
+        files.forEach(node => rows.push(node.dir === 1 ? buildDirItem(node.name, node.time, node.path, node.size) : buildFileItem(node.name, node.time, node.path, node.size)));
+        $('#file_list').html(rows.join('') || '<div class="empty-state file-empty"><div>当前目录没有文件</div></div>');
+    })
+        .fail((xhr, status) => warnToast(requestError(xhr, status, '加载失败')))
+        .always(hideLoading);
+}
+
+function uploadFile() { if (ensureTarget()) $('#file_uploader').click(); }
+function onFileSelected() {
+    const files = $('#file_uploader')[0].files;
+    if (!files.length) return;
+    $('#uploadTipContent').text(Array.from(files).map(f => f.name).join(', '));
+    openDialog('uploadTip');
+}
+
+function confirmUpload(yes) {
+    closeDialog('uploadTip');
+    if (yes !== 1) return;
+    const files = $('#file_uploader')[0].files;
+    if (!files.length) return;
+    const formData = new FormData();
+    formData.append('path', currentRoot);
+    const remote = mode === 'remote' && !!target;
+    if (remote) formData.append('target', target);
+    Array.from(files).forEach((file, index) => formData.append('files-' + index, file));
+    showLoading();
+    $.ajax({ url: remote ? '/manage/remote/upload' : '/upload', type: 'post', data: formData, processData: false, contentType: false, timeout: UPLOAD_TIMEOUT })
+        .done(() => listFile(currentRoot))
+        .fail((xhr, status) => warnToast(requestError(xhr, status, '上传失败')))
+        .always(() => { $('#file_uploader').val(''); hideLoading(); });
+}
+
+function showNewFolderDialog() { if (ensureTarget()) openDialog('newFolder'); }
+function confirmNewFolder(yes) {
+    closeDialog('newFolder');
+    const name = $('#newFolderContent').val().trim();
+    $('#newFolderContent').val('');
+    if (yes !== 1 || !name) return;
+    const remote = mode === 'remote' && !!target;
+    postAction(remote ? '/manage/remote/newFolder' : '/newFolder', { ...(remote ? { target } : {}), path: currentRoot, name }, () => listFile(currentRoot), '新增失败');
+}
+
+function showDelFolderDialog(path, refreshPath) { pendingDelFolder = { path, refreshPath }; $('#delFolderContent').text('是否删除 ' + path); openDialog('delFolder'); }
+function confirmDelFolder(yes) {
+    closeDialog('delFolder');
+    if (yes !== 1 || !pendingDelFolder) { pendingDelFolder = null; return; }
+    const { path, refreshPath } = pendingDelFolder;
+    pendingDelFolder = null;
+    const remote = mode === 'remote' && !!target;
+    postAction(remote ? '/manage/remote/delFolder' : '/delFolder', { ...(remote ? { target } : {}), path }, () => listFile(refreshPath), '删除失败');
+}
+
+function showDelFileDialog(path) { currentFile = path; $('#delFileContent').text('是否删除 ' + path); openDialog('delFile'); }
+function confirmDelFile(yes) {
+    closeDialog('delFile');
+    if (yes !== 1) return;
+    const remote = mode === 'remote' && !!target;
+    postAction(remote ? '/manage/remote/delFile' : '/delFile', { ...(remote ? { target } : {}), path: currentFile }, () => listFile(currentRoot), '删除失败');
+}
+
+function selectFile(path) { currentFile = path; $('#fileUrl').text('file:/' + path); openDialog('fileInfoDialog'); }
+function downloadFile() { closeDialog('fileInfoDialog'); downloadPath(currentFile); }
+function downloadPath(path) {
+    if (!path) return;
+    const a = document.createElement('a');
+    a.href = fileApi(path, true);
+    a.download = path.split('/').filter(Boolean).pop() || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function downloadSelectedArchive() { downloadArchive(Array.from(fileSelection)); }
+function downloadArchive(paths) {
+    if (!paths || !paths.length) return;
+    const query = new URLSearchParams({ ...targetParam(), paths: paths.join('\n') }).toString();
+    const a = document.createElement('a');
+    a.href = archiveApi() + '?' + query;
+    a.download = paths.length === 1 ? (paths[0].split('/').filter(Boolean).pop() || 'files') + '.zip' : 'webhtv-files.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
+function loadSyncManage(force = false) {
+    if (syncLoadedKey === activeKey() && !force) return;
+    getJson('/manage/sync/paths?' + targetQuery(), data => { syncPaths = data.paths || []; syncLoadedKey = activeKey(); renderSyncPaths(); loadSyncTree(''); });
+}
+
+function loadSyncTree(path = '') {
+    getJson('/manage/sync/tree?' + targetQuery({ path }), data => {
+        $('#syncTreePath').text(data.path || '/');
+        const rows = [];
+        if (data.parent !== '.') rows.push(`<div class="tree-row"><button class="tree-main" type="button" onclick="loadSyncTree('${escPath(data.parent || '')}')"><img class="file-icon" src="${icDir}" alt=""><span>..</span></button></div>`);
+        (data.dirs || []).forEach(item => rows.push(buildSyncDir(item)));
+        if (data.truncated) rows.push('<div class="empty-state compact">当前目录过多，仅显示前 300 个目录</div>');
+        $('#syncTree').html(rows.join('') || '<div class="empty-state">没有可选目录</div>');
+        renderSyncPaths();
+    });
+}
+
+function buildSyncDir(item) {
+    const path = item.path || '';
+    const ep = escPath(path);
+    const checked = syncPaths.includes(path) ? ' checked' : '';
+    return `<div class="tree-row"><label class="tree-check"><input id="sync_${itemId(path)}" type="checkbox" onchange="toggleSyncPath('${ep}',this.checked)"${checked}></label><button class="tree-main" type="button" onclick="loadSyncTree('${ep}')"><img class="file-icon" src="${icDir}" alt=""><span>${escHtml(item.name || path)}</span></button></div>`;
+}
+
+function toggleSyncPath(path, checked) { syncPaths = syncPaths.filter(item => item !== path); if (checked) syncPaths.push(path); renderSyncPaths(); }
+function removeSyncPath(path) { syncPaths = syncPaths.filter(item => item !== path); renderSyncPaths(); }
+function renderSyncPaths() {
+    syncPaths = Array.from(new Set(syncPaths.filter(Boolean)));
+    $('#syncPathChips').html(syncPaths.map(path => `<button class="path-chip" type="button" onclick="removeSyncPath('${escPath(path)}')">${escHtml(path)} ×</button>`).join('') || '<span class="empty-state compact">未选择目录</span>');
+    syncPaths.forEach(path => { const el = document.getElementById('sync_' + itemId(path)); if (el) el.checked = true; });
+}
+function saveSyncPaths() { postJson('/manage/sync/paths', { paths: syncPaths.join('\n') }, data => { syncPaths = data.paths || []; renderSyncPaths(); warnToast('同步目录已保存'); }); }
+function detectSyncPaths() { postJson('/manage/sync/detect', {}, data => { syncPaths = data.paths || []; renderSyncPaths(); warnToast('已自动加入本地包目录'); }, '自动识别失败'); }
+function setSyncMode(next) {
+    syncMode = next === 'pull' ? 'pull' : 'push';
+    $('#syncModePush').toggleClass('active', syncMode === 'push');
+    $('#syncModePull').toggleClass('active', syncMode === 'pull');
+    $('#syncDirectionBtn').text(syncMode === 'push' ? '推送' : '拉取');
+}
+function toggleSyncMode() { setSyncMode(syncMode === 'push' ? 'pull' : 'push'); }
+function syncOptionIds() { return ['syncOptConfig', 'syncOptSpider', 'syncOptWebHome', 'syncOptSearch', 'syncOptHistory', 'syncOptKeep', 'syncOptSettings']; }
+function allSyncSelected() { return syncOptionIds().every(id => $('#' + id).prop('checked')); }
+function toggleSyncSelection() {
+    const checked = !allSyncSelected();
+    syncOptionIds().forEach(id => $('#' + id).prop('checked', checked));
+    updateSyncPathsVisible();
+}
+function updateSyncPathsVisible() {
+    const spider = $('#syncOptSpider').prop('checked');
+    $('#syncPathsPanel').toggle(spider);
+    $('#syncSelectBtn').text(allSyncSelected() ? '取消' : '全选');
+}
+function syncOptionsPayload() {
+    return {
+        config: $('#syncOptConfig').prop('checked'),
+        spider: $('#syncOptSpider').prop('checked'),
+        webHome: $('#syncOptWebHome').prop('checked'),
+        search: $('#syncOptSearch').prop('checked'),
+        history: $('#syncOptHistory').prop('checked'),
+        keep: $('#syncOptKeep').prop('checked'),
+        settings: $('#syncOptSettings').prop('checked'),
+        paths: syncPaths.join('\n')
+    };
+}
+function startSyncManage() {
+    if (!target) {
+        warnToast('请先选择远端设备');
+        devicePanelOpen = true;
+        updateRemotePicker();
+        loadDevices();
+        return;
+    }
+    const options = syncOptionsPayload();
+    if (!Object.keys(options).some(key => key !== 'paths' && options[key])) {
+        warnToast('至少选择一项同步内容');
+        return;
+    }
+    showLoading();
+    $.ajax({
+        url: '/manage/sync/start',
+        type: 'post',
+        data: { device: target, mode: syncMode, options: JSON.stringify(options), paths: syncPaths.join('\n') },
+        timeout: SYNC_TIMEOUT,
+        cache: false
+    })
+        .done(res => {
+            let data = {};
+            try { data = parseJson(res); } catch (e) {}
+            const detail = data.files ? ` · ${data.files} 个文件 · ${formatFileSize(data.zipSize, false)}` : '';
+            warnToast((syncMode === 'push' ? '推送完成' : '拉取已完成') + detail);
+        })
+        .fail((xhr, status) => warnToast(requestError(xhr, status, '同步失败')))
+        .always(hideLoading);
+}
+
+function loadCspManage(force = false) {
+    if (cspLoadedKey === activeKey() && !force) return;
+    getJson('/manage/csp?' + targetQuery(), data => { cspRegistry = normalizeCspRegistry(data); cspLoadedKey = activeKey(); renderCspManage(); });
+}
+function normalizeCspRegistry(data) {
+    const r = data || {};
+    r.enabled = r.enabled !== false;
+    r.insertIndex = Math.max(0, Math.min(9, Number(r.insertIndex || 0)));
+    r.homeKey = r.homeKey || '';
+    r.items = Array.isArray(r.items) ? r.items : [];
+    r.items.forEach((item, i) => normalizeCspItem(item, i));
+    return r;
+}
+function siteValue(item, key, fallback = '') {
+    if (item[key] !== undefined && item[key] !== null && item[key] !== '') return item[key];
+    return item.site && item.site[key] !== undefined && item.site[key] !== null ? item.site[key] : fallback;
+}
+function normalizeCspItem(item, index = 0) {
+    item.site = item.site && typeof item.site === 'object' ? item.site : {};
+    item.id = item.id || ('web_' + Date.now() + '_' + index);
+    item.key = item.key || siteValue(item, 'key', '__custom_csp_' + item.id);
+    const inferredApi = String(siteValue(item, 'api', ''));
+    const inferredHome = String(siteValue(item, 'homePage', siteValue(item, 'webHome', '')));
+    item.webHome = item.webHome == null ? (!inferredApi && !!inferredHome) : item.webHome !== false;
+    item.name = item.name || siteValue(item, 'name', item.webHome ? 'WebHome ' + (index + 1) : '通用 CSP ' + (index + 1));
+    item.enabled = item.enabled !== false;
+    item.type = Number(siteValue(item, 'type', item.webHome ? 3 : 3));
+    item.api = inferredApi;
+    item.ext = siteValue(item, 'ext', '');
+    item.jar = String(siteValue(item, 'jar', ''));
+    item.homePage = String(siteValue(item, 'homePage', siteValue(item, 'webHome', '')));
+    item.click = String(siteValue(item, 'click', ''));
+    item.playUrl = String(siteValue(item, 'playUrl', ''));
+    item.hide = Number(siteValue(item, 'hide', 0));
+    item.indexs = Number(siteValue(item, 'indexs', 0));
+    item.timeout = siteValue(item, 'timeout', '');
+    item.searchable = Number(siteValue(item, 'searchable', item.webHome ? 0 : 1));
+    item.changeable = Number(siteValue(item, 'changeable', 1));
+    item.quickSearch = Number(siteValue(item, 'quickSearch', item.webHome ? 0 : 1));
+    item.categories = Array.isArray(item.categories) ? item.categories : (Array.isArray(item.site.categories) ? item.site.categories : []);
+    item.header = item.header || item.site.header || {};
+    item.style = item.style || item.site.style || {};
+    item.headerText = JSON.stringify(item.header || {}, null, 2);
+    item.styleText = JSON.stringify(item.style || {}, null, 2);
+    syncCspSite(item);
+    return item;
+}
+function syncCspSite(item) {
+    const site = { ...(item.site || {}) };
+    site.key = item.key;
+    site.name = item.name;
+    site.type = Number(item.type || 0);
+    site.homePage = item.homePage || '';
+    site.hide = Number(item.hide || 0);
+    site.searchable = Number(item.searchable || 0);
+    site.changeable = Number(item.changeable || 0);
+    site.quickSearch = Number(item.quickSearch || 0);
+    if (item.webHome) {
+        site.api = '';
+        site.ext = '';
+        site.jar = '';
+        delete site.click;
+        delete site.playUrl;
+    } else {
+        site.api = item.api || '';
+        site.ext = item.ext || '';
+        site.jar = item.jar || '';
+        site.click = item.click || '';
+        site.playUrl = item.playUrl || '';
+        site.indexs = Number(item.indexs || 0);
+        if (item.timeout !== '' && item.timeout !== null) site.timeout = Number(item.timeout || 0); else delete site.timeout;
+        site.categories = Array.isArray(item.categories) ? item.categories : [];
+        site.header = item.header || {};
+        site.style = item.style || {};
+    }
+    item.site = site;
+}
+function stripCspMeta(registry) {
+    const copy = JSON.parse(JSON.stringify(registry || {}));
+    delete copy.active;
+    delete copy.enabledCount;
+    delete copy.itemsCount;
+    (copy.items || []).forEach(item => { delete item.headerText; delete item.styleText; });
+    return copy;
+}
+function renderCspManage() {
+    $('#cspEnabled').prop('checked', cspRegistry.enabled !== false);
+    $('#cspInsertText').text((cspRegistry.insertIndex || 0) + 1);
+    $('#cspSummary').text(`${cspRegistry.active || 0}/${cspRegistry.enabledCount || 0} 可用 · ${cspRegistry.items.length} 条`);
+    $('#cspList').html(cspRegistry.items.map(buildCspCard).join('') || '<div class="empty-state">还没有站点注入条目</div>');
+    $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+}
+function buildCspCard(item, index) {
+    const invalid = item.enabled && !(item.webHome ? item.homePage : item.api) ? ' invalid' : '';
+    return `<div class="manage-card csp-card${invalid}" data-index="${index}"><div class="card-line"><label class="check-row"><input class="csp-field" data-key="enabled" type="checkbox" ${item.enabled ? 'checked' : ''}><span>${item.webHome ? 'WebHome' : '通用 CSP'}</span></label><button class="file-action" type="button" onclick="moveCspItem(${index},-1)">上移</button><button class="file-action" type="button" onclick="moveCspItem(${index},1)">下移</button><button class="file-action danger" type="button" onclick="removeCspItem(${index})">删除</button></div><div class="field-row compact"><input class="md-input csp-field" data-key="name" value="${escHtml(item.name)}" placeholder="名称"><input class="md-input csp-field" data-key="key" value="${escHtml(item.key)}" placeholder="Key"></div>${buildHomeCheck(item, index)}<div class="md-field"><input class="md-input csp-field" data-key="homePage" value="${escHtml(item.homePage)}" placeholder="${item.webHome ? 'WebHome 地址' : 'WebHome 首页地址，可选'}"></div>${item.webHome ? '' : buildCommonCspFields(item)}</div>`;
+}
+function buildHomeCheck(item, index) { return `<label class="check-row"><input class="csp-home" type="checkbox" ${cspRegistry.homeKey === item.key ? 'checked' : ''} onchange="setCspHome(${index},this.checked)"><span>设为首页</span></label>`; }
+function buildCommonCspFields(item) {
+    return `<div class="field-row compact"><input class="md-input mini-input csp-field" data-key="type" type="number" value="${escHtml(item.type)}" placeholder="类型"><input class="md-input csp-field" data-key="api" value="${escHtml(item.api)}" placeholder="API / CSP 类名"></div><div class="field-row compact"><input class="md-input csp-field" data-key="jar" value="${escHtml(item.jar)}" placeholder="Jar"><input class="md-input csp-field" data-key="ext" value="${escHtml(typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext))}" placeholder="Ext"></div><div class="field-row compact"><input class="md-input csp-field" data-key="click" value="${escHtml(item.click)}" placeholder="点击脚本"><input class="md-input csp-field" data-key="playUrl" value="${escHtml(item.playUrl)}" placeholder="播放前缀"></div><div class="field-row compact"><input class="md-input mini-input csp-field" data-key="indexs" type="number" value="${escHtml(item.indexs)}" placeholder="索引"><input class="md-input mini-input csp-field" data-key="timeout" type="number" value="${escHtml(item.timeout)}" placeholder="超时秒"><input class="md-input csp-field" data-key="categories" value="${escHtml((item.categories || []).join(','))}" placeholder="分类，逗号分隔"></div><textarea class="code-area csp-field" data-key="headerText" spellcheck="false" placeholder="Header JSON">${escHtml(item.headerText)}</textarea><textarea class="code-area csp-field" data-key="styleText" spellcheck="false" placeholder="Style JSON">${escHtml(item.styleText)}</textarea><div class="flag-grid"><label class="check-row"><input class="csp-field" data-key="hide" type="checkbox" ${item.hide ? 'checked' : ''}><span>隐藏</span></label><label class="check-row"><input class="csp-field" data-key="searchable" type="checkbox" ${item.searchable ? 'checked' : ''}><span>搜索</span></label><label class="check-row"><input class="csp-field" data-key="changeable" type="checkbox" ${item.changeable ? 'checked' : ''}><span>换源</span></label><label class="check-row"><input class="csp-field" data-key="quickSearch" type="checkbox" ${item.quickSearch ? 'checked' : ''}><span>快搜</span></label></div>`;
+}
+function updateCspGlobal() {
+    if (!cspRegistry) return;
+    cspRegistry.enabled = $('#cspEnabled').prop('checked');
+    cspRegistry.insertIndex = Math.max(0, Math.min(9, Number(cspRegistry.insertIndex || 0)));
+    $('#cspInsertText').text(cspRegistry.insertIndex + 1);
+    $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+}
+function stepCspInsert(delta) { if (!cspRegistry) return; cspRegistry.insertIndex = Math.max(0, Math.min(9, Number(cspRegistry.insertIndex || 0) + delta)); updateCspGlobal(); }
+function syncCspFromCards(updateRaw = true) {
+    if (!cspRegistry) return;
+    cspRegistry.enabled = $('#cspEnabled').prop('checked');
+    cspRegistry.insertIndex = Math.max(0, Math.min(9, Number(cspRegistry.insertIndex || 0)));
+    $('#cspList .csp-card').each(function () {
+        const item = cspRegistry.items[Number($(this).data('index'))];
+        $(this).find('.csp-field').each(function () {
+            const key = $(this).data('key');
+            if (this.type === 'checkbox') item[key] = ['enabled'].includes(key) ? this.checked : (this.checked ? 1 : 0);
+            else if (['type', 'hide', 'searchable', 'changeable', 'quickSearch', 'indexs'].includes(key)) item[key] = Number(this.value || 0);
+            else if (key === 'timeout') item[key] = this.value === '' ? '' : Number(this.value || 0);
+            else if (key === 'categories') item[key] = this.value.split(',').map(x => x.trim()).filter(Boolean);
+            else if (key === 'headerText') item.header = parseJsonField(this.value, {});
+            else if (key === 'styleText') item.style = parseJsonField(this.value, {});
+            else item[key] = this.value.trim();
+        });
+        syncCspSite(item);
+    });
+    if (updateRaw) $('#cspRaw').val(JSON.stringify(stripCspMeta(cspRegistry), null, 2));
+}
+function parseJsonField(text, fallback) { try { return text && text.trim() ? JSON.parse(text) : fallback; } catch (e) { warnToast('JSON 格式无效，已保留为空对象'); return fallback; } }
+function addCspItem(webHome) {
+    if (!cspRegistry) cspRegistry = normalizeCspRegistry({});
+    syncCspFromCards(false);
+    const n = cspRegistry.items.filter(x => (x.webHome !== false) === webHome).length + 1;
+    cspRegistry.items.push(normalizeCspItem({ webHome, name: webHome ? 'WebHome ' + n : '通用 CSP ' + n }, cspRegistry.items.length));
+    renderCspManage();
+}
+function removeCspItem(index) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (item && cspRegistry.homeKey === item.key) cspRegistry.homeKey = ''; cspRegistry.items.splice(index, 1); renderCspManage(); }
+function moveCspItem(index, delta) { syncCspFromCards(false); const targetIndex = index + delta; if (targetIndex < 0 || targetIndex >= cspRegistry.items.length) return; const item = cspRegistry.items.splice(index, 1)[0]; cspRegistry.items.splice(targetIndex, 0, item); renderCspManage(); }
+function setCspHome(index, checked) { syncCspFromCards(false); cspRegistry.homeKey = checked && cspRegistry.items[index] ? cspRegistry.items[index].key : ''; renderCspManage(); }
+function saveCspManage() {
+    syncCspFromCards(false);
+    try { cspRegistry = normalizeCspRegistry(JSON.parse($('#cspRaw').val().trim() || '{}')); }
+    catch (e) { warnToast('站点注入 JSON 格式无效'); return; }
+    cspRegistry.items.forEach(syncCspSite);
+    postJson('/manage/csp', { registry: JSON.stringify(stripCspMeta(cspRegistry)) }, data => { cspRegistry = normalizeCspRegistry(data); renderCspManage(); warnToast('站点注入已保存'); });
+}
+
+function loadProxyManage(force = false) {
+    if (proxyLoadedKey === activeKey() && !force) return;
+    getJson('/manage/proxy?' + targetQuery(), data => {
+        proxyLoadedKey = activeKey();
+        proxyEnabled = !!data.enabled;
+        $('#proxyUrl').val(data.url || '');
+        $('#proxyRules').val(formatProxyRules(parseProxyRules(data.rules || '')));
+        proxyRules = parseProxyRules(data.rules || '');
+        renderProxyManage(data);
+    });
+}
+function updateProxySummary(data = {}) {
+    const count = data.count != null ? data.count : proxyRules.filter(rule => rule.hosts || rule.url).length;
+    const configured = count > 0 || !!cleanProxyUrl($('#proxyUrl').val());
+    $('#proxySummary').text(`${proxyEnabled ? '启用' : '禁用'} · ${count || 0} 条 · ${configured ? '已配置' : '未配置'}`);
+}
+function renderProxyManage(data = {}) {
+    $('#proxyEnabled').text(proxyEnabled ? '启用' : '禁用').toggleClass('on', proxyEnabled).toggleClass('off', !proxyEnabled);
+    $('#proxyModeForm').toggleClass('active', proxyMode === 'form');
+    $('#proxyModeText').toggleClass('active', proxyMode === 'text');
+    $('#proxyFormPanel').toggle(proxyMode === 'form');
+    $('#proxyTextPanel').toggle(proxyMode === 'text');
+    if (!proxyRules.length) proxyRules = [proxyRule('', '')];
+    $('#proxyRuleList').html(proxyRules.map(buildProxyRule).join(''));
+    updateProxySummary(data);
+}
+function toggleProxyEnabled() {
+    proxyEnabled = !proxyEnabled;
+    renderProxyManage();
+}
+function setProxyMode(next) {
+    if (next === proxyMode) return;
+    if (proxyMode === 'form') syncProxyTextFromForm();
+    else proxyRules = parseProxyRules($('#proxyRules').val());
+    proxyMode = next === 'text' ? 'text' : 'form';
+    if (proxyMode === 'text') $('#proxyRules').val(formatProxyRules(proxyRules));
+    renderProxyManage();
+}
+function proxyRule(hosts, url) { return { hosts: hosts || '', url: url || '' }; }
+function buildProxyRule(rule, index) {
+    return `<div class="proxy-rule-card" data-index="${index}"><div class="proxy-rule-head"><span>规则 ${index + 1}</span><div class="card-actions"><button class="file-action" onclick="moveProxyRule(${index},-1)" type="button">上移</button><button class="file-action" onclick="moveProxyRule(${index},1)" type="button">下移</button><button class="file-action danger" onclick="removeProxyRule(${index})" type="button">删除</button></div></div><div class="proxy-rule-fields"><div><label class="form-label">域名 / Host</label><input class="md-input proxy-rule-hosts" value="${escHtml(rule.hosts)}" placeholder="例如 * 或 api.example.com,*.example.org"></div><div><label class="form-label">代理地址</label><input class="md-input proxy-rule-url" value="${escHtml(rule.url)}" placeholder="留空时使用默认代理地址"></div></div></div>`;
+}
+function syncProxyRulesFromForm() {
+    const items = [];
+    $('#proxyRuleList .proxy-rule-card').each(function () {
+        items.push(proxyRule($(this).find('.proxy-rule-hosts').val().trim(), $(this).find('.proxy-rule-url').val().trim()));
+    });
+    proxyRules = items.length ? items : [proxyRule('', '')];
+}
+function syncProxyTextFromForm() {
+    syncProxyRulesFromForm();
+    $('#proxyRules').val(formatProxyRules(proxyRules));
+}
+function addProxyRule() {
+    syncProxyRulesFromForm();
+    proxyRules.push(proxyRule('', cleanProxyUrl($('#proxyUrl').val())));
+    renderProxyManage();
+}
+function removeProxyRule(index) {
+    syncProxyRulesFromForm();
+    proxyRules.splice(index, 1);
+    if (!proxyRules.length) proxyRules.push(proxyRule('', ''));
+    renderProxyManage();
+}
+function moveProxyRule(index, delta) {
+    syncProxyRulesFromForm();
+    const next = index + delta;
+    if (next < 0 || next >= proxyRules.length) return;
+    const item = proxyRules.splice(index, 1)[0];
+    proxyRules.splice(next, 0, item);
+    renderProxyManage();
+}
+function parseProxyRules(text) {
+    const raw = String(text || '').trim();
+    if (!raw) return [];
+    if (raw[0] === '{' || raw[0] === '[') return parseProxyJson(raw);
+    const rows = [];
+    raw.split(/\r?\n/).forEach(line => {
+        const value = line.trim();
+        if (!value || value.startsWith('#')) return;
+        const parts = value.split(/\s+/, 2);
+        if (parts.length === 1 && looksLikeProxyUrl(parts[0])) rows.push(proxyRule('*', parts[0]));
+        else rows.push(proxyRule(parts[0], parts.length > 1 ? parts[1] : ''));
+    });
+    return rows;
+}
+function parseProxyJson(text) {
+    try {
+        const root = JSON.parse(text);
+        const array = Array.isArray(root) ? root : (Array.isArray(root.proxy) ? root.proxy : [root]);
+        return array.map(item => proxyRule(joinProxyValue(item.hosts), joinProxyValue(item.urls))).filter(item => item.hosts || item.url);
+    } catch (e) {
+        warnToast('Proxy JSON 格式无效');
+        return [];
+    }
+}
+function joinProxyValue(value) {
+    if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean).join(',');
+    return value == null ? '' : String(value).trim();
+}
+function splitProxyValue(value) {
+    return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+}
+function formatProxyRules(items) {
+    const proxy = (items || []).map(item => {
+        const hosts = splitProxyValue(item.hosts || '*');
+        const urls = splitProxyValue(item.url);
+        if (!hosts.length && !urls.length) return null;
+        const rule = { hosts: hosts.length ? hosts : ['*'] };
+        if (urls.length) rule.urls = urls;
+        return rule;
+    }).filter(Boolean);
+    return proxy.length ? JSON.stringify({ proxy }, null, 2) : '';
+}
+function cleanProxyUrl(url) {
+    const value = String(url || '').trim();
+    return value.toLowerCase() === 'socks5://' ? '' : value;
+}
+function looksLikeProxyUrl(text) {
+    return /^(https?|socks)\w*:\/\//i.test(String(text || '').trim());
+}
+function saveProxyManage() {
+    if (proxyMode === 'form') syncProxyTextFromForm();
+    else proxyRules = parseProxyRules($('#proxyRules').val());
+    const rules = proxyMode === 'form' ? formatProxyRules(proxyRules) : $('#proxyRules').val().trim();
+    postJson('/manage/proxy', { enabled: proxyEnabled ? 'true' : 'false', url: cleanProxyUrl($('#proxyUrl').val()), rules }, data => {
+        proxyEnabled = !!data.enabled;
+        proxyRules = parseProxyRules(data.rules || rules);
+        $('#proxyRules').val(formatProxyRules(proxyRules));
+        renderProxyManage(data);
+        warnToast('Proxy 已保存');
+    }, 'Proxy 保存失败');
+}
+
+function remoteSearch() { if (!ensureTarget()) return; postAction('/manage/action', { target, do: 'search', word: $('#remoteKeyword').val().trim() }, () => warnToast('已发送搜索'), '搜索发送失败'); }
+function remotePush() { if (!ensureTarget()) return; postAction('/manage/action', { target, do: 'push', url: $('#remotePushUrl').val().trim() }, () => warnToast('已发送推送'), '推送发送失败'); }
+
+function openDialog(id) { $('#' + id).show(); history.pushState({ dialog: id }, ''); }
+function closeDialog(id) { dialogClosing = true; $('#' + id).hide(); history.back(); }
+function warnToast(msg) { $('#warnToastContent').text(msg); $('#warnToast').show(); if (warnToastTimer) clearTimeout(warnToastTimer); warnToastTimer = setTimeout(() => { $('#warnToast').hide(); warnToastTimer = null; }, 1500); }
+
+window.addEventListener('popstate', function () {
+    if (dialogClosing) { dialogClosing = false; return; }
+    const visible = $('.md-dialog-overlay:visible');
+    if (visible.length) { visible.first().hide(); return; }
+    if (currentView === 'files') listFile(currentParent);
+});
+
+$(function () {
+    startHeartbeat();
+    setManageMode('local');
+    updateSyncPathsVisible();
+    $('#newFolderContent').on('keydown', function (e) { if (e.key === 'Enter') { this.blur(); confirmNewFolder(1); } });
+    $(document).on('input change', '#cspList .csp-field', function () { syncCspFromCards(); });
+    $(document).on('change', '#viewSync input[type=checkbox]', updateSyncPathsVisible);
+});

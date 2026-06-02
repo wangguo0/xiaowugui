@@ -9,6 +9,7 @@ public class Server {
 
     private volatile PlaybackService service;
     private volatile Nano nano;
+    private volatile boolean manage;
 
     private static class Loader {
         static volatile Server INSTANCE = new Server();
@@ -24,6 +25,10 @@ public class Server {
 
     public void setService(PlaybackService service) {
         this.service = service;
+    }
+
+    public boolean isRunning() {
+        return nano != null;
     }
 
     public String getAddress() {
@@ -42,6 +47,16 @@ public class Server {
         return "http://" + (local ? "127.0.0.1" : Util.getIp()) + ":" + Proxy.getPort();
     }
 
+    public synchronized void startManage() {
+        manage = true;
+        start();
+    }
+
+    public synchronized void stopManage() {
+        manage = false;
+        if (service == null) stop();
+    }
+
     public synchronized void start() {
         if (nano != null) return;
         for (int i = 9978; i < 9999; i++) {
@@ -58,9 +73,11 @@ public class Server {
 
     public void stop() {
         Task.execute(() -> {
-            if (nano != null) nano.stop();
-            service = null;
-            nano = null;
+            synchronized (this) {
+                if (manage || service != null) return;
+                if (nano != null) nano.stop();
+                nano = null;
+            }
         });
     }
 }

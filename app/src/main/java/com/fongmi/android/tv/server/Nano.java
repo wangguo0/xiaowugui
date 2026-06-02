@@ -8,6 +8,7 @@ import com.fongmi.android.tv.server.process.Cache;
 import com.fongmi.android.tv.server.process.DebugLogs;
 import com.fongmi.android.tv.server.process.DriveCheck;
 import com.fongmi.android.tv.server.process.Local;
+import com.fongmi.android.tv.server.process.Manage;
 import com.fongmi.android.tv.server.process.Media;
 import com.fongmi.android.tv.server.process.Parse;
 import com.fongmi.android.tv.server.process.Proxy;
@@ -41,6 +42,7 @@ public class Nano extends NanoHTTPD {
         process.add(new DebugLogs());
         process.add(new DriveCheck());
         process.add(new Local());
+        process.add(new Manage());
         process.add(new Media());
         process.add(new Parse());
         process.add(new Proxy());
@@ -87,6 +89,7 @@ public class Nano extends NanoHTTPD {
     private Response getAssets(String path) {
         try {
             if (path.isEmpty()) path = INDEX;
+            if ("m".equals(path)) path = "manage.html";
             InputStream is = Asset.open(path);
             return newFixedLengthResponse(Response.Status.OK, getMimeTypeForFile(path), is, -1);
         } catch (Exception e) {

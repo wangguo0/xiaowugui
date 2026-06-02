@@ -89,27 +89,41 @@ function escHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function fileUrl(path, download = false) {
+    const encoded = path.split('/').map(encodeURIComponent).join('/');
+    return '/file' + encoded + (download ? '?download=1' : '');
+}
+
 function buildParentItem() {
-    return `<a class="file-item" href="javascript:void(0)" onclick="history.back()">
+    return `<div class="file-item">
+    <a class="file-main" href="javascript:void(0)" onclick="history.back()">
     <img class="file-icon" src="${icDir}" alt="">
     <div class="file-info"><div class="file-name">..</div></div>
-    </a>`;
+    </a>
+    </div>`;
 }
 
 function buildDirItem(name, time, path) {
     const ep = escPath(path);
-    return `<a class="file-item" href="javascript:void(0)" ontouchstart="startLongPress(()=>showDelFolderDialog('${ep}',currentRoot))" ontouchmove="cancelLongPress()" ontouchend="cancelLongPress()" oncontextmenu="return false" onclick="if(!longPressTriggered)listFile('${ep}',true)">
+    return `<div class="file-item">
+    <a class="file-main" href="javascript:void(0)" ontouchstart="startLongPress(()=>showDelFolderDialog('${ep}',currentRoot))" ontouchmove="cancelLongPress()" ontouchend="cancelLongPress()" oncontextmenu="return false" onclick="if(!longPressTriggered)listFile('${ep}',true)">
     <img class="file-icon" src="${icDir}" alt="">
     <div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time">${escHtml(time)}</div></div>
-    </a>`;
+    </a>
+    <button class="file-action danger" type="button" onclick="showDelFolderDialog('${ep}',currentRoot)">刪除</button>
+    </div>`;
 }
 
 function buildFileItem(name, time, path) {
     const ep = escPath(path);
-    return `<a class="file-item" href="javascript:void(0)" ontouchstart="startLongPress(()=>showDelFileDialog('${ep}'))" ontouchmove="cancelLongPress()" ontouchend="cancelLongPress()" oncontextmenu="return false" onclick="if(!longPressTriggered)selectFile('${ep}')">
+    return `<div class="file-item">
+    <a class="file-main" href="javascript:void(0)" ontouchstart="startLongPress(()=>showDelFileDialog('${ep}'))" ontouchmove="cancelLongPress()" ontouchend="cancelLongPress()" oncontextmenu="return false" onclick="if(!longPressTriggered)selectFile('${ep}')">
     <img class="file-icon" src="${icFile}" alt="">
     <div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time">${escHtml(time)}</div></div>
-    </a>`;
+    </a>
+    <button class="file-action" type="button" onclick="downloadPath('${ep}')">下載</button>
+    <button class="file-action danger" type="button" onclick="showDelFileDialog('${ep}')">刪除</button>
+    </div>`;
 }
 
 function addFile(node) {
@@ -127,9 +141,24 @@ function pushFile(yes) {
     if (yes === 1) doAction('file', { path: "file:/" + currentFile });
 }
 
+function downloadFile() {
+    closeDialog('fileInfoDialog');
+    downloadPath(currentFile);
+}
+
+function downloadPath(path) {
+    if (!path) return;
+    const a = document.createElement('a');
+    a.href = fileUrl(path, true);
+    a.download = path.split('/').filter(Boolean).pop() || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+}
+
 function listFile(path, addHistory = false) {
     const loadingTimer = setTimeout(() => $('#loadingToast').show(), 200);
-    $.get('/file' + path, function (res) {
+    $.get(fileUrl(path), function (res) {
         clearTimeout(loadingTimer);
         let info;
         try {
@@ -142,6 +171,7 @@ function listFile(path, addHistory = false) {
         const parent = info.parent;
         currentRoot = path;
         currentParent = parent;
+        $('#filePath').text(path || '/');
         const array = info.files;
         if (path === '' && array.length === 0) warnToast('可能沒有存儲權限');
         $('#file_list').html('');
