@@ -631,8 +631,15 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             showDialog();
             return true;
         }
-        if (mWeb != null && mWeb.isVisible() && mWeb.dispatchKeyEvent(event)) return true;
-        if (mWeb != null && mWeb.isVisible()) return super.dispatchKeyEvent(event);
+        if (mWeb != null && mWeb.isVisible()) {
+            if (mBinding.toolbar.hasFocus()) {
+                if (KeyUtil.isActionDown(event) && KeyUtil.isDownKey(event)) return requestWebFocus();
+                return super.dispatchKeyEvent(event);
+            }
+            if (KeyUtil.isUpKey(event)) return super.dispatchKeyEvent(event);
+            if (mWeb.dispatchKeyEvent(event)) return true;
+            return super.dispatchKeyEvent(event);
+        }
         if (KeyUtil.isActionDown(event) & KeyUtil.isUpKey(event) && mBinding.typeRecycler.hasFocus()) return requestTitleFocus();
         if (KeyUtil.isActionDown(event) & KeyUtil.isDownKey(event) && mBinding.typeRecycler.hasFocus()) return requestContentFocus();
         if (KeyUtil.isActionDown(event) & KeyUtil.isUpKey(event) && mBinding.recycler.hasFocus() && mBinding.typeRecycler.getVisibility() == View.VISIBLE) updateToolbarVisibility(true);
@@ -649,6 +656,10 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private boolean requestHomeFocus() {
         if (mBinding.typeRecycler.getVisibility() == View.VISIBLE) return mBinding.typeRecycler.requestFocus();
         return requestContentFocus();
+    }
+
+    private boolean requestWebFocus() {
+        return mWeb != null && mWeb.isVisible() && mWeb.requestFocus("toolbar-down");
     }
 
     private boolean requestContentFocus() {

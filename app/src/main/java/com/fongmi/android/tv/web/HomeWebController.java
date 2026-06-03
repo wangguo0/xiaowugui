@@ -17,6 +17,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import com.fongmi.android.tv.R;
 import com.github.catvod.crawler.SpiderDebug;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Site;
@@ -53,6 +54,7 @@ public class HomeWebController {
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     private void init() {
         WebViewUtil.configureHome(webView);
+        if (Util.isLeanback()) webView.setNextFocusUpId(R.id.title);
         webView.setBackgroundColor(Color.TRANSPARENT);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
@@ -196,6 +198,10 @@ public class HomeWebController {
         return handled;
     }
 
+    public boolean requestFocus(String reason) {
+        return focusWebView(reason);
+    }
+
     private boolean isRemoteKey(KeyEvent event) {
         return KeyUtil.isUpKey(event)
                 || KeyUtil.isDownKey(event)
@@ -204,10 +210,11 @@ public class HomeWebController {
                 || KeyUtil.isEnterKey(event);
     }
 
-    private void focusWebView(String reason) {
-        if (webView.hasFocus()) return;
+    private boolean focusWebView(String reason) {
+        if (webView.hasFocus()) return true;
         boolean ok = webView.requestFocus();
         SpiderDebug.log("webhome-focus", "request reason=%s ok=%s visible=%s width=%s height=%s url=%s", reason, ok, isVisible(), webView.getWidth(), webView.getHeight(), webView.getUrl());
+        return ok;
     }
 
     private void dispatchLifecycle(String event, String detail) {
