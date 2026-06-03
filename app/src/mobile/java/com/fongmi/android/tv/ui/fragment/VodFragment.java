@@ -32,6 +32,7 @@ import com.fongmi.android.tv.impl.ConfigListener;
 import com.fongmi.android.tv.impl.FilterListener;
 import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.ui.activity.HomeActivity;
 import com.fongmi.android.tv.ui.activity.HistoryActivity;
 import com.fongmi.android.tv.ui.activity.KeepActivity;
 import com.fongmi.android.tv.ui.activity.SearchActivity;
@@ -63,6 +64,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private HomeWebController mWeb;
     private TypeAdapter mAdapter;
     private Result mResult;
+    private boolean mWebFullscreen;
+    private int mHomeWebTopMargin;
 
     public static VodFragment newInstance() {
         return new VodFragment();
@@ -89,6 +92,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     protected void initView() {
         EventBus.getDefault().register(this);
         mBinding.title.setSelected(true);
+        mHomeWebTopMargin = ((ViewGroup.MarginLayoutParams) mBinding.homeWeb.getLayoutParams()).topMargin;
         setRecyclerView();
         setWebView();
         setViewModel();
@@ -149,6 +153,12 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void setFabVisible(int position) {
+        if (mWebFullscreen) {
+            mBinding.top.setVisibility(View.GONE);
+            mBinding.link.setVisibility(View.GONE);
+            mBinding.filter.setVisibility(View.GONE);
+            return;
+        }
         if (mAdapter.getItemCount() == 0) {
             mBinding.top.setVisibility(View.INVISIBLE);
             mBinding.link.setVisibility(View.VISIBLE);
@@ -258,6 +268,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void homeContent() {
+        setWebFullscreen(false);
         showProgress();
         mBinding.homeWeb.setVisibility(View.GONE);
         setFabVisible(0);
@@ -296,6 +307,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         switch (event.getType()) {
             case HOME:
                 if (mWeb != null && mWeb.isVisible()) {
+                    setWebFullscreen(false);
                     setTitle();
                     if (!mWeb.load(getHome(), true)) {
                         showNativeContent();
@@ -372,6 +384,10 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     @Override
     public boolean canBack() {
         if (mWeb != null && mWeb.handleBack()) return false;
+        if (mWebFullscreen) {
+            setWebFullscreen(false);
+            return false;
+        }
         if (mBinding.pager.getAdapter() == null || mBinding.pager.getAdapter().getCount() == 0) return true;
         if (!getFragment().canBack()) return true;
         getFragment().goBack();
@@ -380,9 +396,10 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     @Override
     public void onDestroyView() {
-        super.onDestroyView();
+        setWebFullscreen(false);
         if (mWeb != null) mWeb.destroy();
         EventBus.getDefault().unregister(this);
+        super.onDestroyView();
     }
 
     @Override
@@ -409,16 +426,21 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     @Override
     public void onWebError() {
+        setWebFullscreen(false);
         showNativeContent();
         homeContent();
     }
 
     @Override
     public void setToolbar(boolean visible) {
+        setWebFullscreen(!visible);
     }
 
     private void hideNativeContent() {
         mBinding.appBar.setExpanded(true, false);
+        mBinding.appBar.setVisibility(mWebFullscreen ? View.GONE : View.VISIBLE);
+        setHomeWebTopMargin(mWebFullscreen ? 0 : mHomeWebTopMargin);
+        setNavigationVisible(!mWebFullscreen);
         mBinding.type.setVisibility(View.GONE);
         mBinding.pager.setVisibility(View.GONE);
         mBinding.filter.setVisibility(View.GONE);
@@ -427,9 +449,36 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void showNativeContent() {
+        setWebFullscreen(false);
         mBinding.type.setVisibility(View.VISIBLE);
         mBinding.pager.setVisibility(View.VISIBLE);
         mBinding.homeWeb.setVisibility(View.GONE);
+    }
+
+    private void setWebFullscreen(boolean fullscreen) {
+        mWebFullscreen = fullscreen;
+        mBinding.appBar.setExpanded(true, false);
+        mBinding.appBar.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
+        setHomeWebTopMargin(fullscreen ? 0 : mHomeWebTopMargin);
+        setNavigationVisible(!fullscreen);
+        if (fullscreen) {
+            mBinding.type.setVisibility(View.GONE);
+            mBinding.pager.setVisibility(View.GONE);
+            mBinding.filter.setVisibility(View.GONE);
+            mBinding.link.setVisibility(View.GONE);
+            mBinding.top.setVisibility(View.GONE);
+        }
+    }
+
+    private void setHomeWebTopMargin(int margin) {
+        ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) mBinding.homeWeb.getLayoutParams();
+        if (params.topMargin == margin) return;
+        params.topMargin = margin;
+        mBinding.homeWeb.setLayoutParams(params);
+    }
+
+    private void setNavigationVisible(boolean visible) {
+        if (getActivity() instanceof HomeActivity) ((HomeActivity) getActivity()).setNavigationVisible(visible);
     }
 
 

@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.RelativeLayout;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.pm.ShortcutInfoCompat;
@@ -44,6 +45,7 @@ import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.UrlUtil;
+import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.net.OkHttp;
 import com.google.android.material.navigation.NavigationBarView;
 
@@ -54,6 +56,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     private FragmentStateManager mManager;
     private ActivityHomeBinding mBinding;
+    private boolean webHomeFullscreen;
     private int orientation;
 
     @Override
@@ -168,8 +171,33 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void change(int position) {
+        resetVodFullscreen();
+        setNavigationVisible(true);
         if (position < 2) mBinding.navigation.setSelectedItemId(position == 0 ? R.id.vod : R.id.setting);
         else mManager.change(position);
+    }
+
+    public void setNavigationVisible(boolean visible) {
+        setWebHomeFullscreen(!visible);
+        RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) mBinding.container.getLayoutParams();
+        if (visible) {
+            params.addRule(RelativeLayout.ABOVE, R.id.navigation);
+            mBinding.navigation.setVisibility(View.VISIBLE);
+        } else {
+            params.removeRule(RelativeLayout.ABOVE);
+            mBinding.navigation.setVisibility(View.GONE);
+        }
+        mBinding.container.setLayoutParams(params);
+        mBinding.getRoot().requestApplyInsets();
+    }
+
+    private void setWebHomeFullscreen(boolean fullscreen) {
+        if (webHomeFullscreen == fullscreen) return;
+        webHomeFullscreen = fullscreen;
+        mBinding.getRoot().setFitsSystemWindows(!fullscreen);
+        mBinding.getRoot().setPadding(0, 0, 0, 0);
+        if (fullscreen) Util.hideSystemUI(this);
+        else Util.showSystemUI(this);
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -200,16 +228,29 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+        resetVodFullscreen();
+        setNavigationVisible(true);
         if (item.getItemId() == R.id.setting) return mManager.change(1);
         if (item.getItemId() == R.id.vod) return mManager.change(0);
         if (item.getItemId() == R.id.live) return openLive();
         return false;
     }
 
+    private void resetVodFullscreen() {
+        VodFragment fragment = (VodFragment) mManager.getFragment(0);
+        if (fragment != null) fragment.setToolbar(true);
+    }
+
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         App.post(() -> checkOrientation(newConfig), 100);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && webHomeFullscreen) Util.hideSystemUI(this);
     }
 
     private void checkOrientation(Configuration newConfig) {
@@ -235,6 +276,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     @Override
     protected void onDestroy() {
+        if (webHomeFullscreen) Util.showSystemUI(this);
         LiveConfig.get().clear();
         VodConfig.get().clear();
         AppDatabase.backup();
