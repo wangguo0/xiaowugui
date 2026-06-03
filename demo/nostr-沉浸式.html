@@ -3450,6 +3450,7 @@
       pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
       detailCover: { images: [], index: 0, timer: 0, token: 0, swipe: null },
+      episodeViewer: { episodes: [], effectiveIndexes: [], index: -1, episodeNumber: "", swipe: null },
       deviceMode: "unknown",
       detailReturn: null,
       homeReturn: null,
@@ -7285,14 +7286,26 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     function renderEpisodes(episodes) {
       const activeEl = document.activeElement;
       const restoreEpisode = activeEl && $("episodeRail").contains(activeEl) && activeEl.dataset.episodeNumber || "";
+      const keepEpisode = $("imageViewer") && $("imageViewer").classList.contains("active") && $("imageViewer").classList.contains("episode-mode")
+        ? String(state.episodeViewer.episodeNumber || "")
+        : "";
+      state.episodeViewer.episodes = Array.isArray(episodes) ? episodes.slice() : [];
+      state.episodeViewer.effectiveIndexes = episodeEffectiveIndexes(state.episodeViewer.episodes);
+      if (keepEpisode) {
+        const index = state.episodeViewer.episodes.findIndex((ep) => String(ep && ep.episode_number || "") === keepEpisode);
+        state.episodeViewer.index = index;
+        state.episodeViewer.episodeNumber = index >= 0 ? keepEpisode : "";
+      } else {
+        state.episodeViewer.index = -1;
+        state.episodeViewer.episodeNumber = "";
+      }
       if (!episodes.length) {
         $("episodeRail").replaceChildren(emptyNode("暂无分集信息"));
         return;
       }
-      $("episodeRail").replaceChildren(...episodes.map((ep) => {
+      $("episodeRail").replaceChildren(...episodes.map((ep, index) => {
         const stillSource = ep.still_path ? imageUrl(ep.still_path, true) : "";
         const still = stillSource ? displayImage(stillSource, { size: "w300" }) : "";
-        const fullStill = stillSource ? displayImage(stillSource, { size: "w780" }) : "";
         const button = document.createElement("button");
         button.className = "episode-card focusable" + (still ? " has-still" : "");
         button.type = "button";
@@ -7306,18 +7319,115 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
             <p>${escapeHtml(ep.overview || "暂无剧情")}</p>
           </div>
         `;
-        button.addEventListener("click", () => openEpisodeViewer(ep, fullStill));
+        button.addEventListener("click", () => openEpisodeViewer(index));
         return button;
       }));
       if (restoreEpisode) requestAnimationFrame(() => focusRemoteTarget(findByDataset($("episodeRail"), "episodeNumber", restoreEpisode) || $("episodeRail").querySelector(".episode-card")));
       updatePostPanFocusState();
     }
 
-    function openEpisodeViewer(ep, still) {
+    function isEffectiveEpisode(ep, maxAiredEpisode) {
+      if (!ep) return false;
+      const airDate = String(ep.air_date || "").trim();
+      if (airDate) {
+        const airMs = dateOnlyMs(airDate);
+        const todayMs = dateOnlyMs(today());
+        if (airMs) return airMs <= todayMs;
+      }
+      if (maxAiredEpisode > 0) return Number(ep.episode_number || 0) > 0 && Number(ep.episode_number || 0) <= maxAiredEpisode;
+      return !!(ep.still_path || String(ep.overview || "").trim());
+    }
+
+    function episodeEffectiveIndexes(episodes) {
+      const todayMs = dateOnlyMs(today());
+      const maxAiredEpisode = (Array.isArray(episodes) ? episodes : []).reduce((max, ep) => {
+        const airMs = dateOnlyMs(ep && ep.air_date);
+        if (!airMs || airMs > todayMs) return max;
+        return Math.max(max, Number(ep && ep.episode_number || 0));
+      }, 0);
+      const indexes = [];
+      (Array.isArray(episodes) ? episodes : []).forEach((ep, index) => {
+        if (isEffectiveEpisode(ep, maxAiredEpisode)) indexes.push(index);
+      });
+      return indexes.length ? indexes : (episodes || []).map((_, index) => index);
+    }
+
+    function episodeFullStill(ep) {
+      const stillSource = ep && ep.still_path ? imageUrl(ep.still_path, true) : "";
+      return stillSource ? displayImage(stillSource, { size: "w780" }) : "";
+    }
+
+    function episodeViewerPayload(ep) {
+      const still = episodeFullStill(ep);
       const title = `${ep.episode_number || ""}${ep.episode_number ? ". " : ""}${ep.name || "未命名"}`;
       const meta = [ep.air_date || "", state.selected && state.selected.title || ""].filter(Boolean).join(" · ");
       const overview = ep.overview || "暂无剧情概要";
-      openImage(still || "", { episode: { title, meta, overview, still } });
+      return { title, meta, overview, still };
+    }
+
+    function openEpisodeViewer(index) {
+      const episodes = state.episodeViewer.episodes || [];
+      const ep = episodes[index];
+      if (!ep) return;
+      state.episodeViewer.index = index;
+      state.episodeViewer.episodeNumber = String(ep.episode_number || "");
+      const episode = episodeViewerPayload(ep);
+      openImage(episode.still || "", { episode });
+    }
+
+    function currentEpisodeViewerIndex() {
+      const episodes = state.episodeViewer.episodes || [];
+      const episodeNumber = String(state.episodeViewer.episodeNumber || "");
+      if (episodeNumber) {
+        const index = episodes.findIndex((ep) => String(ep && ep.episode_number || "") === episodeNumber);
+        if (index >= 0) return index;
+      }
+      const index = Number(state.episodeViewer.index);
+      return Number.isFinite(index) && index >= 0 ? index : 0;
+    }
+
+    function renderEpisodeViewerContent(episode) {
+      const episodeBox = $("episodeViewer");
+      if (!episodeBox) return;
+      const still = episode && episode.still || "";
+      episodeBox.style.display = "grid";
+      episodeBox.classList.toggle("no-still", !still);
+      episodeBox.innerHTML = `
+        ${still ? `<img alt="" ${imageAttrs(still)}>` : ""}
+        <div>
+          <h3>${escapeHtml(episode && episode.title || "分集剧情")}</h3>
+          ${episode && episode.meta ? `<span>${escapeHtml(episode.meta)}</span>` : ""}
+        </div>
+        <p>${escapeHtml(episode && episode.overview || "暂无剧情概要")}</p>
+      `;
+    }
+
+    function switchEpisodeViewer(delta) {
+      const viewer = $("imageViewer");
+      if (!viewer || !viewer.classList.contains("active") || !viewer.classList.contains("episode-mode")) return false;
+      const episodes = state.episodeViewer.episodes || [];
+      if (episodes.length <= 1) return false;
+      const current = currentEpisodeViewerIndex();
+      const effective = (state.episodeViewer.effectiveIndexes || []).filter((index) => index >= 0 && index < episodes.length);
+      const indexes = effective.length ? effective : episodes.map((_, index) => index);
+      if (indexes.length <= 1) return false;
+      let currentPos = indexes.indexOf(current);
+      if (currentPos < 0) {
+        currentPos = delta > 0
+          ? indexes.findIndex((index) => index > current) - 1
+          : indexes.findIndex((index) => index >= current);
+        if (currentPos < 0) currentPos = delta > 0 ? indexes.length - 1 : 0;
+      }
+      const next = indexes[(currentPos + delta + indexes.length) % indexes.length];
+      state.episodeViewer.index = next;
+      state.episodeViewer.episodeNumber = String(episodes[next].episode_number || "");
+      renderEpisodeViewerContent(episodeViewerPayload(episodes[next]));
+      const content = $("imageContent");
+      if (content) content.scrollTop = 0;
+      const currentCard = findByDataset($("episodeRail"), "episodeNumber", String(episodes[next].episode_number || ""));
+      if (currentCard) state.focusReturnEl = currentCard;
+      scheduleUiSnapshotSave();
+      return true;
     }
 
     async function loadPersonWorks(person) {
@@ -8250,17 +8360,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         $("imageViewer").classList.add("episode-mode");
         image.style.display = "none";
         image.removeAttribute("src");
-        const still = episode.still || url || "";
-        episodeBox.style.display = "grid";
-        episodeBox.classList.toggle("no-still", !still);
-        episodeBox.innerHTML = `
-          ${still ? `<img alt="" ${imageAttrs(still)}>` : ""}
-          <div>
-            <h3>${escapeHtml(episode.title || "分集剧情")}</h3>
-            ${episode.meta ? `<span>${escapeHtml(episode.meta)}</span>` : ""}
-          </div>
-          <p>${escapeHtml(episode.overview || "暂无剧情概要")}</p>
-        `;
+        renderEpisodeViewerContent(Object.assign({}, episode, { still: episode.still || url || "" }));
       } else {
         document.body.classList.remove("episode-active");
         $("imageViewer").classList.remove("episode-mode");
@@ -8291,6 +8391,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       $("episodeViewer").style.display = "none";
       $("episodeViewer").classList.remove("no-still");
       $("episodeViewer").replaceChildren();
+      state.episodeViewer.swipe = null;
       $("mobileImageBackBtn").classList.remove("is-hidden");
       if (!fromPopState && location.hash === "#image") history.back();
       scheduleUiSnapshotSave();
@@ -9523,6 +9624,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         scheduleUiSnapshotSave();
       }, { passive: true });
       bindDetailCoverSwipe();
+      bindEpisodeViewerSwipe();
       $("detailMoreBtn").addEventListener("click", toggleDetailTextMore);
       $("panTabs").addEventListener("click", handlePanTabEvent);
       $("panTabs").addEventListener("touchend", handlePanTabEvent);
@@ -9648,6 +9750,46 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }, { passive: true });
     }
 
+    function bindEpisodeViewerSwipe() {
+      const content = $("imageContent");
+      if (!content) return;
+      content.addEventListener("touchstart", (event) => {
+        const viewer = $("imageViewer");
+        if (!viewer || !viewer.classList.contains("episode-mode") || !viewer.classList.contains("active")) return;
+        if ((state.episodeViewer.episodes || []).length <= 1) return;
+        const touch = event.touches && event.touches[0];
+        if (!touch) return;
+        state.episodeViewer.swipe = { x: touch.clientX, y: touch.clientY, at: Date.now(), moved: false };
+      }, { passive: true });
+      content.addEventListener("touchmove", (event) => {
+        const swipe = state.episodeViewer.swipe;
+        const touch = event.touches && event.touches[0];
+        if (!swipe || !touch) return;
+        const dx = touch.clientX - swipe.x;
+        const dy = touch.clientY - swipe.y;
+        if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+          swipe.moved = true;
+          event.preventDefault();
+        }
+      }, { passive: false });
+      content.addEventListener("touchend", (event) => {
+        const swipe = state.episodeViewer.swipe;
+        state.episodeViewer.swipe = null;
+        if (!swipe || !swipe.moved) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+        const dx = touch.clientX - swipe.x;
+        const dy = touch.clientY - swipe.y;
+        if (Math.abs(dx) < 46 || Math.abs(dx) < Math.abs(dy) * 1.35 || Date.now() - swipe.at > 1000) return;
+        event.preventDefault();
+        event.stopPropagation();
+        switchEpisodeViewer(dx < 0 ? 1 : -1);
+      }, { passive: false });
+      content.addEventListener("touchcancel", () => {
+        state.episodeViewer.swipe = null;
+      }, { passive: true });
+    }
+
     function scrollHomeToTop() {
       try {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -9730,6 +9872,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           return;
         }
         if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
+        if (handleEpisodeViewerDirectionalKey(key, event)) return;
         if (handleScrollableOverlayKey(key, event)) return;
         if (handlePanDirectionalKey(key, event)) return;
         if (handleDetailDirectionalKey(key, event)) return;
@@ -9865,6 +10008,18 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       event.preventDefault();
       content.scrollTop = Math.max(0, Math.min(max, content.scrollTop + delta));
       if (!content.contains(document.activeElement)) focusRemoteTarget(content);
+      return true;
+    }
+
+    function handleEpisodeViewerDirectionalKey(key, event) {
+      if (key !== "ArrowLeft" && key !== "ArrowRight") return false;
+      const viewer = $("imageViewer");
+      if (!viewer || !viewer.classList.contains("active") || !viewer.classList.contains("episode-mode")) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+      switchEpisodeViewer(key === "ArrowRight" ? 1 : -1);
+      focusRemoteTarget($("imageContent"));
       return true;
     }
 
