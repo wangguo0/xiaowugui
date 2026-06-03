@@ -612,7 +612,6 @@
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
-      contain: layout style;
     }
 
     html.tv-mode .media-grid {
@@ -645,7 +644,6 @@
       color: var(--text);
       scroll-snap-align: start;
       backdrop-filter: blur(10px) saturate(1.05);
-      contain: layout style;
     }
 
     .media-grid .card {
@@ -1130,6 +1128,22 @@
     }
 
     @media (max-width: 719px) {
+      html:not(.tv-mode) #closeDetailBtn,
+      html:not(.tv-mode) #imageViewer.episode-mode #closeImageBtn {
+        display: none;
+      }
+
+      html:not(.tv-mode) #detailSheet:not(.detail-large) .detail-cover {
+        border-radius: 14px;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      html:not(.tv-mode) #detailSheet:not(.detail-large) .detail-cover::before,
+      html:not(.tv-mode) #detailSheet:not(.detail-large) .detail-cover img {
+        border-radius: inherit;
+      }
+
       html:not(.tv-mode) .detail-cover.has-multiple {
         touch-action: pan-y;
       }
@@ -1261,6 +1275,7 @@
       color: var(--text);
       text-align: left;
       scroll-snap-align: start;
+      contain: layout style;
     }
 
     .episode-card.has-still {
@@ -1302,6 +1317,10 @@
       line-height: 1.22;
     }
 
+    #detailSheet .episode-card .episode-badge {
+      display: none;
+    }
+
     .person-card span {
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -1335,6 +1354,7 @@
       padding: 0;
       text-align: left;
       scroll-snap-align: start;
+      contain: layout style;
     }
 
     .person-card img {
@@ -1380,8 +1400,8 @@
 
     #detailSheet.detail-large::before {
       background-image:
-        linear-gradient(90deg, rgba(4, 12, 19, .98) 0%, rgba(4, 12, 19, .9) 28%, rgba(4, 12, 19, .48) 56%, rgba(4, 12, 19, .82) 100%),
-        linear-gradient(180deg, rgba(4, 12, 19, .1) 0%, rgba(4, 12, 19, .78) 72%, #06111b 100%),
+        linear-gradient(90deg, rgba(4, 12, 19, .98) 0%, rgba(4, 12, 19, .88) 30%, rgba(4, 12, 19, .42) 58%, rgba(4, 12, 19, .54) 100%),
+        linear-gradient(180deg, rgba(4, 12, 19, .08) 0%, rgba(4, 12, 19, .66) 72%, #06111b 100%),
         var(--detail-hero-bg, none);
       background-size: cover;
       background-position: center, center, right top;
@@ -1417,6 +1437,35 @@
       background: transparent;
     }
 
+    #detailSheet.detail-large .detail-cover[data-cover-mode="landscape"] {
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .28) 3%, rgba(0, 0, 0, .76) 7%, #000 12%, #000 100%);
+      mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .28) 3%, rgba(0, 0, 0, .76) 7%, #000 12%, #000 100%);
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-size: 100% 100%;
+      mask-size: 100% 100%;
+    }
+
+    #detailSheet.detail-large .detail-cover[data-cover-mode="landscape"]::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 1;
+      width: 16%;
+      pointer-events: none;
+      background-image: var(--detail-cover-bg, none);
+      background-size: cover;
+      background-position: center top;
+      opacity: .16;
+      filter: blur(8px) saturate(.92);
+      transform: scale(1.04);
+      transform-origin: left center;
+      -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 36%, rgba(0, 0, 0, .66) 68%, transparent 100%);
+      mask-image: linear-gradient(90deg, transparent 0%, #000 36%, rgba(0, 0, 0, .66) 68%, transparent 100%);
+    }
+
     #detailSheet.detail-large .detail-cover::after {
       content: "";
       position: absolute;
@@ -1427,8 +1476,8 @@
       inset: 0;
       z-index: 2;
       background:
-        linear-gradient(90deg, #06111b 0%, rgba(6, 17, 27, .76) 12%, rgba(6, 17, 27, .14) 44%, rgba(6, 17, 27, .18) 100%),
-        linear-gradient(180deg, rgba(6, 17, 27, .12) 0%, rgba(6, 17, 27, .08) 56%, #06111b 100%);
+        linear-gradient(90deg, #06111b 0%, rgba(6, 17, 27, .78) 5%, rgba(6, 17, 27, .34) 13%, rgba(6, 17, 27, .1) 24%, rgba(6, 17, 27, .1) 100%),
+        linear-gradient(180deg, rgba(6, 17, 27, .1) 0%, rgba(6, 17, 27, .06) 56%, #06111b 100%);
     }
 
     #detailSheet.detail-large .detail-cover.poster-mode::after {
@@ -1439,6 +1488,11 @@
       object-fit: cover !important;
       object-position: center top;
       filter: saturate(.92) contrast(.98) brightness(.76);
+    }
+
+    #detailSheet.detail-large .detail-cover[data-cover-mode="landscape"] img {
+      transform: translateZ(0) scale(1.012);
+      transform-origin: center top;
     }
 
     #detailSheet.detail-large .detail-cover.poster-mode img {
@@ -1629,7 +1683,7 @@
       opacity: .92;
     }
 
-    #detailSheet.detail-large .episode-badge {
+    html.tv-mode #detailSheet.detail-large .episode-badge {
       display: inline-flex;
       position: absolute;
       top: 8px;
@@ -1950,6 +2004,54 @@
       word-break: break-word;
     }
 
+    .connection-item.refresh-progress {
+      align-items: start;
+    }
+
+    .connection-item.refresh-progress span {
+      white-space: pre-line;
+    }
+
+    .relay-mirror-config {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, .12);
+    }
+
+    .relay-mirror-config label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .relay-mirror-config .field {
+      width: 100%;
+      min-height: 36px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .relay-mirror-config textarea.field {
+      min-height: 68px;
+    }
+
+    .relay-mirror-progress {
+      min-height: 58px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: var(--radius);
+      color: var(--text);
+      background: rgba(0, 0, 0, .16);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-line;
+      word-break: break-word;
+    }
+
     .connection-body .actions {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
@@ -2077,6 +2179,7 @@
       color: var(--text);
       text-align: left;
       backdrop-filter: blur(10px) saturate(1.05);
+      contain: layout style;
     }
 
     .pan-result-item.is-bad {
@@ -2289,7 +2392,7 @@
       outline-offset: -2px;
       border-color: rgba(255, 255, 255, .96);
       background: rgba(var(--panel-rgb), .72);
-      box-shadow: none;
+      box-shadow: inset 0 0 0 1px rgba(168, 218, 255, .72);
       transition: none;
       z-index: 12;
     }
@@ -2300,37 +2403,14 @@
 
     html.tv-mode .card:focus {
       border-color: rgba(255, 255, 255, .98);
-      box-shadow: none;
-    }
-
-    html.tv-mode #recommendRail .card:focus,
-    html.tv-mode #listStack .card:focus,
-    html.tv-mode #searchRail .card:focus {
-      transform: translateY(-2px) scale(1.045);
-      outline: none;
-      border-color: rgba(255, 255, 255, .98);
-      background: rgba(var(--panel-rgb), .76);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, .98);
-    }
-
-    html.tv-mode .pan-result-item:focus {
-      transform: translateY(-1px);
-      outline: 2px solid rgba(255, 255, 255, .9);
-      outline-offset: -2px;
-      border-color: rgba(255, 255, 255, .96);
-      box-shadow: none;
-      background: rgba(82, 100, 112, .86);
-      z-index: 12;
-    }
-
-    html.tv-mode #detailSheet.detail-large .episode-card:focus,
-    html.tv-mode #detailSheet.detail-large .person-card:focus,
-    html.tv-mode #detailSheet.detail-large .card.landscape-card:focus {
-      border-color: rgba(255, 255, 255, .98);
-      box-shadow: none;
+      box-shadow: inset 0 0 0 1px rgba(168, 218, 255, .74);
     }
 
     html.tv-mode .card,
+    html.tv-mode .chip,
+    html.tv-mode .btn,
+    html.tv-mode .mini-icon-btn,
+    html.tv-mode .connection-toggle,
     html.tv-mode .field,
     html.tv-mode .pan-result-item,
     html.tv-mode .person-info,
@@ -2451,13 +2531,46 @@
         grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
       }
     }
+
+    /* TV performance merge: rendering hints and lightweight containment. */
+    html.tv-mode #recommendRail,
+    html.tv-mode #searchRail,
+    html.tv-mode #listStack .media-grid {
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+
+    html.tv-mode .media-grid .card,
+    html.tv-mode #searchRail .card,
+    html.tv-mode .episode-card,
+    html.tv-mode .person-card,
+    html.tv-mode .pan-result-item,
+    html.tv-mode .live-entry-card {
+      will-change: transform;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+
+    html.tv-mode .card:focus {
+      transform: translateY(-1px) scale(1.025) translateZ(0);
+    }
+
+    html.tv-mode .episode-card:focus,
+    html.tv-mode .person-card:focus {
+      transform: translateY(-1px) scale(1.03) translateZ(0);
+    }
+
+    html.tv-mode .media-grid,
+    html.tv-mode .rail {
+      contain: layout style;
+    }
   </style>
 </head>
 <body>
   <main class="app" id="home">
     <form class="search" id="searchForm" autocomplete="off">
       <input class="field focusable" id="searchInput" type="search" inputmode="search" enterkeyhint="search" placeholder="搜索关键词" aria-autocomplete="list" aria-controls="suggestPanel" readonly>
-      <button class="btn blue focusable" type="submit">
+      <button class="btn blue focusable" id="searchSubmitBtn" type="submit">
         <svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         搜索
       </button>
@@ -2495,6 +2608,7 @@
               <div class="connection-item"><b>盘搜</b><span id="statusPan">未搜索</span></div>
               <div class="connection-item"><b>发布</b><span id="statusPublish">暂无发布</span></div>
               <div class="connection-item"><b>身份</b><span class="mono" id="statusIdentity">未就绪</span></div>
+              <div class="connection-item refresh-progress"><b>刷新</b><span id="statusRefresh">未执行</span></div>
               <div class="connection-item"><b>Relays</b><span id="statusRelays">未连接</span></div>
             </div>
             <div class="pan-config">
@@ -2516,7 +2630,18 @@
               <div class="pan-disk-grid" id="panDiskGrid"></div>
               <button class="btn focusable" id="savePanConfigBtn" type="button">保存配置</button>
             </div>
+            <div class="relay-mirror-config">
+              <label for="mirrorSourceInput">镜像源 Relays
+                <textarea class="field focusable mono" id="mirrorSourceInput" rows="3" placeholder="每行一个源 relay" readonly></textarea>
+              </label>
+              <label for="mirrorTargetInput">镜像目标 Relays
+                <textarea class="field focusable mono" id="mirrorTargetInput" rows="2" placeholder="每行一个目标 relay，例如 wss://your-relay.example" readonly></textarea>
+              </label>
+              <div class="relay-mirror-progress mono" id="mirrorProgress">镜像未执行</div>
+              <button class="btn focusable" id="mirrorRelayBtn" type="button">镜像榜单</button>
+            </div>
             <div class="actions" style="margin-top:10px">
+              <button class="btn focusable" id="refreshNostrBtn" type="button">刷新榜单</button>
               <button class="btn focusable" id="syncBtn" type="button">同步身份</button>
               <button class="btn danger focusable" id="deleteDataBtn" type="button">删除数据</button>
             </div>
@@ -2698,15 +2823,32 @@
         nsecKey: "fish2018_home_v1_nsec",
         relays: [
           "wss://relay-sgp.signedbyme.com",
-          "wss://relay.nostr.moe",
-          "wss://nostr.spacecitynode.com",
-          // "ws://139.162.37.202",
+          "wss://kotukonostr.onrender.com",
+          "wss://nostr.spicyz.io",
+          "wss://x.kojira.io",
+          "wss://relay.wellorder.net",
+          // "wss://relay.nostr.moe",
+          // "wss://relay.nostr.info",
+          // "wss://bitcoiner.social",
+          // "wss://relay.398ja.xyz",
+          // "wss://us-east.nostr.pikachat.org",
+          // "wss://relay.damus.io",
+          // "wss://relay.chorus.community",
+          // "wss://relay.gulugulu.moe",
+          // "wss://nostr.hifish.org",
           // "wss://nos.lol",
+          // "wss://relay.vertexlab.io",
+          // "wss://nostr.wecsats.io",
+          // "wss://relay.nostr.net",
+          // "wss://nostr.wine",
+          // "wss://relay.peer.ooo",
+          // 翻
           // "wss://relay.snort.social",
           // "wss://nostr.mom",
           // "wss://relay.primal.net",
           // "wss://nostr-01.yakihonne.com",
-          // "wss://nostr-02.yakihonne.com"
+          // "wss://nostr-02.yakihonne.com",
+          // "wss://nostr-pub.wellorder.net",
         ]
       },
       pan: {
@@ -2741,6 +2883,8 @@
     const GRID_INITIAL_ROWS = 3;
     const GRID_APPEND_ROWS = 2;
     const RECENT_UI_TTL_MS = 30000;
+    const DETAIL_TEXT_CLAMP_LIMIT = 150;
+    const DETAIL_TEXT_CLAMP_LIMIT_LARGE = 210;
     const state = {
       site: null,
       config: null,
@@ -2752,15 +2896,17 @@
       catalogPage: {},
       recent: { items: [], loading: false, loaded: false, error: "", refreshedAt: 0 },
       gridRender: {},
+      gridColumnCache: {},
       fallback: [],
       fallbackPage: { sourceIndex: 0, page: 0, loading: false, loaded: false, done: false },
       loadingMore: false,
       chipFocusTimer: 0,
       railScroll: {},
       searchItems: [],
+      searchHold: { timer: 0, fired: false, suppressClickUntil: 0, pointer: null, target: null },
       suggestions: { keyword: "", items: [], loading: false, timer: 0, seq: 0, controller: null },
       hot: { db: null, dbPromise: null, idb: false, ready: false, items: [], media: new Map(), users: new Map(), ingestQueue: Promise.resolve(), refreshTimer: 0 },
-      relay: { connected: 0, published: 0, total: 0, lastOk: 0, lastDone: 0, statuses: {}, subscribeStarted: false, subscribeDone: 0, subscribeFinished: {}, backfillBusy: {}, backfillTimers: {}, backfillCandidates: {}, primaryBackfillRelay: "", fallbackReadyAt: 0, fallbackTimer: 0, fallbackPrefetchTimer: 0 },
+      relay: { connected: 0, published: 0, total: 0, lastOk: 0, lastDone: 0, statuses: {}, subscribeStarted: false, subscribeDone: 0, subscribeFinished: {}, subscribeToken: 0, refresh: null, backfillBusy: {}, backfillTimers: {}, backfillCandidates: {}, primaryBackfillRelay: "", fallbackReadyAt: 0, fallbackTimer: 0, fallbackPrefetchTimer: 0 },
       recommendationSource: "pending",
       status: {
         sdk: "检测中",
@@ -2768,7 +2914,8 @@
         nostr: "等待连接",
         pan: "未搜索",
         publish: "暂无发布",
-        identity: "未就绪"
+        identity: "未就绪",
+        refresh: "未执行"
       },
       deleteState: { loaded: false, users: {} },
       tmdb: { config: null, configDirty: false },
@@ -2778,6 +2925,7 @@
       detailCover: { images: [], index: 0, timer: 0, token: 0, swipe: null },
       deviceMode: "unknown",
       detailReturn: null,
+      homeReturn: null,
       focusReturnEl: null,
       remoteInitialFocused: false,
       renderTimer: 0,
@@ -2787,6 +2935,7 @@
       activeGridAppendId: "",
       focusScrollTimer: 0,
       focusScrollTarget: null,
+      remoteKeyGate: { key: "", at: 0 },
       scrollingUntil: 0,
       infiniteObserver: null,
       scrollLoadTimer: 0,
@@ -3799,6 +3948,10 @@
       state.hot.refreshTimer = 0;
       state.hot.items = buildHotItemsFromIndex();
       useNostrRecommendationsIfReady();
+      if (isNostrRefreshActive()) {
+        updateNostrRefreshProgress({ indexed: state.hot.items.length });
+        maybeFinishNostrRefresh();
+      }
     }
 
     function scheduleHotRefresh(delay) {
@@ -3876,6 +4029,30 @@
       if (mine) await hotRemoveVectors([mine]);
     }
 
+    async function hotClearRankingIndexForRefresh() {
+      const db = await openHotDb();
+      const localKey = state.identity ? hotUserKey(state.identity.pubkey) : "";
+      const localVector = localKey ? await hotGetUserVector(localKey, db) : null;
+      const localMedia = [];
+      hotActiveVectorItems(localVector).forEach((item) => {
+        const mediaKey = hotVectorItemMediaKey(item);
+        const media = mediaKey ? state.hot.media.get(mediaKey) : null;
+        if (media && media.m) localMedia.push(Object.assign({}, media, { c: 1 }));
+      });
+      await hotClearIndex(false);
+      if (localVector && localVector.u) state.hot.users.set(localVector.u, localVector);
+      localMedia.forEach((media) => state.hot.media.set(media.m, media));
+      if (db && (localVector && localVector.u || localMedia.length)) {
+        const tx = db.transaction(["media", "userVector"], "readwrite");
+        const mediaStore = tx.objectStore("media");
+        const vectorStore = tx.objectStore("userVector");
+        if (localVector && localVector.u) vectorStore.put(localVector);
+        localMedia.forEach((media) => mediaStore.put(media));
+        await idbDone(tx).catch(() => {});
+      }
+      state.hot.items = buildHotItemsFromIndex();
+    }
+
     async function hotRemoveVectors(vectors, options) {
       const rows = (vectors || []).filter((vector) => vector && vector.u);
       if (!rows.length) return;
@@ -3908,6 +4085,72 @@
     function setPanStatus(value) {
       state.status.pan = value;
       renderConnection();
+    }
+
+    function setRefreshStatus(value) {
+      state.status.refresh = value || "未执行";
+      renderConnection();
+    }
+
+    function updateNostrRefreshProgress(patch) {
+      const current = state.relay.refresh || {};
+      state.relay.refresh = Object.assign({
+        active: false,
+        phase: "未执行",
+        connected: 0,
+        subscribeDone: 0,
+        subEvents: 0,
+        recentPages: 0,
+        recentEvents: 0,
+        historyPages: 0,
+        historyEvents: 0,
+        indexed: 0,
+        relay: "",
+        startedAt: 0,
+        finishedAt: 0
+      }, current, patch || {});
+      const info = state.relay.refresh;
+      const relays = window.WEBHOME_CONFIG.nostr.relays;
+      const phase = info.phase || "刷新中";
+      const connected = Number(info.connected || state.relay.connected || 0);
+      const subscribeDone = Number(info.subscribeDone || state.relay.subscribeDone || 0);
+      const subEvents = Number(info.subEvents || 0);
+      const recentPages = Number(info.recentPages || 0);
+      const recentEvents = Number(info.recentEvents || 0);
+      const historyPages = Number(info.historyPages || 0);
+      const historyEvents = Number(info.historyEvents || 0);
+      const backfillBusy = Object.keys(state.relay.backfillBusy || {}).length;
+      const backfillTimers = Object.values(state.relay.backfillTimers || {}).filter(Boolean).length;
+      const parts = [];
+      if (phase === "完成") parts.push("已完成");
+      else if (info.active) parts.push(`进行中：${phase}`);
+      else parts.push(phase);
+      if (phase !== "未执行") {
+        parts.push(`连接 ${connected}/${relays.length}，订阅完成 ${subscribeDone}/${relays.length}`);
+        parts.push(`订阅事件 ${subEvents} 条`);
+        parts.push(`近7天回填 ${recentPages} 页 / ${recentEvents} 条`);
+        parts.push(`历史回填 ${historyPages} 页 / ${historyEvents} 条`);
+        if (info.active && (backfillBusy || backfillTimers)) parts.push(`回填队列 ${backfillBusy} 个执行中 / ${backfillTimers} 个等待`);
+        if (info.active && state.hot.refreshTimer) parts.push("榜单列表待更新");
+        if (info.relay) parts.push(`当前 relay：${info.relay}`);
+      }
+      parts.push(`当前榜单 ${state.hot.items.length} 条`);
+      setRefreshStatus(parts.join("\n"));
+    }
+
+    function isNostrRefreshActive(token) {
+      const info = state.relay.refresh;
+      return !!(info && info.active && (token == null || token === state.relay.subscribeToken));
+    }
+
+    function maybeFinishNostrRefresh(token) {
+      if (!isNostrRefreshActive(token)) return;
+      const relays = window.WEBHOME_CONFIG.nostr.relays;
+      const busy = Object.keys(state.relay.backfillBusy || {}).length;
+      const timers = Object.values(state.relay.backfillTimers || {}).filter(Boolean).length;
+      if (state.relay.subscribeDone < relays.length || busy || timers || state.hot.refreshTimer) return;
+      updateNostrRefreshProgress({ active: false, phase: "完成", finishedAt: Date.now(), indexed: state.hot.items.length });
+      toast(`榜单刷新完成：${state.hot.items.length}条`);
     }
 
     function setRelayStatus(relay, value) {
@@ -3982,7 +4225,9 @@
       if ($("statusPan")) $("statusPan").textContent = state.status.pan || "未搜索";
       $("statusPublish").textContent = state.status.publish;
       $("statusIdentity").textContent = state.status.identity;
+      if ($("statusRefresh")) $("statusRefresh").textContent = state.status.refresh || "未执行";
       $("statusRelays").textContent = relayValues.join(" · ");
+      if ($("refreshNostrBtn")) $("refreshNostrBtn").textContent = state.relay.refresh && state.relay.refresh.active ? "刷新中" : "刷新榜单";
       $("connectionDot").className = "dot " + (nostrOk ? "ok" : bad ? "bad" : "warn");
       fitConnectionPanel();
     }
@@ -4031,6 +4276,19 @@
       state.relay.backfillTimers = {};
       clearTimeout(state.hot.refreshTimer);
       state.hot.refreshTimer = 0;
+    }
+
+    function resetRelaySubscribeState() {
+      Object.values(state.relay.backfillTimers || {}).forEach((timer) => clearTimeout(timer));
+      state.relay.connected = 0;
+      state.relay.subscribeDone = 0;
+      state.relay.subscribeFinished = {};
+      state.relay.statuses = {};
+      state.relay.backfillBusy = {};
+      state.relay.backfillTimers = {};
+      state.relay.backfillCandidates = {};
+      state.relay.primaryBackfillRelay = "";
+      return ++state.relay.subscribeToken;
     }
 
     function closeConnectionPanel() {
@@ -4582,6 +4840,34 @@
       await sdk().cache.del(cacheKey("events"));
       await hotClearIndex(onlyMine);
       scheduleRender();
+    }
+
+    async function forceRefreshNostrRanking() {
+      if (forceRefreshNostrRanking.busy) return;
+      forceRefreshNostrRanking.busy = true;
+      const button = $("refreshNostrBtn");
+      const oldText = button && button.textContent || "";
+      if (button) button.textContent = "刷新中";
+      try {
+        setStatus("nostr", "刷新榜单中");
+        toast("开始刷新 Nostr 榜单");
+        updateNostrRefreshProgress({ active: true, phase: "清理索引", startedAt: Date.now(), finishedAt: 0, connected: 0, subscribeDone: 0, subEvents: 0, recentPages: 0, recentEvents: 0, historyPages: 0, historyEvents: 0, indexed: 0, relay: "" });
+        clearRelayBackfillTimers();
+        resetRelaySubscribeState();
+        await hotClearRankingIndexForRefresh();
+        state.recommendationSource = "pending";
+        renderMetrics();
+        if (state.activeList === "all") renderActiveGrid();
+        updateNostrRefreshProgress({ phase: "连接 relay", indexed: state.hot.items.length });
+        subscribeNostr();
+      } catch (e) {
+        setStatus("nostr", "刷新榜单失败");
+        updateNostrRefreshProgress({ active: false, phase: "刷新失败", finishedAt: Date.now(), indexed: state.hot.items.length });
+        toast(e.message || "刷新榜单失败");
+      } finally {
+        forceRefreshNostrRanking.busy = false;
+        renderConnection();
+      }
     }
 
     function allItems() {
@@ -5194,22 +5480,17 @@
     }
 
     function gridColumns(grid) {
-      const widthKey = grid ? `${Math.floor(window.innerWidth || document.documentElement.clientWidth || 0)}:${isTvMode() ? "tv" : "web"}` : "";
-      if (grid && grid.dataset.columnCacheKey === widthKey && grid.dataset.columnCacheValue) return Number(grid.dataset.columnCacheValue) || 1;
+      const width = window.innerWidth || 0;
+      const mode = isTvMode() ? "tv" : "web";
+      const gridId = gridRenderId(grid);
       const value = grid ? getComputedStyle(grid).gridTemplateColumns : "";
+      const cacheKey = `${gridId}|${mode}|${width}|${value}`;
+      const cached = state.gridColumnCache[cacheKey];
+      if (cached) return cached;
       const count = value && value !== "none" ? value.split(" ").filter(Boolean).length : 0;
-      let columns = count;
-      if (columns <= 0) {
-        if (isTvMode()) columns = 5;
-        else if ((window.innerWidth || 0) >= 1180) columns = 6;
-        else if ((window.innerWidth || 0) >= 720) columns = 4;
-        else columns = 3;
-      }
-      if (grid) {
-        grid.dataset.columnCacheKey = widthKey;
-        grid.dataset.columnCacheValue = String(columns);
-      }
-      return columns;
+      const cols = count > 0 ? count : isTvMode() ? 5 : width >= 1180 ? 6 : width >= 720 ? 4 : 3;
+      state.gridColumnCache[cacheKey] = cols;
+      return cols;
     }
 
     function initialGridBatchSize(grid) {
@@ -5289,7 +5570,7 @@
       if (!info || Number(info.rendered || 0) >= Number(info.total || 0)) return;
       let index = Number(card.dataset.cardIndex || -1);
       if (!Number.isFinite(index) || index < 0) {
-        const cards = Array.from(grid.children).filter((child) => child.classList && child.classList.contains("card"));
+        const cards = Array.from(grid.querySelectorAll(".card"));
         index = cards.indexOf(card);
       }
       if (index < 0) return;
@@ -5451,7 +5732,7 @@
           return;
         }
         if (item.source === "history") openRecentItem(item);
-        else openDetail(item);
+        else openDetail(item, { returnTarget: button });
       });
       return button;
     }
@@ -5657,6 +5938,89 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       searchTmdb(input.value);
     }
 
+    function currentSearchKeyword() {
+      const input = $("searchInput");
+      return String(input && input.value || "").trim();
+    }
+
+    function clearSearchHold() {
+      if (state.searchHold.timer) clearTimeout(state.searchHold.timer);
+      state.searchHold.timer = 0;
+      state.searchHold.pointer = null;
+      state.searchHold.target = null;
+    }
+
+    function handleSearchNativeHoldStart(event) {
+      const button = $("searchSubmitBtn");
+      if (!button) return;
+      if (event && event.pointerType === "mouse" && event.button !== 0) return;
+      clearSearchHold();
+      state.searchHold.fired = false;
+      state.searchHold.target = button;
+      state.searchHold.pointer = event && event.pointerId != null ? {
+        id: event.pointerId,
+        x: event.clientX || 0,
+        y: event.clientY || 0
+      } : null;
+      state.searchHold.timer = setTimeout(() => {
+        state.searchHold.timer = 0;
+        state.searchHold.fired = true;
+        state.searchHold.suppressClickUntil = Date.now() + 800;
+        const keyword = currentSearchKeyword();
+        hideSearchSuggest();
+        nativeHomeSearch(keyword);
+      }, 650);
+    }
+
+    function handleSearchNativeHoldMove(event) {
+      const pointer = state.searchHold.pointer;
+      if (!pointer || !event || pointer.id !== event.pointerId) return;
+      const dx = Math.abs((event.clientX || 0) - pointer.x);
+      const dy = Math.abs((event.clientY || 0) - pointer.y);
+      if (dx > 12 || dy > 12) clearSearchHold();
+    }
+
+    function handleSearchNativeHoldEnd() {
+      const fired = state.searchHold.fired;
+      clearSearchHold();
+      return fired;
+    }
+
+    function consumeSearchSubmitEnterDown(el, event) {
+      if (el !== $("searchSubmitBtn")) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (state.searchHold.timer || state.searchHold.fired) return true;
+      handleSearchNativeHoldStart();
+      return true;
+    }
+
+    function handleSearchSubmitEnterUp(event) {
+      const key = normalizeRemoteKey(event);
+      if (key !== "Enter" || state.searchHold.target !== $("searchSubmitBtn")) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (handleSearchNativeHoldEnd()) {
+        state.searchHold.fired = false;
+        return true;
+      }
+      if (Date.now() < Number(state.searchHold.suppressClickUntil || 0)) return true;
+      state.searchHold.suppressClickUntil = Date.now() + 180;
+      submitSearchInput();
+      return true;
+    }
+
+    function handleSearchSubmitClick(event) {
+      if (Date.now() < Number(state.searchHold.suppressClickUntil || 0) || state.searchHold.fired) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.searchHold.fired = false;
+        return;
+      }
+      event.preventDefault();
+      submitSearchInput();
+    }
+
     async function searchTmdb(keyword) {
       const kw = keyword.trim();
       if (!kw) return;
@@ -5675,8 +6039,125 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }
     }
 
+    function homeScrollTop() {
+      return Math.round(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0);
+    }
+
+    function homeFocusSnapshot(target, item) {
+      const el = target && target.closest ? target : null;
+      const card = el && el.closest(".card[data-media-key]");
+      if (card) {
+        const grid = card.closest(".media-grid,.rail");
+        return {
+          type: "media",
+          key: card.dataset.mediaKey || mediaDomKey(item),
+          cardIndex: Number(card.dataset.cardIndex || -1),
+          gridId: grid && (grid.dataset.listId || grid.id || "") || ""
+        };
+      }
+      const chip = el && el.closest("#chips .chip[data-chip-id]");
+      if (chip) return { type: "chip", key: chip.dataset.chipId || "" };
+      const itemKey = mediaDomKey(item);
+      if (itemKey) return { type: "media", key: itemKey, cardIndex: -1, gridId: "" };
+      if (el && el.id) return { type: "id", key: el.id };
+      return { type: "", key: "" };
+    }
+
+    function rememberHomeReturn(item, returnTarget) {
+      const target = returnTarget && returnTarget.isConnected ? returnTarget : document.activeElement;
+      state.homeReturn = {
+        scrollY: homeScrollTop(),
+        activeList: state.activeList || "all",
+        mediaKey: mediaDomKey(item),
+        focus: homeFocusSnapshot(target, item),
+        at: Date.now()
+      };
+    }
+
+    function findHomeReturnMediaTarget(saved, focus) {
+      const key = focus.key || saved.mediaKey || "";
+      const candidates = key ? Array.from(document.querySelectorAll(".app .card[data-media-key]"))
+        .filter((el) => String(el.dataset.mediaKey || "") === String(key) && isVisibleFocusable(el)) : [];
+      if (focus.gridId) {
+        const scoped = candidates.find((el) => {
+          const grid = el.closest(".media-grid,.rail");
+          return grid && String(grid.dataset.listId || grid.id || "") === String(focus.gridId);
+        });
+        if (scoped) return scoped;
+      }
+      if (candidates.length) return candidates[0];
+      const grid = focus.gridId === "searchRail" ? $("searchRail") : activeMediaGrid();
+      const index = Number(focus.cardIndex);
+      if (!grid || !Number.isFinite(index) || index < 0) return null;
+      let guard = 0;
+      while (grid.querySelectorAll(".card").length <= index && appendGridBatch(grid) && guard < 60) guard += 1;
+      const indexed = grid.querySelectorAll(".card")[index] || null;
+      return isVisibleFocusable(indexed) ? indexed : null;
+    }
+
+    function findHomeReturnTarget(saved) {
+      if (!saved) return null;
+      const focus = saved.focus || {};
+      if (focus.type === "media") return findHomeReturnMediaTarget(saved, focus);
+      if (focus.type === "chip") return findByDataset($("chips"), "chipId", focus.key);
+      if (focus.type === "id" && focus.key) return $(focus.key);
+      if (saved.activeList) return findByDataset($("chips"), "chipId", saved.activeList);
+      return firstContentFocus();
+    }
+
+    function applyHomeScrollTop(y) {
+      window.scrollTo(0, y);
+      document.documentElement.scrollTop = y;
+      document.body.scrollTop = y;
+      updateBackTopButton();
+    }
+
+    function focusHomeReturnTarget(target) {
+      if (!isVisibleFocusable(target)) return false;
+      state.remoteInitialFocused = true;
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        target.focus();
+      }
+      maybeAppendGridForFocus(target);
+      return true;
+    }
+
+    function restoreHomeReturn() {
+      const saved = state.homeReturn;
+      if (!saved) return false;
+      if (Date.now() - Number(saved.at || 0) > 10 * 60 * 1000) {
+        state.homeReturn = null;
+        return false;
+      }
+      state.homeReturn = null;
+      if (saved.activeList && isKnownList(saved.activeList) && state.activeList !== saved.activeList) {
+        state.activeList = saved.activeList;
+        normalizeActiveListForViewport();
+        renderAll({ deferContent: false });
+      }
+      const y = Math.max(0, Number(saved.scrollY || 0));
+      const apply = (withFocus) => {
+        if ($("detailSheet") && $("detailSheet").classList.contains("active")) return;
+        const target = withFocus ? findHomeReturnTarget(saved) : null;
+        if (target) focusHomeReturnTarget(target);
+        applyHomeScrollTop(y);
+      };
+      requestAnimationFrame(() => apply(true));
+      setTimeout(() => apply(true), 80);
+      setTimeout(() => apply(false), 240);
+      setTimeout(() => {
+        apply(false);
+        scheduleUiSnapshotSave();
+      }, 520);
+      return true;
+    }
+
     function openDetail(item, options) {
       const opts = options || {};
+      const detailWasActive = $("detailSheet") && $("detailSheet").classList.contains("active");
+      if (!opts.restore && !detailWasActive) rememberHomeReturn(item, opts.returnTarget);
       state.selected = item;
       state.detail = null;
       if (!opts.keepPan) resetPanSearch();
@@ -6107,6 +6588,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       return height;
     }
 
+    function detailTextClampLimit() {
+      return useLargeDetailLayout() ? DETAIL_TEXT_CLAMP_LIMIT_LARGE : DETAIL_TEXT_CLAMP_LIMIT;
+    }
+
+    function detailTextShouldClampByLength(text) {
+      const plain = String(text && text.textContent || "").replace(/\s+/g, "").trim();
+      return plain.length > detailTextClampLimit();
+    }
+
     function updateDetailTextClamp() {
       const sheet = $("detailSheet");
       const text = $("detailText");
@@ -6135,8 +6625,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const naturalHeight = text.scrollHeight;
       const lineHeight = parseFloat(getComputedStyle(text).lineHeight || "21") || 21;
       const minHeight = Math.max(44, lineHeight * 2.05);
-      if (overflow <= 0 || naturalHeight <= minHeight + 1) return;
-      const maxHeight = Math.max(minHeight, textRect.height - overflow - measureDetailMoreHeight(more) - 6);
+      const lengthClamp = detailTextShouldClampByLength(text);
+      if (overflow <= 0 && !lengthClamp) return;
+      if (naturalHeight <= minHeight + 1) return;
+      const lengthMaxHeight = lineHeight * (useLargeDetailLayout() ? 4.2 : 3.15);
+      const overflowMaxHeight = overflow > 0 ? textRect.height - overflow - measureDetailMoreHeight(more) - 6 : naturalHeight;
+      const maxHeight = Math.max(minHeight, Math.min(lengthClamp ? lengthMaxHeight : naturalHeight, overflowMaxHeight));
       if (maxHeight >= naturalHeight - 2) return;
       text.style.setProperty("--detail-text-max", `${Math.round(maxHeight)}px`);
       text.classList.add("clamped");
@@ -7174,6 +7668,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       stopDetailCoverCarousel(true);
       resetPanSearch();
       setNativeToolbarVisible(true);
+      restoreHomeReturn();
       scheduleUiSnapshotSave();
       if (!fromPopState && location.hash === "#detail") history.back();
     }
@@ -7257,6 +7752,11 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       rememberDetailReturn($("detailSearchBtn"));
       await sdk().search(title, { direct: true });
       toast("已发起原生搜索");
+    }
+
+    async function nativeHomeSearch(keyword) {
+      await sdk().search(String(keyword || "").trim(), { direct: false });
+      toast("已打开原生搜索");
     }
 
     async function openLiveHome() {
@@ -7617,9 +8117,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     function subscribeNostr() {
       const relays = window.WEBHOME_CONFIG.nostr.relays;
+      const subscribeToken = resetRelaySubscribeState();
       state.relay.subscribeStarted = true;
-      state.relay.subscribeDone = 0;
-      state.relay.subscribeFinished = {};
       setStatus("nostr", "连接中");
       relays.forEach((relay, index) => {
         try {
@@ -7630,31 +8129,50 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           let seenEvents = 0;
           let eventQueue = [];
           let flushTimer = 0;
+          const active = () => subscribeToken === state.relay.subscribeToken;
           const flushQueue = () => {
-            clearTimeout(flushTimer);
-            flushTimer = 0;
+          clearTimeout(flushTimer);
+          flushTimer = 0;
+          if (!active()) {
+            eventQueue = [];
+            maybeFinishNostrRefresh(subscribeToken);
+            return;
+          }
             const batch = eventQueue;
             eventQueue = [];
-            if (!batch.length) return;
+            if (!batch.length) {
+              maybeFinishNostrRefresh(subscribeToken);
+              return;
+            }
             hotIngestEvents(batch).then((changed) => {
-              if (!changed) return;
-              scheduleHotRefresh(HOT_REFRESH_IDLE_MS);
+              if (changed && active()) {
+                scheduleHotRefresh(HOT_REFRESH_IDLE_MS);
+                if (isNostrRefreshActive(subscribeToken)) updateNostrRefreshProgress({ phase: "写入索引", indexed: state.hot.items.length });
+              }
+              maybeFinishNostrRefresh(subscribeToken);
             });
           };
           const startBackfill = () => {
-            if (backfillStarted) return;
+            if (!active() || backfillStarted) return;
             backfillStarted = true;
             state.relay.backfillCandidates[relay] = Math.max(Number(state.relay.backfillCandidates[relay] || 0), seenEvents);
             choosePrimaryBackfillRelay(false);
-            syncRelayBackfill(relay).catch(() => {});
+            syncRelayBackfill(relay, subscribeToken).catch(() => {});
           };
           const timer = setTimeout(() => {
+            if (!active()) return;
             if (state.relay.statuses[relay] === "已连接") startBackfill();
             finishRelaySubscribe(relay, state.relay.statuses[relay] === "已连接" ? "" : "失败");
+            maybeFinishNostrRefresh(subscribeToken);
             try { ws.close(); } catch (e) {}
           }, 8000);
           ws.onopen = () => {
+            if (!active()) {
+              try { ws.close(); } catch (e) {}
+              return;
+            }
             state.relay.connected += 1;
+            if (isNostrRefreshActive(subscribeToken)) updateNostrRefreshProgress({ phase: "订阅近7天", connected: state.relay.connected, relay: shortRelay(relay) });
             setRelayStatus(relay, "已连接");
             setStatus("nostr", "已连接");
             renderMetrics();
@@ -7667,12 +8185,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
             }]));
           };
           ws.onmessage = async (message) => {
+            if (!active()) return;
             const data = safeJson(message.data, []);
             if (data[0] === "EOSE") {
               clearTimeout(timer);
               flushQueue();
               finishRelaySubscribe(relay, "");
+              if (isNostrRefreshActive(subscribeToken)) updateNostrRefreshProgress({ subscribeDone: state.relay.subscribeDone, indexed: state.hot.items.length });
               startBackfill();
+              maybeFinishNostrRefresh(subscribeToken);
               try {
                 ws.send(JSON.stringify(["CLOSE", subId]));
                 ws.close();
@@ -7681,22 +8202,29 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
             }
             if (data[0] !== "EVENT" || !data[2]) return;
             seenEvents += 1;
+            if (isNostrRefreshActive(subscribeToken)) updateNostrRefreshProgress({ phase: "接收订阅", subEvents: Number(state.relay.refresh && state.relay.refresh.subEvents || 0) + 1, relay: shortRelay(relay) });
             eventQueue.push(data[2]);
             if (!flushTimer) flushTimer = setTimeout(flushQueue, 100);
           };
           ws.onclose = () => {
             clearTimeout(timer);
             flushQueue();
+            if (!active()) return;
             if (state.relay.statuses[relay] !== "已连接") finishRelaySubscribe(relay, "断开");
+            maybeFinishNostrRefresh(subscribeToken);
           };
           ws.onerror = () => {
             clearTimeout(timer);
             flushQueue();
+            if (!active()) return;
             finishRelaySubscribe(relay, "失败");
             if (!Object.values(state.relay.statuses).includes("已连接")) setStatus("nostr", "连接失败");
+            maybeFinishNostrRefresh(subscribeToken);
           };
         } catch (e) {
+          if (subscribeToken !== state.relay.subscribeToken) return;
           finishRelaySubscribe(relay, "失败");
+          maybeFinishNostrRefresh(subscribeToken);
         }
       });
     }
@@ -7745,22 +8273,226 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       });
     }
 
-    async function syncRelayBackfill(relay) {
+    const RELAY_MIRROR_PAGE_LIMIT = 1000;
+    const RELAY_MIRROR_MAX_PAGES_PER_SOURCE = 120;
+
+    function normalizeRelayUrl(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      try {
+        const url = new URL(text);
+        if (url.protocol !== "wss:" && url.protocol !== "ws:") return "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function parseRelayList(value) {
+      return Array.from(new Set(String(value || "")
+        .split(/[\s,，]+/)
+        .map(normalizeRelayUrl)
+        .filter(Boolean)));
+    }
+
+    function setupRelayMirrorDefaults() {
+      const source = $("mirrorSourceInput");
+      const target = $("mirrorTargetInput");
+      if (source && !source.value.trim()) source.value = window.WEBHOME_CONFIG.nostr.relays.join("\n");
+      if (target) target.value = target.value || "";
+      disablePanelTextEditing(source);
+      disablePanelTextEditing(target);
+    }
+
+    function setMirrorProgress(lines) {
+      const el = $("mirrorProgress");
+      if (!el) return;
+      el.textContent = Array.isArray(lines) ? lines.filter(Boolean).join("\n") : String(lines || "镜像未执行");
+    }
+
+    function isMirrorableHotEvent(event) {
+      return !!(event && event.id && event.pubkey && event.sig && event.kind === window.WEBHOME_CONFIG.nostr.kind && getD(event) === HOT_VECTOR_D && !eventExpired(event));
+    }
+
+    function mirrorEventKey(event) {
+      return eventAddress(event) || String(event && event.id || "");
+    }
+
+    function mirrorEventIsNewer(next, old) {
+      if (!old) return true;
+      const nextCreated = Number(next && next.created_at || 0);
+      const oldCreated = Number(old && old.created_at || 0);
+      if (nextCreated !== oldCreated) return nextCreated > oldCreated;
+      return String(next && next.id || "") > String(old && old.id || "");
+    }
+
+    async function queryMirrorEventsFromRelay(relay, since, progress) {
+      const byId = new Map();
+      let until = hotNow();
+      let pages = 0;
+      while (until > since && pages < RELAY_MIRROR_MAX_PAGES_PER_SOURCE) {
+        pages += 1;
+        setMirrorProgress([
+          `拉取中：${shortRelay(relay)}`,
+          `第 ${pages} 页，已收到 ${byId.size} 条`,
+          progress
+        ]);
+        const events = await queryRelayHotPage(relay, {
+          kinds: [window.WEBHOME_CONFIG.nostr.kind],
+          "#t": [window.WEBHOME_CONFIG.nostr.tag],
+          "#d": [HOT_VECTOR_D],
+          since,
+          until,
+          limit: RELAY_MIRROR_PAGE_LIMIT
+        }, 12000);
+        events.filter(isMirrorableHotEvent).forEach((event) => byId.set(event.id, event));
+        if (!events.length || !events.complete) break;
+        let oldest = until;
+        for (const event of events) oldest = Math.min(oldest, Number(event.created_at || oldest));
+        if (events.length < RELAY_MIRROR_PAGE_LIMIT || oldest >= until) break;
+        until = oldest - 1;
+      }
+      return Array.from(byId.values());
+    }
+
+    async function publishMirrorEventToRelay(relay, event, timeout) {
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (ok, text) => {
+          if (settled) return;
+          settled = true;
+          resolve({ ok, text: text || "" });
+        };
+        try {
+          const ws = new WebSocket(relay);
+          const timer = setTimeout(() => {
+            try { ws.close(); } catch (e) {}
+            done(false, "超时");
+          }, timeout || 9000);
+          ws.onopen = () => ws.send(JSON.stringify(["EVENT", stripLocal(event)]));
+          ws.onmessage = (message) => {
+            const data = safeJson(message.data, []);
+            if (data[0] !== "OK") return;
+            clearTimeout(timer);
+            try { ws.close(); } catch (e) {}
+            done(!!data[2], data[2] ? "OK" : data[3] || "拒绝");
+          };
+          ws.onerror = () => {
+            clearTimeout(timer);
+            done(false, "失败");
+          };
+          ws.onclose = () => done(false, "断开");
+        } catch (e) {
+          done(false, e.message || "失败");
+        }
+      });
+    }
+
+    async function mirrorHotEventsToRelays() {
+      if (mirrorHotEventsToRelays.busy) return;
+      const sources = parseRelayList($("mirrorSourceInput") && $("mirrorSourceInput").value || window.WEBHOME_CONFIG.nostr.relays.join("\n"));
+      const targets = parseRelayList($("mirrorTargetInput") && $("mirrorTargetInput").value || "");
+      if (!sources.length) return toast("请填写源 relay");
+      if (!targets.length) return toast("请填写目标 relay");
+      mirrorHotEventsToRelays.busy = true;
+      const button = $("mirrorRelayBtn");
+      if (button) button.textContent = "镜像中";
+      try {
+        const since = hotWindowStart();
+        const eventsByAddress = new Map();
+        for (const relay of sources) {
+          const events = await queryMirrorEventsFromRelay(relay, since, `源 ${sources.indexOf(relay) + 1}/${sources.length} · 用户 ${eventsByAddress.size} 个`);
+          events.forEach((event) => {
+            const key = mirrorEventKey(event);
+            if (key && mirrorEventIsNewer(event, eventsByAddress.get(key))) eventsByAddress.set(key, event);
+          });
+          setMirrorProgress([
+            `源完成：${shortRelay(relay)}`,
+            `本源有效 ${events.length} 条`,
+            `按用户去重后 ${eventsByAddress.size} 条`
+          ]);
+        }
+        const events = Array.from(eventsByAddress.values()).sort((a, b) => Number(b.created_at || 0) - Number(a.created_at || 0));
+        if (!events.length) {
+          setMirrorProgress(["镜像完成", "没有从源 relay 拉到可镜像的榜单事件"]);
+          toast("没有可镜像事件");
+          return;
+        }
+        let ok = 0;
+        let rejected = 0;
+        let failed = 0;
+        let done = 0;
+        for (const target of targets) {
+          let targetOk = 0;
+          let targetRejected = 0;
+          let targetFailed = 0;
+          for (const event of events) {
+            done += 1;
+            setMirrorProgress([
+              `发布中：${shortRelay(target)}`,
+              `事件 ${done}/${events.length * targets.length}`,
+              `总计 OK ${ok} · 拒绝 ${rejected} · 失败 ${failed}`
+            ]);
+            const result = await publishMirrorEventToRelay(target, event, 9000);
+            if (result.ok) {
+              ok += 1;
+              targetOk += 1;
+            } else if (/duplicate|exists|already|newer|older|replace/i.test(result.text || "")) {
+              ok += 1;
+              targetOk += 1;
+            } else if ((result.text || "").includes("拒绝")) {
+              rejected += 1;
+              targetRejected += 1;
+            } else {
+              failed += 1;
+              targetFailed += 1;
+            }
+          }
+          setMirrorProgress([
+            `目标完成：${shortRelay(target)}`,
+            `OK ${targetOk} · 拒绝 ${targetRejected} · 失败 ${targetFailed}`,
+            `总计 OK ${ok} · 拒绝 ${rejected} · 失败 ${failed}`
+          ]);
+        }
+        setMirrorProgress([
+          "镜像完成",
+          `源 relay ${sources.length} 个，目标 relay ${targets.length} 个`,
+          `最新用户事件 ${events.length} 条`,
+          `发布 OK ${ok} · 拒绝 ${rejected} · 失败 ${failed}`
+        ]);
+        toast(`镜像完成：${events.length} 条事件`);
+      } finally {
+        mirrorHotEventsToRelays.busy = false;
+        if (button) button.textContent = "镜像榜单";
+      }
+    }
+
+    async function syncRelayBackfill(relay, token) {
+      const runToken = token == null ? state.relay.subscribeToken : token;
+      if (runToken !== state.relay.subscribeToken) return;
       if (state.relay.backfillBusy[relay]) return;
       state.relay.backfillBusy[relay] = true;
       let cursor = null;
       try {
         const db = await openHotDb();
-        if (!db) return;
-        const primary = selectPrimaryBackfillRelay(relay);
+        if (runToken !== state.relay.subscribeToken) return;
+        if (!db) {
+          if (isNostrRefreshActive(runToken)) updateNostrRefreshProgress({ active: false, phase: "本地索引不可用", finishedAt: Date.now() });
+          return;
+        }
+        const primary = selectPrimaryBackfillRelay(relay, runToken);
         const isPrimary = primary === relay;
+        if (isNostrRefreshActive(runToken)) updateNostrRefreshProgress({ phase: isPrimary ? "回填历史" : "回填近7天", relay: shortRelay(relay) });
         const since = isPrimary ? hotWindowStart() : hotBackupWindowStart();
         const now = hotNow();
         cursor = normalizeRelayCursor(await hotStoreGet("relayCursor", relay), relay, since, now);
+        if (runToken !== state.relay.subscribeToken) return;
         if (cursor.nextRetryAt && cursor.nextRetryAt > now) return;
         let changed = false;
-        changed = await syncRelayRecent(relay, cursor, since, now) || changed;
-        if (isPrimary && !cursor.recentUntil) changed = await syncRelayHistory(relay, cursor, since, now) || changed;
+        changed = await syncRelayRecent(relay, cursor, since, now, runToken) || changed;
+        if (isPrimary && !cursor.recentUntil) changed = await syncRelayHistory(relay, cursor, since, now, runToken) || changed;
+        if (runToken !== state.relay.subscribeToken) return;
         if (!isPrimary) {
           cursor.historyDone = true;
           cursor.historyUntil = since - 1;
@@ -7773,16 +8505,20 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (changed) {
           scheduleHotRefresh(HOT_REFRESH_BACKFILL_MS);
           setStatus("nostr", `已同步 ${shortRelay(relay)}${isPrimary ? " 主" : " 近7天"}`);
+          if (isNostrRefreshActive(runToken)) updateNostrRefreshProgress({ phase: "写入索引", indexed: state.hot.items.length, relay: shortRelay(relay) });
         }
       } finally {
-        delete state.relay.backfillBusy[relay];
-        if (cursor && !relayBackfillDone(cursor)) scheduleRelayBackfill(relay, relayBackfillDelay(cursor));
+        if (runToken === state.relay.subscribeToken) {
+          delete state.relay.backfillBusy[relay];
+          if (cursor && !relayBackfillDone(cursor)) scheduleRelayBackfill(relay, relayBackfillDelay(cursor), runToken);
+          maybeFinishNostrRefresh(runToken);
+        }
       }
     }
 
-    function selectPrimaryBackfillRelay(relay) {
+    function selectPrimaryBackfillRelay(relay, token) {
       const primary = choosePrimaryBackfillRelay(state.relay.subscribeDone >= window.WEBHOME_CONFIG.nostr.relays.length);
-      if (primary && primary !== relay && !state.relay.backfillBusy[primary]) scheduleRelayBackfill(primary);
+      if (primary && primary !== relay && !state.relay.backfillBusy[primary]) scheduleRelayBackfill(primary, undefined, token);
       return primary;
     }
 
@@ -7826,11 +8562,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       cursor.nextRetryAt = 0;
     }
 
-    function scheduleRelayBackfill(relay, delay) {
+    function scheduleRelayBackfill(relay, delay, token) {
       clearTimeout(state.relay.backfillTimers[relay]);
+      const runToken = token == null ? state.relay.subscribeToken : token;
       state.relay.backfillTimers[relay] = setTimeout(() => {
-        syncRelayBackfill(relay).catch(() => {});
+        delete state.relay.backfillTimers[relay];
+        if (isNostrRefreshActive(runToken)) updateNostrRefreshProgress({ phase: "回填排队完成", relay: shortRelay(relay) });
+        syncRelayBackfill(relay, runToken).catch(() => {});
       }, Number.isFinite(delay) ? delay : HOT_BACKFILL_IDLE_MS);
+      if (isNostrRefreshActive(runToken)) updateNostrRefreshProgress({ phase: "等待回填", relay: shortRelay(relay) });
     }
 
     function normalizeRelayCursor(row, relay, since, now) {
@@ -7872,7 +8612,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       };
     }
 
-    async function syncRelayRecent(relay, cursor, since, now) {
+    async function syncRelayRecent(relay, cursor, since, now, token) {
       if (!cursor.recentUntil && now > cursor.newest) {
         cursor.recentHigh = now;
         cursor.recentUntil = now;
@@ -7890,6 +8630,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           until: cursor.recentUntil,
           limit: HOT_PAGE_LIMIT
         }, 9000);
+        if (token != null && token !== state.relay.subscribeToken) break;
+        if (isNostrRefreshActive(token)) {
+          updateNostrRefreshProgress({
+            phase: "回填近7天",
+            relay: shortRelay(relay),
+            recentPages: Number(state.relay.refresh && state.relay.refresh.recentPages || 0) + 1,
+            recentEvents: Number(state.relay.refresh && state.relay.refresh.recentEvents || 0) + events.length
+          });
+        }
         if (!events.length) {
           if (!events.complete) {
             markRelayBackfillRetry(cursor);
@@ -7902,13 +8651,17 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         clearRelayBackfillRetry(cursor);
         let oldest = cursor.recentUntil;
         for (const event of events) oldest = Math.min(oldest, Number(event.created_at || oldest));
-        if (await hotIngestEvents(events)) changed = true;
+        if (await hotIngestEvents(events)) {
+          changed = true;
+          if (isNostrRefreshActive(token)) updateNostrRefreshProgress({ phase: "写入索引", indexed: state.hot.items.length, relay: shortRelay(relay) });
+        }
         cursor.recentUntil = oldest - 1;
         if (!events.complete) break;
         if (events.length < HOT_PAGE_LIMIT || cursor.recentUntil < cursor.recentTarget) {
           finishRelayRecent(cursor);
           break;
         }
+        if (token != null && token !== state.relay.subscribeToken) break;
       }
       return changed;
     }
@@ -7927,11 +8680,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       cursor.recentTarget = 0;
     }
 
-    async function syncRelayHistory(relay, cursor, since, now) {
+    async function syncRelayHistory(relay, cursor, since, now, token) {
       if (cursor.historyDone) return false;
       if (!cursor.historyUntil || cursor.historyUntil < since) cursor.historyUntil = Math.max(cursor.newest || 0, now);
       let changed = false;
       for (let page = 0; page < HOT_HISTORY_PAGES_PER_RELAY; page++) {
+        if (token != null && token !== state.relay.subscribeToken) break;
         if (cursor.historyUntil <= since) {
           cursor.historyDone = true;
           break;
@@ -7944,6 +8698,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           until: cursor.historyUntil,
           limit: HOT_PAGE_LIMIT
         }, 9000);
+        if (token != null && token !== state.relay.subscribeToken) break;
+        if (isNostrRefreshActive(token)) {
+          updateNostrRefreshProgress({
+            phase: "回填历史",
+            relay: shortRelay(relay),
+            historyPages: Number(state.relay.refresh && state.relay.refresh.historyPages || 0) + 1,
+            historyEvents: Number(state.relay.refresh && state.relay.refresh.historyEvents || 0) + events.length
+          });
+        }
         if (!events.length) {
           if (!events.complete) {
             markRelayBackfillRetry(cursor);
@@ -7956,7 +8719,10 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         clearRelayBackfillRetry(cursor);
         let oldest = cursor.historyUntil;
         for (const event of events) oldest = Math.min(oldest, Number(event.created_at || oldest));
-        if (await hotIngestEvents(events)) changed = true;
+        if (await hotIngestEvents(events)) {
+          changed = true;
+          if (isNostrRefreshActive(token)) updateNostrRefreshProgress({ phase: "写入索引", indexed: state.hot.items.length, relay: shortRelay(relay) });
+        }
         cursor.historyUntil = oldest - 1;
         if (!events.complete) break;
         cursor.historyDone = events.length < HOT_PAGE_LIMIT || cursor.historyUntil <= since;
@@ -8150,6 +8916,15 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function bindActions() {
+      $("refreshNostrBtn").addEventListener("click", () => {
+        forceRefreshNostrRanking().catch((e) => toast(e.message || "刷新榜单失败"));
+      });
+      $("mirrorRelayBtn").addEventListener("click", () => {
+        mirrorHotEventsToRelays().catch((e) => {
+          setMirrorProgress(["镜像失败", e.message || String(e || "")]);
+          toast(e.message || "镜像失败");
+        });
+      });
       $("syncBtn").addEventListener("click", openSync);
       $("closeSyncBtn").addEventListener("click", () => closeSync(false));
       $("saveNsecBtn").addEventListener("click", async () => {
@@ -8251,10 +9026,17 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         event.preventDefault();
         submitSearchInput();
       });
-      $("searchForm").querySelector("button[type='submit']").addEventListener("click", (event) => {
-        event.preventDefault();
-        submitSearchInput();
+      const searchSubmit = $("searchSubmitBtn") || $("searchForm").querySelector("button[type='submit']");
+      searchSubmit.addEventListener("pointerdown", handleSearchNativeHoldStart);
+      searchSubmit.addEventListener("pointermove", handleSearchNativeHoldMove);
+      searchSubmit.addEventListener("pointerup", handleSearchNativeHoldEnd);
+      searchSubmit.addEventListener("pointercancel", clearSearchHold);
+      searchSubmit.addEventListener("pointerleave", clearSearchHold);
+      searchSubmit.addEventListener("contextmenu", (event) => {
+        if (Date.now() < Number(state.searchHold.suppressClickUntil || 0)) event.preventDefault();
       });
+      searchSubmit.addEventListener("blur", clearSearchHold);
+      searchSubmit.addEventListener("click", handleSearchSubmitClick);
       $("clearSearchBtn").addEventListener("click", clearSearchResults);
       $("closeDetailBtn").addEventListener("click", () => closeDetail(false));
       $("detailSearchBtn").addEventListener("click", () => {
@@ -8327,6 +9109,10 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (!key) return;
         const el = document.activeElement;
         const editing = isTextEditingElement(el);
+        if (!editing && shouldThrottleRemoteNav(key, event, el)) {
+          event.preventDefault();
+          return;
+        }
         if (key !== "Enter" && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key) && ensureRemoteActiveFocus()) {
           event.preventDefault();
           return;
@@ -8335,6 +9121,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           const blockCard = blockableRecommendCard(el);
           if (consumeBlockCardEnterDown(blockCard, event)) return;
           if (handleConnectionPanelEnterKey(event)) return;
+          if (consumeSearchSubmitEnterDown(el, event)) return;
           if (el === $("searchInput") && el.readOnly) {
             event.preventDefault();
             enableSearchEditing();
@@ -8390,7 +9177,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (handleScrollableOverlayKey(key, event)) return;
         if (handlePanDirectionalKey(key, event)) return;
         if (handleDetailDirectionalKey(key, event)) return;
-        const target = fastDirectionalTarget(key, el) || nearestFocusable(key);
+        const target = fastHomeDirectionalTarget(key, el) || nearestFocusable(key);
         if (target) {
           event.preventDefault();
           if (!isPanFocusTarget(target)) state.pan.focusMode = "";
@@ -8409,6 +9196,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       document.addEventListener("keyup", (event) => {
         const key = normalizeRemoteKey(event);
         if (key !== "Enter") return;
+        if (handleSearchSubmitEnterUp(event)) return;
         if (handleBlockCardEnterUp(event)) return;
         clearBlockLongPress();
       }, true);
@@ -8578,6 +9366,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const items = searchSuggestItems();
       let target = null;
       if (active === input || form && form.contains(active) && !(panel && panel.contains(active))) {
+        if (active === input && key === "ArrowRight") return false;
         if (key === "ArrowDown") target = items[0] || input;
         else target = input;
       } else if (panel && panel.contains(active)) {
@@ -8941,10 +9730,10 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     function isFirstVisiblePanResult(el) {
       const list = $("panResultList");
       if (!list || !list.contains(el)) return false;
-      let node = list.firstElementChild;
-      while (node) {
-        if (node.classList && node.classList.contains("pan-result-item") && isVisibleFocusable(node)) return node === el;
-        node = node.nextElementSibling;
+      let item = list.firstElementChild;
+      while (item) {
+        if (item.classList && item.classList.contains("pan-result-item") && isVisibleFocusable(item)) return item === el;
+        item = item.nextElementSibling;
       }
       return false;
     }
@@ -8971,27 +9760,41 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       return map[event.keyCode || event.which] || "";
     }
 
-    function fastDirectionalTarget(key, active) {
-      if (!active || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return null;
-      if (focusScopeRoot() !== document) return null;
-      return fastChipDirectionalTarget(key, active)
-        || fastGridDirectionalTarget(key, active)
-        || fastRailDirectionalTarget(key, active)
-        || fastLiveDirectionalTarget(key, active);
+    function shouldThrottleRemoteNav(key, event, active) {
+      if (!isTvMode() || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return false;
+      if (focusScopeRoot() !== document || isConnectionPanelOpen() || isSearchSuggestOpen()) return false;
+      if ($("searchForm") && active && $("searchForm").contains(active)) return false;
+      const now = window.performance && performance.now ? performance.now() : Date.now();
+      const gate = state.remoteKeyGate || { key: "", at: 0 };
+      const minGap = gate.key === key ? 56 : 38;
+      if (gate.at && now - gate.at < minGap) return true;
+      state.remoteKeyGate = { key, at: now };
+      return false;
     }
 
-    function fastChipDirectionalTarget(key, active) {
+    function fastHomeDirectionalTarget(key, active) {
+      if (!isTvMode() || focusScopeRoot() !== document || isConnectionPanelOpen() || isSearchSuggestOpen()) return null;
+      if (!active || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return null;
+      if (isTextEditingElement(active)) return null;
+      if ($("connectionDock") && $("connectionDock").contains(active)) return null;
+      if ($("searchForm") && $("searchForm").contains(active)) return null;
+      return fastHomeChipTarget(key, active)
+        || fastHomeGridTarget(key, active)
+        || fastHomeSearchRailTarget(key, active);
+    }
+
+    function fastHomeChipTarget(key, active) {
       const chips = $("chips");
       if (!chips || !chips.contains(active)) return null;
-      if (key === "ArrowLeft" || key === "ArrowRight") return fastSibling(chips, active, key === "ArrowRight" ? 1 : -1, ".chip");
-      if (key === "ArrowDown") return firstHomeContentTarget();
+      if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(chips, active, key === "ArrowRight" ? 1 : -1, ".chip");
       return null;
     }
 
-    function fastGridDirectionalTarget(key, active) {
+    function fastHomeGridTarget(key, active) {
       const card = active && active.classList && active.classList.contains("card") ? active : null;
       const grid = card && card.closest && card.closest(".media-grid");
       if (!grid || grid.closest && grid.closest(".list-panel[hidden]")) return null;
+      if (grid !== activeMediaGrid()) return null;
       let index = Number(card.dataset.cardIndex || -1);
       if (!Number.isFinite(index) || index < 0) index = Array.prototype.indexOf.call(grid.children, card);
       if (index < 0) return null;
@@ -9002,52 +9805,36 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       else if (key === "ArrowRight" && index % columns < columns - 1) targetIndex = index + 1;
       else if (key === "ArrowUp") targetIndex = index - columns;
       else if (key === "ArrowDown") targetIndex = index + columns;
-      if (targetIndex >= 0 && targetIndex < count) return gridCardAt(grid, targetIndex);
-      if (key === "ArrowUp" && targetIndex < 0) return currentHomeFocus();
+      if (targetIndex >= 0 && targetIndex < count) return homeGridCardAt(grid, targetIndex);
       if (key === "ArrowDown" && targetIndex >= count && appendGridBatch(grid)) {
         observeInfiniteScroll();
-        return gridCardAt(grid, targetIndex);
+        return homeGridCardAt(grid, targetIndex);
       }
       return null;
     }
 
-    function fastRailDirectionalTarget(key, active) {
+    function fastHomeSearchRailTarget(key, active) {
       const rail = active && active.closest && active.closest("#searchRail");
       if (!rail || !rail.contains(active)) return null;
-      if (key === "ArrowLeft" || key === "ArrowRight") return fastSibling(rail, active, key === "ArrowRight" ? 1 : -1, ".card");
-      if (key === "ArrowUp") return $("searchInput") || null;
-      if (key === "ArrowDown") return currentHomeFocus() || firstHomeContentTarget();
+      if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(rail, active, key === "ArrowRight" ? 1 : -1, ".card");
       return null;
     }
 
-    function fastLiveDirectionalTarget(key, active) {
-      if (!active || !active.classList || !active.classList.contains("live-entry-card")) return null;
-      return key === "ArrowUp" ? currentHomeFocus() : null;
-    }
-
-    function firstHomeContentTarget() {
-      const grid = activeMediaGrid();
-      const gridTarget = grid && gridCardAt(grid, 0);
-      if (gridTarget) return gridTarget;
-      const panel = Array.from($("listStack").querySelectorAll(".list-panel")).find((item) => !item.hidden && item.dataset.listId === state.activeList);
-      return panel && (Array.from(panel.children).find((child) => canFastFocus(child)) || Array.from(panel.querySelectorAll(".live-entry-card.focusable, .focusable, button")).find(canFastFocus)) || null;
-    }
-
-    function gridCardAt(grid, index) {
+    function homeGridCardAt(grid, index) {
       const target = grid && index >= 0 ? grid.children[index] : null;
-      return target && target.classList && target.classList.contains("card") && canFastFocus(target) ? target : null;
+      return target && target.classList && target.classList.contains("card") && canFastHomeFocus(target) ? target : null;
     }
 
-    function fastSibling(root, current, delta, selector) {
+    function fastHomeSibling(root, current, delta, selector) {
       let target = delta > 0 ? current.nextElementSibling : current.previousElementSibling;
       while (target && root.contains(target)) {
-        if (target.matches && target.matches(selector) && canFastFocus(target)) return target;
+        if (target.matches && target.matches(selector) && canFastHomeFocus(target)) return target;
         target = delta > 0 ? target.nextElementSibling : target.previousElementSibling;
       }
       return null;
     }
 
-    function canFastFocus(el) {
+    function canFastHomeFocus(el) {
       return !!(el && el.matches && el.matches(".focusable,button,input,textarea") && !el.disabled && el.getAttribute("tabindex") !== "-1" && !el.hidden && !el.closest("[hidden]") && !el.closest('[aria-hidden="true"]'));
     }
 
@@ -9195,6 +9982,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         detailScrollTop: detail ? Math.round(detail.scrollTop || 0) : 0,
         imageUrl: $("viewerImage") && $("viewerImage").style.display !== "none" ? $("viewerImage").getAttribute("src") || "" : "",
         detailReturn: state.detailReturn || null,
+        homeReturn: state.homeReturn || null,
         pan: {
           visible: !!($("panSearchBlock") && $("panSearchBlock").classList.contains("active")),
           keyword: state.pan.keyword || "",
@@ -9275,6 +10063,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     async function restoreUiSnapshot(snapshot) {
       if (!snapshot) return false;
       state.detailReturn = snapshot.detailReturn || null;
+      state.homeReturn = snapshot.homeReturn || null;
       restoreSearchSnapshot(snapshot.search);
       if (snapshot.activeList) state.activeList = snapshot.activeList;
       normalizeActiveListForViewport();
@@ -9395,6 +10184,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     });
 
     window.addEventListener("fmviewport", () => {
+      state.gridColumnCache = {};
       document.body.style.minHeight = getComputedStyle(document.documentElement).getPropertyValue("--fm-web-height");
       lockViewportWidth();
       fitConnectionPanel();
@@ -9406,6 +10196,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     });
 
     window.addEventListener("resize", () => {
+      state.gridColumnCache = {};
       lockViewportWidth();
       fitConnectionPanel();
       const detailLayoutChanged = syncDetailLayout();
@@ -9469,6 +10260,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       installRemoteKeys();
       await initTmdbConfig();
       await initPanConfig();
+      setupRelayMirrorDefaults();
       await loadBlockedRecommend();
       renderConnection();
       armFallbackTimers();
