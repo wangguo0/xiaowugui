@@ -4350,8 +4350,8 @@
         apiKey: "304ca56b1b7b57ca7a47d9b59946be94",
         apiBase: "https://api.tmdb.org/3",
         language: "zh-CN",
-        imageBase: "https://image.tmdb.org/t/p/w342",
-        backdropBase: "https://image.tmdb.org/t/p/w780",
+        imageBase: "https://images.tmdb.org/t/p/w342",
+        backdropBase: "https://images.tmdb.org/t/p/w780",
         lists: [
           {
             id: "cn-movie",
@@ -5352,7 +5352,7 @@
       }
       try {
         const parsed = new URL(value);
-        if (parsed.hostname === "image.tmdb.org") return parsed.pathname.replace(/^\/t\/p\/[^/]+/, "") || parsed.pathname;
+        if (parsed.hostname === "images.tmdb.org") return parsed.pathname.replace(/^\/t\/p\/[^/]+/, "") || parsed.pathname;
       } catch (e) {}
       return value;
     }
@@ -6079,7 +6079,7 @@
       const value = String(path || "").trim();
       const imagePath = value.startsWith("/") ? value : tmdbImagePath(value);
       if (!imagePath) return value;
-      return `https://image.tmdb.org/t/p/${size || "w342"}${imagePath}`;
+      return `https://images.tmdb.org/t/p/${size || "w342"}${imagePath}`;
     }
 
     function tmdbImagePath(url) {
@@ -6088,7 +6088,7 @@
       if (value.startsWith("/")) return value;
       try {
         const parsed = new URL(value);
-        if (parsed.hostname !== "image.tmdb.org") return "";
+        if (parsed.hostname !== "images.tmdb.org") return "";
         return parsed.pathname.replace(/^\/t\/p\/[^/]+/, "") || "";
       } catch (e) {
         return "";
