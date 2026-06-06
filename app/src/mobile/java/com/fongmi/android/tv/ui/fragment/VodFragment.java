@@ -436,6 +436,11 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         setWebFullscreen(!visible);
     }
 
+    @Override
+    public void openSetting() {
+        if (getActivity() instanceof HomeActivity) ((HomeActivity) getActivity()).change(1);
+    }
+
     private void hideNativeContent() {
         mBinding.appBar.setExpanded(true, false);
         mBinding.appBar.setVisibility(mWebFullscreen ? View.GONE : View.VISIBLE);
