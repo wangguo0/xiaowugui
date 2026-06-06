@@ -125,6 +125,10 @@
     <string name="setting_enhance">增强功能</string>
     <string name="setting_debug_log">调试日志</string>
     <string name="setting_manage_page">管理页面</string>
+    <string name="setting_site_health_sort">站点健康排序</string>
+    <string name="setting_site_health_enable">启用站点健康排序</string>
+    <string name="setting_site_health_dialog_sort">站点弹窗排序</string>
+    <string name="site_health_clear_done">站点健康记录已清空</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">站点注入</string>
