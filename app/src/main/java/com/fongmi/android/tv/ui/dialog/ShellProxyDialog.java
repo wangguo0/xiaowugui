@@ -278,7 +278,17 @@ public class ShellProxyDialog extends BaseAlertDialog {
     }
 
     private void attachTouchHelper() {
-        ItemTouchHelper helper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, ItemTouchHelper.START | ItemTouchHelper.END) {
+        ItemTouchHelper helper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override
+            public boolean isLongPressDragEnabled() {
+                return false;
+            }
+
+            @Override
+            public boolean isItemViewSwipeEnabled() {
+                return false;
+            }
+
             @Override
             public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
                 adapter.move(source.getBindingAdapterPosition(), target.getBindingAdapterPosition());
@@ -288,8 +298,6 @@ public class ShellProxyDialog extends BaseAlertDialog {
 
             @Override
             public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                adapter.remove(viewHolder.getBindingAdapterPosition());
-                syncTextFromRules();
             }
         });
         helper.attachToRecyclerView(binding.ruleRecycler);
@@ -579,6 +587,10 @@ public class ShellProxyDialog extends BaseAlertDialog {
             Rule item = items.get(position);
             holder.binding.hosts.setText(item.hosts);
             holder.binding.url.setText(item.url);
+            holder.binding.delete.setOnClickListener(view -> {
+                adapter.remove(holder.getBindingAdapterPosition());
+                syncTextFromRules();
+            });
             holder.binding.drag.setOnTouchListener((view, event) -> {
                 if (event.getActionMasked() == MotionEvent.ACTION_DOWN && dragListener != null) dragListener.onStartDrag(holder);
                 return false;
