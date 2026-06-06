@@ -58,7 +58,7 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.driveCheckText.setText(getSwitch(Setting.isDriveCheck()));
         mBinding.debugLogText.setText(getSwitch(Setting.isDebugLog()));
         mBinding.managePageText.setText(R.string.manage_page_web);
-        mBinding.shellProxyText.setText(getSwitch(Setting.isShellProxy()));
+        mBinding.shellProxyText.setText(getSwitch(Setting.isShellProxy()) + " · " + getString(R.string.setting_proxy_rule_count, ProxySetting.count()));
         mBinding.shellProxyConfigText.setText(getString(R.string.setting_proxy_rule_count, ProxySetting.count()));
         CustomCspSetting.Registry registry = CustomCspSetting.load();
         CustomCspSetting.Count count = CustomCspSetting.count();

@@ -170,6 +170,16 @@
     <string name="setting_proxy_add_rule">新增規則</string>
     <string name="setting_proxy_rule_count">%1$d 條規則</string>
     <string name="setting_proxy_invalid">代理地址無效</string>
+    <string name="setting_proxy_suggest">自動建議</string>
+    <string name="setting_proxy_test">測試代理</string>
+    <string name="setting_proxy_select_site">選擇站點</string>
+    <string name="setting_proxy_no_site">暫無可選站點</string>
+    <string name="setting_proxy_no_suggest">未發現可代理網域</string>
+    <string name="setting_proxy_suggest_added">已新增 %1$d 個網域，共 %2$d 個</string>
+    <string name="setting_proxy_test_no_rule">沒有命中的代理規則</string>
+    <string name="setting_proxy_test_running">正在測試代理...</string>
+    <string name="setting_proxy_test_success">代理測試通過：%1$s</string>
+    <string name="setting_proxy_test_failed">代理測試失敗：%1$s</string>
     <string name="setting_one_key_sync">一鍵同步</string>
     <string name="setting_incognito">無痕模式</string>
     <string name="setting_drive_check">網盤檢測</string>
