@@ -163,6 +163,8 @@
                 android:gravity="start|top"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
+                android:scrollbars="vertical|horizontal"
+                android:fadeScrollbars="false"
                 android:singleLine="false"
                 android:textColor="@color/black" />
 
@@ -185,6 +187,8 @@
                 android:gravity="start|top"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
+                android:scrollbars="vertical|horizontal"
+                android:fadeScrollbars="false"
                 android:singleLine="false"
                 android:textColor="@color/black" />
 
@@ -278,9 +282,11 @@
                     android:id="@+id/networkSearch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:fadeScrollbars="false"
                     android:importantForAutofill="no"
                     android:inputType="textNoSuggestions|textUri"
                     android:scrollHorizontally="true"
+                    android:scrollbars="horizontal"
                     android:singleLine="true"
                     android:textColor="@color/black"
                     android:textColorHint="#666666" />
@@ -299,7 +305,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:fillViewport="true"
-                    android:overScrollMode="never">
+                    android:overScrollMode="never"
+                    android:scrollbars="none">
 
                     <HorizontalScrollView
                         android:id="@+id/networkRowsHorizontal"
@@ -370,34 +377,22 @@
                 android:layout_height="128dp"
                 android:background="#FAFAFA">
 
-                <com.fongmi.android.tv.ui.custom.CustomNestedScrollView
-                    android:id="@+id/networkDetailVertical"
+                <EditText
+                    android:id="@+id/networkDetail"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:fillViewport="true"
-                    android:overScrollMode="never">
-
-                    <HorizontalScrollView
-                        android:id="@+id/networkDetailHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:fillViewport="true"
-                        android:overScrollMode="never">
-
-                        <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/networkDetail"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="monospace"
-                            android:minWidth="900dp"
-                            android:padding="8dp"
-                            android:textColor="@color/black"
-                            android:textIsSelectable="true"
-                            android:textSize="12sp" />
-
-                    </HorizontalScrollView>
-
-                </com.fongmi.android.tv.ui.custom.CustomNestedScrollView>
+                    android:background="@android:color/transparent"
+                    android:fadeScrollbars="false"
+                    android:fontFamily="monospace"
+                    android:gravity="start|top"
+                    android:inputType="textMultiLine|textNoSuggestions"
+                    android:padding="8dp"
+                    android:scrollHorizontally="true"
+                    android:scrollbars="vertical|horizontal"
+                    android:singleLine="false"
+                    android:textColor="@color/black"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
 
             </FrameLayout>
 
@@ -421,6 +416,8 @@
                 android:hint="@string/web_home_extension_code_hint"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
+                android:scrollbars="vertical|horizontal"
+                android:fadeScrollbars="false"
                 android:singleLine="false"
                 android:textColor="@color/black"
                 android:textColorHint="#666666" />

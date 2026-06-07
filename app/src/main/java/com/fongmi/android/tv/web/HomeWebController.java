@@ -464,6 +464,7 @@ public class HomeWebController {
             if (WebHomeExtension.RUN_AT_START.equals(extension.getRunAt())) SpiderDebug.log("webhome-ext", "document-start downgraded id=%s site=%s", extension.getId(), site.getKey());
             SpiderDebug.log("webhome-ext", "inject id=%s runAt=%s target=%s site=%s", extension.getId(), extension.getRunAt(), runAt, site.getKey());
             WebHomeExtensionRegistry.get().recordInject(extension, site.getKey(), runAt);
+            if (debugTools) dispatchDebugConsole("EXT", "inject id=" + extension.getId() + " runAt=" + extension.getRunAt() + " target=" + runAt);
             webView.evaluateJavascript(extension.script(site.getKey()), null);
         }
     }

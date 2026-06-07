@@ -81,6 +81,8 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     public void onStart() {
         super.onStart();
         if (getDialog() == null) return;
+        setCancelable(false);
+        getDialog().setCanceledOnTouchOutside(false);
         Window window = getDialog().getWindow();
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
@@ -106,7 +108,9 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         setupScrollableText(binding.consoleText);
         setupScrollableText(binding.elementsText);
         setupScrollableText(binding.networkSearch);
-        setupFixedScrollBars();
+        setupScrollableText(binding.networkDetail);
+        binding.networkDetail.setKeyListener(null);
+        binding.networkDetail.setTextIsSelectable(true);
         binding.networkFilterGroup.check(R.id.filterAll);
         binding.tabGroup.check(R.id.tabWeb);
         controller = new HomeWebController(requireActivity(), binding.web, this, true);
@@ -209,7 +213,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                       id:el.id||'',
                       className:typeof el.className==='string'?el.className:'',
                       text:(el.innerText||el.textContent||'').trim().replace(/\\s+/g,' ').slice(0,500),
-                      html:(el.outerHTML||'').replace(/\\s+/g,' ').slice(0,1200),
+                      html:(el.outerHTML||'').slice(0,200000),
                       x:Math.round(rect.left),y:Math.round(rect.top),w:Math.round(rect.width),h:Math.round(rect.height)
                     };
                   }
@@ -254,9 +258,15 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
             return;
         }
         String id = source == null ? "" : source.getId();
-        WebHomeExtensionSourceStore.saveCode(id, source == null ? getString(R.string.web_home_extension_local_code_default, WebHomeExtensionSourceStore.list().size() + 1) : source.getName(), code, source == null || source.isEnabled(), VodConfig.get().getHome().getKey());
-        source = firstCodeSource();
+        Site site = VodConfig.get().getHome();
+        String siteKey = site == null ? "" : site.getKey();
+        if (!Setting.isWebHomeExtension()) Setting.putWebHomeExtension(true);
+        WebHomeExtensionSourceStore.saveCode(id, source == null ? getString(R.string.web_home_extension_local_code_default, WebHomeExtensionSourceStore.list().size() + 1) : source.getName(), code, true, siteKey);
+        source = TextUtils.isEmpty(id) ? firstCodeSource() : codeSource(id);
+        if (source == null) source = firstCodeSource();
+        if (source != null) WebHomeExtensionRegistry.get().setExtensionEnabled(source.getId(), true);
         consoleLines.clear();
+        appendConsole("EXT preview saved, extension enabled, reload requested");
         WebHomeExtensionRegistry.get().clear();
         if (controller != null) controller.reloadExtensions();
         Notify.show(R.string.web_home_extension_source_saved);
@@ -313,9 +323,15 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         controller.evaluate("""
                 (function(){
                   const active=document.activeElement;
+                  const HTML_LIMIT=1000000;
+                  const TEXT_LIMIT=200000;
+                  const clip=function(value,limit){
+                    value=String(value||'');
+                    return value.length>limit?value.slice(0,limit)+'\\n...truncated '+(value.length-limit)+' chars':value;
+                  };
                   const path=function(el){
                     const arr=[];
-                    for(let n=el;n&&n.nodeType===1&&arr.length<8;n=n.parentElement){
+                    for(let n=el;n&&n.nodeType===1&&arr.length<16;n=n.parentElement){
                       let s=n.tagName.toLowerCase();
                       if(n.id)s+='#'+n.id;
                       if(n.className&&typeof n.className==='string')s+='.'+n.className.trim().split(/\\s+/).slice(0,3).join('.');
@@ -323,14 +339,15 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                     }
                     return arr.join(' > ');
                   };
-                  const nodes=Array.prototype.slice.call(document.querySelectorAll('body *'),0,80).map(function(n){
+                  const html=document.documentElement&&document.documentElement.outerHTML||'';
+                  const nodes=Array.prototype.slice.call(document.querySelectorAll('body *'),0,600).map(function(n){
                     const rect=n.getBoundingClientRect();
                     const depth=(function(el){let d=0;for(let p=el.parentElement;p&&d<20;p=p.parentElement)d++;return d;})(n);
                     const attrs=[];
-                    for(let i=0;i<n.attributes.length&&i<8;i++){
+                    for(let i=0;i<n.attributes.length&&i<16;i++){
                       const a=n.attributes[i];
                       if(a.name==='class'||a.name==='id')continue;
-                      attrs.push(a.name+'="'+String(a.value).slice(0,80)+'"');
+                      attrs.push(a.name+'="'+String(a.value).slice(0,300)+'"');
                     }
                     return {
                       depth:depth,
@@ -338,17 +355,20 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                       id:n.id||'',
                       className:typeof n.className==='string'?n.className:'',
                       attrs:attrs.join(' '),
-                      text:(n.innerText||n.textContent||'').trim().replace(/\\s+/g,' ').slice(0,120),
+                      text:(n.innerText||n.textContent||'').trim().replace(/\\s+/g,' ').slice(0,500),
                       x:Math.round(rect.left),y:Math.round(rect.top),w:Math.round(rect.width),h:Math.round(rect.height)
                     };
-                  }).filter(function(n){return n.w>0&&n.h>0;}).slice(0,40);
+                  }).filter(function(n){return n.w>0&&n.h>0;}).slice(0,300);
                   return JSON.stringify({
                     title:document.title,
                     url:location.href,
                     readyState:document.readyState,
                     active:active?path(active):'',
                     selected:window.__fmInspectLast||null,
-                    bodyText:(document.body&&document.body.innerText||'').trim().replace(/\\s+/g,' ').slice(0,1200),
+                    bodyText:clip((document.body&&document.body.innerText||'').trim(),TEXT_LIMIT),
+                    html:clip(html,HTML_LIMIT),
+                    htmlLength:html.length,
+                    htmlTruncated:html.length>HTML_LIMIT,
                     elements:nodes
                   },null,2);
                 })();
@@ -378,6 +398,10 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
             builder.append("DOM\n");
             JsonArray elements = object.getAsJsonArray("elements");
             if (elements != null) for (JsonElement element : elements) appendElement(builder, element.getAsJsonObject());
+            builder.append("\nBody Text\n").append(safe(object, "bodyText")).append("\n\n");
+            builder.append("HTML");
+            if ("true".equals(safe(object, "htmlTruncated"))) builder.append(" (truncated, total chars ").append(safe(object, "htmlLength")).append(')');
+            builder.append("\n").append(safe(object, "html")).append('\n');
             return builder.toString();
         } catch (Throwable e) {
             return builder.append(unquote(value)).toString();
@@ -404,6 +428,11 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         } catch (Throwable e) {
             return "";
         }
+    }
+
+    private String clip(String value, int limit) {
+        if (value == null) return "";
+        return value.length() <= limit ? value : value.substring(0, limit) + "\n...truncated " + (value.length() - limit) + " chars";
     }
 
     private int parseInt(String value) {
@@ -466,28 +495,27 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         return null;
     }
 
+    private WebHomeExtensionSourceStore.Entry codeSource(String id) {
+        for (WebHomeExtensionSourceStore.Entry entry : WebHomeExtensionSourceStore.list()) {
+            if (TextUtils.equals(entry.getId(), id) && WebHomeExtensionSourceStore.isCodeSource(entry)) return entry;
+        }
+        return null;
+    }
+
     private void setupScrollableText(EditText input) {
         input.setSelectAllOnFocus(false);
         input.setHorizontallyScrolling(true);
         input.setHorizontalScrollBarEnabled(true);
         input.setVerticalScrollBarEnabled(true);
+        input.setScrollbarFadingEnabled(false);
+        input.setScrollBarStyle(View.SCROLLBARS_INSIDE_INSET);
+        input.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
         input.setOnTouchListener((view, event) -> {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) view.post(() -> disallowParentIntercept(view, false));
             else disallowParentIntercept(view, true);
             return false;
         });
-    }
-
-    private void setupFixedScrollBars() {
-        binding.networkRowsVertical.setVerticalScrollBarEnabled(true);
-        binding.networkRowsVertical.setScrollbarFadingEnabled(false);
-        binding.networkRowsHorizontal.setHorizontalScrollBarEnabled(true);
-        binding.networkRowsHorizontal.setScrollbarFadingEnabled(false);
-        binding.networkDetailVertical.setVerticalScrollBarEnabled(true);
-        binding.networkDetailVertical.setScrollbarFadingEnabled(false);
-        binding.networkDetailHorizontal.setHorizontalScrollBarEnabled(true);
-        binding.networkDetailHorizontal.setScrollbarFadingEnabled(false);
     }
 
     private void changeDetailHeight(int deltaDp) {

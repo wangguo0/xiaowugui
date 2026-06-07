@@ -92,6 +92,8 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     public void onStart() {
         super.onStart();
         if (getDialog() == null) return;
+        setCancelable(false);
+        getDialog().setCanceledOnTouchOutside(false);
         Window window = getDialog().getWindow();
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
@@ -623,6 +625,9 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         input.setHorizontallyScrolling(true);
         input.setHorizontalScrollBarEnabled(true);
         input.setVerticalScrollBarEnabled(true);
+        input.setScrollbarFadingEnabled(false);
+        input.setScrollBarStyle(View.SCROLLBARS_INSIDE_INSET);
+        input.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
         input.setOnTouchListener((view, event) -> {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) view.post(() -> disallowParentIntercept(view, false));

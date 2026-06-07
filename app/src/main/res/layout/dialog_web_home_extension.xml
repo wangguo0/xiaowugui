@@ -170,6 +170,8 @@
             android:inputType="textMultiLine|textNoSuggestions"
             android:minLines="8"
             android:scrollHorizontally="true"
+            android:scrollbars="vertical|horizontal"
+            android:fadeScrollbars="false"
             android:selectAllOnFocus="false"
             android:singleLine="false"
             android:textColor="@color/black"
