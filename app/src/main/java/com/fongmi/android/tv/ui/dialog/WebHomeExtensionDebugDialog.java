@@ -505,11 +505,9 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     private void setupScrollableText(EditText input) {
         input.setSelectAllOnFocus(false);
         input.setHorizontallyScrolling(true);
-        input.setHorizontalScrollBarEnabled(true);
-        input.setVerticalScrollBarEnabled(true);
-        input.setScrollbarFadingEnabled(false);
-        input.setScrollBarStyle(View.SCROLLBARS_INSIDE_INSET);
-        input.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+        input.setHorizontalScrollBarEnabled(false);
+        input.setVerticalScrollBarEnabled(false);
+        input.setOverScrollMode(View.OVER_SCROLL_NEVER);
         input.setOnTouchListener((view, event) -> {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) view.post(() -> disallowParentIntercept(view, false));

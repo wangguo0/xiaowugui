@@ -46,7 +46,7 @@
         android:layout_marginTop="10dp"
         android:fillViewport="false"
         android:overScrollMode="never"
-        android:scrollbars="horizontal">
+        android:scrollbars="none">
 
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/tabGroup"
@@ -163,8 +163,7 @@
                 android:gravity="start|top"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
-                android:scrollbars="vertical|horizontal"
-                android:fadeScrollbars="false"
+                android:scrollbars="none"
                 android:singleLine="false"
                 android:textColor="@color/black" />
 
@@ -187,8 +186,7 @@
                 android:gravity="start|top"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
-                android:scrollbars="vertical|horizontal"
-                android:fadeScrollbars="false"
+                android:scrollbars="none"
                 android:singleLine="false"
                 android:textColor="@color/black" />
 
@@ -208,7 +206,7 @@
                 android:layout_height="wrap_content"
                 android:fillViewport="false"
                 android:overScrollMode="never"
-                android:scrollbars="horizontal">
+                android:scrollbars="none">
 
                 <com.google.android.material.button.MaterialButtonToggleGroup
                     android:id="@+id/networkFilterGroup"
@@ -282,11 +280,10 @@
                     android:id="@+id/networkSearch"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:fadeScrollbars="false"
                     android:importantForAutofill="no"
                     android:inputType="textNoSuggestions|textUri"
                     android:scrollHorizontally="true"
-                    android:scrollbars="horizontal"
+                    android:scrollbars="none"
                     android:singleLine="true"
                     android:textColor="@color/black"
                     android:textColorHint="#666666" />
@@ -313,7 +310,8 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:fillViewport="true"
-                        android:overScrollMode="never">
+                        android:overScrollMode="never"
+                        android:scrollbars="none">
 
                         <androidx.appcompat.widget.LinearLayoutCompat
                             android:id="@+id/networkRows"
@@ -382,13 +380,12 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:background="@android:color/transparent"
-                    android:fadeScrollbars="false"
                     android:fontFamily="monospace"
                     android:gravity="start|top"
                     android:inputType="textMultiLine|textNoSuggestions"
                     android:padding="8dp"
                     android:scrollHorizontally="true"
-                    android:scrollbars="vertical|horizontal"
+                    android:scrollbars="none"
                     android:singleLine="false"
                     android:textColor="@color/black"
                     android:textIsSelectable="true"
@@ -416,8 +413,7 @@
                 android:hint="@string/web_home_extension_code_hint"
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:scrollHorizontally="true"
-                android:scrollbars="vertical|horizontal"
-                android:fadeScrollbars="false"
+                android:scrollbars="none"
                 android:singleLine="false"
                 android:textColor="@color/black"
                 android:textColorHint="#666666" />
@@ -432,7 +428,7 @@
         android:layout_marginTop="8dp"
         android:fillViewport="false"
         android:overScrollMode="never"
-        android:scrollbars="horizontal">
+        android:scrollbars="none">
 
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/actions"
