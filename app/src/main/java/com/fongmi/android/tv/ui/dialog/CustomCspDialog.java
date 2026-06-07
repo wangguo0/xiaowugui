@@ -506,6 +506,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             private CustomCspSetting.Item item;
             private boolean bindingItem;
             private boolean autoName;
+            private boolean autoKey;
 
             ViewHolder(@NonNull AdapterCustomCspBinding binding) {
                 super(binding.getRoot());
@@ -548,6 +549,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 this.item = item;
                 bindingItem = true;
                 autoName = isAutoName(item.getName(), item.getKind());
+                autoKey = isAutoKey(item.getKey());
                 binding.enabled.setAlpha(item.isEnabled() ? 1.0f : 0.65f);
                 binding.enabled.setText(item.isEnabled() ? R.string.setting_enable : R.string.setting_disable);
                 binding.typeGroup.check(item.isLive() ? R.id.liveMode : item.isWebHome() ? R.id.webHomeMode : R.id.cspMode);
@@ -643,7 +645,9 @@ public class CustomCspDialog extends BaseAlertDialog {
                 binding.homePageLayout.setVisibility(webHome ? View.VISIBLE : View.GONE);
                 binding.liveUrlLayout.setVisibility(live ? View.VISIBLE : View.GONE);
                 binding.liveTypePanel.setVisibility(View.GONE);
-                binding.cspOptionsPanel.setVisibility(!webHome && !live ? View.VISIBLE : View.GONE);
+                binding.cspOptionsPanel.setVisibility(!live ? View.VISIBLE : View.GONE);
+                binding.keyLayout.setVisibility(!live ? View.VISIBLE : View.GONE);
+                binding.typeLayout.setVisibility(!webHome && !live ? View.VISIBLE : View.GONE);
                 binding.liveMetaPanel.setVisibility(live ? View.VISIBLE : View.GONE);
                 binding.liveHeaderPanel.setVisibility(live ? View.VISIBLE : View.GONE);
                 binding.liveTunePanel.setVisibility(live ? View.VISIBLE : View.GONE);
@@ -656,9 +660,16 @@ public class CustomCspDialog extends BaseAlertDialog {
             void sync() {
                 if (item == null || bindingItem) return;
                 String name = binding.name.getText().toString().trim();
+                String key = binding.key.getText().toString().trim();
+                if (!key.equals(item.getKey())) autoKey = false;
                 autoName = autoName || isAutoName(item.getName(), item.getKind());
                 if (!name.equals(item.getName())) autoName = false;
                 item.setName(name);
+                if (autoKey && !item.isLive() && !binding.key.getText().toString().trim().equals(item.getKey())) {
+                    bindingItem = true;
+                    setText(binding.key, item.getKey());
+                    bindingItem = false;
+                }
                 if (item.isLive()) {
                     item.setUrl(binding.liveUrl.getText().toString().trim());
                     item.setApi(binding.api.getText().toString().trim());
@@ -693,6 +704,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                     item.setClick(binding.click.getText().toString().trim());
                     item.setPlayUrl(binding.playUrl.getText().toString().trim());
                 } else {
+                    item.setKey(binding.key.getText().toString().trim());
                     item.setHomePage(binding.homePage.getText().toString().trim());
                     item.setClick("");
                     item.setPlayUrl("");
@@ -731,6 +743,10 @@ public class CustomCspDialog extends BaseAlertDialog {
                 if (TextUtils.isEmpty(name)) return true;
                 if (name.equals(prefix)) return true;
                 return name.matches(java.util.regex.Pattern.quote(prefix) + " \\d+");
+            }
+
+            private boolean isAutoKey(String key) {
+                return TextUtils.isEmpty(key) || key.startsWith("__custom_csp_");
             }
 
             private void updateValidity() {
