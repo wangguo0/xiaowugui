@@ -129,6 +129,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         binding.reload.setOnClickListener(view -> reload());
         binding.inspect.setOnClickListener(view -> inspectElement());
         binding.refreshConsole.setOnClickListener(view -> onPanelAction());
+        binding.clearPanel.setOnClickListener(view -> clearPanel());
         binding.networkFilterGroup.addOnButtonCheckedListener((group, checkedId, checked) -> {
             if (!checked) return;
             networkFilter = filter(checkedId);
@@ -284,9 +285,20 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
             refreshPanel();
             return;
         }
-        networkEntries.clear();
-        selectedNetworkId = 0;
         refreshNetwork();
+    }
+
+    private void clearPanel() {
+        if (binding.tabConsole.isChecked()) {
+            consoleLines.clear();
+            refreshConsole();
+        } else if (binding.tabNetwork.isChecked()) {
+            networkEntries.clear();
+            selectedNetworkId = 0;
+            refreshNetwork();
+        } else if (binding.tabElements.isChecked()) {
+            binding.elementsText.setText("");
+        }
     }
 
     private void refreshConsole() {
@@ -573,7 +585,8 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     private void updateActionText() {
         if (binding == null) return;
         MaterialButton button = binding.refreshConsole;
-        button.setText(binding.tabNetwork.isChecked() ? R.string.web_home_extension_network_clear : R.string.web_home_extension_refresh_console);
+        button.setText(R.string.web_home_extension_refresh_console);
+        binding.clearPanel.setEnabled(!binding.tabCode.isChecked() && !binding.tabWeb.isChecked());
     }
 
     private void refreshNetworkDetail() {

@@ -193,6 +193,7 @@
     <string name="web_home_extension_inspect_element">检查元素</string>
     <string name="web_home_extension_inspect_hint">点击 Web 页里的元素进行检查</string>
     <string name="web_home_extension_refresh_console">刷新面板</string>
+    <string name="web_home_extension_clear_panel">清空</string>
     <string name="web_home_extension_save_preview">保存并预览</string>
     <string name="web_home_extension_network_all">全部</string>
     <string name="web_home_extension_network_web">页面资源</string>

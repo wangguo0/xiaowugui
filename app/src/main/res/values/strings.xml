@@ -194,6 +194,7 @@
     <string name="web_home_extension_inspect_element">Inspect</string>
     <string name="web_home_extension_inspect_hint">Click an element in the Web tab to inspect it</string>
     <string name="web_home_extension_refresh_console">Refresh panel</string>
+    <string name="web_home_extension_clear_panel">Clear</string>
     <string name="web_home_extension_save_preview">Save &amp; preview</string>
     <string name="web_home_extension_network_all">All</string>
     <string name="web_home_extension_network_web">Resources</string>

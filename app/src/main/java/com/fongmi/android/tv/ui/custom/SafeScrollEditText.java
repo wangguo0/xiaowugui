@@ -5,9 +5,11 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.text.Layout;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 
 import com.google.android.material.textfield.TextInputEditText;
 
@@ -65,6 +67,11 @@ public class SafeScrollEditText extends TextInputEditText {
     }
 
     @Override
+    public void scrollTo(int x, int y) {
+        super.scrollTo(clampInt(x, 0, maxScrollX()), clampInt(y, 0, maxScrollY()));
+    }
+
+    @Override
     protected void onScrollChanged(int horiz, int vert, int oldHoriz, int oldVert) {
         super.onScrollChanged(horiz, vert, oldHoriz, oldVert);
         invalidate();
@@ -77,8 +84,9 @@ public class SafeScrollEditText extends TextInputEditText {
     }
 
     private void drawVerticalBar(Canvas canvas) {
-        int range = computeVerticalScrollRange();
-        int extent = computeVerticalScrollExtent();
+        int maxScroll = maxScrollY();
+        int extent = Math.max(1, getHeight());
+        int range = maxScroll + extent;
         if (getWidth() <= 0 || getHeight() <= 0) return;
         float viewportTop = getScrollY();
         float viewportBottom = viewportTop + getHeight();
@@ -87,17 +95,17 @@ public class SafeScrollEditText extends TextInputEditText {
         float bottom = viewportBottom - inset - barSize - inset;
         float track = bottom - top;
         if (track <= 0) return;
-        float thumb = range <= extent ? track : Math.max(minThumb, track * extent / range);
+        float thumb = maxScroll <= 0 ? track : Math.max(minThumb, track * extent / range);
         float maxTop = Math.max(top, bottom - thumb);
-        float offset = computeVerticalScrollOffset();
-        float thumbTop = top + (maxTop - top) * offset / Math.max(1, range - extent);
+        float thumbTop = top + (maxTop - top) * getScrollY() / Math.max(1, maxScroll);
         drawRound(canvas, left, top, left + barSize, bottom, trackPaint);
         drawRound(canvas, left, thumbTop, left + barSize, thumbTop + thumb, thumbPaint);
     }
 
     private void drawHorizontalBar(Canvas canvas) {
-        int range = computeHorizontalScrollRange();
-        int extent = computeHorizontalScrollExtent();
+        int maxScroll = maxScrollX();
+        int extent = Math.max(1, getWidth());
+        int range = maxScroll + extent;
         if (getWidth() <= 0 || getHeight() <= 0) return;
         float viewportLeft = getScrollX();
         float viewportRight = viewportLeft + getWidth();
@@ -106,10 +114,9 @@ public class SafeScrollEditText extends TextInputEditText {
         float right = viewportRight - inset - barSize - inset;
         float track = right - left;
         if (track <= 0) return;
-        float thumb = range <= extent ? track : Math.max(minThumb, track * extent / range);
+        float thumb = maxScroll <= 0 ? track : Math.max(minThumb, track * extent / range);
         float maxLeft = Math.max(left, right - thumb);
-        float offset = computeHorizontalScrollOffset();
-        float thumbLeft = left + (maxLeft - left) * offset / Math.max(1, range - extent);
+        float thumbLeft = left + (maxLeft - left) * getScrollX() / Math.max(1, maxScroll);
         drawRound(canvas, left, top, right, top + barSize, trackPaint);
         drawRound(canvas, thumbLeft, top, thumbLeft + thumb, top + barSize, thumbPaint);
     }
@@ -119,7 +126,7 @@ public class SafeScrollEditText extends TextInputEditText {
         if (action == MotionEvent.ACTION_DOWN) {
             dragMode = hitMode(event.getX(), event.getY());
             if (dragMode == 0) return false;
-            getParent().requestDisallowInterceptTouchEvent(true);
+            requestParentIntercept(false);
             scrollFromTouch(event.getX(), event.getY());
             return true;
         }
@@ -130,7 +137,7 @@ public class SafeScrollEditText extends TextInputEditText {
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             dragMode = 0;
-            getParent().requestDisallowInterceptTouchEvent(false);
+            requestParentIntercept(true);
             return true;
         }
         return true;
@@ -144,26 +151,63 @@ public class SafeScrollEditText extends TextInputEditText {
 
     private void scrollFromTouch(float x, float y) {
         if (dragMode == 1) {
-            int range = computeVerticalScrollRange();
-            int extent = computeVerticalScrollExtent();
-            if (range <= extent) return;
+            int maxScroll = maxScrollY();
+            if (maxScroll <= 0) return;
             float top = inset;
             float bottom = getHeight() - inset - barSize - inset;
             float ratio = clamp((y - top) / Math.max(1f, bottom - top));
-            scrollTo(getScrollX(), Math.round((range - extent) * ratio));
+            scrollTo(getScrollX(), Math.round(maxScroll * ratio));
         } else if (dragMode == 2) {
-            int range = computeHorizontalScrollRange();
-            int extent = computeHorizontalScrollExtent();
-            if (range <= extent) return;
+            int maxScroll = maxScrollX();
+            if (maxScroll <= 0) return;
             float left = inset;
             float right = getWidth() - inset - barSize - inset;
             float ratio = clamp((x - left) / Math.max(1f, right - left));
-            scrollTo(Math.round((range - extent) * ratio), getScrollY());
+            scrollTo(Math.round(maxScroll * ratio), getScrollY());
         }
     }
 
     private float clamp(float value) {
         return Math.max(0f, Math.min(1f, value));
+    }
+
+    private int clampInt(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private int maxScrollX() {
+        return Math.max(0, contentWidth() - getWidth());
+    }
+
+    private int maxScrollY() {
+        return Math.max(0, contentHeight() - getHeight());
+    }
+
+    private int contentWidth() {
+        int textWidth = 0;
+        Layout layout = getLayout();
+        if (layout != null) {
+            for (int i = 0; i < layout.getLineCount(); i++) {
+                textWidth = Math.max(textWidth, (int) Math.ceil(layout.getLineWidth(i)));
+            }
+        } else if (getText() != null) {
+            textWidth = (int) Math.ceil(getPaint().measureText(getText().toString()));
+        }
+        return Math.max(getWidth(), textWidth + getTotalPaddingLeft() + getTotalPaddingRight());
+    }
+
+    private int contentHeight() {
+        Layout layout = getLayout();
+        int textHeight = layout == null ? getLineHeight() : layout.getHeight();
+        return Math.max(getHeight(), textHeight + getTotalPaddingTop() + getTotalPaddingBottom());
+    }
+
+    private void requestParentIntercept(boolean allow) {
+        ViewParent parent = getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(!allow);
+            parent = parent.getParent();
+        }
     }
 
     private void drawRound(Canvas canvas, float left, float top, float right, float bottom, Paint paint) {
