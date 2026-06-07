@@ -21,6 +21,7 @@ import androidx.webkit.ScriptHandler;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.github.catvod.crawler.SpiderDebug;
 import com.fongmi.android.tv.api.config.VodConfig;
@@ -43,6 +44,8 @@ public class HomeWebController {
 
     private static final String BRIDGE = "fongmiBridge";
     private static final int SLOW_KEY_MS = 24;
+    private static HomeWebController active;
+    private static boolean extensionReloadRequested;
 
     private final Listener listener;
     private final Activity activity;
@@ -56,6 +59,7 @@ public class HomeWebController {
     private long pauseAt;
     private long lastKeyAt;
     private boolean sdkReady;
+    private boolean paused;
 
     public HomeWebController(Activity activity, WebView webView, Listener listener) {
         this.activity = activity;
@@ -63,7 +67,14 @@ public class HomeWebController {
         this.listener = listener;
         this.density = activity.getResources().getDisplayMetrics().density;
         this.injectedExtensions = new HashSet<>();
+        active = this;
         init();
+    }
+
+    public static void requestExtensionReload() {
+        extensionReloadRequested = true;
+        HomeWebController controller = active;
+        if (controller != null) App.post(controller::consumeExtensionReload);
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -113,8 +124,10 @@ public class HomeWebController {
     }
 
     public void show() {
+        active = this;
         webView.setVisibility(View.VISIBLE);
         focusWebView("show");
+        consumeExtensionReload();
     }
 
     public void hide() {
@@ -141,12 +154,15 @@ public class HomeWebController {
     }
 
     public void onResume() {
+        paused = false;
         webView.onResume();
         webView.resumeTimers();
         recoverAfterResume();
+        consumeExtensionReload();
     }
 
     public void onPause() {
+        paused = true;
         pauseAt = System.currentTimeMillis();
         dispatchLifecycle("fmpause", "{time:" + pauseAt + "}");
         webView.onPause();
@@ -156,6 +172,18 @@ public class HomeWebController {
         removeDocumentStartScripts();
         webView.stopLoading();
         webView.destroy();
+        if (active == this) active = null;
+    }
+
+    private void consumeExtensionReload() {
+        if (!extensionReloadRequested || paused || !isVisible() || site == null || TextUtils.isEmpty(homePage)) return;
+        extensionReloadRequested = false;
+        Site current = site;
+        WebHomeExtensionRegistry.get().refresh(current, () -> {
+            if (site == null || !current.getKey().equals(site.getKey())) return;
+            registerDocumentStartScripts();
+            reload();
+        });
     }
 
     private void recreateWebView() {

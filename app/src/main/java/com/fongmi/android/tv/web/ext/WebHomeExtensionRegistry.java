@@ -32,6 +32,7 @@ public class WebHomeExtensionRegistry {
     private static final WebHomeExtensionRegistry INSTANCE = new WebHomeExtensionRegistry();
     private static final String PREF_ENABLED = "web_home_ext_enabled_";
     private static final int SITE_ORDER_BASE = 10000;
+    private static final int USER_ORDER_BASE = 20000;
 
     private final Map<String, List<WebHomeExtension>> ready;
     private final Map<String, WebHomeExtension> installed;
@@ -47,6 +48,7 @@ public class WebHomeExtensionRegistry {
     private boolean globalLoaded;
     private int lastMatchedCount;
     private int lastReadyCount;
+    private int lastSourceCount;
     private long lastPreparedAt;
 
     private WebHomeExtensionRegistry() {
@@ -92,7 +94,7 @@ public class WebHomeExtensionRegistry {
             if (callback != null) App.post(callback);
             return;
         }
-        if (!hasGlobalSources() && isEmpty(site.getExtensions())) {
+        if (!hasGlobalSources() && WebHomeExtensionSourceStore.enabledCount() == 0 && isEmpty(site.getExtensions())) {
             ready.remove(siteKey);
             installed.clear();
             if (callback != null) App.post(callback);
@@ -158,7 +160,7 @@ public class WebHomeExtensionRegistry {
             return new Snapshot(
                     Setting.isWebHomeExtension(),
                     lastSiteKey,
-                    sourceCount(),
+                    lastSourceCount,
                     installed.size(),
                     lastMatchedCount,
                     lastReadyCount,
@@ -167,6 +169,52 @@ public class WebHomeExtensionRegistry {
                     List.copyOf(events)
             );
         }
+    }
+
+    public String debugReport() {
+        Snapshot snapshot = snapshot();
+        StringBuilder builder = new StringBuilder();
+        builder.append("WebHome Extension Debug Preview\n");
+        builder.append("enabled=").append(snapshot.enabled).append('\n');
+        builder.append("siteKey=").append(display(snapshot.siteKey)).append('\n');
+        builder.append("sources=").append(snapshot.sourceCount)
+                .append(" installed=").append(snapshot.installedCount)
+                .append(" matched=").append(snapshot.matchedCount)
+                .append(" ready=").append(snapshot.readyCount)
+                .append('\n');
+        builder.append("preparedAt=").append(snapshot.preparedAt).append("\n\n");
+        builder.append("Workflow:\n");
+        builder.append("1. Add local code for in-app editing, or add an external URL served by your dev server.\n");
+        builder.append("2. Save code or tap Preview to clear extension cache and reload the active WebHome WebView.\n");
+        builder.append("3. Use GM_log or fm.ext.log in scripts, then long-press Preview to copy this report.\n");
+        builder.append("4. Enable Debug log to inspect full WebView console/runtime logs.\n\n");
+        builder.append("Extensions:\n");
+        if (snapshot.items.isEmpty()) builder.append("- none\n");
+        for (Item item : snapshot.items) {
+            builder.append("- ").append(item.name).append(" [").append(item.id).append("]\n");
+            builder.append("  version=").append(display(item.version))
+                    .append(" runAt=").append(display(item.runAt))
+                    .append(" enabled=").append(item.enabled)
+                    .append(" default=").append(item.defaultEnabled)
+                    .append(" remote=").append(item.remote)
+                    .append(" siteScoped=").append(item.siteScoped)
+                    .append('\n');
+            builder.append("  status=").append(display(item.status));
+            if (!TextUtils.isEmpty(item.reason)) builder.append(" reason=").append(item.reason);
+            builder.append('\n');
+            builder.append("  match=").append(display(item.matchText));
+            if (!TextUtils.isEmpty(item.excludeText)) builder.append(" exclude=").append(item.excludeText);
+            builder.append('\n');
+            if (!TextUtils.isEmpty(item.dependsText)) builder.append("  depends=").append(item.dependsText).append('\n');
+            builder.append("  source=").append(display(item.sourceUrl)).append('\n');
+            if (!TextUtils.isEmpty(item.lastLog)) builder.append("  lastLog=").append(item.lastLog).append('\n');
+            if (item.lastInjectAt > 0) builder.append("  lastInjectAt=").append(item.lastInjectAt).append('\n');
+        }
+        builder.append("\nEvents:\n");
+        if (snapshot.events.isEmpty()) builder.append("- none\n");
+        int start = Math.max(0, snapshot.events.size() - 20);
+        for (int i = start; i < snapshot.events.size(); i++) builder.append("- ").append(snapshot.events.get(i)).append('\n');
+        return builder.toString();
     }
 
     public void recordInject(WebHomeExtension extension, String siteKey, String targetRunAt) {
@@ -198,6 +246,7 @@ public class WebHomeExtensionRegistry {
         List<WebHomeExtension> all = new ArrayList<>();
         all.addAll(loadGlobalExtensions());
         all.addAll(loadSiteExtensions(site));
+        all.addAll(loadUserExtensions(site));
         installed.clear();
         rememberInstalled(all);
 
@@ -226,6 +275,7 @@ public class WebHomeExtensionRegistry {
         }
         synchronized (lock) {
             lastSiteKey = siteKey;
+            lastSourceCount = sourceCount(site);
             lastMatchedCount = matched.size();
             lastReadyCount = resolved.size();
             lastPreparedAt = System.currentTimeMillis();
@@ -258,6 +308,16 @@ public class WebHomeExtensionRegistry {
         List<WebHomeExtension> result = new ArrayList<>();
         Order order = new Order(SITE_ORDER_BASE);
         for (JsonElement element : elements(site.getExtensions())) loadElement(result, element, site.getKey(), VodConfig.getUrl(), true, true, order);
+        return result;
+    }
+
+    private List<WebHomeExtension> loadUserExtensions(Site site) {
+        List<WebHomeExtension> result = new ArrayList<>();
+        Order order = new Order(USER_ORDER_BASE);
+        for (WebHomeExtensionSourceStore.Entry entry : WebHomeExtensionSourceStore.enabledEntries()) {
+            if (!entry.matches(site.getKey())) continue;
+            loadElement(result, WebHomeExtensionSourceStore.parse(entry.getRaw()), site.getKey(), "", true, true, order);
+        }
         return result;
     }
 
@@ -468,8 +528,8 @@ public class WebHomeExtensionRegistry {
         }
     }
 
-    private int sourceCount() {
-        return elements(globalSources).size();
+    private int sourceCount(Site site) {
+        return WebHomeExtensionSourceStore.enabledCount(site.getKey()) + elements(globalSources).size() + elements(site.getExtensions()).size();
     }
 
     private State state(String id) {
@@ -478,6 +538,10 @@ public class WebHomeExtensionRegistry {
 
     private String prefKey(String id) {
         return PREF_ENABLED + Util.md5(id);
+    }
+
+    private String display(String value) {
+        return TextUtils.isEmpty(value) ? "-" : value;
     }
 
     private void event(String message) {
