@@ -3,7 +3,7 @@
     {
       "id": "pomo-native-router",
       "name": "Pomo native router",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "runAt": "document-end",
       "js": [
         "./pomo.mom.js"

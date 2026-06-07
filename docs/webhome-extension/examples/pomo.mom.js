@@ -632,11 +632,45 @@
     const header = card && card.querySelector(".x-dbjs-header");
     if (header) header.classList.add("fm-pomo-detail-header");
 
+    const poster = card && card.querySelector(".x-dbjs-poster");
+    const rating = card && card.querySelector(".rating-badge");
+    if (poster && rating && rating.parentElement !== poster) {
+      poster.appendChild(rating);
+    }
+
+    const fav = card && card.querySelector(".fav-btn");
+    if (fav) fav.classList.add("fm-pomo-hide");
+
     const desc = document.querySelector(".x-dbjs-desc-block");
-    if (desc) desc.classList.add("fm-pomo-detail-desc");
+    if (desc) {
+      desc.classList.add("fm-pomo-detail-desc");
+      const banner = detailBanner();
+      const bannerImg = banner && banner.querySelector("img[src]");
+      if (banner) banner.classList.add("fm-pomo-detail-banner");
+      if (bannerImg) desc.style.setProperty("--fm-pomo-backdrop", "url(" + JSON.stringify(bannerImg.src) + ")");
+    }
 
     const stills = document.querySelector(".pic-col5");
     if (stills) stills.classList.add("fm-pomo-stills");
+
+    hideRelatedMovies();
+  }
+
+  function detailBanner() {
+    const main = document.querySelector("main");
+    if (!main) return null;
+    const prev = main.previousElementSibling;
+    if (prev && prev.querySelector("img[src]") && !prev.querySelector(CONFIG.detailCardSelector)) return prev;
+    return null;
+  }
+
+  function hideRelatedMovies() {
+    const headings = document.querySelectorAll("h2,h3,h4");
+    for (let i = 0; i < headings.length; i++) {
+      if (cleanText(headings[i].textContent) !== "探索更多") continue;
+      const section = headings[i].closest(".mt-24") || headings[i].parentElement;
+      if (section) section.classList.add("fm-pomo-related-hide");
+    }
   }
 
   function enhanceFocusable() {
@@ -721,6 +755,8 @@
       }
       .fm-pomo-hide,
       .fm-pomo-hero-wrap,
+      .fm-pomo-detail-banner,
+      .fm-pomo-related-hide,
       #mobile-search-btn,
       #mobile-search-box,
       #mobile-nav-btn,
@@ -1023,6 +1059,7 @@
       .fm-pomo-detail .x-dbjs-poster {
         width: auto !important;
         margin: 0 !important;
+        position: relative !important;
       }
       .fm-pomo-detail .x-dbjs-poster img {
         width: 100% !important;
@@ -1031,6 +1068,24 @@
         object-fit: cover;
         border-radius: 8px !important;
         box-shadow: none !important;
+      }
+      .fm-pomo-detail .rating-badge {
+        position: absolute !important;
+        top: 8px;
+        right: 8px;
+        z-index: 3;
+        min-height: 28px;
+        padding: 0 9px !important;
+        border: 1px solid rgba(0, 0, 0, .12) !important;
+        border-radius: 8px !important;
+        background: rgba(245, 197, 24, .96) !important;
+        color: #111827 !important;
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px !important;
+        font-weight: 900 !important;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, .20);
       }
       .fm-pomo-detail .x-dbjs-info {
         width: auto !important;
@@ -1065,12 +1120,45 @@
         justify-content: flex-start !important;
       }
       .fm-pomo-detail-desc {
+        position: relative;
+        overflow: hidden;
         margin: 14px 0 10px !important;
-        padding-top: 12px;
-        border-top: 1px solid #e2e8f0;
+        padding: 14px !important;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
       }
       .dark .fm-pomo-detail-desc {
-        border-top-color: #26313c;
+        border-color: #26313c;
+        background: #0f141b;
+      }
+      .fm-pomo-detail-desc::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(90deg, rgba(248, 250, 252, .96), rgba(248, 250, 252, .82)), var(--fm-pomo-backdrop);
+        background-size: cover;
+        background-position: center;
+        opacity: .55;
+        pointer-events: none;
+      }
+      .dark .fm-pomo-detail-desc::before {
+        background-image: linear-gradient(90deg, rgba(15, 20, 27, .96), rgba(15, 20, 27, .82)), var(--fm-pomo-backdrop);
+        opacity: .72;
+      }
+      .fm-pomo-detail-desc h3,
+      .fm-pomo-detail-desc p {
+        position: relative;
+        z-index: 1;
+      }
+      .fm-pomo-detail-desc h3 {
+        margin: 0 0 8px !important;
+        color: #111827 !important;
+        font-size: 17px !important;
+        line-height: 1.3 !important;
+      }
+      .dark .fm-pomo-detail-desc h3 {
+        color: #f8fafc !important;
       }
       .fm-pomo-detail-desc p {
         color: #334155 !important;
