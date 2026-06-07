@@ -238,25 +238,13 @@
                         app:strokeColor="@color/dialog_outlined_button_stroke" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/filterFetch"
+                        android:id="@+id/filterScript"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="wrap_content"
                         android:layout_height="36dp"
                         android:minHeight="36dp"
                         android:minWidth="64dp"
-                        android:text="@string/web_home_extension_network_fetch"
-                        android:textColor="@color/dialog_toggle_button_text"
-                        app:backgroundTint="@color/dialog_toggle_button_bg"
-                        app:strokeColor="@color/dialog_outlined_button_stroke" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/filterXhr"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:minHeight="36dp"
-                        android:minWidth="64dp"
-                        android:text="@string/web_home_extension_network_xhr"
+                        android:text="@string/web_home_extension_network_script"
                         android:textColor="@color/dialog_toggle_button_text"
                         app:backgroundTint="@color/dialog_toggle_button_bg"
                         app:strokeColor="@color/dialog_outlined_button_stroke" />
@@ -269,18 +257,6 @@
                         android:minHeight="36dp"
                         android:minWidth="64dp"
                         android:text="@string/web_home_extension_network_error"
-                        android:textColor="@color/dialog_toggle_button_text"
-                        app:backgroundTint="@color/dialog_toggle_button_bg"
-                        app:strokeColor="@color/dialog_outlined_button_stroke" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/filterNative"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:minHeight="36dp"
-                        android:minWidth="64dp"
-                        android:text="@string/web_home_extension_network_native"
                         android:textColor="@color/dialog_toggle_button_text"
                         app:backgroundTint="@color/dialog_toggle_button_bg"
                         app:strokeColor="@color/dialog_outlined_button_stroke" />
@@ -311,55 +287,119 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <HorizontalScrollView
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_marginTop="8dp"
                 android:layout_weight="1"
-                android:fillViewport="true"
-                android:overScrollMode="never"
-                android:scrollbars="horizontal">
+                android:background="#FAFAFA">
 
                 <com.fongmi.android.tv.ui.custom.CustomNestedScrollView
-                    android:layout_width="wrap_content"
+                    android:id="@+id/networkRowsVertical"
+                    android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:fillViewport="true"
-                    android:overScrollMode="never"
-                    android:scrollbars="vertical">
+                    android:overScrollMode="never">
 
-                    <androidx.appcompat.widget.LinearLayoutCompat
-                        android:id="@+id/networkRows"
-                        android:layout_width="wrap_content"
+                    <HorizontalScrollView
+                        android:id="@+id/networkRowsHorizontal"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minWidth="980dp"
-                        android:orientation="vertical" />
+                        android:fillViewport="true"
+                        android:overScrollMode="never">
+
+                        <androidx.appcompat.widget.LinearLayoutCompat
+                            android:id="@+id/networkRows"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:minWidth="980dp"
+                            android:orientation="vertical" />
+
+                    </HorizontalScrollView>
 
                 </com.fongmi.android.tv.ui.custom.CustomNestedScrollView>
 
-            </HorizontalScrollView>
+            </FrameLayout>
 
-            <HorizontalScrollView
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/web_home_extension_network_detail"
+                    android:textColor="#202124"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/detailSmaller"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="32dp"
+                    android:minHeight="32dp"
+                    android:minWidth="0dp"
+                    android:text="@string/web_home_extension_network_detail_smaller"
+                    android:textColor="@color/dialog_outlined_button_text"
+                    app:backgroundTint="@color/dialog_outlined_button_bg"
+                    app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/detailBigger"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="44dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="8dp"
+                    android:minHeight="32dp"
+                    android:minWidth="0dp"
+                    android:text="@string/web_home_extension_network_detail_bigger"
+                    android:textColor="@color/dialog_outlined_button_text"
+                    app:backgroundTint="@color/dialog_outlined_button_bg"
+                    app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <FrameLayout
+                android:id="@+id/networkDetailFrame"
                 android:layout_width="match_parent"
                 android:layout_height="128dp"
-                android:layout_marginTop="8dp"
-                android:fillViewport="true"
-                android:overScrollMode="never"
-                android:scrollbars="horizontal">
+                android:background="#FAFAFA">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/networkDetail"
-                    android:layout_width="wrap_content"
+                <com.fongmi.android.tv.ui.custom.CustomNestedScrollView
+                    android:id="@+id/networkDetailVertical"
+                    android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:fontFamily="monospace"
-                    android:gravity="start|top"
-                    android:inputType="textMultiLine|textNoSuggestions"
-                    android:minWidth="900dp"
-                    android:scrollbars="vertical|horizontal"
-                    android:singleLine="false"
-                    android:textColor="@color/black"
-                    android:textSize="12sp" />
+                    android:fillViewport="true"
+                    android:overScrollMode="never">
 
-            </HorizontalScrollView>
+                    <HorizontalScrollView
+                        android:id="@+id/networkDetailHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fillViewport="true"
+                        android:overScrollMode="never">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/networkDetail"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
+                            android:minWidth="900dp"
+                            android:padding="8dp"
+                            android:textColor="@color/black"
+                            android:textIsSelectable="true"
+                            android:textSize="12sp" />
+
+                    </HorizontalScrollView>
+
+                </com.fongmi.android.tv.ui.custom.CustomNestedScrollView>
+
+            </FrameLayout>
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

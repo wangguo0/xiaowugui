@@ -195,11 +195,15 @@
     <string name="web_home_extension_refresh_console">重新整理面板</string>
     <string name="web_home_extension_save_preview">儲存並預覽</string>
     <string name="web_home_extension_network_all">全部</string>
-    <string name="web_home_extension_network_web">頁面</string>
+    <string name="web_home_extension_network_web">頁面資源</string>
     <string name="web_home_extension_network_fetch">Fetch</string>
     <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_script">腳本請求</string>
     <string name="web_home_extension_network_error">錯誤</string>
     <string name="web_home_extension_network_native">原生</string>
+    <string name="web_home_extension_network_detail">請求詳情</string>
+    <string name="web_home_extension_network_detail_smaller">-</string>
+    <string name="web_home_extension_network_detail_bigger">+</string>
     <string name="web_home_extension_network_filter">過濾 URL / 狀態 / 詳情</string>
     <string name="web_home_extension_network_empty">目前過濾條件下沒有請求</string>
     <string name="web_home_extension_network_select">選擇一個請求查看詳情。</string>

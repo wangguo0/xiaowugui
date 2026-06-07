@@ -195,11 +195,15 @@
     <string name="web_home_extension_refresh_console">刷新面板</string>
     <string name="web_home_extension_save_preview">保存并预览</string>
     <string name="web_home_extension_network_all">全部</string>
-    <string name="web_home_extension_network_web">页面</string>
+    <string name="web_home_extension_network_web">页面资源</string>
     <string name="web_home_extension_network_fetch">Fetch</string>
     <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_script">脚本请求</string>
     <string name="web_home_extension_network_error">错误</string>
     <string name="web_home_extension_network_native">原生</string>
+    <string name="web_home_extension_network_detail">请求详情</string>
+    <string name="web_home_extension_network_detail_smaller">-</string>
+    <string name="web_home_extension_network_detail_bigger">+</string>
     <string name="web_home_extension_network_filter">过滤 URL / 状态 / 详情</string>
     <string name="web_home_extension_network_empty">当前过滤条件下没有请求</string>
     <string name="web_home_extension_network_select">选择一个请求查看详情。</string>

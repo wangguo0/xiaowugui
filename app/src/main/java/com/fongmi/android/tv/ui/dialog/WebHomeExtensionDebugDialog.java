@@ -47,6 +47,10 @@ import java.util.Map;
 
 public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements HomeWebController.Listener {
 
+    private static final int DETAIL_MIN_DP = 96;
+    private static final int DETAIL_MAX_DP = 360;
+    private static final int DETAIL_STEP_DP = 56;
+
     private DialogWebHomeExtensionDebugBinding binding;
     private HomeWebController controller;
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.ROOT);
@@ -102,7 +106,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         setupScrollableText(binding.consoleText);
         setupScrollableText(binding.elementsText);
         setupScrollableText(binding.networkSearch);
-        setupScrollableText(binding.networkDetail);
+        setupFixedScrollBars();
         binding.networkFilterGroup.check(R.id.filterAll);
         binding.tabGroup.check(R.id.tabWeb);
         controller = new HomeWebController(requireActivity(), binding.web, this, true);
@@ -140,6 +144,8 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
             public void afterTextChanged(Editable s) {
             }
         });
+        binding.detailSmaller.setOnClickListener(view -> changeDetailHeight(-DETAIL_STEP_DP));
+        binding.detailBigger.setOnClickListener(view -> changeDetailHeight(DETAIL_STEP_DP));
         binding.save.setOnClickListener(view -> saveAndPreview());
         binding.close.setOnClickListener(view -> dismiss());
     }
@@ -473,6 +479,24 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         });
     }
 
+    private void setupFixedScrollBars() {
+        binding.networkRowsVertical.setVerticalScrollBarEnabled(true);
+        binding.networkRowsVertical.setScrollbarFadingEnabled(false);
+        binding.networkRowsHorizontal.setHorizontalScrollBarEnabled(true);
+        binding.networkRowsHorizontal.setScrollbarFadingEnabled(false);
+        binding.networkDetailVertical.setVerticalScrollBarEnabled(true);
+        binding.networkDetailVertical.setScrollbarFadingEnabled(false);
+        binding.networkDetailHorizontal.setHorizontalScrollBarEnabled(true);
+        binding.networkDetailHorizontal.setScrollbarFadingEnabled(false);
+    }
+
+    private void changeDetailHeight(int deltaDp) {
+        ViewGroup.LayoutParams params = binding.networkDetailFrame.getLayoutParams();
+        int current = params.height <= 0 ? dp(128) : params.height;
+        params.height = Math.max(dp(DETAIL_MIN_DP), Math.min(dp(DETAIL_MAX_DP), current + dp(deltaDp)));
+        binding.networkDetailFrame.setLayoutParams(params);
+    }
+
     private void disallowParentIntercept(View view, boolean disallow) {
         ViewParent parent = view.getParent();
         while (parent != null) {
@@ -513,12 +537,12 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
     @Override
     public void onWebRequest(String method, String url, boolean mainFrame) {
-        appendNetwork(new NetworkEntry("WEB", method, url, 0, 0, mainFrame ? "main frame" : "subresource", ""));
+        appendNetwork(new NetworkEntry("RESOURCE", method, url, 0, 0, mainFrame ? "main frame" : "subresource", ""));
     }
 
     @Override
     public void onWebRequest(String method, String url, boolean mainFrame, Map<String, String> headers) {
-        appendNetwork(new NetworkEntry("WEB", method, url, 0, 0, mainFrame ? "main frame" : "subresource", headerText(headers)));
+        appendNetwork(new NetworkEntry("RESOURCE", method, url, 0, 0, mainFrame ? "main frame" : "subresource", headerText(headers)));
     }
 
     @Override
@@ -541,7 +565,8 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         StringBuilder builder = new StringBuilder();
         builder.append("General\n");
         builder.append("URL: ").append(selected.url).append('\n');
-        builder.append("Type: ").append(selected.kind).append('\n');
+        builder.append("Type: ").append(selected.displayKind()).append('\n');
+        builder.append("Raw type: ").append(selected.kind).append('\n');
         builder.append("Method: ").append(selected.method).append('\n');
         builder.append("State: ").append(selected.stateText()).append('\n');
         builder.append("Status: ").append(selected.status <= 0 ? "-" : selected.status).append('\n');
@@ -553,21 +578,17 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     }
 
     private String filter(int checkedId) {
-        if (checkedId == R.id.filterWeb) return "WEB";
-        if (checkedId == R.id.filterFetch) return "FETCH";
-        if (checkedId == R.id.filterXhr) return "XHR";
+        if (checkedId == R.id.filterWeb) return "RESOURCE";
+        if (checkedId == R.id.filterScript) return "SCRIPT";
         if (checkedId == R.id.filterError) return "ERROR";
-        if (checkedId == R.id.filterNative) return "NATIVE";
         return "ALL";
     }
 
     private boolean matchesFilter(NetworkEntry entry) {
         if ("ERROR".equals(networkFilter)) {
             if (!entry.isError()) return false;
-        } else if ("FETCH".equals(networkFilter)) {
-            if (!"FETCH".equals(entry.kind)) return false;
-        } else if ("XHR".equals(networkFilter)) {
-            if (!"XHR".equals(entry.kind)) return false;
+        } else if ("SCRIPT".equals(networkFilter)) {
+            if (!entry.isScript()) return false;
         } else if (!"ALL".equals(networkFilter) && !entry.kind.startsWith(networkFilter)) {
             return false;
         }
@@ -592,7 +613,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     }
 
     private NetworkEntry findPending(NetworkEntry incoming) {
-        if (incoming.isStart() || "WEB".equals(incoming.kind)) return null;
+        if (incoming.isStart() || "RESOURCE".equals(incoming.kind)) return null;
         for (int i = networkEntries.size() - 1; i >= 0; i--) {
             NetworkEntry entry = networkEntries.get(i);
             if (!entry.isPending()) continue;
@@ -610,7 +631,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         row.setBackgroundColor(entry == null ? Color.parseColor("#F5F6F7") : selected ? Color.parseColor("#DCEBFF") : entry.isError() ? Color.parseColor("#FFF1F1") : Color.WHITE);
         row.addView(networkCell(entry == null ? "#" : String.valueOf(entry.id), 46, color(entry), entry == null));
         row.addView(networkCell(entry == null ? "Time" : entry.time, 104, color(entry), entry == null));
-        row.addView(networkCell(entry == null ? "Type" : entry.kind, 82, color(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Type" : entry.displayKind(), 82, color(entry), entry == null));
         row.addView(networkCell(entry == null ? "Method" : entry.method, 76, color(entry), entry == null));
         row.addView(networkCell(entry == null ? "Status" : entry.statusText(), 80, statusColor(entry), entry == null));
         row.addView(networkCell(entry == null ? "Cost" : entry.durationText(), 84, color(entry), entry == null));
@@ -706,6 +727,14 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
         private boolean isError() {
             return "ERROR".equals(state) || status >= 400;
+        }
+
+        private boolean isScript() {
+            return "FETCH".equals(kind) || "XHR".equals(kind) || "NATIVE".equals(kind);
+        }
+
+        private String displayKind() {
+            return isScript() ? "SCRIPT" : kind;
         }
 
         private boolean isStart() {

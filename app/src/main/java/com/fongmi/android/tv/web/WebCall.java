@@ -78,7 +78,7 @@ public class WebCall {
         StringBuilder builder = new StringBuilder();
         builder.append("Request Headers\n").append(request.headers());
         RequestBody body = request.body();
-        if (body != null) builder.append("Body\n").append("contentType=").append(body.contentType()).append('\n').append("contentLength=").append(contentLength(body));
+        if (body != null) builder.append("Body\n").append("contentType=").append(body.contentType()).append('\n').append("contentLength=").append(contentLength(body)).append('\n').append(bodyPreview(body));
         return builder.toString().trim();
     }
 
@@ -91,6 +91,17 @@ public class WebCall {
             return body.contentLength();
         } catch (Throwable e) {
             return -1;
+        }
+    }
+
+    private static String bodyPreview(RequestBody body) {
+        try {
+            okio.Buffer buffer = new okio.Buffer();
+            body.writeTo(buffer);
+            String text = buffer.readString(StandardCharsets.UTF_8);
+            return "payload:\n" + (text.length() > 2000 ? text.substring(0, 2000) + "\n...truncated" : text);
+        } catch (Throwable e) {
+            return "payloadPreview=" + e.getMessage();
         }
     }
 

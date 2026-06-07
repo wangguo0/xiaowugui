@@ -629,6 +629,18 @@ public class HomeWebController {
                   if(!window.__fmNetworkHook){
                     window.__fmNetworkHook=true;
                     const absolute=function(url){try{return new URL(String(url),location.href).href;}catch(e){return String(url||'');}};
+                    const clip=function(value){value=String(value||'');return value.length>2000?value.slice(0,2000)+'\\n...truncated':value;};
+                    const bodyText=function(body){
+                      if(!body)return '';
+                      if(typeof body==='string')return 'payload:\\n'+clip(body);
+                      if(body instanceof URLSearchParams)return 'payload:\\n'+clip(body.toString());
+                      if(body instanceof FormData){
+                        const out=[];
+                        try{body.forEach(function(v,k){out.push(k+'='+(v&&v.name?'[file '+v.name+']':String(v)));});}catch(e){}
+                        return 'payload:\\n'+clip(out.join('\\n'));
+                      }
+                      return 'payloadType='+Object.prototype.toString.call(body)+'\\npayloadBytes='+String(body).length;
+                    };
                     const headers=function(headers){
                       const out=[];
                       try{
@@ -644,7 +656,7 @@ public class HomeWebController {
                         const method=(init&&init.method)||(input&&input.method)||'GET';
                         const url=absolute(input&&input.url?input.url:input);
                         const requestHeaders=headers((init&&init.headers)||(input&&input.headers));
-                        const body=init&&init.body?('bodyBytes='+String(init.body).length):'';
+                        const body=bodyText(init&&init.body);
                         try{fongmiBridge.network('FETCH_START',method,url,0,0,[requestHeaders,body].filter(Boolean).join('\\n'));}catch(e){}
                         return rawFetch.apply(this,arguments).then(function(resp){
                           try{fongmiBridge.network('FETCH_DONE',method,url,resp.status||0,Date.now()-started,['type='+(resp.type||''),'headers:',headers(resp.headers)].join('\\n'));}catch(e){}
@@ -667,7 +679,7 @@ public class HomeWebController {
                       RawXHR.prototype.send=function(){
                         const xhr=this;
                         const started=Date.now();
-                        const body=arguments.length&&arguments[0]?('bodyBytes='+String(arguments[0]).length):'';
+                        const body=arguments.length?bodyText(arguments[0]):'';
                         try{fongmiBridge.network('XHR_START',xhr.__fmMethod||'GET',xhr.__fmUrl||'',0,0,body);}catch(e){}
                         xhr.addEventListener('loadend',function(){
                           try{fongmiBridge.network('XHR_DONE',xhr.__fmMethod||'GET',xhr.__fmUrl||'',xhr.status||0,Date.now()-started,[xhr.statusText||'',xhr.getAllResponseHeaders&&xhr.getAllResponseHeaders()||''].filter(Boolean).join('\\n'));}catch(e){}

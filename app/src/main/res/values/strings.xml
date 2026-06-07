@@ -196,11 +196,15 @@
     <string name="web_home_extension_refresh_console">Refresh panel</string>
     <string name="web_home_extension_save_preview">Save &amp; preview</string>
     <string name="web_home_extension_network_all">All</string>
-    <string name="web_home_extension_network_web">Page</string>
+    <string name="web_home_extension_network_web">Resources</string>
     <string name="web_home_extension_network_fetch">Fetch</string>
     <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_script">Scripts</string>
     <string name="web_home_extension_network_error">Errors</string>
     <string name="web_home_extension_network_native">Native</string>
+    <string name="web_home_extension_network_detail">Request detail</string>
+    <string name="web_home_extension_network_detail_smaller">-</string>
+    <string name="web_home_extension_network_detail_bigger">+</string>
     <string name="web_home_extension_network_filter">Filter URL / status / detail</string>
     <string name="web_home_extension_network_empty">No requests captured for this filter</string>
     <string name="web_home_extension_network_select">Select a request to view details.</string>
