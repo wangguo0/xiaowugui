@@ -157,6 +157,9 @@
     <string name="web_home_extension_json_hint">使用者擴展源 JSON</string>
     <string name="web_home_extension_name_hint">名稱</string>
     <string name="web_home_extension_run_at_hint">注入時機</string>
+    <string name="web_home_extension_run_at_start_short">開始</string>
+    <string name="web_home_extension_run_at_end_short">結束</string>
+    <string name="web_home_extension_run_at_idle_short">空閒</string>
     <string name="web_home_extension_match_hint">站點 key 或正則</string>
     <string name="web_home_extension_code_hint">JavaScript / CSS 注入代碼</string>
     <string name="web_home_extension_local_code_default">本地擴展 %1$d</string>
@@ -191,6 +194,16 @@
     <string name="web_home_extension_inspect_hint">點擊 Web 頁裡的元素進行檢查</string>
     <string name="web_home_extension_refresh_console">重新整理面板</string>
     <string name="web_home_extension_save_preview">儲存並預覽</string>
+    <string name="web_home_extension_network_all">全部</string>
+    <string name="web_home_extension_network_web">頁面</string>
+    <string name="web_home_extension_network_fetch">Fetch</string>
+    <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_error">錯誤</string>
+    <string name="web_home_extension_network_native">原生</string>
+    <string name="web_home_extension_network_filter">過濾 URL / 狀態 / 詳情</string>
+    <string name="web_home_extension_network_empty">目前過濾條件下沒有請求</string>
+    <string name="web_home_extension_network_select">選擇一個請求查看詳情。</string>
+    <string name="web_home_extension_network_clear">清空請求</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">站點注入</string>

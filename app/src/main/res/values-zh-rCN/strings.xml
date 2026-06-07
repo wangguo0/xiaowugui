@@ -157,6 +157,9 @@
     <string name="web_home_extension_json_hint">用户扩展源 JSON</string>
     <string name="web_home_extension_name_hint">名称</string>
     <string name="web_home_extension_run_at_hint">注入时机</string>
+    <string name="web_home_extension_run_at_start_short">开始</string>
+    <string name="web_home_extension_run_at_end_short">结束</string>
+    <string name="web_home_extension_run_at_idle_short">空闲</string>
     <string name="web_home_extension_match_hint">站点 key 或正则</string>
     <string name="web_home_extension_code_hint">JavaScript / CSS 注入代码</string>
     <string name="web_home_extension_local_code_default">本地扩展 %1$d</string>
@@ -191,6 +194,16 @@
     <string name="web_home_extension_inspect_hint">点击 Web 页里的元素进行检查</string>
     <string name="web_home_extension_refresh_console">刷新面板</string>
     <string name="web_home_extension_save_preview">保存并预览</string>
+    <string name="web_home_extension_network_all">全部</string>
+    <string name="web_home_extension_network_web">页面</string>
+    <string name="web_home_extension_network_fetch">Fetch</string>
+    <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_error">错误</string>
+    <string name="web_home_extension_network_native">原生</string>
+    <string name="web_home_extension_network_filter">过滤 URL / 状态 / 详情</string>
+    <string name="web_home_extension_network_empty">当前过滤条件下没有请求</string>
+    <string name="web_home_extension_network_select">选择一个请求查看详情。</string>
+    <string name="web_home_extension_network_clear">清空请求</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">站点注入</string>

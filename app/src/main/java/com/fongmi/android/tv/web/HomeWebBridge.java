@@ -94,7 +94,7 @@ public class HomeWebBridge {
         try {
             SpiderDebug.log("webhome", "invoke method=%s payload=%s", method, payload);
             String result = switch (method) {
-                case "net.request" -> WebCall.request(payload);
+                case "net.request" -> WebCall.request(payload, controller);
                 case "net.resourceUrl" -> quote(resourceUrl(Json.safeString(payload, "url"), payload.toString()));
                 case "player.playUrl" -> playUrl(payload);
                 case "player.playVod" -> playVod(payload);

@@ -1,8 +1,12 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -12,6 +16,7 @@ import android.view.WindowManager;
 import android.widget.EditText;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 
@@ -26,7 +31,9 @@ import com.fongmi.android.tv.web.HomeWebController;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionSourceStore;
 import com.github.catvod.utils.Json;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.textview.MaterialTextView;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -44,9 +51,11 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     private HomeWebController controller;
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.ROOT);
     private final List<String> consoleLines = new ArrayList<>();
-    private final List<String> networkLines = new ArrayList<>();
+    private final List<NetworkEntry> networkEntries = new ArrayList<>();
     private Runnable callback;
     private WebHomeExtensionSourceStore.Entry source;
+    private int selectedNetworkId;
+    private String networkFilter = "ALL";
 
     public static void show(FragmentActivity activity, Runnable callback) {
         WebHomeExtensionDebugDialog dialog = new WebHomeExtensionDebugDialog();
@@ -92,7 +101,9 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         setupScrollableText(binding.codeText);
         setupScrollableText(binding.consoleText);
         setupScrollableText(binding.elementsText);
-        setupScrollableText(binding.networkText);
+        setupScrollableText(binding.networkSearch);
+        setupScrollableText(binding.networkDetail);
+        binding.networkFilterGroup.check(R.id.filterAll);
         binding.tabGroup.check(R.id.tabWeb);
         controller = new HomeWebController(requireActivity(), binding.web, this, true);
         Site site = VodConfig.get().getHome();
@@ -109,7 +120,26 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         });
         binding.reload.setOnClickListener(view -> reload());
         binding.inspect.setOnClickListener(view -> inspectElement());
-        binding.refreshConsole.setOnClickListener(view -> refreshPanel());
+        binding.refreshConsole.setOnClickListener(view -> onPanelAction());
+        binding.networkFilterGroup.addOnButtonCheckedListener((group, checkedId, checked) -> {
+            if (!checked) return;
+            networkFilter = filter(checkedId);
+            refreshNetwork();
+        });
+        binding.networkSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                refreshNetwork();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
         binding.save.setOnClickListener(view -> saveAndPreview());
         binding.close.setOnClickListener(view -> dismiss());
     }
@@ -140,6 +170,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         binding.elementsLayout.setVisibility(tab == R.id.tabElements ? View.VISIBLE : View.GONE);
         binding.networkLayout.setVisibility(tab == R.id.tabNetwork ? View.VISIBLE : View.GONE);
         binding.codeLayout.setVisibility(tab == R.id.tabCode ? View.VISIBLE : View.GONE);
+        updateActionText();
     }
 
     private void reload() {
@@ -231,6 +262,16 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         else if (binding.tabNetwork.isChecked()) refreshNetwork();
     }
 
+    private void onPanelAction() {
+        if (!binding.tabNetwork.isChecked()) {
+            refreshPanel();
+            return;
+        }
+        networkEntries.clear();
+        selectedNetworkId = 0;
+        refreshNetwork();
+    }
+
     private void refreshConsole() {
         StringBuilder builder = new StringBuilder();
         builder.append("Console\n");
@@ -241,12 +282,24 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     }
 
     private void refreshNetwork() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Network\n");
-        builder.append("time          type         method status cost  detail url\n\n");
-        if (networkLines.isEmpty()) builder.append("No requests captured yet.\n");
-        else for (String line : networkLines) builder.append(line).append('\n');
-        binding.networkText.setText(builder.toString());
+        List<NetworkEntry> visible = new ArrayList<>();
+        for (NetworkEntry entry : networkEntries) {
+            if (!matchesFilter(entry)) continue;
+            visible.add(entry);
+        }
+        if (selectedNetworkId != 0 && findNetwork(selectedNetworkId, visible) == null) selectedNetworkId = visible.isEmpty() ? 0 : visible.get(0).id;
+        if (selectedNetworkId == 0 && !visible.isEmpty()) selectedNetworkId = visible.get(0).id;
+        binding.networkRows.removeAllViews();
+        binding.networkRows.addView(networkRow(null, false));
+        if (visible.isEmpty()) {
+            MaterialTextView empty = networkText(getString(R.string.web_home_extension_network_empty), 14, Color.parseColor("#5F6368"), false);
+            empty.setGravity(Gravity.CENTER);
+            empty.setPadding(0, dp(22), 0, dp(22));
+            binding.networkRows.addView(empty, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        } else {
+            for (NetworkEntry entry : visible) binding.networkRows.addView(networkRow(entry, entry.id == selectedNetworkId));
+        }
+        refreshNetworkDetail();
     }
 
     private void refreshElements() {
@@ -378,10 +431,13 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         });
     }
 
-    private void appendNetwork(String line) {
+    private void appendNetwork(NetworkEntry entry) {
         runOnUi(() -> {
-            networkLines.add(now() + " " + line);
-            trim(networkLines);
+            NetworkEntry existing = findPending(entry);
+            if (existing == null) networkEntries.add(entry);
+            else existing.update(entry);
+            while (networkEntries.size() > 500) networkEntries.remove(0);
+            if (selectedNetworkId == 0) selectedNetworkId = existing == null ? entry.id : existing.id;
             if (binding != null && binding.tabNetwork.isChecked()) refreshNetwork();
         });
     }
@@ -429,6 +485,10 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         return input.getText() == null ? "" : input.getText().toString().trim();
     }
 
+    private int dp(int value) {
+        return ResUtil.dp2px(value);
+    }
+
     @Override
     public void onWebLoading() {
         appendConsole("PAGE loading");
@@ -453,42 +513,252 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
     @Override
     public void onWebRequest(String method, String url, boolean mainFrame) {
-        appendNetwork(formatNetwork("WEBVIEW", method, url, 0, 0, mainFrame ? "main" : "sub"));
+        appendNetwork(new NetworkEntry("WEB", method, url, 0, 0, mainFrame ? "main frame" : "subresource", ""));
     }
 
     @Override
     public void onWebRequest(String method, String url, boolean mainFrame, Map<String, String> headers) {
-        appendNetwork(formatNetwork("WEBVIEW", method, url, 0, 0, mainFrame ? "main" : "sub") + headerText(headers));
+        appendNetwork(new NetworkEntry("WEB", method, url, 0, 0, mainFrame ? "main frame" : "subresource", headerText(headers)));
     }
 
     @Override
     public void onWebNetwork(String type, String method, String url, int status, long durationMs, String detail) {
-        appendNetwork(formatNetwork(type, method, url, status, durationMs, detail));
+        appendNetwork(new NetworkEntry(type, method, url, status, durationMs, detail, ""));
     }
 
-    private String formatNetwork(String type, String method, String url, int status, long durationMs, String detail) {
-        return String.format(Locale.ROOT, "%-11s %-6s %-6s %-5s %-6s %s",
-                empty(type),
-                empty(method),
-                status <= 0 ? "-" : String.valueOf(status),
-                durationMs <= 0 ? "-" : durationMs + "ms",
-                TextUtils.isEmpty(detail) ? "-" : detail,
-                url == null ? "" : url);
+    private void updateActionText() {
+        if (binding == null) return;
+        MaterialButton button = binding.refreshConsole;
+        button.setText(binding.tabNetwork.isChecked() ? R.string.web_home_extension_network_clear : R.string.web_home_extension_refresh_console);
+    }
+
+    private void refreshNetworkDetail() {
+        NetworkEntry selected = findNetwork(selectedNetworkId, networkEntries);
+        if (selected == null) {
+            binding.networkDetail.setText(R.string.web_home_extension_network_select);
+            return;
+        }
+        StringBuilder builder = new StringBuilder();
+        builder.append("General\n");
+        builder.append("URL: ").append(selected.url).append('\n');
+        builder.append("Type: ").append(selected.kind).append('\n');
+        builder.append("Method: ").append(selected.method).append('\n');
+        builder.append("State: ").append(selected.stateText()).append('\n');
+        builder.append("Status: ").append(selected.status <= 0 ? "-" : selected.status).append('\n');
+        builder.append("Duration: ").append(selected.durationMs <= 0 ? "-" : selected.durationMs + "ms").append('\n');
+        builder.append("Time: ").append(selected.time).append("\n\n");
+        builder.append("Detail\n").append(TextUtils.isEmpty(selected.detail) ? "-" : selected.detail).append("\n\n");
+        builder.append("Request Headers\n").append(TextUtils.isEmpty(selected.headers) ? "-" : selected.headers);
+        binding.networkDetail.setText(builder.toString());
+    }
+
+    private String filter(int checkedId) {
+        if (checkedId == R.id.filterWeb) return "WEB";
+        if (checkedId == R.id.filterFetch) return "FETCH";
+        if (checkedId == R.id.filterXhr) return "XHR";
+        if (checkedId == R.id.filterError) return "ERROR";
+        if (checkedId == R.id.filterNative) return "NATIVE";
+        return "ALL";
+    }
+
+    private boolean matchesFilter(NetworkEntry entry) {
+        if ("ERROR".equals(networkFilter)) {
+            if (!entry.isError()) return false;
+        } else if ("FETCH".equals(networkFilter)) {
+            if (!"FETCH".equals(entry.kind)) return false;
+        } else if ("XHR".equals(networkFilter)) {
+            if (!"XHR".equals(entry.kind)) return false;
+        } else if (!"ALL".equals(networkFilter) && !entry.kind.startsWith(networkFilter)) {
+            return false;
+        }
+        return matchesSearch(entry);
+    }
+
+    private boolean matchesSearch(NetworkEntry entry) {
+        String query = inputText(binding.networkSearch).toLowerCase(Locale.ROOT);
+        if (TextUtils.isEmpty(query)) return true;
+        return entry.url.toLowerCase(Locale.ROOT).contains(query)
+                || entry.method.toLowerCase(Locale.ROOT).contains(query)
+                || entry.kind.toLowerCase(Locale.ROOT).contains(query)
+                || entry.stateText().toLowerCase(Locale.ROOT).contains(query)
+                || String.valueOf(entry.status).contains(query)
+                || entry.detail.toLowerCase(Locale.ROOT).contains(query)
+                || entry.headers.toLowerCase(Locale.ROOT).contains(query);
+    }
+
+    private NetworkEntry findNetwork(int id, List<NetworkEntry> entries) {
+        for (NetworkEntry entry : entries) if (entry.id == id) return entry;
+        return null;
+    }
+
+    private NetworkEntry findPending(NetworkEntry incoming) {
+        if (incoming.isStart() || "WEB".equals(incoming.kind)) return null;
+        for (int i = networkEntries.size() - 1; i >= 0; i--) {
+            NetworkEntry entry = networkEntries.get(i);
+            if (!entry.isPending()) continue;
+            if (!entry.sameRequest(incoming)) continue;
+            return entry;
+        }
+        return null;
+    }
+
+    private View networkRow(NetworkEntry entry, boolean selected) {
+        LinearLayoutCompat row = new LinearLayoutCompat(requireContext());
+        row.setOrientation(LinearLayoutCompat.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(8), dp(6), dp(8), dp(6));
+        row.setBackgroundColor(entry == null ? Color.parseColor("#F5F6F7") : selected ? Color.parseColor("#DCEBFF") : entry.isError() ? Color.parseColor("#FFF1F1") : Color.WHITE);
+        row.addView(networkCell(entry == null ? "#" : String.valueOf(entry.id), 46, color(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Time" : entry.time, 104, color(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Type" : entry.kind, 82, color(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Method" : entry.method, 76, color(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Status" : entry.statusText(), 80, statusColor(entry), entry == null));
+        row.addView(networkCell(entry == null ? "Cost" : entry.durationText(), 84, color(entry), entry == null));
+        row.addView(networkUrlCell(entry == null ? "URL" : entry.url, entry == null));
+        if (entry != null) {
+            row.setFocusable(true);
+            row.setClickable(true);
+            row.setOnClickListener(view -> {
+                selectedNetworkId = entry.id;
+                refreshNetwork();
+            });
+        }
+        return row;
+    }
+
+    private MaterialTextView networkCell(String value, int width, int color, boolean header) {
+        MaterialTextView view = networkText(value, 12, color, header);
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(dp(width), ViewGroup.LayoutParams.WRAP_CONTENT);
+        view.setLayoutParams(params);
+        return view;
+    }
+
+    private MaterialTextView networkUrlCell(String value, boolean header) {
+        MaterialTextView view = networkText(value, 12, header ? Color.BLACK : Color.parseColor("#174EA6"), header);
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        view.setMinWidth(dp(620));
+        view.setLayoutParams(params);
+        return view;
+    }
+
+    private MaterialTextView networkText(String value, int sp, int color, boolean bold) {
+        MaterialTextView view = new MaterialTextView(requireContext());
+        view.setText(value);
+        view.setTextColor(color);
+        view.setTextSize(sp);
+        view.setTypeface(Typeface.MONOSPACE, bold ? Typeface.BOLD : Typeface.NORMAL);
+        view.setSingleLine(true);
+        view.setIncludeFontPadding(false);
+        return view;
+    }
+
+    private int color(NetworkEntry entry) {
+        if (entry == null) return Color.BLACK;
+        if (entry.isError()) return Color.parseColor("#B3261E");
+        if (entry.isPending()) return Color.parseColor("#5F6368");
+        return Color.parseColor("#202124");
+    }
+
+    private int statusColor(NetworkEntry entry) {
+        if (entry == null) return Color.BLACK;
+        if (entry.isError()) return Color.parseColor("#B3261E");
+        if (entry.status >= 200 && entry.status < 400) return Color.parseColor("#137333");
+        return color(entry);
     }
 
     private String headerText(Map<String, String> headers) {
         if (headers == null || headers.isEmpty()) return "";
-        StringBuilder builder = new StringBuilder("  headers=");
+        StringBuilder builder = new StringBuilder();
         int count = 0;
         for (Map.Entry<String, String> entry : headers.entrySet()) {
-            if (count++ > 0) builder.append("; ");
+            if (count++ > 0) builder.append('\n');
             builder.append(entry.getKey()).append(':').append(entry.getValue());
-            if (count >= 4) break;
         }
         return builder.toString();
     }
 
-    private String empty(String value) {
-        return TextUtils.isEmpty(value) ? "-" : value;
+    private static int nextNetworkId;
+
+    private class NetworkEntry {
+        private final int id;
+        private final String time;
+        private final String kind;
+        private final String method;
+        private final String url;
+        private String state;
+        private String detail;
+        private String headers;
+        private int status;
+        private long durationMs;
+
+        private NetworkEntry(String type, String method, String url, int status, long durationMs, String detail, String headers) {
+            this.id = ++nextNetworkId;
+            this.time = now();
+            this.kind = kind(type);
+            this.method = TextUtils.isEmpty(method) ? "GET" : method;
+            this.url = url == null ? "" : url;
+            this.state = state(type);
+            this.status = status;
+            this.durationMs = durationMs;
+            this.detail = detail == null ? "" : detail;
+            this.headers = headers == null ? "" : headers;
+        }
+
+        private boolean isError() {
+            return "ERROR".equals(state) || status >= 400;
+        }
+
+        private boolean isStart() {
+            return "START".equals(state);
+        }
+
+        private boolean isPending() {
+            return isStart() && status <= 0;
+        }
+
+        private boolean sameRequest(NetworkEntry incoming) {
+            return kind.equals(incoming.kind) && method.equals(incoming.method) && url.equals(incoming.url);
+        }
+
+        private void update(NetworkEntry incoming) {
+            state = incoming.state;
+            status = incoming.status;
+            durationMs = incoming.durationMs;
+            detail = mergeDetail(detail, incoming.detail);
+            if (!TextUtils.isEmpty(incoming.headers)) headers = incoming.headers;
+        }
+
+        private String statusText() {
+            if (status > 0) return String.valueOf(status);
+            if (isPending()) return "pending";
+            return "-";
+        }
+
+        private String durationText() {
+            return durationMs <= 0 ? "-" : durationMs + "ms";
+        }
+
+        private String stateText() {
+            return TextUtils.isEmpty(state) ? "-" : state;
+        }
+
+        private String kind(String type) {
+            if (TextUtils.isEmpty(type)) return "-";
+            int index = type.indexOf('_');
+            return index < 0 ? type : type.substring(0, index);
+        }
+
+        private String state(String type) {
+            if (TextUtils.isEmpty(type)) return "";
+            int index = type.indexOf('_');
+            return index < 0 ? "" : type.substring(index + 1);
+        }
+
+        private String mergeDetail(String current, String incoming) {
+            if (TextUtils.isEmpty(incoming)) return current == null ? "" : current;
+            if (TextUtils.isEmpty(current)) return incoming;
+            if (current.contains(incoming)) return current;
+            return current + "\n\n" + incoming;
+        }
     }
 }

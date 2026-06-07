@@ -63,6 +63,8 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     private boolean enabled;
     private boolean textMode;
     private WebHomeExtensionSourceStore.Entry pendingFileEdit;
+    private SourceEditor pendingFileEditor;
+    private final List<SourceEditor> editors = new ArrayList<>();
 
     public static void show(Fragment fragment, Runnable callback) {
         WebHomeExtensionDialog dialog = new WebHomeExtensionDialog();
@@ -137,7 +139,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             if (checkedId == R.id.textMode) showTextMode(true);
             if (checkedId == R.id.uiMode && !showTextMode(false)) binding.modeGroup.check(R.id.textMode);
         });
-        binding.refresh.setOnClickListener(view -> refresh(true));
         binding.clear.setOnClickListener(view -> clearCache());
         binding.negative.setOnClickListener(view -> dismiss());
         binding.positive.setOnClickListener(view -> onPositive());
@@ -155,11 +156,9 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     private void refresh(boolean manual) {
-        binding.refresh.setEnabled(false);
         if (manual) binding.summary.setText(R.string.update_check);
         WebHomeExtensionRegistry.get().refresh(VodConfig.get().getHome(), () -> {
             if (binding == null) return;
-            binding.refresh.setEnabled(true);
             render();
             if (callback != null) callback.run();
         });
@@ -206,6 +205,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
 
     private void onPositive() {
         if (textMode && !saveTextSources(true)) return;
+        if (!textMode && !saveFormSources(true)) return;
         boolean changed = Setting.isWebHomeExtension() != enabled;
         Setting.putWebHomeExtension(enabled);
         if (changed) {
@@ -222,6 +222,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         String siteKey = TextUtils.isEmpty(snapshot.siteKey) ? getString(R.string.web_home_extension_unknown_site) : snapshot.siteKey;
         binding.summary.setText(getString(R.string.web_home_extension_summary, snapshot.sourceCount, snapshot.installedCount, snapshot.matchedCount, snapshot.readyCount, siteKey));
         trimRows();
+        editors.clear();
         binding.empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
         for (RowModel row : rows) binding.list.addView(row(row));
     }
@@ -276,9 +277,8 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         root.addView(title);
         MaterialTextView status = text(model.status(), 12, statusColor(model.statusKey()), false);
         root.addView(status);
-        if (source != null) addDetail(root, getString(R.string.web_home_extension_site_scope, empty(source.getSiteKey())));
-        addDetail(root, getString(R.string.web_home_extension_source, shortText(model.source())));
-        if (item != null) {
+        if (source == null) addDetail(root, getString(R.string.web_home_extension_source, shortText(model.source())));
+        if (source == null && item != null) {
             addDetail(root, getString(R.string.web_home_extension_match, empty(item.matchText)));
             if (!TextUtils.isEmpty(item.excludeText)) addDetail(root, getString(R.string.web_home_extension_exclude, item.excludeText));
             if (!TextUtils.isEmpty(item.dependsText)) addDetail(root, getString(R.string.web_home_extension_depends, item.dependsText));
@@ -323,6 +323,9 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         name.setText(fields.name);
         link.setText(fields.link);
         match.setText(fields.match);
+        setupScrollableText(name);
+        setupScrollableText(link);
+        setupScrollableText(match);
         code.setMinLines(6);
         code.setMaxLines(12);
         code.setText(fields.code);
@@ -333,29 +336,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         params.topMargin = dp(8);
         root.addView(form, params);
 
-        form.addView(text(getString(R.string.web_home_extension_source_type), 12, Color.parseColor("#5F6368"), false));
-        MaterialButtonToggleGroup sourceGroup = toggleGroup();
-        int fileId = View.generateViewId();
-        int linkId = View.generateViewId();
-        int codeId = View.generateViewId();
-        sourceGroup.addView(toggleButton(fileId, R.string.web_home_extension_add_file));
-        sourceGroup.addView(toggleButton(linkId, R.string.web_home_extension_add_link));
-        sourceGroup.addView(toggleButton(codeId, R.string.web_home_extension_add_code));
-        sourceGroup.check(switch (fields.sourceType) {
-            case WebHomeExtensionSourceStore.SOURCE_TYPE_FILE -> fileId;
-            case WebHomeExtensionSourceStore.SOURCE_TYPE_LINK -> linkId;
-            default -> codeId;
-        });
-        form.addView(sourceGroup, topMargin(4));
-
-        TextInputLayout linkLayout = inputLayout(R.string.web_home_extension_link_hint, link);
-        TextInputLayout codeLayout = inputLayout(R.string.web_home_extension_code_hint, code);
-        MaterialButton chooseFile = sourceActionButton(R.string.web_home_extension_choose_file, true, false);
-        chooseFile.setOnClickListener(view -> chooseFile(source));
-        form.addView(chooseFile, topMargin(8));
-        form.addView(linkLayout, topMargin(8));
-        form.addView(codeLayout, topMargin(8));
-
         form.addView(inputLayout(R.string.web_home_extension_name_hint, name));
         form.addView(inputLayout(R.string.web_home_extension_match_hint, match), topMargin(8));
         form.addView(text(getString(R.string.web_home_extension_run_at_hint), 12, Color.parseColor("#5F6368"), false), topMargin(8));
@@ -363,9 +343,9 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         int startId = View.generateViewId();
         int endId = View.generateViewId();
         int idleId = View.generateViewId();
-        runAtGroup.addView(toggleButton(startId, WebHomeExtension.RUN_AT_START));
-        runAtGroup.addView(toggleButton(endId, WebHomeExtension.RUN_AT_END));
-        runAtGroup.addView(toggleButton(idleId, WebHomeExtension.RUN_AT_IDLE));
+        runAtGroup.addView(toggleButton(startId, R.string.web_home_extension_run_at_start_short));
+        runAtGroup.addView(toggleButton(endId, R.string.web_home_extension_run_at_end_short));
+        runAtGroup.addView(toggleButton(idleId, R.string.web_home_extension_run_at_idle_short));
         runAtGroup.check(switch (fields.runAt) {
             case WebHomeExtension.RUN_AT_START -> startId;
             case WebHomeExtension.RUN_AT_IDLE -> idleId;
@@ -373,28 +353,66 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         });
         form.addView(runAtGroup, topMargin(4));
 
+        MaterialButtonToggleGroup sourceGroup = toggleGroup();
+        int fileId = View.generateViewId();
+        int linkId = View.generateViewId();
+        int codeId = View.generateViewId();
+        MaterialButton fileButton = toggleButton(fileId, R.string.web_home_extension_add_file);
+        MaterialButton linkButton = toggleButton(linkId, R.string.web_home_extension_add_link);
+        MaterialButton codeButton = toggleButton(codeId, R.string.web_home_extension_add_code);
+        sourceGroup.addView(fileButton);
+        sourceGroup.addView(linkButton);
+        sourceGroup.addView(codeButton);
+        sourceGroup.check(switch (fields.sourceType) {
+            case WebHomeExtensionSourceStore.SOURCE_TYPE_FILE -> fileId;
+            case WebHomeExtensionSourceStore.SOURCE_TYPE_LINK -> linkId;
+            default -> codeId;
+        });
+        form.addView(sourceGroup, topMargin(8));
+
+        TextInputLayout linkLayout = inputLayout(R.string.web_home_extension_link_hint, link);
+        TextInputLayout codeLayout = inputLayout(R.string.web_home_extension_code_hint, code);
+        form.addView(linkLayout, topMargin(8));
+        form.addView(codeLayout, topMargin(8));
+
+        SourceEditor editor = new SourceEditor(source, sourceGroup, runAtGroup, fileId, linkId, codeId, startId, idleId, name, link, code, match);
+        editors.add(editor);
         Runnable update = () -> {
             int checked = sourceGroup.getCheckedButtonId();
-            boolean file = checked == fileId;
             boolean linkSource = checked == linkId;
-            chooseFile.setVisibility(file ? View.VISIBLE : View.GONE);
             linkLayout.setVisibility(linkSource ? View.VISIBLE : View.GONE);
             codeLayout.setVisibility(checked == codeId ? View.VISIBLE : View.GONE);
         };
         sourceGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (isChecked) update.run();
+            if (!isChecked) return;
+            update.run();
         });
+        fileButton.setOnClickListener(view -> chooseFile(editor));
         update.run();
-
-        MaterialButton save = sourceActionButton(R.string.dialog_positive, true, false);
-        save.setOnClickListener(view -> saveFormFields(source, sourceType(sourceGroup, fileId, linkId), name, runAt(runAtGroup, startId, idleId), link, code, match));
-        form.addView(save, topMargin(8));
     }
 
     private LinearLayoutCompat.LayoutParams topMargin(int value) {
         LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.topMargin = dp(value);
         return params;
+    }
+
+    private boolean saveFormSources(boolean notify) {
+        try {
+            for (SourceEditor editor : editors) saveFormEditor(editor);
+            onSourceSaved(false);
+            return true;
+        } catch (Throwable e) {
+            if (notify) Notify.show(errorText(e));
+            return false;
+        }
+    }
+
+    private void saveFormEditor(SourceEditor editor) {
+        WebHomeExtensionSourceStore.Entry source = editor.source;
+        String sourceType = sourceType(editor.sourceGroup, editor.fileId, editor.linkId);
+        if (WebHomeExtensionSourceStore.SOURCE_TYPE_LINK.equals(sourceType)) WebHomeExtensionSourceStore.saveLink(source.getId(), inputText(editor.name), runAt(editor.runAtGroup, editor.startId, editor.idleId), inputText(editor.link), inputText(editor.match), source.isEnabled(), currentSiteKey(source));
+        else WebHomeExtensionSourceStore.saveCodeMeta(source.getId(), inputText(editor.name), runAt(editor.runAtGroup, editor.startId, editor.idleId), inputText(editor.match), inputText(editor.code), source.isEnabled(), currentSiteKey(source), sourceType);
     }
 
     private void saveFormFields(WebHomeExtensionSourceStore.Entry source, String sourceType, TextInputEditText name, String runAt, TextInputEditText link, TextInputEditText code, TextInputEditText match) {
@@ -450,6 +468,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     private String runAt(MaterialButtonToggleGroup group, int startId, int idleId) {
+        if (group == null) return WebHomeExtension.RUN_AT_END;
         int checked = group.getCheckedButtonId();
         if (checked == startId) return WebHomeExtension.RUN_AT_START;
         if (checked == idleId) return WebHomeExtension.RUN_AT_IDLE;
@@ -486,30 +505,36 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         onSourceSaved();
     }
 
-    private void chooseFile(WebHomeExtensionSourceStore.Entry source) {
-        pendingFileEdit = source;
+    private void chooseFile(SourceEditor editor) {
+        pendingFileEditor = editor;
+        pendingFileEdit = editor.source;
         FileChooser.from(fileLauncher).show("text/*", new String[]{"text/*", "application/javascript", "application/octet-stream"});
     }
 
     private final ActivityResultLauncher<Intent> fileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            pendingFileEditor = null;
             pendingFileEdit = null;
             return;
         }
         String path = FileChooser.getPathFromUri(result.getData().getData());
         if (TextUtils.isEmpty(path)) {
+            pendingFileEditor = null;
             pendingFileEdit = null;
             return;
         }
         String code = Path.read(Path.local(path));
         if (TextUtils.isEmpty(code)) {
             Notify.show(R.string.web_home_extension_source_empty);
+            pendingFileEditor = null;
             pendingFileEdit = null;
             return;
         }
         WebHomeExtensionSourceStore.Entry source = pendingFileEdit;
+        SourceEditor editor = pendingFileEditor;
         String name = path.substring(path.lastIndexOf('/') + 1);
-        WebHomeExtensionSourceStore.saveFile(source == null ? "" : source.getId(), name, fileCode(name, code), source == null || source.isEnabled(), currentSiteKey(source));
+        WebHomeExtensionSourceStore.saveCodeMeta(source == null ? "" : source.getId(), inputText(editor == null ? null : editor.name, name), runAt(editor == null ? null : editor.runAtGroup, editor == null ? 0 : editor.startId, editor == null ? 0 : editor.idleId), inputText(editor == null ? null : editor.match), fileCode(name, code), source == null || source.isEnabled(), currentSiteKey(source), WebHomeExtensionSourceStore.SOURCE_TYPE_FILE);
+        pendingFileEditor = null;
         pendingFileEdit = null;
         onSourceSaved();
     });
@@ -615,7 +640,13 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     private String inputText(EditText input) {
+        if (input == null) return "";
         return input.getText() == null ? "" : input.getText().toString().trim();
+    }
+
+    private String inputText(EditText input, String fallback) {
+        String value = inputText(input);
+        return TextUtils.isEmpty(value) ? fallback : value;
     }
 
     private String errorText(Throwable e) {
@@ -775,5 +806,35 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         private String link = "";
         private String code = "";
         private String match = "";
+    }
+
+    private static class SourceEditor {
+        private final WebHomeExtensionSourceStore.Entry source;
+        private final MaterialButtonToggleGroup sourceGroup;
+        private final MaterialButtonToggleGroup runAtGroup;
+        private final int fileId;
+        private final int linkId;
+        private final int codeId;
+        private final int startId;
+        private final int idleId;
+        private final TextInputEditText name;
+        private final TextInputEditText link;
+        private final TextInputEditText code;
+        private final TextInputEditText match;
+
+        private SourceEditor(WebHomeExtensionSourceStore.Entry source, MaterialButtonToggleGroup sourceGroup, MaterialButtonToggleGroup runAtGroup, int fileId, int linkId, int codeId, int startId, int idleId, TextInputEditText name, TextInputEditText link, TextInputEditText code, TextInputEditText match) {
+            this.source = source;
+            this.sourceGroup = sourceGroup;
+            this.runAtGroup = runAtGroup;
+            this.fileId = fileId;
+            this.linkId = linkId;
+            this.codeId = codeId;
+            this.startId = startId;
+            this.idleId = idleId;
+            this.name = name;
+            this.link = link;
+            this.code = code;
+            this.match = match;
+        }
     }
 }

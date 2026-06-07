@@ -158,6 +158,9 @@
     <string name="web_home_extension_json_hint">User extension sources JSON</string>
     <string name="web_home_extension_name_hint">Name</string>
     <string name="web_home_extension_run_at_hint">Run at</string>
+    <string name="web_home_extension_run_at_start_short">Start</string>
+    <string name="web_home_extension_run_at_end_short">End</string>
+    <string name="web_home_extension_run_at_idle_short">Idle</string>
     <string name="web_home_extension_match_hint">Site key or regex</string>
     <string name="web_home_extension_code_hint">JavaScript / CSS injector code</string>
     <string name="web_home_extension_local_code_default">Local extension %1$d</string>
@@ -192,6 +195,16 @@
     <string name="web_home_extension_inspect_hint">Click an element in the Web tab to inspect it</string>
     <string name="web_home_extension_refresh_console">Refresh panel</string>
     <string name="web_home_extension_save_preview">Save &amp; preview</string>
+    <string name="web_home_extension_network_all">All</string>
+    <string name="web_home_extension_network_web">Page</string>
+    <string name="web_home_extension_network_fetch">Fetch</string>
+    <string name="web_home_extension_network_xhr">XHR</string>
+    <string name="web_home_extension_network_error">Errors</string>
+    <string name="web_home_extension_network_native">Native</string>
+    <string name="web_home_extension_network_filter">Filter URL / status / detail</string>
+    <string name="web_home_extension_network_empty">No requests captured for this filter</string>
+    <string name="web_home_extension_network_select">Select a request to view details.</string>
+    <string name="web_home_extension_network_clear">Clear requests</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">Site Injection</string>
