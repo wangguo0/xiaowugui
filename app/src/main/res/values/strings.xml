@@ -136,9 +136,7 @@
     <string name="web_home_extension_add_source">Add</string>
     <string name="web_home_extension_debug">Debug</string>
     <string name="web_home_extension_refresh">Refresh</string>
-    <string name="web_home_extension_preview">Preview</string>
     <string name="web_home_extension_clear_cache">Clear cache</string>
-    <string name="web_home_extension_preview_reloaded">WebHome preview reloaded</string>
     <string name="web_home_extension_user_sources">User sources</string>
     <string name="web_home_extension_loaded_extensions">Loaded extensions</string>
     <string name="web_home_extension_user_source_status">User source · %1$s</string>
@@ -193,7 +191,6 @@
     <string name="web_home_extension_tab_code">Code</string>
     <string name="web_home_extension_inspect_element">Inspect</string>
     <string name="web_home_extension_inspect_hint">Click an element in the Web tab to inspect it</string>
-    <string name="web_home_extension_refresh_console">Refresh panel</string>
     <string name="web_home_extension_clear_panel">Clear</string>
     <string name="web_home_extension_save_preview">Save &amp; preview</string>
     <string name="web_home_extension_network_all">All</string>

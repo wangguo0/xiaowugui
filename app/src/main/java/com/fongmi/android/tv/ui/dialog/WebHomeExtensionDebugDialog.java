@@ -31,7 +31,6 @@ import com.fongmi.android.tv.web.HomeWebController;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionSourceStore;
 import com.github.catvod.utils.Json;
-import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textview.MaterialTextView;
 import com.google.gson.JsonArray;
@@ -126,9 +125,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
             showTab(checkedId);
             refreshPanel();
         });
-        binding.reload.setOnClickListener(view -> reload());
         binding.inspect.setOnClickListener(view -> inspectElement());
-        binding.refreshConsole.setOnClickListener(view -> onPanelAction());
         binding.clearPanel.setOnClickListener(view -> clearPanel());
         binding.networkFilterGroup.addOnButtonCheckedListener((group, checkedId, checked) -> {
             if (!checked) return;
@@ -181,12 +178,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         binding.elementsLayout.setVisibility(tab == R.id.tabElements ? View.VISIBLE : View.GONE);
         binding.networkLayout.setVisibility(tab == R.id.tabNetwork ? View.VISIBLE : View.GONE);
         binding.codeLayout.setVisibility(tab == R.id.tabCode ? View.VISIBLE : View.GONE);
-        updateActionText();
-    }
-
-    private void reload() {
-        if (controller != null) controller.reloadExtensions();
-        Notify.show(R.string.web_home_extension_preview_reloaded);
+        binding.clearPanel.setEnabled(tab != R.id.tabCode && tab != R.id.tabWeb);
     }
 
     private void inspectElement() {
@@ -278,14 +270,6 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         if (binding.tabConsole.isChecked()) refreshConsole();
         else if (binding.tabElements.isChecked()) refreshElements();
         else if (binding.tabNetwork.isChecked()) refreshNetwork();
-    }
-
-    private void onPanelAction() {
-        if (!binding.tabNetwork.isChecked()) {
-            refreshPanel();
-            return;
-        }
-        refreshNetwork();
     }
 
     private void clearPanel() {
@@ -580,13 +564,6 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     @Override
     public void onWebNetwork(String type, String method, String url, int status, long durationMs, String detail) {
         appendNetwork(new NetworkEntry(type, method, url, status, durationMs, detail, ""));
-    }
-
-    private void updateActionText() {
-        if (binding == null) return;
-        MaterialButton button = binding.refreshConsole;
-        button.setText(R.string.web_home_extension_refresh_console);
-        binding.clearPanel.setEnabled(!binding.tabCode.isChecked() && !binding.tabWeb.isChecked());
     }
 
     private void refreshNetworkDetail() {
