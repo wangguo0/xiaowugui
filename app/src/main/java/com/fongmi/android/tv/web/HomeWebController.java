@@ -17,6 +17,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.webkit.ScriptHandler;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+
 import com.fongmi.android.tv.R;
 import com.github.catvod.crawler.SpiderDebug;
 import com.fongmi.android.tv.api.config.VodConfig;
@@ -27,8 +31,13 @@ import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.utils.WebViewUtil;
+import com.fongmi.android.tv.web.ext.WebHomeExtension;
+import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 public class HomeWebController {
 
@@ -37,17 +46,23 @@ public class HomeWebController {
 
     private final Listener listener;
     private final Activity activity;
+    private final Set<String> injectedExtensions;
     private WebView webView;
     private final float density;
+    private ScriptHandler documentStartHandler;
+    private Site site;
+    private String documentStartKey;
     private String homePage;
     private long pauseAt;
     private long lastKeyAt;
+    private boolean sdkReady;
 
     public HomeWebController(Activity activity, WebView webView, Listener listener) {
         this.activity = activity;
         this.webView = webView;
         this.listener = listener;
         this.density = activity.getResources().getDisplayMetrics().density;
+        this.injectedExtensions = new HashSet<>();
         init();
     }
 
@@ -74,7 +89,13 @@ public class HomeWebController {
         if (!site.hasHomePage()) return false;
         Server.get().start();
         String url = getHomePage(site);
-        if (force || !url.equals(homePage)) {
+        boolean reload = force || !url.equals(homePage);
+        this.site = site;
+        prepareExtensions(site);
+        registerDocumentStartScripts();
+        if (reload) {
+            sdkReady = false;
+            injectedExtensions.clear();
             homePage = url;
             webView.loadUrl(force ? reloadUrl(homePage) : homePage);
         }
@@ -132,6 +153,7 @@ public class HomeWebController {
     }
 
     public void destroy() {
+        removeDocumentStartScripts();
         webView.stopLoading();
         webView.destroy();
     }
@@ -144,6 +166,7 @@ public class HomeWebController {
         int visibility = webView.getVisibility();
         ViewGroup.LayoutParams params = webView.getLayoutParams();
         try {
+            removeDocumentStartScripts();
             webView.stopLoading();
             parent.removeView(webView);
             webView.destroy();
@@ -154,6 +177,7 @@ public class HomeWebController {
         webView.setVisibility(visibility);
         parent.addView(webView, Math.max(0, index), params);
         init();
+        registerDocumentStartScripts();
     }
 
     private void recoverAfterResume() {
@@ -232,6 +256,9 @@ public class HomeWebController {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 SpiderDebug.log("webhome-webview", "page started url=%s", url);
+                sdkReady = false;
+                injectedExtensions.clear();
+                markDocumentStartInjected();
                 listener.onWebLoading();
             }
 
@@ -287,7 +314,87 @@ public class HomeWebController {
 
     private void injectSdk() {
         injectViewport();
-        webView.evaluateJavascript(getSdk(), null);
+        webView.evaluateJavascript(getSdk(), value -> {
+            sdkReady = true;
+            injectExtensions(WebHomeExtension.RUN_AT_END);
+            webView.postDelayed(() -> injectExtensions(WebHomeExtension.RUN_AT_IDLE), 600);
+        });
+    }
+
+    private void prepareExtensions(Site site) {
+        String key = site.getKey();
+        WebHomeExtensionRegistry.get().prepare(site, () -> {
+            if (this.site == null || !key.equals(this.site.getKey())) return;
+            registerDocumentStartScripts();
+            injectExtensions(WebHomeExtension.RUN_AT_END);
+            webView.postDelayed(() -> injectExtensions(WebHomeExtension.RUN_AT_IDLE), 600);
+        });
+    }
+
+    private void registerDocumentStartScripts() {
+        removeDocumentStartScripts();
+        if (site == null || !isDocumentStartSupported()) return;
+        String script = documentStartScript();
+        if (TextUtils.isEmpty(script)) return;
+        try {
+            documentStartHandler = WebViewCompat.addDocumentStartJavaScript(webView, script, Collections.singleton("*"));
+            documentStartKey = site.getKey();
+            SpiderDebug.log("webhome-ext", "document-start registered site=%s", documentStartKey);
+        } catch (Throwable e) {
+            documentStartHandler = null;
+            documentStartKey = "";
+            SpiderDebug.log("webhome-ext", "document-start register failed site=%s error=%s", site.getKey(), e.getMessage());
+        }
+    }
+
+    private void removeDocumentStartScripts() {
+        try {
+            if (documentStartHandler != null) documentStartHandler.remove();
+        } catch (Throwable e) {
+            SpiderDebug.log("webhome-ext", "document-start remove failed error=%s", e.getMessage());
+        }
+        documentStartHandler = null;
+        documentStartKey = "";
+    }
+
+    private String documentStartScript() {
+        if (site == null) return "";
+        StringBuilder script = new StringBuilder();
+        for (WebHomeExtension extension : WebHomeExtensionRegistry.get().get(site.getKey())) {
+            if (!WebHomeExtension.RUN_AT_START.equals(extension.getRunAt())) continue;
+            if (script.length() == 0) script.append(getSdk());
+            script.append('\n').append(extension.script(site.getKey()));
+        }
+        return script.toString();
+    }
+
+    private void markDocumentStartInjected() {
+        if (site == null || TextUtils.isEmpty(documentStartKey) || !documentStartKey.equals(site.getKey())) return;
+        for (WebHomeExtension extension : WebHomeExtensionRegistry.get().get(site.getKey())) {
+            if (!WebHomeExtension.RUN_AT_START.equals(extension.getRunAt())) continue;
+            injectedExtensions.add(extension.getId());
+            WebHomeExtensionRegistry.get().recordInject(extension, site.getKey(), WebHomeExtension.RUN_AT_START);
+        }
+    }
+
+    private boolean isDocumentStartSupported() {
+        try {
+            return WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private void injectExtensions(String runAt) {
+        if (!sdkReady || site == null || !isVisible()) return;
+        for (WebHomeExtension extension : WebHomeExtensionRegistry.get().get(site.getKey())) {
+            if (!extension.shouldInjectAt(runAt)) continue;
+            if (!injectedExtensions.add(extension.getId())) continue;
+            if (WebHomeExtension.RUN_AT_START.equals(extension.getRunAt())) SpiderDebug.log("webhome-ext", "document-start downgraded id=%s site=%s", extension.getId(), site.getKey());
+            SpiderDebug.log("webhome-ext", "inject id=%s runAt=%s target=%s site=%s", extension.getId(), extension.getRunAt(), runAt, site.getKey());
+            WebHomeExtensionRegistry.get().recordInject(extension, site.getKey(), runAt);
+            webView.evaluateJavascript(extension.script(site.getKey()), null);
+        }
     }
 
     private void injectViewport() {
@@ -351,6 +458,15 @@ public class HomeWebController {
                     resolve:(id,data)=>{ if(callbacks[id]){ callbacks[id].resolve(hydrate(data)); delete callbacks[id]; } },
                     reject:(id,error)=>{ if(callbacks[id]){ callbacks[id].reject(new Error(error||'')); delete callbacks[id]; } }
                   };
+                  if(!window.__fmUrlHook&&window.history){
+                    window.__fmUrlHook=true;
+                    const emit=()=>window.dispatchEvent(new CustomEvent('fmurlchange',{detail:{url:location.href}}));
+                    const rawPush=history.pushState;
+                    const rawReplace=history.replaceState;
+                    history.pushState=function(){const r=rawPush.apply(this,arguments);emit();return r;};
+                    history.replaceState=function(){const r=rawReplace.apply(this,arguments);emit();return r;};
+                    window.addEventListener('popstate',emit);
+                  }
                   const player={
                     playUrl:(url,title,options)=>invoke('player.playUrl',Object.assign({},options||{},{url,title})),
                     playVod:(siteKey,vodId,title,pic,options)=>invoke('player.playVod',Object.assign({},options||{},{siteKey,vodId,title,pic})),
@@ -370,6 +486,11 @@ public class HomeWebController {
                     check:(items)=>invoke('pan.check',{items}),
                     play:(payload)=>invoke('pan.play',payload||{})
                   };
+                  const ext={
+                    info:()=>invoke('ext.info',{}),
+                    log:(message,data)=>invoke('ext.log',{message,data}),
+                    toast:(message)=>invoke('ext.toast',{message})
+                  };
                   const ui={
                     setToolbar:(visible)=>invoke('ui.setToolbar',{visible:visible!==false})
                   };
@@ -382,6 +503,7 @@ public class HomeWebController {
                       history:()=>invoke('app.history',{})
                     },
                     pan,
+                    ext,
                     device:{info:()=>invoke('device.info',{})},
                     site:{info:()=>invoke('site.info',{})},
                     config:{info:()=>invoke('config.info',{})},
@@ -406,6 +528,7 @@ public class HomeWebController {
                     pan,
                     check:window.fongmi.pan.check,
                     cache,
+                    ext,
                     ui,
                     device:window.fongmi.device.info,
                     site:window.fongmi.site.info,

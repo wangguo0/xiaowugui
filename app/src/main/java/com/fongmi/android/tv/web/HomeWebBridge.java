@@ -19,7 +19,9 @@ import com.fongmi.android.tv.ui.activity.KeepActivity;
 import com.fongmi.android.tv.ui.activity.LiveActivity;
 import com.fongmi.android.tv.ui.activity.SearchActivity;
 import com.fongmi.android.tv.ui.activity.VideoActivity;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Task;
+import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Prefers;
@@ -101,6 +103,9 @@ public class HomeWebBridge {
                 case "device.info" -> device();
                 case "site.info" -> site();
                 case "config.info" -> config();
+                case "ext.info" -> extInfo();
+                case "ext.log" -> extLog(payload);
+                case "ext.toast" -> extToast(payload);
                 case "ui.setToolbar" -> setToolbar(payload);
                 case "navigation.back" -> back();
                 case "navigation.reload" -> reload();
@@ -248,6 +253,31 @@ public class HomeWebBridge {
         object.addProperty("desc", VodConfig.getDesc());
         object.addProperty("driveCheck", Setting.isDriveCheck());
         return object.toString();
+    }
+
+    private String extInfo() {
+        JsonObject object = new JsonObject();
+        Site site = VodConfig.get().getHome();
+        object.addProperty("siteKey", site.getKey());
+        object.addProperty("siteName", site.getName());
+        object.addProperty("homePage", site.getHomePage());
+        WebHomeExtensionRegistry.Snapshot snapshot = WebHomeExtensionRegistry.get().snapshot();
+        object.addProperty("enabled", snapshot.enabled);
+        object.addProperty("matched", snapshot.matchedCount);
+        object.addProperty("ready", snapshot.readyCount);
+        return object.toString();
+    }
+
+    private String extLog(JsonObject payload) {
+        WebHomeExtensionRegistry.get().recordScriptLog(payload);
+        SpiderDebug.log("webhome-ext", "script message=%s data=%s", Json.safeString(payload, "message"), payload.has("data") ? payload.get("data") : "");
+        return "{}";
+    }
+
+    private String extToast(JsonObject payload) {
+        String message = Json.safeString(payload, "message");
+        if (!TextUtils.isEmpty(message)) App.post(() -> Notify.show(message));
+        return "{}";
     }
 
     private String setToolbar(JsonObject payload) {
