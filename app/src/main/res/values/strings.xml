@@ -187,10 +187,12 @@
     <string name="web_home_extension_status_matched">Matched</string>
     <string name="web_home_extension_debug_title">WebHome debug workspace</string>
     <string name="web_home_extension_tab_web">Web</string>
-    <string name="web_home_extension_tab_console">Elements / logs</string>
+    <string name="web_home_extension_tab_console">Console</string>
+    <string name="web_home_extension_tab_elements">Elements</string>
+    <string name="web_home_extension_tab_network">Network</string>
     <string name="web_home_extension_tab_code">Code</string>
     <string name="web_home_extension_inspect_element">Inspect</string>
-    <string name="web_home_extension_refresh_console">Refresh logs</string>
+    <string name="web_home_extension_refresh_console">Refresh panel</string>
     <string name="web_home_extension_save_preview">Save &amp; preview</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>

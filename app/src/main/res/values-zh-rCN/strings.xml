@@ -186,10 +186,12 @@
     <string name="web_home_extension_status_matched">已匹配</string>
     <string name="web_home_extension_debug_title">WebHome 调试工作台</string>
     <string name="web_home_extension_tab_web">Web</string>
-    <string name="web_home_extension_tab_console">元素 / 日志</string>
+    <string name="web_home_extension_tab_console">控制台</string>
+    <string name="web_home_extension_tab_elements">元素</string>
+    <string name="web_home_extension_tab_network">网络</string>
     <string name="web_home_extension_tab_code">代码</string>
     <string name="web_home_extension_inspect_element">选元素</string>
-    <string name="web_home_extension_refresh_console">刷新日志</string>
+    <string name="web_home_extension_refresh_console">刷新面板</string>
     <string name="web_home_extension_save_preview">保存并预览</string>
     <string name="setting_shell_proxy">Proxy</string>
     <string name="setting_shell_proxy_config">Proxy</string>

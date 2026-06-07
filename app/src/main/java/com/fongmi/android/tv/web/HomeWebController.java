@@ -14,6 +14,7 @@ import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.ValueCallback;
@@ -294,6 +295,7 @@ public class HomeWebController {
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
                 SpiderDebug.log("webhome-webview", "page started url=%s", url);
+                listener.onWebRequest("PAGE", url, true);
                 sdkReady = false;
                 injectedExtensions.clear();
                 markDocumentStartInjected();
@@ -313,6 +315,7 @@ public class HomeWebController {
             public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
                 super.onReceivedError(view, request, error);
                 SpiderDebug.log("webhome-webview", "resource error main=%s code=%s desc=%s url=%s", request.isForMainFrame(), error.getErrorCode(), error.getDescription(), request.getUrl());
+                listener.onWebConsole("ERROR " + error.getErrorCode() + " " + error.getDescription() + " " + request.getUrl());
                 if (request.isForMainFrame()) {
                     homePage = null;
                     Notify.show(error.getDescription().toString());
@@ -323,6 +326,12 @@ public class HomeWebController {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
+            }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                listener.onWebRequest(request.getMethod(), request.getUrl().toString(), request.isForMainFrame());
+                return super.shouldInterceptRequest(view, request);
             }
 
             @Override
@@ -344,7 +353,11 @@ public class HomeWebController {
         return new WebChromeClient() {
             @Override
             public boolean onConsoleMessage(ConsoleMessage message) {
-                if (message != null) SpiderDebug.log("webhome-console", "%s %s:%s %s", message.messageLevel(), message.sourceId(), message.lineNumber(), message.message());
+                if (message != null) {
+                    String line = String.format(Locale.ROOT, "%s %s:%s %s", message.messageLevel(), message.sourceId(), message.lineNumber(), message.message());
+                    SpiderDebug.log("webhome-console", line);
+                    listener.onWebConsole(line);
+                }
                 return super.onConsoleMessage(message);
             }
         };
@@ -591,6 +604,12 @@ public class HomeWebController {
         }
 
         default void openSetting() {
+        }
+
+        default void onWebConsole(String line) {
+        }
+
+        default void onWebRequest(String method, String url, boolean mainFrame) {
         }
     }
 }

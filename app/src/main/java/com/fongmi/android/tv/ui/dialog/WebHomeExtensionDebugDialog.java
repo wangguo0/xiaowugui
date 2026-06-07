@@ -25,13 +25,25 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.web.HomeWebController;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionSourceStore;
-import com.github.catvod.crawler.DebugLogStore;
+import com.github.catvod.utils.Json;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements HomeWebController.Listener {
 
     private DialogWebHomeExtensionDebugBinding binding;
     private HomeWebController controller;
+    private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.ROOT);
+    private final List<String> consoleLines = new ArrayList<>();
+    private final List<String> networkLines = new ArrayList<>();
     private Runnable callback;
     private WebHomeExtensionSourceStore.Entry source;
 
@@ -63,7 +75,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.getDecorView().setPadding(0, 0, 0, 0);
         params.width = (int) (screenWidth * (ResUtil.isLand(requireContext()) ? 0.96f : 0.98f));
-        params.height = (int) (screenHeight * 0.96f);
+        params.height = (int) (screenHeight * 0.90f);
         window.setAttributes(params);
         window.setLayout(params.width, params.height);
         ViewGroup.LayoutParams rootParams = binding.root.getLayoutParams();
@@ -78,11 +90,13 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         binding.codeText.setText(source == null ? "GM_log('ready');\n" : WebHomeExtensionSourceStore.code(source));
         setupScrollableText(binding.codeText);
         setupScrollableText(binding.consoleText);
+        setupScrollableText(binding.elementsText);
+        setupScrollableText(binding.networkText);
         binding.tabGroup.check(R.id.tabWeb);
         controller = new HomeWebController(requireActivity(), binding.web, this);
         Site site = VodConfig.get().getHome();
         if (site != null && site.hasHomePage()) controller.load(site, true);
-        refreshConsole();
+        refreshPanel();
     }
 
     @Override
@@ -90,11 +104,11 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         binding.tabGroup.addOnButtonCheckedListener((group, checkedId, checked) -> {
             if (!checked) return;
             showTab(checkedId);
-            if (checkedId == R.id.tabConsole) refreshConsole();
+            refreshPanel();
         });
         binding.reload.setOnClickListener(view -> reload());
         binding.inspect.setOnClickListener(view -> inspectElement());
-        binding.refreshConsole.setOnClickListener(view -> refreshConsole());
+        binding.refreshConsole.setOnClickListener(view -> refreshPanel());
         binding.save.setOnClickListener(view -> saveAndPreview());
         binding.close.setOnClickListener(view -> dismiss());
     }
@@ -122,6 +136,8 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     private void showTab(int tab) {
         binding.web.setVisibility(tab == R.id.tabWeb ? View.VISIBLE : View.GONE);
         binding.consoleLayout.setVisibility(tab == R.id.tabConsole ? View.VISIBLE : View.GONE);
+        binding.elementsLayout.setVisibility(tab == R.id.tabElements ? View.VISIBLE : View.GONE);
+        binding.networkLayout.setVisibility(tab == R.id.tabNetwork ? View.VISIBLE : View.GONE);
         binding.codeLayout.setVisibility(tab == R.id.tabCode ? View.VISIBLE : View.GONE);
     }
 
@@ -206,18 +222,30 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         Notify.show(R.string.web_home_extension_source_saved);
     }
 
+    private void refreshPanel() {
+        if (binding.tabConsole.isChecked()) refreshConsole();
+        else if (binding.tabElements.isChecked()) refreshElements();
+        else if (binding.tabNetwork.isChecked()) refreshNetwork();
+    }
+
     private void refreshConsole() {
         StringBuilder builder = new StringBuilder();
-        builder.append("Runtime report:\n");
-        builder.append(WebHomeExtensionRegistry.get().debugReport()).append('\n');
-        builder.append("Recent WebView / extension logs:\n");
-        for (String line : DebugLogStore.snapshot()) {
-            if (line.contains("webhome") || line.contains("webview-console") || line.contains("webhome-ext")) builder.append(line).append('\n');
-        }
-        if (controller == null) {
-            binding.consoleText.setText(builder.toString());
-            return;
-        }
+        builder.append("Console\n\n");
+        if (consoleLines.isEmpty()) builder.append("No console messages yet.\n");
+        else for (String line : consoleLines) builder.append(line).append('\n');
+        binding.consoleText.setText(builder.toString());
+    }
+
+    private void refreshNetwork() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Network\n\n");
+        if (networkLines.isEmpty()) builder.append("No requests captured yet.\n");
+        else for (String line : networkLines) builder.append(line).append('\n');
+        binding.networkText.setText(builder.toString());
+    }
+
+    private void refreshElements() {
+        if (controller == null) return;
         controller.evaluate("""
                 (function(){
                   const active=document.activeElement;
@@ -233,10 +261,19 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                   };
                   const nodes=Array.prototype.slice.call(document.querySelectorAll('body *'),0,80).map(function(n){
                     const rect=n.getBoundingClientRect();
+                    const depth=(function(el){let d=0;for(let p=el.parentElement;p&&d<20;p=p.parentElement)d++;return d;})(n);
+                    const attrs=[];
+                    for(let i=0;i<n.attributes.length&&i<8;i++){
+                      const a=n.attributes[i];
+                      if(a.name==='class'||a.name==='id')continue;
+                      attrs.push(a.name+'="'+String(a.value).slice(0,80)+'"');
+                    }
                     return {
+                      depth:depth,
                       tag:n.tagName.toLowerCase(),
                       id:n.id||'',
                       className:typeof n.className==='string'?n.className:'',
+                      attrs:attrs.join(' '),
                       text:(n.innerText||n.textContent||'').trim().replace(/\\s+/g,' ').slice(0,120),
                       x:Math.round(rect.left),y:Math.round(rect.top),w:Math.round(rect.width),h:Math.round(rect.height)
                     };
@@ -251,7 +288,105 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                     elements:nodes
                   },null,2);
                 })();
-                """, value -> binding.consoleText.setText(builder.append("\nPage elements snapshot:\n").append(value == null ? "" : value).toString()));
+                """, value -> {
+                    if (binding != null) binding.elementsText.setText(formatElements(value));
+                });
+    }
+
+    private String formatElements(String value) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Elements\n\n");
+        try {
+            JsonObject object = Json.parse(unquote(value)).getAsJsonObject();
+            builder.append("Title: ").append(safe(object, "title")).append('\n');
+            builder.append("URL: ").append(safe(object, "url")).append('\n');
+            builder.append("Ready: ").append(safe(object, "readyState")).append('\n');
+            builder.append("Active: ").append(safe(object, "active")).append("\n\n");
+            if (object.has("selected") && object.get("selected").isJsonObject()) {
+                JsonObject selected = object.getAsJsonObject("selected");
+                builder.append("Selected\n");
+                builder.append(safe(selected, "path")).append('\n');
+                builder.append("box: ").append(safe(selected, "x")).append(',').append(safe(selected, "y")).append(' ')
+                        .append(safe(selected, "w")).append('x').append(safe(selected, "h")).append('\n');
+                builder.append("text: ").append(safe(selected, "text")).append("\n\n");
+                builder.append("html: ").append(safe(selected, "html")).append("\n\n");
+            }
+            builder.append("DOM\n");
+            JsonArray elements = object.getAsJsonArray("elements");
+            if (elements != null) for (JsonElement element : elements) appendElement(builder, element.getAsJsonObject());
+            return builder.toString();
+        } catch (Throwable e) {
+            return builder.append(unquote(value)).toString();
+        }
+    }
+
+    private void appendElement(StringBuilder builder, JsonObject object) {
+        int depth = parseInt(safe(object, "depth"));
+        for (int i = 0; i < Math.max(0, depth - 1); i++) builder.append("  ");
+        builder.append('<').append(safe(object, "tag"));
+        if (!TextUtils.isEmpty(safe(object, "id"))) builder.append(" id=\"").append(safe(object, "id")).append('"');
+        if (!TextUtils.isEmpty(safe(object, "className"))) builder.append(" class=\"").append(safe(object, "className")).append('"');
+        if (!TextUtils.isEmpty(safe(object, "attrs"))) builder.append(' ').append(safe(object, "attrs"));
+        builder.append('>');
+        if (!TextUtils.isEmpty(safe(object, "text"))) builder.append("  ").append(safe(object, "text"));
+        builder.append("  [").append(safe(object, "x")).append(',').append(safe(object, "y")).append(' ')
+                .append(safe(object, "w")).append('x').append(safe(object, "h")).append("]\n");
+    }
+
+    private String safe(JsonObject object, String key) {
+        try {
+            JsonElement element = object.get(key);
+            return element == null || element.isJsonNull() ? "" : element.getAsString();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private int parseInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (Throwable e) {
+            return 0;
+        }
+    }
+
+    private String unquote(String value) {
+        if (TextUtils.isEmpty(value)) return "";
+        try {
+            JsonElement element = Json.parse(value);
+            return element.isJsonPrimitive() ? element.getAsString() : value;
+        } catch (Throwable e) {
+            return value;
+        }
+    }
+
+    private void appendConsole(String line) {
+        runOnUi(() -> {
+            consoleLines.add(now() + " " + line);
+            trim(consoleLines);
+            if (binding != null && binding.tabConsole.isChecked()) refreshConsole();
+        });
+    }
+
+    private void appendNetwork(String line) {
+        runOnUi(() -> {
+            networkLines.add(now() + " " + line);
+            trim(networkLines);
+            if (binding != null && binding.tabNetwork.isChecked()) refreshNetwork();
+        });
+    }
+
+    private void runOnUi(Runnable action) {
+        if (binding == null) return;
+        binding.root.post(action);
+    }
+
+    private void trim(List<String> lines) {
+        while (lines.size() > 300) lines.remove(0);
+    }
+
+    private String now() {
+        return timeFormat.format(new Date());
     }
 
     private WebHomeExtensionSourceStore.Entry firstCodeSource() {
@@ -286,15 +421,28 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
     @Override
     public void onWebLoading() {
+        appendConsole("PAGE loading");
     }
 
     @Override
     public void onWebReady() {
-        refreshConsole();
+        appendConsole("PAGE ready");
+        refreshPanel();
     }
 
     @Override
     public void onWebError() {
-        refreshConsole();
+        appendConsole("PAGE error");
+        refreshPanel();
+    }
+
+    @Override
+    public void onWebConsole(String line) {
+        appendConsole(line);
+    }
+
+    @Override
+    public void onWebRequest(String method, String url, boolean mainFrame) {
+        appendNetwork((mainFrame ? "* " : "  ") + method + " " + url);
     }
 }

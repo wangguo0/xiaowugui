@@ -71,6 +71,28 @@
             app:strokeColor="@color/dialog_outlined_button_stroke" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/tabElements"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/web_home_extension_tab_elements"
+            android:textColor="@color/dialog_toggle_button_text"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/tabNetwork"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/web_home_extension_tab_network"
+            android:textColor="@color/dialog_toggle_button_text"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/tabCode"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="0dp"
@@ -118,6 +140,50 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/elementsLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            app:boxBackgroundColor="@color/white"
+            app:boxStrokeColor="@color/dialog_outlined_button_stroke"
+            app:hintEnabled="false">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/elementsText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fontFamily="monospace"
+                android:gravity="start|top"
+                android:inputType="textMultiLine|textNoSuggestions"
+                android:scrollHorizontally="true"
+                android:singleLine="false"
+                android:textColor="@color/black" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/networkLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            app:boxBackgroundColor="@color/white"
+            app:boxStrokeColor="@color/dialog_outlined_button_stroke"
+            app:hintEnabled="false">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/networkText"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fontFamily="monospace"
+                android:gravity="start|top"
+                android:inputType="textMultiLine|textNoSuggestions"
+                android:scrollHorizontally="true"
+                android:singleLine="false"
+                android:textColor="@color/black" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/codeLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
@@ -144,9 +210,10 @@
     </FrameLayout>
 
     <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/actions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 

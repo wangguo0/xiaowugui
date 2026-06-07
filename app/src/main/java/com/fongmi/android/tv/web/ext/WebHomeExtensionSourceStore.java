@@ -99,6 +99,22 @@ public class WebHomeExtensionSourceStore {
     public static synchronized void saveCode(String id, String name, String code, boolean enabled, String siteKey) {
         String value = code == null ? "" : code.trim();
         if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
+        saveCodeObject(id, name, "", WebHomeExtension.RUN_AT_END, "", value, enabled, siteKey);
+    }
+
+    public static synchronized void saveCodeMeta(String id, String name, String extensionId, String runAt, String match, boolean enabled, String siteKey) {
+        Entry source = null;
+        for (Entry item : read()) {
+            if (!TextUtils.equals(item.getId(), id)) continue;
+            source = item;
+            break;
+        }
+        String value = code(source);
+        if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
+        saveCodeObject(id, name, extensionId, runAt, match, value, enabled, siteKey);
+    }
+
+    private static void saveCodeObject(String id, String name, String extensionId, String runAt, String match, String code, boolean enabled, String siteKey) {
         List<Entry> items = read();
         Entry target = null;
         for (Entry item : items) {
@@ -108,14 +124,15 @@ public class WebHomeExtensionSourceStore {
         }
         if (target == null) {
             target = new Entry();
-            target.id = "user_" + Util.md5(value + ":" + System.currentTimeMillis());
+            target.id = "user_" + Util.md5(code + ":" + System.currentTimeMillis());
             items.add(target);
         }
         JsonObject object = new JsonObject();
-        object.addProperty("id", target.id);
+        object.addProperty("id", TextUtils.isEmpty(extensionId) ? target.id : extensionId.trim());
         object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
-        object.addProperty("runAt", WebHomeExtension.RUN_AT_END);
-        object.addProperty("code", value);
+        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
+        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
+        object.addProperty("code", code);
         target.raw = object.toString();
         target.name = title(target.raw);
         target.siteKey = normalizeSiteKey(siteKey, target.siteKey);
