@@ -1,0 +1,13 @@
+{
+  "extensions": [
+    {
+      "id": "pomo-native-router",
+      "name": "Pomo native router",
+      "version": "1.0.0",
+      "runAt": "document-end",
+      "js": [
+        "./pomo.mom.js"
+      ]
+    }
+  ]
+}
