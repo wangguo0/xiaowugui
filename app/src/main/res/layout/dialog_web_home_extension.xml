@@ -92,7 +92,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/setting_proxy_ui_mode"
+            android:text="@string/web_home_extension_form_mode"
             android:textColor="@color/dialog_toggle_button_text"
             app:backgroundTint="@color/dialog_toggle_button_bg"
             app:strokeColor="@color/dialog_outlined_button_stroke" />
@@ -103,7 +103,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/setting_proxy_text_mode"
+            android:text="@string/web_home_extension_text_mode"
             android:textColor="@color/dialog_toggle_button_text"
             app:backgroundTint="@color/dialog_toggle_button_bg"
             app:strokeColor="@color/dialog_outlined_button_stroke" />
@@ -190,21 +190,6 @@
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
             android:text="@string/web_home_extension_refresh"
-            android:textColor="@color/dialog_tonal_button_text"
-            app:backgroundTint="@color/dialog_tonal_button_bg" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/report"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:minHeight="40dp"
-            android:minWidth="0dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_report"
             android:textColor="@color/dialog_tonal_button_text"
             app:backgroundTint="@color/dialog_tonal_button_bg" />
 

@@ -54,6 +54,16 @@ public class HomeWebBridge {
     }
 
     @JavascriptInterface
+    public void console(String level, String message) {
+        controller.dispatchDebugConsole(level, message);
+    }
+
+    @JavascriptInterface
+    public void network(String type, String method, String url, int status, long durationMs, String detail) {
+        controller.dispatchDebugNetwork(type, method, url, status, durationMs, detail);
+    }
+
+    @JavascriptInterface
     public String resourceUrl(String url, String options) {
         JsonObject object = WebCall.object(options);
         StringBuilder builder = new StringBuilder(Server.get().getAddress("/webResource?url=")).append(encode(url));

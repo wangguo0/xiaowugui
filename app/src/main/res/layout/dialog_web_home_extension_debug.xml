@@ -40,70 +40,99 @@
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 
-    <com.google.android.material.button.MaterialButtonToggleGroup
-        android:id="@+id/tabGroup"
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        app:selectionRequired="true"
-        app:singleSelection="true">
+        android:fillViewport="false"
+        android:horizontalScrollBarEnabled="true"
+        android:overScrollMode="never">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabWeb"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/tabGroup"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/web_home_extension_tab_web"
-            android:textColor="@color/dialog_toggle_button_text"
-            app:backgroundTint="@color/dialog_toggle_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            app:selectionRequired="true"
+            app:singleSelection="true">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabConsole"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/web_home_extension_tab_console"
-            android:textColor="@color/dialog_toggle_button_text"
-            app:backgroundTint="@color/dialog_toggle_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabWeb"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minHeight="40dp"
+                android:minWidth="84dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_tab_web"
+                android:textColor="@color/dialog_toggle_button_text"
+                app:backgroundTint="@color/dialog_toggle_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabElements"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/web_home_extension_tab_elements"
-            android:textColor="@color/dialog_toggle_button_text"
-            app:backgroundTint="@color/dialog_toggle_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabConsole"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minHeight="40dp"
+                android:minWidth="84dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_tab_console"
+                android:textColor="@color/dialog_toggle_button_text"
+                app:backgroundTint="@color/dialog_toggle_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabNetwork"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/web_home_extension_tab_network"
-            android:textColor="@color/dialog_toggle_button_text"
-            app:backgroundTint="@color/dialog_toggle_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabElements"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minHeight="40dp"
+                android:minWidth="84dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_tab_elements"
+                android:textColor="@color/dialog_toggle_button_text"
+                app:backgroundTint="@color/dialog_toggle_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabCode"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/web_home_extension_tab_code"
-            android:textColor="@color/dialog_toggle_button_text"
-            app:backgroundTint="@color/dialog_toggle_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabNetwork"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minHeight="40dp"
+                android:minWidth="84dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_tab_network"
+                android:textColor="@color/dialog_toggle_button_text"
+                app:backgroundTint="@color/dialog_toggle_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
 
-    </com.google.android.material.button.MaterialButtonToggleGroup>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tabCode"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minHeight="40dp"
+                android:minWidth="84dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_tab_code"
+                android:textColor="@color/dialog_toggle_button_text"
+                app:backgroundTint="@color/dialog_toggle_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    </HorizontalScrollView>
 
     <FrameLayout
         android:id="@+id/pages"
@@ -209,70 +238,79 @@
 
     </FrameLayout>
 
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/actions"
+    <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:fillViewport="false"
+        android:horizontalScrollBarEnabled="true"
+        android:overScrollMode="never">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/inspect"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_inspect_element"
-            android:textColor="@color/dialog_tonal_button_text"
-            app:backgroundTint="@color/dialog_tonal_button_bg" />
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/refreshConsole"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_refresh_console"
-            android:textColor="@color/dialog_tonal_button_text"
-            app:backgroundTint="@color/dialog_tonal_button_bg" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/inspect"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="92dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_inspect_element"
+                android:textColor="@color/dialog_tonal_button_text"
+                app:backgroundTint="@color/dialog_tonal_button_bg" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/save"
-            style="@style/Widget.Material3.Button"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_save_preview"
-            android:textColor="@color/dialog_primary_button_text"
-            app:backgroundTint="@color/dialog_primary_button_bg" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/refreshConsole"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="92dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_refresh_console"
+                android:textColor="@color/dialog_tonal_button_text"
+                app:backgroundTint="@color/dialog_tonal_button_bg" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/close"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:layout_weight="1"
-            android:minWidth="0dp"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"
-            android:text="@string/dialog_negative"
-            android:textColor="@color/dialog_outlined_button_text"
-            app:backgroundTint="@color/dialog_outlined_button_bg"
-            app:strokeColor="@color/dialog_outlined_button_stroke" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/save"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="108dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/web_home_extension_save_preview"
+                android:textColor="@color/dialog_primary_button_text"
+                app:backgroundTint="@color/dialog_primary_button_bg" />
 
-    </androidx.appcompat.widget.LinearLayoutCompat>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/close"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="92dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:text="@string/dialog_negative"
+                android:textColor="@color/dialog_outlined_button_text"
+                app:backgroundTint="@color/dialog_outlined_button_bg"
+                app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+    </HorizontalScrollView>
 
 </androidx.appcompat.widget.LinearLayoutCompat>

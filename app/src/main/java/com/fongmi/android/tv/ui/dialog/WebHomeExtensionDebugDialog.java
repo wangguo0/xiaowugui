@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements HomeWebController.Listener {
 
@@ -93,7 +94,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         setupScrollableText(binding.elementsText);
         setupScrollableText(binding.networkText);
         binding.tabGroup.check(R.id.tabWeb);
-        controller = new HomeWebController(requireActivity(), binding.web, this);
+        controller = new HomeWebController(requireActivity(), binding.web, this, true);
         Site site = VodConfig.get().getHome();
         if (site != null && site.hasHomePage()) controller.load(site, true);
         refreshPanel();
@@ -149,6 +150,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
     private void inspectElement() {
         binding.tabGroup.check(R.id.tabWeb);
         if (controller == null) return;
+        appendConsole("INSPECT click an element in the Web tab");
         controller.evaluate("""
                 (function(){
                   if(window.__fmInspectCleanup)window.__fmInspectCleanup();
@@ -205,7 +207,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
                   document.addEventListener('click',click,true);
                   return 'installed';
                 })();
-                """, value -> Notify.show(R.string.web_home_extension_inspect_element));
+                """, value -> Notify.show(R.string.web_home_extension_inspect_hint));
     }
 
     private void saveAndPreview() {
@@ -217,6 +219,7 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         String id = source == null ? "" : source.getId();
         WebHomeExtensionSourceStore.saveCode(id, source == null ? getString(R.string.web_home_extension_local_code_default, WebHomeExtensionSourceStore.list().size() + 1) : source.getName(), code, source == null || source.isEnabled(), VodConfig.get().getHome().getKey());
         source = firstCodeSource();
+        consoleLines.clear();
         WebHomeExtensionRegistry.get().clear();
         if (controller != null) controller.reloadExtensions();
         Notify.show(R.string.web_home_extension_source_saved);
@@ -230,15 +233,17 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
     private void refreshConsole() {
         StringBuilder builder = new StringBuilder();
-        builder.append("Console\n\n");
-        if (consoleLines.isEmpty()) builder.append("No console messages yet.\n");
+        builder.append("Console\n");
+        builder.append("time          level/source message\n\n");
+        if (consoleLines.isEmpty()) builder.append("No console messages yet. Save code and preview, then use console.log(...) or GM_log(...).\n");
         else for (String line : consoleLines) builder.append(line).append('\n');
         binding.consoleText.setText(builder.toString());
     }
 
     private void refreshNetwork() {
         StringBuilder builder = new StringBuilder();
-        builder.append("Network\n\n");
+        builder.append("Network\n");
+        builder.append("time          type         method status cost  detail url\n\n");
         if (networkLines.isEmpty()) builder.append("No requests captured yet.\n");
         else for (String line : networkLines) builder.append(line).append('\n');
         binding.networkText.setText(builder.toString());
@@ -364,7 +369,12 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
         runOnUi(() -> {
             consoleLines.add(now() + " " + line);
             trim(consoleLines);
-            if (binding != null && binding.tabConsole.isChecked()) refreshConsole();
+            if (line.contains("[fm-inspect]")) {
+                binding.tabGroup.check(R.id.tabElements);
+                refreshElements();
+            } else if (binding != null && binding.tabConsole.isChecked()) {
+                refreshConsole();
+            }
         });
     }
 
@@ -443,6 +453,42 @@ public class WebHomeExtensionDebugDialog extends BaseAlertDialog implements Home
 
     @Override
     public void onWebRequest(String method, String url, boolean mainFrame) {
-        appendNetwork((mainFrame ? "* " : "  ") + method + " " + url);
+        appendNetwork(formatNetwork("WEBVIEW", method, url, 0, 0, mainFrame ? "main" : "sub"));
+    }
+
+    @Override
+    public void onWebRequest(String method, String url, boolean mainFrame, Map<String, String> headers) {
+        appendNetwork(formatNetwork("WEBVIEW", method, url, 0, 0, mainFrame ? "main" : "sub") + headerText(headers));
+    }
+
+    @Override
+    public void onWebNetwork(String type, String method, String url, int status, long durationMs, String detail) {
+        appendNetwork(formatNetwork(type, method, url, status, durationMs, detail));
+    }
+
+    private String formatNetwork(String type, String method, String url, int status, long durationMs, String detail) {
+        return String.format(Locale.ROOT, "%-11s %-6s %-6s %-5s %-6s %s",
+                empty(type),
+                empty(method),
+                status <= 0 ? "-" : String.valueOf(status),
+                durationMs <= 0 ? "-" : durationMs + "ms",
+                TextUtils.isEmpty(detail) ? "-" : detail,
+                url == null ? "" : url);
+    }
+
+    private String headerText(Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) return "";
+        StringBuilder builder = new StringBuilder("  headers=");
+        int count = 0;
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            if (count++ > 0) builder.append("; ");
+            builder.append(entry.getKey()).append(':').append(entry.getValue());
+            if (count >= 4) break;
+        }
+        return builder.toString();
+    }
+
+    private String empty(String value) {
+        return TextUtils.isEmpty(value) ? "-" : value;
     }
 }

@@ -1,9 +1,6 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -42,10 +39,12 @@ import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.web.HomeWebController;
+import com.fongmi.android.tv.web.ext.WebHomeExtension;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionSourceStore;
 import com.github.catvod.utils.Path;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.button.MaterialButtonToggleGroup;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -139,7 +138,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             if (checkedId == R.id.uiMode && !showTextMode(false)) binding.modeGroup.check(R.id.textMode);
         });
         binding.refresh.setOnClickListener(view -> refresh(true));
-        binding.report.setOnClickListener(view -> showReport());
         binding.clear.setOnClickListener(view -> clearCache());
         binding.negative.setOnClickListener(view -> dismiss());
         binding.positive.setOnClickListener(view -> onPositive());
@@ -204,25 +202,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             if (notify) Notify.show(R.string.web_home_extension_source_invalid);
             return false;
         }
-    }
-
-    private void showReport() {
-        String report = WebHomeExtensionRegistry.get().debugReport();
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.web_home_extension_report_title)
-                .setMessage(report)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.web_home_extension_copy_report, null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> copyReport(report)));
-        dialog.show();
-    }
-
-    private void copyReport(String report) {
-        ClipboardManager manager = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        if (manager == null) return;
-        manager.setPrimaryClip(ClipData.newPlainText(getString(R.string.web_home_extension_report_title), report));
-        Notify.show(R.string.web_home_extension_report_copied);
     }
 
     private void onPositive() {
@@ -306,7 +285,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             if (!TextUtils.isEmpty(item.reason)) addDetail(root, item.reason);
             if (!TextUtils.isEmpty(item.lastLog)) addDetail(root, getString(R.string.web_home_extension_last_log, item.lastLog));
         }
-        if (source != null) addForm(root, source);
+        if (source != null) addSourceForm(root, source);
 
         LinearLayoutCompat actions = new LinearLayoutCompat(requireContext());
         actions.setGravity(Gravity.CENTER_VERTICAL);
@@ -327,62 +306,88 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         });
         actions.addView(toggle, actionLayout(0));
 
-        MaterialButton code = sourceActionButton(R.string.web_home_extension_add_code, true, false);
-        code.setVisibility(source == null ? View.GONE : View.VISIBLE);
-        code.setOnClickListener(view -> editCodeSource(source));
-        actions.addView(code, actionLayout(8));
-
         if (source != null) {
-            LinearLayoutCompat sourceActions = new LinearLayoutCompat(requireContext());
-            sourceActions.setGravity(Gravity.CENTER_VERTICAL);
-            sourceActions.setOrientation(LinearLayoutCompat.HORIZONTAL);
-            LinearLayoutCompat.LayoutParams sourceActionParams = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            sourceActionParams.topMargin = dp(7);
-            root.addView(sourceActions, sourceActionParams);
-
-            MaterialButton file = sourceActionButton(R.string.web_home_extension_add_file, false, false);
-            file.setOnClickListener(view -> chooseFile(source));
-            sourceActions.addView(file, actionLayout(0));
-
-            MaterialButton link = sourceActionButton(R.string.web_home_extension_add_link, false, false);
-            link.setOnClickListener(view -> editRawSource(source));
-            sourceActions.addView(link, actionLayout(8));
-
-            MaterialButton form = sourceActionButton(R.string.web_home_extension_add_form, false, false);
-            form.setOnClickListener(view -> editFormSource(source));
-            sourceActions.addView(form, actionLayout(8));
-
             MaterialButton delete = sourceActionButton(R.string.setting_delete, false, true);
             delete.setOnClickListener(view -> deleteSource(source));
-            sourceActions.addView(delete, actionLayout(8));
+            actions.addView(delete, actionLayout(8));
         }
         return root;
     }
 
-    private void addForm(LinearLayoutCompat root, WebHomeExtensionSourceStore.Entry source) {
+    private void addSourceForm(LinearLayoutCompat root, WebHomeExtensionSourceStore.Entry source) {
         FormFields fields = formFields(source);
         TextInputEditText name = createInput(false);
-        TextInputEditText extensionId = createInput(false);
-        TextInputEditText runAt = createInput(false);
-        TextInputEditText jsUrl = createInput(false);
+        TextInputEditText link = createInput(false);
         TextInputEditText match = createInput(false);
+        TextInputEditText code = createInput(true);
         name.setText(fields.name);
-        extensionId.setText(fields.extensionId);
-        runAt.setText(fields.runAt);
-        jsUrl.setText(fields.jsUrl);
+        link.setText(fields.link);
         match.setText(fields.match);
+        code.setMinLines(6);
+        code.setMaxLines(12);
+        code.setText(fields.code);
+        setupScrollableText(code);
         LinearLayoutCompat form = new LinearLayoutCompat(requireContext());
         form.setOrientation(LinearLayoutCompat.VERTICAL);
         LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         params.topMargin = dp(8);
         root.addView(form, params);
+
+        form.addView(text(getString(R.string.web_home_extension_source_type), 12, Color.parseColor("#5F6368"), false));
+        MaterialButtonToggleGroup sourceGroup = toggleGroup();
+        int fileId = View.generateViewId();
+        int linkId = View.generateViewId();
+        int codeId = View.generateViewId();
+        sourceGroup.addView(toggleButton(fileId, R.string.web_home_extension_add_file));
+        sourceGroup.addView(toggleButton(linkId, R.string.web_home_extension_add_link));
+        sourceGroup.addView(toggleButton(codeId, R.string.web_home_extension_add_code));
+        sourceGroup.check(switch (fields.sourceType) {
+            case WebHomeExtensionSourceStore.SOURCE_TYPE_FILE -> fileId;
+            case WebHomeExtensionSourceStore.SOURCE_TYPE_LINK -> linkId;
+            default -> codeId;
+        });
+        form.addView(sourceGroup, topMargin(4));
+
+        TextInputLayout linkLayout = inputLayout(R.string.web_home_extension_link_hint, link);
+        TextInputLayout codeLayout = inputLayout(R.string.web_home_extension_code_hint, code);
+        MaterialButton chooseFile = sourceActionButton(R.string.web_home_extension_choose_file, true, false);
+        chooseFile.setOnClickListener(view -> chooseFile(source));
+        form.addView(chooseFile, topMargin(8));
+        form.addView(linkLayout, topMargin(8));
+        form.addView(codeLayout, topMargin(8));
+
         form.addView(inputLayout(R.string.web_home_extension_name_hint, name));
-        form.addView(inputLayout(R.string.web_home_extension_id_hint, extensionId), topMargin(8));
-        form.addView(inputLayout(R.string.web_home_extension_run_at_hint, runAt), topMargin(8));
-        form.addView(inputLayout(R.string.web_home_extension_js_hint, jsUrl), topMargin(8));
         form.addView(inputLayout(R.string.web_home_extension_match_hint, match), topMargin(8));
+        form.addView(text(getString(R.string.web_home_extension_run_at_hint), 12, Color.parseColor("#5F6368"), false), topMargin(8));
+        MaterialButtonToggleGroup runAtGroup = toggleGroup();
+        int startId = View.generateViewId();
+        int endId = View.generateViewId();
+        int idleId = View.generateViewId();
+        runAtGroup.addView(toggleButton(startId, WebHomeExtension.RUN_AT_START));
+        runAtGroup.addView(toggleButton(endId, WebHomeExtension.RUN_AT_END));
+        runAtGroup.addView(toggleButton(idleId, WebHomeExtension.RUN_AT_IDLE));
+        runAtGroup.check(switch (fields.runAt) {
+            case WebHomeExtension.RUN_AT_START -> startId;
+            case WebHomeExtension.RUN_AT_IDLE -> idleId;
+            default -> endId;
+        });
+        form.addView(runAtGroup, topMargin(4));
+
+        Runnable update = () -> {
+            int checked = sourceGroup.getCheckedButtonId();
+            boolean file = checked == fileId;
+            boolean linkSource = checked == linkId;
+            chooseFile.setVisibility(file ? View.VISIBLE : View.GONE);
+            linkLayout.setVisibility(linkSource ? View.VISIBLE : View.GONE);
+            codeLayout.setVisibility(checked == codeId ? View.VISIBLE : View.GONE);
+        };
+        sourceGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (isChecked) update.run();
+        });
+        update.run();
+
         MaterialButton save = sourceActionButton(R.string.dialog_positive, true, false);
-        save.setOnClickListener(view -> saveFormFields(source, name, extensionId, runAt, jsUrl, match));
+        save.setOnClickListener(view -> saveFormFields(source, sourceType(sourceGroup, fileId, linkId), name, runAt(runAtGroup, startId, idleId), link, code, match));
         form.addView(save, topMargin(8));
     }
 
@@ -392,17 +397,63 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         return params;
     }
 
-    private void saveFormFields(WebHomeExtensionSourceStore.Entry source, TextInputEditText name, TextInputEditText extensionId, TextInputEditText runAt, TextInputEditText jsUrl, TextInputEditText match) {
+    private void saveFormFields(WebHomeExtensionSourceStore.Entry source, String sourceType, TextInputEditText name, String runAt, TextInputEditText link, TextInputEditText code, TextInputEditText match) {
         try {
-            if (WebHomeExtensionSourceStore.isCodeSource(source)) {
-                WebHomeExtensionSourceStore.saveCodeMeta(source.getId(), inputText(name), inputText(extensionId), inputText(runAt), inputText(match), source.isEnabled(), currentSiteKey(source));
-            } else {
-                WebHomeExtensionSourceStore.saveForm(source.getId(), inputText(name), inputText(extensionId), inputText(runAt), inputText(jsUrl), inputText(match), source.isEnabled(), currentSiteKey(source));
-            }
+            if (WebHomeExtensionSourceStore.SOURCE_TYPE_LINK.equals(sourceType)) WebHomeExtensionSourceStore.saveLink(source.getId(), inputText(name), runAt, inputText(link), inputText(match), source.isEnabled(), currentSiteKey(source));
+            else WebHomeExtensionSourceStore.saveCodeMeta(source.getId(), inputText(name), runAt, inputText(match), inputText(code), source.isEnabled(), currentSiteKey(source), sourceType);
             onSourceSaved();
         } catch (Throwable e) {
             Notify.show(errorText(e));
         }
+    }
+
+    private MaterialButtonToggleGroup toggleGroup() {
+        MaterialButtonToggleGroup group = new MaterialButtonToggleGroup(requireContext());
+        group.setSingleSelection(true);
+        group.setSelectionRequired(true);
+        return group;
+    }
+
+    private MaterialButton toggleButton(int id, int text) {
+        MaterialButton button = toggleButton(id);
+        button.setText(text);
+        return button;
+    }
+
+    private MaterialButton toggleButton(int id, String text) {
+        MaterialButton button = toggleButton(id);
+        button.setText(text);
+        return button;
+    }
+
+    private MaterialButton toggleButton(int id) {
+        MaterialButton button = new MaterialButton(requireContext());
+        button.setId(id);
+        button.setMinWidth(0);
+        button.setMinHeight(dp(38));
+        button.setMinimumHeight(dp(38));
+        button.setPadding(dp(6), 0, dp(6), 0);
+        button.setTextColor(ContextCompat.getColorStateList(requireContext(), R.color.dialog_toggle_button_text));
+        button.setBackgroundTintList(ContextCompat.getColorStateList(requireContext(), R.color.dialog_toggle_button_bg));
+        button.setStrokeColor(ContextCompat.getColorStateList(requireContext(), R.color.dialog_outlined_button_stroke));
+        button.setStrokeWidth(dp(1));
+        MaterialButtonToggleGroup.LayoutParams params = new MaterialButtonToggleGroup.LayoutParams(0, dp(38), 1);
+        button.setLayoutParams(params);
+        return button;
+    }
+
+    private String sourceType(MaterialButtonToggleGroup group, int fileId, int linkId) {
+        int checked = group.getCheckedButtonId();
+        if (checked == fileId) return WebHomeExtensionSourceStore.SOURCE_TYPE_FILE;
+        if (checked == linkId) return WebHomeExtensionSourceStore.SOURCE_TYPE_LINK;
+        return WebHomeExtensionSourceStore.SOURCE_TYPE_CODE;
+    }
+
+    private String runAt(MaterialButtonToggleGroup group, int startId, int idleId) {
+        int checked = group.getCheckedButtonId();
+        if (checked == startId) return WebHomeExtension.RUN_AT_START;
+        if (checked == idleId) return WebHomeExtension.RUN_AT_IDLE;
+        return WebHomeExtension.RUN_AT_END;
     }
 
     private LinearLayoutCompat.LayoutParams actionLayout(int marginStart) {
@@ -437,7 +488,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
 
     private void chooseFile(WebHomeExtensionSourceStore.Entry source) {
         pendingFileEdit = source;
-        FileChooser.from(fileLauncher).show("text/*", new String[]{"text/*", "application/javascript", "application/json", "application/octet-stream"});
+        FileChooser.from(fileLauncher).show("text/*", new String[]{"text/*", "application/javascript", "application/octet-stream"});
     }
 
     private final ActivityResultLauncher<Intent> fileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -458,20 +509,10 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         }
         WebHomeExtensionSourceStore.Entry source = pendingFileEdit;
         String name = path.substring(path.lastIndexOf('/') + 1);
-        if (isJsonFile(name, code)) {
-            WebHomeExtensionSourceStore.save(source == null ? "" : source.getId(), code, source == null || source.isEnabled(), currentSiteKey(source));
-        } else {
-            WebHomeExtensionSourceStore.saveCode(source == null ? "" : source.getId(), name, fileCode(name, code), source == null || source.isEnabled(), currentSiteKey(source));
-        }
+        WebHomeExtensionSourceStore.saveFile(source == null ? "" : source.getId(), name, fileCode(name, code), source == null || source.isEnabled(), currentSiteKey(source));
         pendingFileEdit = null;
         onSourceSaved();
     });
-
-    private boolean isJsonFile(String name, String code) {
-        String lower = name == null ? "" : name.toLowerCase();
-        String value = code == null ? "" : code.trim();
-        return lower.endsWith(".json") || value.startsWith("{") || value.startsWith("[");
-    }
 
     private String fileCode(String name, String code) {
         String lower = name == null ? "" : name.toLowerCase();
@@ -479,122 +520,31 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         return code;
     }
 
-    private void editRawSource(WebHomeExtensionSourceStore.Entry source) {
-        TextInputEditText input = createInput(true);
-        input.setMinLines(3);
-        input.setMaxLines(8);
-        if (source != null) input.setText(source.getRaw());
-        setupScrollableText(input);
-        TextInputLayout layout = inputLayout(R.string.web_home_extension_source_hint, input);
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(source == null ? R.string.web_home_extension_add_external : R.string.web_home_extension_edit_source)
-                .setView(inputPanel(layout))
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            try {
-                WebHomeExtensionSourceStore.save(source == null ? "" : source.getId(), inputText(input), source == null || source.isEnabled(), currentSiteKey(source));
-                dialog.dismiss();
-                onSourceSaved();
-            } catch (Throwable e) {
-                layout.setError(errorText(e));
-            }
-        }));
-        dialog.show();
-    }
-
-    private void editCodeSource(WebHomeExtensionSourceStore.Entry source) {
-        TextInputEditText name = createInput(false);
-        TextInputEditText code = createInput(true);
-        name.setText(source == null ? getString(R.string.web_home_extension_local_code_default, WebHomeExtensionSourceStore.list().size() + 1) : source.getName());
-        code.setMinLines(10);
-        code.setMaxLines(18);
-        code.setText(source == null ? "GM_log('ready');\n" : WebHomeExtensionSourceStore.code(source));
-        setupScrollableText(code);
-        TextInputLayout nameLayout = inputLayout(R.string.web_home_extension_name_hint, name);
-        TextInputLayout codeLayout = inputLayout(R.string.web_home_extension_code_hint, code);
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(source == null ? R.string.web_home_extension_add_code : R.string.web_home_extension_edit_code)
-                .setView(inputPanel(nameLayout, codeLayout))
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            try {
-                WebHomeExtensionSourceStore.saveCode(source == null ? "" : source.getId(), inputText(name), inputText(code), source == null || source.isEnabled(), currentSiteKey(source));
-                dialog.dismiss();
-                onSourceSaved();
-            } catch (Throwable e) {
-                codeLayout.setError(errorText(e));
-            }
-        }));
-        dialog.show();
-    }
-
-    private void editFormSource(WebHomeExtensionSourceStore.Entry source) {
-        TextInputEditText name = createInput(false);
-        TextInputEditText extensionId = createInput(false);
-        TextInputEditText runAt = createInput(false);
-        TextInputEditText jsUrl = createInput(false);
-        TextInputEditText match = createInput(false);
-        fillForm(source, name, extensionId, runAt, jsUrl, match);
-        TextInputLayout jsLayout = inputLayout(R.string.web_home_extension_js_hint, jsUrl);
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(source == null ? R.string.web_home_extension_add_form : R.string.web_home_extension_edit_form)
-                .setView(inputPanel(
-                        inputLayout(R.string.web_home_extension_name_hint, name),
-                        inputLayout(R.string.web_home_extension_id_hint, extensionId),
-                        inputLayout(R.string.web_home_extension_run_at_hint, runAt),
-                        jsLayout,
-                        inputLayout(R.string.web_home_extension_match_hint, match)
-                ))
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, null)
-                .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            try {
-                WebHomeExtensionSourceStore.saveForm(source == null ? "" : source.getId(), inputText(name), inputText(extensionId), inputText(runAt), inputText(jsUrl), inputText(match), source == null || source.isEnabled(), currentSiteKey(source));
-                dialog.dismiss();
-                onSourceSaved();
-            } catch (Throwable e) {
-                jsLayout.setError(errorText(e));
-            }
-        }));
-        dialog.show();
-    }
-
-    private void fillForm(WebHomeExtensionSourceStore.Entry source, TextInputEditText name, TextInputEditText extensionId, TextInputEditText runAt, TextInputEditText jsUrl, TextInputEditText match) {
-        FormFields fields = formFields(source);
-        name.setText(fields.name);
-        extensionId.setText(fields.extensionId);
-        runAt.setText(fields.runAt);
-        jsUrl.setText(fields.jsUrl);
-        match.setText(fields.match);
-    }
-
     private FormFields formFields(WebHomeExtensionSourceStore.Entry source) {
         FormFields fields = new FormFields();
-        fields.runAt = "document-end";
+        fields.sourceType = WebHomeExtensionSourceStore.SOURCE_TYPE_CODE;
+        fields.runAt = WebHomeExtension.RUN_AT_END;
         fields.match = VodConfig.get().getHome().getKey();
         if (source == null) return fields;
         fields.name = source.getName();
+        fields.sourceType = WebHomeExtensionSourceStore.sourceType(source);
+        fields.code = WebHomeExtensionSourceStore.code(source);
+        fields.link = WebHomeExtensionSourceStore.link(source);
         try {
             JsonElement element = WebHomeExtensionSourceStore.parse(source.getRaw());
             if (!element.isJsonObject()) {
-                fields.jsUrl = source.getRaw();
+                fields.sourceType = WebHomeExtensionSourceStore.SOURCE_TYPE_LINK;
+                fields.link = source.getRaw();
                 return fields;
             }
             JsonObject object = element.getAsJsonObject();
             fields.name = firstNonEmpty(safeString(object, "name"), source.getName());
-            fields.extensionId = safeString(object, "id");
             String value = safeString(object, "runAt");
             if (!TextUtils.isEmpty(value)) fields.runAt = value;
-            if (object.has("js") && object.get("js").isJsonArray() && object.getAsJsonArray("js").size() > 0) fields.jsUrl = object.getAsJsonArray("js").get(0).getAsString();
-            else fields.jsUrl = first(object, "manifestUrl", "manifest", "sourceUrl", "url");
             if (object.has("cspKeyRegex") && object.get("cspKeyRegex").isJsonArray() && object.getAsJsonArray("cspKeyRegex").size() > 0) fields.match = object.getAsJsonArray("cspKeyRegex").get(0).getAsString();
         } catch (Throwable e) {
-            fields.jsUrl = source.getRaw();
+            fields.sourceType = WebHomeExtensionSourceStore.SOURCE_TYPE_LINK;
+            fields.link = source.getRaw();
         }
         return fields;
     }
@@ -644,18 +594,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         return layout;
     }
 
-    private View inputPanel(TextInputLayout... layouts) {
-        LinearLayoutCompat container = new LinearLayoutCompat(requireContext());
-        container.setOrientation(LinearLayoutCompat.VERTICAL);
-        container.setPadding(dp(20), dp(8), dp(20), 0);
-        for (int i = 0; i < layouts.length; i++) {
-            LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            if (i > 0) params.topMargin = dp(10);
-            container.addView(layouts[i], params);
-        }
-        return container;
-    }
-
     private void setupScrollableText(EditText input) {
         input.setHorizontallyScrolling(true);
         input.setHorizontalScrollBarEnabled(true);
@@ -690,14 +628,6 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         } catch (Throwable e) {
             return "";
         }
-    }
-
-    private String first(JsonObject object, String... keys) {
-        for (String key : keys) {
-            String value = safeString(object, key);
-            if (!TextUtils.isEmpty(value)) return value;
-        }
-        return "";
     }
 
     private String firstNonEmpty(String value, String fallback) {
@@ -840,9 +770,10 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
 
     private static class FormFields {
         private String name = "";
-        private String extensionId = "";
+        private String sourceType = "";
         private String runAt = "";
-        private String jsUrl = "";
+        private String link = "";
+        private String code = "";
         private String match = "";
     }
 }

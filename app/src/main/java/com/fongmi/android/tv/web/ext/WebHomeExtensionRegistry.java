@@ -171,52 +171,6 @@ public class WebHomeExtensionRegistry {
         }
     }
 
-    public String debugReport() {
-        Snapshot snapshot = snapshot();
-        StringBuilder builder = new StringBuilder();
-        builder.append("WebHome Extension Debug Preview\n");
-        builder.append("enabled=").append(snapshot.enabled).append('\n');
-        builder.append("siteKey=").append(display(snapshot.siteKey)).append('\n');
-        builder.append("sources=").append(snapshot.sourceCount)
-                .append(" installed=").append(snapshot.installedCount)
-                .append(" matched=").append(snapshot.matchedCount)
-                .append(" ready=").append(snapshot.readyCount)
-                .append('\n');
-        builder.append("preparedAt=").append(snapshot.preparedAt).append("\n\n");
-        builder.append("Workflow:\n");
-        builder.append("1. Add local code for in-app editing, or add an external URL served by your dev server.\n");
-        builder.append("2. Save code or tap Preview to clear extension cache and reload the active WebHome WebView.\n");
-        builder.append("3. Use GM_log or fm.ext.log in scripts, then long-press Preview to copy this report.\n");
-        builder.append("4. Enable Debug log to inspect full WebView console/runtime logs.\n\n");
-        builder.append("Extensions:\n");
-        if (snapshot.items.isEmpty()) builder.append("- none\n");
-        for (Item item : snapshot.items) {
-            builder.append("- ").append(item.name).append(" [").append(item.id).append("]\n");
-            builder.append("  version=").append(display(item.version))
-                    .append(" runAt=").append(display(item.runAt))
-                    .append(" enabled=").append(item.enabled)
-                    .append(" default=").append(item.defaultEnabled)
-                    .append(" remote=").append(item.remote)
-                    .append(" siteScoped=").append(item.siteScoped)
-                    .append('\n');
-            builder.append("  status=").append(display(item.status));
-            if (!TextUtils.isEmpty(item.reason)) builder.append(" reason=").append(item.reason);
-            builder.append('\n');
-            builder.append("  match=").append(display(item.matchText));
-            if (!TextUtils.isEmpty(item.excludeText)) builder.append(" exclude=").append(item.excludeText);
-            builder.append('\n');
-            if (!TextUtils.isEmpty(item.dependsText)) builder.append("  depends=").append(item.dependsText).append('\n');
-            builder.append("  source=").append(display(item.sourceUrl)).append('\n');
-            if (!TextUtils.isEmpty(item.lastLog)) builder.append("  lastLog=").append(item.lastLog).append('\n');
-            if (item.lastInjectAt > 0) builder.append("  lastInjectAt=").append(item.lastInjectAt).append('\n');
-        }
-        builder.append("\nEvents:\n");
-        if (snapshot.events.isEmpty()) builder.append("- none\n");
-        int start = Math.max(0, snapshot.events.size() - 20);
-        for (int i = start; i < snapshot.events.size(); i++) builder.append("- ").append(snapshot.events.get(i)).append('\n');
-        return builder.toString();
-    }
-
     public void recordInject(WebHomeExtension extension, String siteKey, String targetRunAt) {
         State state = state(extension.getId());
         state.siteKey = siteKey;
@@ -538,10 +492,6 @@ public class WebHomeExtensionRegistry {
 
     private String prefKey(String id) {
         return PREF_ENABLED + Util.md5(id);
-    }
-
-    private String display(String value) {
-        return TextUtils.isEmpty(value) ? "-" : value;
     }
 
     private void event(String message) {

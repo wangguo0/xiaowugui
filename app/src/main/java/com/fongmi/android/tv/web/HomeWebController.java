@@ -40,6 +40,7 @@ import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 public class HomeWebController {
@@ -52,6 +53,7 @@ public class HomeWebController {
     private final Listener listener;
     private final Activity activity;
     private final Set<String> injectedExtensions;
+    private final boolean debugTools;
     private WebView webView;
     private final float density;
     private ScriptHandler documentStartHandler;
@@ -64,9 +66,14 @@ public class HomeWebController {
     private boolean paused;
 
     public HomeWebController(Activity activity, WebView webView, Listener listener) {
+        this(activity, webView, listener, false);
+    }
+
+    public HomeWebController(Activity activity, WebView webView, Listener listener, boolean debugTools) {
         this.activity = activity;
         this.webView = webView;
         this.listener = listener;
+        this.debugTools = debugTools;
         this.density = activity.getResources().getDisplayMetrics().density;
         this.injectedExtensions = new HashSet<>();
         active = this;
@@ -81,6 +88,7 @@ public class HomeWebController {
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     private void init() {
+        if (debugTools) WebView.setWebContentsDebuggingEnabled(true);
         WebViewUtil.configureHome(webView);
         if (Util.isLeanback()) webView.setNextFocusUpId(R.id.title);
         webView.setBackgroundColor(Color.TRANSPARENT);
@@ -134,6 +142,17 @@ public class HomeWebController {
         webView.post(() -> webView.evaluateJavascript(script, callback));
     }
 
+    public void dispatchDebugConsole(String level, String message) {
+        if (!debugTools) return;
+        String text = (TextUtils.isEmpty(level) ? "log" : level).toUpperCase(Locale.ROOT) + " " + (message == null ? "" : message);
+        App.post(() -> listener.onWebConsole(text));
+    }
+
+    public void dispatchDebugNetwork(String type, String method, String url, int status, long durationMs, String detail) {
+        if (!debugTools) return;
+        App.post(() -> listener.onWebNetwork(type, method, url, status, durationMs, detail));
+    }
+
     public void show() {
         active = this;
         webView.setVisibility(View.VISIBLE);
@@ -183,6 +202,7 @@ public class HomeWebController {
         removeDocumentStartScripts();
         webView.stopLoading();
         webView.destroy();
+        if (debugTools) WebView.setWebContentsDebuggingEnabled(false);
         if (active == this) active = null;
     }
 
@@ -330,7 +350,7 @@ public class HomeWebController {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                listener.onWebRequest(request.getMethod(), request.getUrl().toString(), request.isForMainFrame());
+                listener.onWebRequest(request.getMethod(), request.getUrl().toString(), request.isForMainFrame(), request.getRequestHeaders());
                 return super.shouldInterceptRequest(view, request);
             }
 
@@ -518,6 +538,7 @@ public class HomeWebController {
                     history.replaceState=function(){const r=rawReplace.apply(this,arguments);emit();return r;};
                     window.addEventListener('popstate',emit);
                   }
+                  %s
                   const player={
                     playUrl:(url,title,options)=>invoke('player.playUrl',Object.assign({},options||{},{url,title})),
                     playVod:(siteKey,vodId,title,pic,options)=>invoke('player.playVod',Object.assign({},options||{},{siteKey,vodId,title,pic})),
@@ -589,7 +610,65 @@ public class HomeWebController {
                   };
                   window.dispatchEvent(new CustomEvent('fmsdk'));
                 })();
-                """, com.fongmi.android.tv.BuildConfig.FLAVOR_mode, com.fongmi.android.tv.utils.Util.isLeanback());
+                """, com.fongmi.android.tv.BuildConfig.FLAVOR_mode, com.fongmi.android.tv.utils.Util.isLeanback(), debugTools ? debugSdkHook() : "");
+    }
+
+    private String debugSdkHook() {
+        return """
+                  if(!window.__fmConsoleHook){
+                    window.__fmConsoleHook=true;
+                    ['log','info','warn','error','debug'].forEach(function(level){
+                      const raw=console[level]||console.log;
+                      console[level]=function(){
+                        const args=Array.prototype.slice.call(arguments);
+                        try{fongmiBridge.console(level,args.map(function(v){try{return typeof v==='string'?v:JSON.stringify(v);}catch(e){return String(v);}}).join(' '));}catch(e){}
+                        return raw&&raw.apply(console,args);
+                      };
+                    });
+                  }
+                  if(!window.__fmNetworkHook){
+                    window.__fmNetworkHook=true;
+                    const absolute=function(url){try{return new URL(String(url),location.href).href;}catch(e){return String(url||'');}};
+                    const rawFetch=window.fetch;
+                    if(rawFetch){
+                      window.fetch=function(input,init){
+                        const started=Date.now();
+                        const method=(init&&init.method)||(input&&input.method)||'GET';
+                        const url=absolute(input&&input.url?input.url:input);
+                        try{fongmiBridge.network('FETCH_START',method,url,0,0,'');}catch(e){}
+                        return rawFetch.apply(this,arguments).then(function(resp){
+                          try{fongmiBridge.network('FETCH_DONE',method,url,resp.status||0,Date.now()-started,resp.type||'');}catch(e){}
+                          return resp;
+                        }).catch(function(err){
+                          try{fongmiBridge.network('FETCH_ERROR',method,url,0,Date.now()-started,String(err&&err.message||err));}catch(e){}
+                          throw err;
+                        });
+                      };
+                    }
+                    const RawXHR=window.XMLHttpRequest;
+                    if(RawXHR&&RawXHR.prototype){
+                      const rawOpen=RawXHR.prototype.open;
+                      const rawSend=RawXHR.prototype.send;
+                      RawXHR.prototype.open=function(method,url){
+                        this.__fmMethod=method||'GET';
+                        this.__fmUrl=absolute(url);
+                        return rawOpen.apply(this,arguments);
+                      };
+                      RawXHR.prototype.send=function(){
+                        const xhr=this;
+                        const started=Date.now();
+                        try{fongmiBridge.network('XHR_START',xhr.__fmMethod||'GET',xhr.__fmUrl||'',0,0,'');}catch(e){}
+                        xhr.addEventListener('loadend',function(){
+                          try{fongmiBridge.network('XHR_DONE',xhr.__fmMethod||'GET',xhr.__fmUrl||'',xhr.status||0,Date.now()-started,xhr.statusText||'');}catch(e){}
+                        });
+                        xhr.addEventListener('error',function(){
+                          try{fongmiBridge.network('XHR_ERROR',xhr.__fmMethod||'GET',xhr.__fmUrl||'',xhr.status||0,Date.now()-started,'error');}catch(e){}
+                        });
+                        return rawSend.apply(this,arguments);
+                      };
+                    }
+                  }
+                """;
     }
 
     public interface Listener {
@@ -610,6 +689,13 @@ public class HomeWebController {
         }
 
         default void onWebRequest(String method, String url, boolean mainFrame) {
+        }
+
+        default void onWebRequest(String method, String url, boolean mainFrame, Map<String, String> headers) {
+            onWebRequest(method, url, mainFrame);
+        }
+
+        default void onWebNetwork(String type, String method, String url, int status, long durationMs, String detail) {
         }
     }
 }

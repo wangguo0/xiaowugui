@@ -18,6 +18,9 @@ import java.util.List;
 public class WebHomeExtensionSourceStore {
 
     private static final String KEY = "web_home_extension_user_sources";
+    public static final String SOURCE_TYPE_FILE = "file";
+    public static final String SOURCE_TYPE_LINK = "link";
+    public static final String SOURCE_TYPE_CODE = "code";
     private static final Type TYPE = new TypeToken<List<Entry>>() {
     }.getType();
 
@@ -99,22 +102,63 @@ public class WebHomeExtensionSourceStore {
     public static synchronized void saveCode(String id, String name, String code, boolean enabled, String siteKey) {
         String value = code == null ? "" : code.trim();
         if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
-        saveCodeObject(id, name, "", WebHomeExtension.RUN_AT_END, "", value, enabled, siteKey);
+        saveCodeObject(id, name, WebHomeExtension.RUN_AT_END, "", value, enabled, siteKey, SOURCE_TYPE_CODE);
     }
 
     public static synchronized void saveCodeMeta(String id, String name, String extensionId, String runAt, String match, boolean enabled, String siteKey) {
+        saveCodeMeta(id, name, runAt, match, "", enabled, siteKey, SOURCE_TYPE_CODE);
+    }
+
+    public static synchronized void saveCodeMeta(String id, String name, String runAt, String match, String code, boolean enabled, String siteKey, String sourceType) {
         Entry source = null;
         for (Entry item : read()) {
             if (!TextUtils.equals(item.getId(), id)) continue;
             source = item;
             break;
         }
-        String value = code(source);
+        String value = TextUtils.isEmpty(code) ? code(source) : code.trim();
         if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
-        saveCodeObject(id, name, extensionId, runAt, match, value, enabled, siteKey);
+        saveCodeObject(id, name, runAt, match, value, enabled, siteKey, sourceType(sourceType, source));
     }
 
-    private static void saveCodeObject(String id, String name, String extensionId, String runAt, String match, String code, boolean enabled, String siteKey) {
+    public static synchronized void saveFile(String id, String name, String code, boolean enabled, String siteKey) {
+        String value = code == null ? "" : code.trim();
+        if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
+        saveCodeObject(id, name, WebHomeExtension.RUN_AT_END, "", value, enabled, siteKey, SOURCE_TYPE_FILE);
+    }
+
+    public static synchronized void saveLink(String id, String name, String runAt, String url, String match, boolean enabled, String siteKey) {
+        String link = url == null ? "" : url.trim();
+        if (TextUtils.isEmpty(link)) throw new IllegalArgumentException("empty");
+        List<Entry> items = read();
+        Entry target = null;
+        for (Entry item : items) {
+            if (!TextUtils.equals(item.getId(), id)) continue;
+            target = item;
+            break;
+        }
+        if (target == null) {
+            target = new Entry();
+            target.id = "user_" + Util.md5(link + ":" + System.currentTimeMillis());
+            items.add(target);
+        }
+        JsonObject object = new JsonObject();
+        object.addProperty("id", target.id);
+        object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
+        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
+        object.addProperty("sourceType", SOURCE_TYPE_LINK);
+        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
+        if (WebHomeExtension.isScriptUrl(link)) object.add("js", App.gson().toJsonTree(List.of(link)));
+        else object.addProperty("manifestUrl", link);
+        target.raw = object.toString();
+        target.name = title(target.raw);
+        target.siteKey = normalizeSiteKey(siteKey, target.siteKey);
+        target.enabled = enabled;
+        target.updatedAt = System.currentTimeMillis();
+        write(items);
+    }
+
+    private static void saveCodeObject(String id, String name, String runAt, String match, String code, boolean enabled, String siteKey, String sourceType) {
         List<Entry> items = read();
         Entry target = null;
         for (Entry item : items) {
@@ -128,9 +172,10 @@ public class WebHomeExtensionSourceStore {
             items.add(target);
         }
         JsonObject object = new JsonObject();
-        object.addProperty("id", TextUtils.isEmpty(extensionId) ? target.id : extensionId.trim());
+        object.addProperty("id", target.id);
         object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
         object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
+        object.addProperty("sourceType", sourceType(sourceType, target));
         if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
         object.addProperty("code", code);
         target.raw = object.toString();
@@ -142,15 +187,7 @@ public class WebHomeExtensionSourceStore {
     }
 
     public static synchronized void saveForm(String id, String name, String extensionId, String runAt, String jsUrl, String match, boolean enabled, String siteKey) {
-        String js = jsUrl == null ? "" : jsUrl.trim();
-        if (TextUtils.isEmpty(js)) throw new IllegalArgumentException("empty");
-        JsonObject object = new JsonObject();
-        if (!TextUtils.isEmpty(extensionId)) object.addProperty("id", extensionId.trim());
-        if (!TextUtils.isEmpty(name)) object.addProperty("name", name.trim());
-        if (!TextUtils.isEmpty(runAt)) object.addProperty("runAt", runAt.trim());
-        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
-        object.add("js", App.gson().toJsonTree(List.of(js)));
-        save(id, object.toString(), enabled, siteKey);
+        saveLink(id, name, runAt, jsUrl, match, enabled, siteKey);
     }
 
     public static synchronized void setEnabled(String id, boolean enabled) {
@@ -177,6 +214,27 @@ public class WebHomeExtensionSourceStore {
 
     public static boolean isCodeSource(Entry entry) {
         return !TextUtils.isEmpty(code(entry));
+    }
+
+    public static String sourceType(Entry entry) {
+        return sourceType("", entry);
+    }
+
+    public static String link(Entry entry) {
+        try {
+            JsonElement element = parse(entry.getRaw());
+            if (!element.isJsonObject()) return entry.getRaw();
+            JsonObject object = element.getAsJsonObject();
+            if (object.has("js") && object.get("js").isJsonArray() && object.getAsJsonArray("js").size() > 0) return object.getAsJsonArray("js").get(0).getAsString();
+            for (String key : new String[]{"manifestUrl", "manifest", "sourceUrl", "url"}) {
+                if (!object.has(key) || !object.get(key).isJsonPrimitive()) continue;
+                String value = object.get(key).getAsString().trim();
+                if (!TextUtils.isEmpty(value)) return value;
+            }
+            return "";
+        } catch (Throwable e) {
+            return entry == null ? "" : entry.getRaw();
+        }
     }
 
     public static String code(Entry entry) {
@@ -240,6 +298,22 @@ public class WebHomeExtensionSourceStore {
 
     private static boolean looksLikeJson(String value) {
         return value.startsWith("{") || value.startsWith("[");
+    }
+
+    private static String sourceType(String requested, Entry fallback) {
+        if (SOURCE_TYPE_FILE.equals(requested) || SOURCE_TYPE_LINK.equals(requested) || SOURCE_TYPE_CODE.equals(requested)) return requested;
+        try {
+            if (fallback == null) return SOURCE_TYPE_CODE;
+            JsonElement element = parse(fallback.getRaw());
+            if (!element.isJsonObject()) return SOURCE_TYPE_LINK;
+            JsonObject object = element.getAsJsonObject();
+            String type = object.has("sourceType") && object.get("sourceType").isJsonPrimitive() ? object.get("sourceType").getAsString().trim() : "";
+            if (SOURCE_TYPE_FILE.equals(type) || SOURCE_TYPE_LINK.equals(type) || SOURCE_TYPE_CODE.equals(type)) return type;
+            if (object.has("code")) return SOURCE_TYPE_CODE;
+            return SOURCE_TYPE_LINK;
+        } catch (Throwable e) {
+            return SOURCE_TYPE_LINK;
+        }
     }
 
     private static String normalizeSiteKey(String siteKey, String fallback) {
