@@ -25,6 +25,20 @@ public class WebHomeExtensionSourceStore {
         return read();
     }
 
+    public static synchronized void saveRawJson(String json) {
+        if (TextUtils.isEmpty(json)) {
+            write(new ArrayList<>());
+            return;
+        }
+        List<Entry> items = App.gson().fromJson(json, TYPE);
+        if (items == null) items = new ArrayList<>();
+        for (Entry item : items) {
+            item.normalize();
+            parse(item.getRaw());
+        }
+        write(items);
+    }
+
     public static synchronized List<Entry> enabledEntries() {
         List<Entry> result = new ArrayList<>();
         for (Entry entry : read()) if (entry.isEnabled()) result.add(entry);
@@ -108,6 +122,18 @@ public class WebHomeExtensionSourceStore {
         target.enabled = enabled;
         target.updatedAt = System.currentTimeMillis();
         write(items);
+    }
+
+    public static synchronized void saveForm(String id, String name, String extensionId, String runAt, String jsUrl, String match, boolean enabled, String siteKey) {
+        String js = jsUrl == null ? "" : jsUrl.trim();
+        if (TextUtils.isEmpty(js)) throw new IllegalArgumentException("empty");
+        JsonObject object = new JsonObject();
+        if (!TextUtils.isEmpty(extensionId)) object.addProperty("id", extensionId.trim());
+        if (!TextUtils.isEmpty(name)) object.addProperty("name", name.trim());
+        if (!TextUtils.isEmpty(runAt)) object.addProperty("runAt", runAt.trim());
+        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
+        object.add("js", App.gson().toJsonTree(List.of(js)));
+        save(id, object.toString(), enabled, siteKey);
     }
 
     public static synchronized void setEnabled(String id, boolean enabled) {

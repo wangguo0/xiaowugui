@@ -16,6 +16,7 @@ import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ValueCallback;
 
 import androidx.webkit.ScriptHandler;
 import androidx.webkit.WebViewCompat;
@@ -121,6 +122,15 @@ public class HomeWebController {
             webView.clearCache(false);
             webView.loadUrl(reloadUrl(homePage));
         }
+    }
+
+    public void reloadExtensions() {
+        extensionReloadRequested = true;
+        consumeExtensionReload();
+    }
+
+    public void evaluate(String script, ValueCallback<String> callback) {
+        webView.post(() -> webView.evaluateJavascript(script, callback));
     }
 
     public void show() {

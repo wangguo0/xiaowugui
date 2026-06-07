@@ -42,6 +42,20 @@
             app:backgroundTint="@color/dialog_tonal_button_bg" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/debug"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:minHeight="36dp"
+            android:minWidth="64dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/web_home_extension_debug"
+            android:textColor="@color/dialog_tonal_button_text"
+            app:backgroundTint="@color/dialog_tonal_button_bg" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/enabled"
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="wrap_content"
@@ -64,6 +78,38 @@
         android:textColor="#5F6368"
         android:textSize="13sp" />
 
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/modeGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        app:selectionRequired="true"
+        app:singleSelection="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/uiMode"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/setting_proxy_ui_mode"
+            android:textColor="@color/dialog_toggle_button_text"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/textMode"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/setting_proxy_text_mode"
+            android:textColor="@color/dialog_toggle_button_text"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+
     <com.fongmi.android.tv.ui.custom.CustomNestedScrollView
         android:id="@+id/contentScroll"
         android:layout_width="match_parent"
@@ -84,9 +130,9 @@
                 android:id="@+id/empty"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center"
                 android:paddingTop="24dp"
                 android:paddingBottom="24dp"
-                android:gravity="center"
                 android:text="@string/web_home_extension_empty"
                 android:textColor="#5F6368"
                 android:textSize="14sp" />
@@ -94,6 +140,37 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
 
     </com.fongmi.android.tv.ui.custom.CustomNestedScrollView>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/jsonLayout"
+        android:layout_width="match_parent"
+        android:layout_height="420dp"
+        android:layout_marginTop="10dp"
+        android:visibility="gone"
+        app:boxBackgroundColor="@color/white"
+        app:boxCollapsedPaddingTop="0dp"
+        app:boxStrokeColor="@color/dialog_outlined_button_stroke"
+        app:hintEnabled="false"
+        app:hintTextColor="#5F6368">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/jsonText"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fontFamily="monospace"
+            android:gravity="start|top"
+            android:hint="@string/web_home_extension_json_hint"
+            android:imeOptions="actionDone"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:minLines="8"
+            android:scrollHorizontally="true"
+            android:selectAllOnFocus="false"
+            android:singleLine="false"
+            android:textColor="@color/black"
+            android:textColorHint="#666666" />
+
+    </com.google.android.material.textfield.TextInputLayout>
 
     <androidx.appcompat.widget.LinearLayoutCompat
         android:layout_width="match_parent"
@@ -117,7 +194,7 @@
             app:backgroundTint="@color/dialog_tonal_button_bg" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/preview"
+            android:id="@+id/report"
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="0dp"
             android:layout_height="40dp"
@@ -127,7 +204,7 @@
             android:minWidth="0dp"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_preview"
+            android:text="@string/web_home_extension_report"
             android:textColor="@color/dialog_tonal_button_text"
             app:backgroundTint="@color/dialog_tonal_button_bg" />
 
