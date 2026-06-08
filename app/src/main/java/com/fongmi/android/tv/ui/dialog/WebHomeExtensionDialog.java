@@ -50,6 +50,7 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.android.material.textview.MaterialTextView;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -118,6 +119,15 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     @Override
+    public void onDestroyView() {
+        binding = null;
+        editors.clear();
+        pendingFileEdit = null;
+        pendingFileEditor = null;
+        super.onDestroyView();
+    }
+
+    @Override
     protected void initView() {
         enabled = Setting.isWebHomeExtension();
         updateEnabledText();
@@ -158,9 +168,10 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     private void refresh(boolean manual) {
+        if (!canRender()) return;
         if (manual) binding.summary.setText(R.string.update_check);
         WebHomeExtensionRegistry.get().refresh(VodConfig.get().getHome(), () -> {
-            if (binding == null) return;
+            if (!canRender()) return;
             render();
             if (callback != null) callback.run();
         });
@@ -179,7 +190,12 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             return true;
         }
         if (text) {
-            binding.jsonText.setText(new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(WebHomeExtensionSourceStore.list()));
+            try {
+                binding.jsonText.setText(currentFormSourcesJson());
+            } catch (Throwable e) {
+                Notify.show(errorText(e));
+                return false;
+            }
         } else if (!saveTextSources(true)) {
             return false;
         }
@@ -219,6 +235,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     }
 
     private void render() {
+        if (!canRender()) return;
         WebHomeExtensionRegistry.Snapshot snapshot = WebHomeExtensionRegistry.get().snapshot();
         List<RowModel> rows = rows(snapshot);
         String siteKey = TextUtils.isEmpty(snapshot.siteKey) ? getString(R.string.web_home_extension_unknown_site) : snapshot.siteKey;
@@ -408,6 +425,38 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             if (notify) Notify.show(errorText(e));
             return false;
         }
+    }
+
+    private String currentFormSourcesJson() {
+        JsonArray array = new JsonArray();
+        for (SourceEditor editor : editors) array.add(sourceJson(editor));
+        return new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(array);
+    }
+
+    private JsonObject sourceJson(SourceEditor editor) {
+        WebHomeExtensionSourceStore.Entry source = editor.source;
+        JsonObject object = new JsonObject();
+        object.addProperty("id", source.getId());
+        object.addProperty("name", inputText(editor.name, source.getName()));
+        object.addProperty("raw", formRaw(editor));
+        object.addProperty("siteKey", currentSiteKey(source));
+        object.addProperty("enabled", source.isEnabled());
+        object.addProperty("updatedAt", source.getUpdatedAt());
+        return object;
+    }
+
+    private String formRaw(SourceEditor editor) {
+        WebHomeExtensionSourceStore.Entry source = editor.source;
+        String sourceType = sourceType(editor.sourceGroup, editor.fileId, editor.linkId);
+        String name = inputText(editor.name);
+        String runAt = runAt(editor.runAtGroup, editor.startId, editor.idleId);
+        String match = inputText(editor.match);
+        if (WebHomeExtensionSourceStore.SOURCE_TYPE_LINK.equals(sourceType)) return WebHomeExtensionSourceStore.rawLink(source.getId(), name, runAt, inputText(editor.link), match);
+        return WebHomeExtensionSourceStore.rawCode(source.getId(), name, runAt, match, inputText(editor.code), sourceType);
+    }
+
+    private boolean canRender() {
+        return binding != null && isAdded() && getContext() != null;
     }
 
     private void saveFormEditor(SourceEditor editor) {

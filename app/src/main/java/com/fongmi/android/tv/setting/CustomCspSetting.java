@@ -37,6 +37,7 @@ public class CustomCspSetting {
     private static final String KIND_WEB_HOME = "webHome";
     private static final String KIND_CSP = "csp";
     private static final String KIND_LIVE = "live";
+    private static final String API_BUILTIN = "csp_Builtin";
 
     public static Registry load() {
         String text = Path.read(registryFile());
@@ -185,7 +186,7 @@ public class CustomCspSetting {
         item.setKey(PREFIX + item.getId());
         item.setWebHome(true);
         item.setType(3);
-        item.setApi("");
+        item.setApi(API_BUILTIN);
         return item;
     }
 
@@ -323,6 +324,8 @@ public class CustomCspSetting {
         private String jar;
         @SerializedName("homePage")
         private String homePage;
+        @SerializedName("extensions")
+        private JsonElement extensions;
         @SerializedName("click")
         private String click;
         @SerializedName("playUrl")
@@ -355,6 +358,9 @@ public class CustomCspSetting {
         private JsonObject site;
         @SerializedName("live")
         private JsonObject live;
+        private transient String extensionsText;
+        private transient boolean extensionsInvalid;
+        private transient Boolean extensionsExpanded;
 
         public Item normalize() {
             normalizeKind();
@@ -390,7 +396,7 @@ public class CustomCspSetting {
             String apiValue = !TextUtils.isEmpty(api) ? api.trim() : getSiteString("api");
             String homeValue = !TextUtils.isEmpty(homePage) ? homePage.trim() : getSiteString("homePage");
             if (TextUtils.isEmpty(homeValue)) homeValue = getSiteHomeAlias();
-            return apiValue.isEmpty() && !homeValue.isEmpty();
+            return !homeValue.isEmpty() && isBuiltinApi(apiValue);
         }
 
         public boolean isLive() {
@@ -452,6 +458,10 @@ public class CustomCspSetting {
                 referer = null;
                 timeZone = null;
                 timeout = null;
+                if (isWebHome()) {
+                    if (type == null) type = 3;
+                    if (TextUtils.isEmpty(api) || isBuiltinApi(api)) api = API_BUILTIN;
+                }
             }
         }
 
@@ -533,6 +543,27 @@ public class CustomCspSetting {
         public void setHomePage(String homePage) {
             this.homePage = homePage;
             putSite("homePage", homePage);
+        }
+
+        public void setExtensionsText(String text) {
+            extensionsText = text == null ? "" : text.trim();
+            extensionsInvalid = false;
+            if (TextUtils.isEmpty(extensionsText)) {
+                extensions = null;
+                removeSite("extensions");
+                return;
+            }
+            try {
+                extensions = parseExtensions(extensionsText);
+                putSite("extensions", extensions);
+            } catch (Exception e) {
+                extensionsInvalid = true;
+            }
+        }
+
+        public void setExtensionsExpanded(boolean expanded) {
+            extensionsExpanded = expanded;
+            if (!expanded) setExtensionsText("");
         }
 
         public void setClick(String click) {
@@ -641,6 +672,22 @@ public class CustomCspSetting {
             return TextUtils.isEmpty(value) ? getSiteHomeAlias() : value;
         }
 
+        public String getExtensionsText() {
+            if (extensionsText != null) return extensionsText;
+            JsonElement element = getExtensions();
+            if (element == null || element.isJsonNull()) return "";
+            if (element.isJsonPrimitive()) return element.getAsString().trim();
+            return App.gson().toJson(element);
+        }
+
+        public boolean hasInvalidExtensions() {
+            return extensionsInvalid;
+        }
+
+        public boolean isExtensionsExpanded() {
+            return extensionsExpanded == null ? !TextUtils.isEmpty(getExtensionsText()) : extensionsExpanded;
+        }
+
         public String getClick() {
             return !TextUtils.isEmpty(click) ? click.trim() : isLive() ? getLiveString("click") : getSiteString("click");
         }
@@ -690,7 +737,7 @@ public class CustomCspSetting {
             site.setKey(getKey());
             site.setName(getName());
             site.setType(getType());
-            site.setApi(webHomeOnly ? "" : UrlUtil.convert(getApi()));
+            site.setApi(webHomeOnly ? API_BUILTIN : UrlUtil.convert(getApi()));
             site.setExt(webHomeOnly ? "" : UrlUtil.convert(getExt()));
             site.setJar(webHomeOnly ? "" : getJar());
             site.setHomePage(UrlUtil.convert(getHomePage()));
@@ -700,6 +747,7 @@ public class CustomCspSetting {
             site.setSearchable(getSearchable());
             site.setChangeable(getChangeable());
             site.setQuickSearch(getQuickSearch());
+            if (webHomeOnly && getExtensions() != null) site.setExtensions(getExtensions().deepCopy());
             site.setStyle(Style.rect());
             return site;
         }
@@ -748,12 +796,18 @@ public class CustomCspSetting {
             if (changeable != null) object.addProperty("changeable", changeable);
             if (quickSearch != null) object.addProperty("quickSearch", quickSearch);
             if (isWebHome()) {
-                object.addProperty("api", "");
-                object.addProperty("ext", "");
-                object.addProperty("jar", "");
+                object.addProperty("type", getType());
+                object.addProperty("api", API_BUILTIN);
+                object.remove("ext");
+                object.remove("jar");
+                object.remove("click");
+                object.remove("playUrl");
+                JsonElement value = getExtensions();
+                if (value == null || value.isJsonNull()) object.remove("extensions");
+                else object.add("extensions", value.deepCopy());
             }
             Site result = Site.objectFrom(object, getJar());
-            boolean webHomeOnly = isWebHome() || result.getApi().isEmpty() && !result.getHomePage().isEmpty();
+            boolean webHomeOnly = isWebHome() || isBuiltinApi(result.getApi()) && !result.getHomePage().isEmpty();
             if (webHomeOnly && searchable == null && !object.has("searchable")) result.setSearchable(0);
             if (webHomeOnly && quickSearch == null && !object.has("quickSearch")) result.setQuickSearch(0);
             return result;
@@ -778,6 +832,30 @@ public class CustomCspSetting {
 
         private String getLiveString(String key) {
             return getString(live, key);
+        }
+
+        private JsonElement getExtensions() {
+            if (extensions != null) return extensions;
+            if (site == null || !site.has("extensions")) return null;
+            return site.get("extensions");
+        }
+
+        private JsonElement parseExtensions(String text) {
+            String value = text == null ? "" : text.trim();
+            JsonArray array = new JsonArray();
+            if (!value.startsWith("[") && !value.startsWith("{") && !value.startsWith("\"")) {
+                array.add(value);
+                return array;
+            }
+            JsonElement element = JsonParser.parseString(value);
+            if (element.isJsonArray()) return element;
+            if (element.isJsonObject() && element.getAsJsonObject().has("extensions")) return element.getAsJsonObject().get("extensions");
+            array.add(element);
+            return array;
+        }
+
+        private boolean isBuiltinApi(String value) {
+            return TextUtils.isEmpty(value) || API_BUILTIN.equals(value.trim());
         }
 
         private String getString(JsonObject object, String key) {
@@ -860,6 +938,14 @@ public class CustomCspSetting {
 
         private void putSite(String key, Integer value) {
             if (site != null && value != null) site.addProperty(key, value);
+        }
+
+        private void putSite(String key, JsonElement value) {
+            if (site != null && value != null) site.add(key, value.deepCopy());
+        }
+
+        private void removeSite(String key) {
+            if (site != null) site.remove(key);
         }
 
         private void putLive(String key, String value) {

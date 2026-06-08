@@ -142,15 +142,7 @@ public class WebHomeExtensionSourceStore {
             target.id = "user_" + Util.md5(link + ":" + System.currentTimeMillis());
             items.add(target);
         }
-        JsonObject object = new JsonObject();
-        object.addProperty("id", target.id);
-        object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
-        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
-        object.addProperty("sourceType", SOURCE_TYPE_LINK);
-        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
-        if (WebHomeExtension.isScriptUrl(link)) object.add("js", App.gson().toJsonTree(List.of(link)));
-        else object.addProperty("manifestUrl", link);
-        target.raw = object.toString();
+        target.raw = rawLink(target.id, name, runAt, link, match);
         target.name = title(target.raw);
         target.siteKey = normalizeSiteKey(siteKey, target.siteKey);
         target.enabled = enabled;
@@ -171,14 +163,7 @@ public class WebHomeExtensionSourceStore {
             target.id = "user_" + Util.md5(code + ":" + System.currentTimeMillis());
             items.add(target);
         }
-        JsonObject object = new JsonObject();
-        object.addProperty("id", target.id);
-        object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
-        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
-        object.addProperty("sourceType", sourceType(sourceType, target));
-        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
-        object.addProperty("code", code);
-        target.raw = object.toString();
+        target.raw = rawCode(target.id, name, runAt, match, code, sourceType(sourceType, target));
         target.name = title(target.raw);
         target.siteKey = normalizeSiteKey(siteKey, target.siteKey);
         target.enabled = enabled;
@@ -188,6 +173,18 @@ public class WebHomeExtensionSourceStore {
 
     public static synchronized void saveForm(String id, String name, String extensionId, String runAt, String jsUrl, String match, boolean enabled, String siteKey) {
         saveLink(id, name, runAt, jsUrl, match, enabled, siteKey);
+    }
+
+    public static String rawLink(String id, String name, String runAt, String url, String match) {
+        String link = url == null ? "" : url.trim();
+        if (TextUtils.isEmpty(link)) throw new IllegalArgumentException("empty");
+        return linkObject(id, name, runAt, link, match).toString();
+    }
+
+    public static String rawCode(String id, String name, String runAt, String match, String code, String sourceType) {
+        String value = code == null ? "" : code.trim();
+        if (TextUtils.isEmpty(value)) throw new IllegalArgumentException("empty");
+        return codeObject(id, name, runAt, match, value, sourceType).toString();
     }
 
     public static synchronized void setEnabled(String id, boolean enabled) {
@@ -268,6 +265,29 @@ public class WebHomeExtensionSourceStore {
 
     private static void write(List<Entry> items) {
         Prefers.put(KEY, App.gson().toJson(items));
+    }
+
+    private static JsonObject linkObject(String id, String name, String runAt, String link, String match) {
+        JsonObject object = new JsonObject();
+        object.addProperty("id", id == null ? "" : id.trim());
+        object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
+        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
+        object.addProperty("sourceType", SOURCE_TYPE_LINK);
+        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
+        if (WebHomeExtension.isScriptUrl(link)) object.add("js", App.gson().toJsonTree(List.of(link)));
+        else object.addProperty("manifestUrl", link);
+        return object;
+    }
+
+    private static JsonObject codeObject(String id, String name, String runAt, String match, String code, String sourceType) {
+        JsonObject object = new JsonObject();
+        object.addProperty("id", id == null ? "" : id.trim());
+        object.addProperty("name", TextUtils.isEmpty(name) ? "Local extension" : name.trim());
+        object.addProperty("runAt", TextUtils.isEmpty(runAt) ? WebHomeExtension.RUN_AT_END : runAt.trim());
+        object.addProperty("sourceType", sourceType(sourceType, null));
+        if (!TextUtils.isEmpty(match)) object.add("cspKeyRegex", App.gson().toJsonTree(List.of(match.trim())));
+        object.addProperty("code", code);
+        return object;
     }
 
     private static String title(String raw) {

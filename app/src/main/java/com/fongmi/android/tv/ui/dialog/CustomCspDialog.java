@@ -24,6 +24,7 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
@@ -96,6 +97,8 @@ public class CustomCspDialog extends BaseAlertDialog {
     public void onStart() {
         super.onStart();
         if (getDialog() == null) return;
+        setCancelable(false);
+        getDialog().setCanceledOnTouchOutside(false);
         Window window = getDialog().getWindow();
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
@@ -130,7 +133,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.recycler.setItemAnimator(null);
         binding.recycler.setAdapter(adapter);
         binding.modeGroup.check(R.id.uiMode);
-        syncJsonFromForm();
+        syncJsonFromForm(false);
         showTextMode(false);
     }
 
@@ -144,7 +147,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.insertPlus.setOnClickListener(view -> changeInsertIndex(1));
         binding.modeGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (!isChecked) return;
-            if (checkedId == R.id.textMode) showTextMode(true);
+            if (checkedId == R.id.textMode && !showTextMode(true)) binding.modeGroup.check(R.id.uiMode);
             if (checkedId == R.id.uiMode && !showTextMode(false)) binding.modeGroup.check(R.id.textMode);
         });
         setupScrollableText(binding.jsonText);
@@ -210,7 +213,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             updateModeVisibility();
             return true;
         }
-        if (text) syncJsonFromForm();
+        if (text && !syncJsonFromForm(true)) return false;
         else if (!syncFormFromJson(true)) return false;
         textMode = text;
         updateModeVisibility();
@@ -296,6 +299,10 @@ public class CustomCspDialog extends BaseAlertDialog {
             return true;
         }
         syncAllVisibleRows();
+        if (validate && adapter.hasInvalidExtensions()) {
+            Notify.show(R.string.setting_custom_csp_extensions_invalid);
+            return false;
+        }
         registry.setEnabled(enabled);
         registry.setInsertIndex(getInsertIndex());
         registry.setItems(new ArrayList<>(adapter.getItems()));
@@ -313,12 +320,17 @@ public class CustomCspDialog extends BaseAlertDialog {
         });
     }
 
-    private void syncJsonFromForm() {
+    private boolean syncJsonFromForm(boolean validate) {
         syncAllVisibleRows();
+        if (validate && adapter.hasInvalidExtensions()) {
+            Notify.show(R.string.setting_custom_csp_extensions_invalid);
+            return false;
+        }
         registry.setEnabled(enabled);
         registry.setInsertIndex(getInsertIndex());
         registry.setItems(new ArrayList<>(adapter.getItems()));
         binding.jsonText.setText(new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(registry.normalize()));
+        return true;
     }
 
     private boolean syncFormFromJson(boolean validate) {
@@ -372,27 +384,32 @@ public class CustomCspDialog extends BaseAlertDialog {
         input.setMaxLines(14);
         input.setText(Path.read(CustomCspSetting.file(item.getId(), "index.html")));
         setupScrollableText(input);
-        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+        showManualCloseDialog(new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.setting_custom_csp_code)
                 .setView(createInputPanel(R.string.setting_custom_csp_code, input))
                 .setPositiveButton(R.string.dialog_positive, (dialog, which) -> saveCode(item, input.getText().toString()))
-                .setNegativeButton(R.string.dialog_negative, null)
-                .show();
+                .setNegativeButton(R.string.dialog_negative, null));
     }
 
     private void editLink(CustomCspSetting.Item item) {
         syncAllVisibleRows();
         TextInputEditText input = createInput(false);
         input.setText(item.getHomePage());
-        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+        showManualCloseDialog(new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.setting_custom_csp_link)
                 .setView(createInputPanel(R.string.setting_custom_csp_link, input))
                 .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
                     item.setHomePage(input.getText().toString().trim());
                     adapter.notifyDataSetChanged();
                 })
-                .setNegativeButton(R.string.dialog_negative, null)
-                .show();
+                .setNegativeButton(R.string.dialog_negative, null));
+    }
+
+    private void showManualCloseDialog(MaterialAlertDialogBuilder builder) {
+        AlertDialog dialog = builder.create();
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
     }
 
     private TextInputEditText createInput(boolean multiline) {
@@ -460,6 +477,11 @@ public class CustomCspDialog extends BaseAlertDialog {
             notifyDataSetChanged();
         }
 
+        boolean hasInvalidExtensions() {
+            for (CustomCspSetting.Item item : items) if (item.hasInvalidExtensions()) return true;
+            return false;
+        }
+
         void move(int from, int to) {
             if (from < 0 || to < 0 || from >= items.size() || to >= items.size()) return;
             syncAllVisibleRows();
@@ -516,6 +538,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 binding.type.addTextChangedListener(new TextSync(this));
                 binding.api.addTextChangedListener(new TextSync(this));
                 binding.homePage.addTextChangedListener(new TextSync(this));
+                binding.extensions.addTextChangedListener(new TextSync(this));
                 binding.ext.addTextChangedListener(new TextSync(this));
                 binding.jar.addTextChangedListener(new TextSync(this));
                 binding.click.addTextChangedListener(new TextSync(this));
@@ -540,9 +563,11 @@ public class CustomCspDialog extends BaseAlertDialog {
                 binding.importFile.setOnClickListener(view -> chooseFile(item));
                 binding.code.setOnClickListener(view -> editCode(item));
                 binding.link.setOnClickListener(view -> editLink(item));
+                binding.extensionsToggle.setOnClickListener(view -> toggleExtensions());
                 binding.up.setOnClickListener(view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1));
                 binding.down.setOnClickListener(view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1));
                 binding.delete.setOnClickListener(view -> remove(getBindingAdapterPosition(), itemView));
+                setupScrollableText(binding.extensions);
             }
 
             void bind(CustomCspSetting.Item item) {
@@ -558,6 +583,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 setText(binding.type, String.valueOf(item.getType()));
                 setText(binding.api, item.getApi());
                 setText(binding.homePage, item.getHomePage());
+                setText(binding.extensions, item.getExtensionsText());
                 setText(binding.ext, item.getExt());
                 setText(binding.jar, item.getJar());
                 setText(binding.click, item.getClick());
@@ -579,6 +605,8 @@ public class CustomCspDialog extends BaseAlertDialog {
                 boolean home = !item.isLive() && item.site().getKey().equals(registry.getHomeKey());
                 binding.home.setChecked(home);
                 updateTypePanels();
+                updateExtensionsToggle();
+                updateExtensionsError();
                 updateValidity();
                 bindingItem = false;
             }
@@ -589,6 +617,16 @@ public class CustomCspDialog extends BaseAlertDialog {
                 item.setEnabled(checked);
                 binding.enabled.setAlpha(checked ? 1.0f : 0.65f);
                 binding.enabled.setText(checked ? R.string.setting_enable : R.string.setting_disable);
+            }
+
+            private void toggleExtensions() {
+                if (bindingItem || item == null) return;
+                item.setExtensionsExpanded(!item.isExtensionsExpanded());
+                if (!item.isExtensionsExpanded()) setText(binding.extensions, "");
+                updateTypePanels();
+                updateExtensionsToggle();
+                updateExtensionsError();
+                sync();
             }
 
             private void onHomeChecked(boolean checked) {
@@ -643,6 +681,8 @@ public class CustomCspDialog extends BaseAlertDialog {
                 binding.home.setVisibility(live ? View.GONE : View.VISIBLE);
                 binding.apiLayout.setVisibility(webHome || live ? View.GONE : View.VISIBLE);
                 binding.homePageLayout.setVisibility(webHome ? View.VISIBLE : View.GONE);
+                binding.extensionsPanel.setVisibility(webHome ? View.VISIBLE : View.GONE);
+                binding.extensionsLayout.setVisibility(webHome && item.isExtensionsExpanded() ? View.VISIBLE : View.GONE);
                 binding.liveUrlLayout.setVisibility(live ? View.VISIBLE : View.GONE);
                 binding.liveTypePanel.setVisibility(View.GONE);
                 binding.cspOptionsPanel.setVisibility(!live ? View.VISIBLE : View.GONE);
@@ -672,6 +712,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 }
                 if (item.isLive()) {
                     item.setUrl(binding.liveUrl.getText().toString().trim());
+                    item.setExtensionsExpanded(false);
                     item.setApi(binding.api.getText().toString().trim());
                     item.setExt(binding.ext.getText().toString().trim());
                     item.setJar(binding.jar.getText().toString().trim());
@@ -687,6 +728,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                     item.setPlayUrl("");
                 } else if (!item.isWebHome()) {
                     item.setKey(binding.key.getText().toString().trim());
+                    item.setExtensionsExpanded(false);
                     item.setType(parseInt(binding.type.getText().toString(), 3));
                     item.setApi(binding.api.getText().toString().trim());
                     item.setHide(binding.hide.isChecked() ? 1 : 0);
@@ -706,9 +748,12 @@ public class CustomCspDialog extends BaseAlertDialog {
                 } else {
                     item.setKey(binding.key.getText().toString().trim());
                     item.setHomePage(binding.homePage.getText().toString().trim());
+                    item.setExtensionsText(item.isExtensionsExpanded() ? binding.extensions.getText().toString() : "");
                     item.setClick("");
                     item.setPlayUrl("");
                 }
+                updateExtensionsToggle();
+                updateExtensionsError();
                 updateValidity();
             }
 
@@ -753,6 +798,16 @@ public class CustomCspDialog extends BaseAlertDialog {
                 if (item == null) return;
                 boolean invalid = item.isEnabled() && !item.isValid();
                 binding.getRoot().setActivated(invalid);
+            }
+
+            private void updateExtensionsError() {
+                binding.extensionsLayout.setError(item != null && item.hasInvalidExtensions() ? getString(R.string.setting_custom_csp_extensions_invalid) : null);
+            }
+
+            private void updateExtensionsToggle() {
+                boolean expanded = item != null && item.isWebHome() && item.isExtensionsExpanded();
+                binding.extensionsToggle.setSelected(expanded);
+                binding.extensionsToggle.setAlpha(expanded ? 1.0f : 0.65f);
             }
         }
     }

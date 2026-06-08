@@ -219,6 +219,9 @@
     <string name="setting_custom_csp_home">Home</string>
     <string name="setting_custom_csp_home_page">WebHome URL</string>
     <string name="setting_custom_csp_home_page_optional">WebHome URL (optional)</string>
+    <string name="setting_custom_csp_extensions_toggle">Extensions</string>
+    <string name="setting_custom_csp_extensions">extensions array</string>
+    <string name="setting_custom_csp_extensions_invalid">Invalid extensions JSON</string>
     <string name="setting_custom_csp_webhome">WebHome</string>
     <string name="setting_custom_csp_common">General CSP</string>
     <string name="setting_custom_csp_live">Live</string>

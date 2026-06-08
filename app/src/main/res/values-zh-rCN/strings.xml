@@ -218,6 +218,9 @@
     <string name="setting_custom_csp_home">首页</string>
     <string name="setting_custom_csp_home_page">WebHome 地址</string>
     <string name="setting_custom_csp_home_page_optional">WebHome 地址（可选）</string>
+    <string name="setting_custom_csp_extensions_toggle">扩展</string>
+    <string name="setting_custom_csp_extensions">extensions 数组</string>
+    <string name="setting_custom_csp_extensions_invalid">extensions JSON 格式无效</string>
     <string name="setting_custom_csp_webhome">WebHome</string>
     <string name="setting_custom_csp_common">通用 CSP</string>
     <string name="setting_custom_csp_live">直播</string>

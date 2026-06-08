@@ -507,6 +507,7 @@
   }
 
   function enhancePage() {
+    cleanupSiteNotice();
     document.documentElement.classList.add("fm-pomo-enhanced");
     enhanceHeader();
     if (!isDetailPage()) enhanceListPage();
@@ -520,6 +521,65 @@
 
     const nav = document.querySelector("header nav");
     if (nav) nav.classList.add("fm-pomo-nav");
+  }
+
+  function cleanupSiteNotice() {
+    const nodes = document.querySelectorAll("h1,h2,h3,h4,h5,h6,[role='heading'],[class*='title'],[class*='Title'],[class*='modal'],[class*='Modal'],[class*='notice'],[class*='Notice']");
+    let removed = false;
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (!isNoticeTitle(cleanText(node.textContent))) continue;
+      const root = noticeRoot(node);
+      if (!root) continue;
+      root.remove();
+      removed = true;
+    }
+    if (!removed) return;
+    cleanupNoticeBackdrops();
+    document.documentElement.style.overflow = "";
+    if (document.body) document.body.style.overflow = "";
+  }
+
+  function isNoticeTitle(text) {
+    return /^(网站公告|站点公告|公告)$/.test(text) || text.indexOf("网站公告") >= 0 && text.length <= 120;
+  }
+
+  function noticeRoot(node) {
+    let best = null;
+    for (let el = node; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      if (el.id === CONFIG.panelId || el.id === CONFIG.searchId) return null;
+      if (isNoticeRootCandidate(el)) best = el;
+    }
+    if (best) return best;
+    const fallback = node.closest("[role='dialog'],[class*='modal'],[class*='Modal'],[class*='dialog'],[class*='Dialog'],[class*='popup'],[class*='Popup'],[class*='notice'],[class*='Notice']");
+    if (fallback && fallback !== document.body && fallback !== document.documentElement) return fallback;
+    let parent = node;
+    for (let depth = 0; depth < 4 && parent && parent.parentElement && parent.parentElement !== document.body; depth++) parent = parent.parentElement;
+    return parent === node ? null : parent;
+  }
+
+  function isNoticeRootCandidate(el) {
+    const cls = String(el.className || "");
+    const role = String(el.getAttribute("role") || "");
+    let fixed = /\b(fixed|inset-0|overlay|backdrop)\b/i.test(cls);
+    try {
+      const style = window.getComputedStyle(el);
+      fixed = fixed || style.position === "fixed";
+    } catch (e) {
+      // ignore
+    }
+    return role === "dialog" || /\b(modal|dialog|popup|notice)\b/i.test(cls) || fixed;
+  }
+
+  function cleanupNoticeBackdrops() {
+    const nodes = document.querySelectorAll(".modal-backdrop,.backdrop,[class*='overlay'],[class*='Overlay'],[class*='fixed'][class*='inset-0']");
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.id === CONFIG.panelId || node.id === CONFIG.searchId) continue;
+      const text = cleanText(node.textContent);
+      if (text && !/公告/.test(text) && text.length > 20) continue;
+      if (isNoticeRootCandidate(node)) node.remove();
+    }
   }
 
   function enhanceListPage() {
