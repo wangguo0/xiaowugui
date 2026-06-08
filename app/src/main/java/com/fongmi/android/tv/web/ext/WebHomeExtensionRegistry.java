@@ -101,10 +101,17 @@ public class WebHomeExtensionRegistry {
             return;
         }
         Task.execute(() -> {
-            List<WebHomeExtension> items = load(site);
-            ready.put(siteKey, items);
-            SpiderDebug.log("webhome-ext", "prepared site=%s matched=%s ready=%s", siteKey, lastMatchedCount, items.size());
-            if (callback != null) App.post(callback);
+            try {
+                List<WebHomeExtension> items = load(site);
+                ready.put(siteKey, items);
+                SpiderDebug.log("webhome-ext", "prepared site=%s matched=%s ready=%s", siteKey, lastMatchedCount, items.size());
+            } catch (Throwable e) {
+                ready.remove(siteKey);
+                event("prepare failed " + e.getMessage());
+                SpiderDebug.log("webhome-ext", "prepare failed site=%s error=%s", siteKey, e.getMessage());
+            } finally {
+                if (callback != null) App.post(callback);
+            }
         });
     }
 
@@ -269,8 +276,13 @@ public class WebHomeExtensionRegistry {
         List<WebHomeExtension> result = new ArrayList<>();
         Order order = new Order(USER_ORDER_BASE);
         for (WebHomeExtensionSourceStore.Entry entry : WebHomeExtensionSourceStore.enabledEntries()) {
-            if (!entry.matches(site.getKey())) continue;
-            loadElement(result, WebHomeExtensionSourceStore.parse(entry.getRaw()), site.getKey(), "", true, true, order);
+            try {
+                if (!entry.matches(site.getKey())) continue;
+                loadElement(result, WebHomeExtensionSourceStore.parse(entry.getRaw()), site.getKey(), "", true, true, order);
+            } catch (Throwable e) {
+                event("user source skipped " + e.getMessage());
+                SpiderDebug.log("webhome-ext", "user source skipped id=%s site=%s error=%s", entry.getId(), site.getKey(), e.getMessage());
+            }
         }
         return result;
     }

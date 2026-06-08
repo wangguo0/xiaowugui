@@ -451,8 +451,12 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         String name = inputText(editor.name);
         String runAt = runAt(editor.runAtGroup, editor.startId, editor.idleId);
         String match = inputText(editor.match);
-        if (WebHomeExtensionSourceStore.SOURCE_TYPE_LINK.equals(sourceType)) return WebHomeExtensionSourceStore.rawLink(source.getId(), name, runAt, inputText(editor.link), match);
-        return WebHomeExtensionSourceStore.rawCode(source.getId(), name, runAt, match, inputText(editor.code), sourceType);
+        try {
+            if (WebHomeExtensionSourceStore.SOURCE_TYPE_LINK.equals(sourceType)) return WebHomeExtensionSourceStore.rawLink(source.getId(), name, runAt, inputText(editor.link), match);
+            return WebHomeExtensionSourceStore.rawCode(source.getId(), name, runAt, match, inputText(editor.code), sourceType);
+        } catch (Throwable e) {
+            return source.getRaw();
+        }
     }
 
     private boolean canRender() {

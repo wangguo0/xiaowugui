@@ -44,19 +44,19 @@ public class WebHomeExtensionSourceStore {
 
     public static synchronized List<Entry> enabledEntries() {
         List<Entry> result = new ArrayList<>();
-        for (Entry entry : read()) if (entry.isEnabled()) result.add(entry);
+        for (Entry entry : read()) if (entry.isEnabled() && !TextUtils.isEmpty(entry.getRaw())) result.add(entry);
         return result;
     }
 
     public static synchronized int enabledCount() {
         int count = 0;
-        for (Entry entry : read()) if (entry.isEnabled()) count++;
+        for (Entry entry : read()) if (entry.isEnabled() && !TextUtils.isEmpty(entry.getRaw())) count++;
         return count;
     }
 
     public static synchronized int enabledCount(String siteKey) {
         int count = 0;
-        for (Entry entry : read()) if (entry.isEnabled() && entry.matches(siteKey)) count++;
+        for (Entry entry : read()) if (entry.isEnabled() && !TextUtils.isEmpty(entry.getRaw()) && entry.matches(siteKey)) count++;
         return count;
     }
 
