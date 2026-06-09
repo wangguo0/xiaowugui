@@ -1542,6 +1542,85 @@ body.manage-page {
     padding: 0 12px;
 }
 
+.login-state-body {
+    display: grid;
+    gap: 14px;
+    padding: 14px;
+}
+
+.login-state-body .manage-card {
+    margin: 0;
+}
+
+.login-file-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.login-file-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--md-outline-variant);
+    border-radius: 8px;
+    background: var(--md-surface-container-high);
+}
+
+.login-file-main {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.login-file-main strong,
+.login-file-main span,
+.login-file-main small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.login-file-main strong {
+    font-size: 14px;
+    line-height: 19px;
+}
+
+.login-file-main span,
+.login-file-main small {
+    color: var(--md-on-surface-variant);
+    font-size: 12px;
+    line-height: 16px;
+}
+
+.file-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 26px;
+    padding: 0 9px;
+    border-radius: 13px;
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.file-tag.muted {
+    background: var(--md-surface-container);
+    color: var(--md-on-surface-variant);
+}
+
 .card-actions {
     display: flex;
     align-items: center;

@@ -107,8 +107,8 @@ public class Backup {
             AppDatabase.get().getHistoryDao().insertOrUpdate(getHistory());
         }
         for (Map.Entry<String, ?> entry : filter(getPrefers(), options).entrySet()) Prefers.put(entry.getKey(), entry.getValue());
-        if (options.isSpider()) BaseLoader.get().clear();
-        if (options.isConfig() || options.isSpider()) reloadConfig();
+        if (options.isSpider() || options.isLoginState()) BaseLoader.get().clear();
+        if (options.isConfig() || options.isSpider() || options.isLoginState()) reloadConfig();
         if (options.isKeep()) RefreshEvent.keep();
         if (options.isHistory()) RefreshEvent.history();
         RefreshEvent.home();
@@ -147,6 +147,7 @@ public class Backup {
         if (key.startsWith("cache_")) return options.isWebHome() || options.isSpider();
         if (key.startsWith("config_")) return options.isConfig();
         if ("keyword".equals(key) || "hot".equals(key)) return options.isSearch();
+        if (key.startsWith("login_state_")) return options.isLoginState();
         if (isAppPref(key)) return options.isSettings();
         return options.isSpider();
     }

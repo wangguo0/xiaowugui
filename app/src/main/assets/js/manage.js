@@ -12,6 +12,10 @@ let pendingDelFolder = null;
 let warnToastTimer = null;
 let syncPaths = [];
 let syncLoadedKey = '';
+let loginStateLoadedKey = '';
+let loginStateData = null;
+let loginStatePaths = [];
+let currentLoginStatePath = '';
 let cspRegistry = null;
 let cspLoadedKey = '';
 let cspRawDirty = false;
@@ -269,6 +273,7 @@ function resetViewState() {
     currentRoot = '';
     currentParent = '';
     syncLoadedKey = '';
+    loginStateLoadedKey = '';
     cspLoadedKey = '';
     proxyLoadedKey = '';
     $('#file_list').html('');
@@ -363,6 +368,7 @@ function loadCurrentView(force) {
     if (!ensureTarget()) return;
     if (currentView === 'files') listFile(force ? '' : currentRoot);
     if (currentView === 'sync') loadSyncManage(force);
+    if (currentView === 'loginState') loadLoginStateManage(force);
     if (currentView === 'csp') loadCspManage(force);
     if (currentView === 'proxy') loadProxyManage(force);
 }
@@ -554,6 +560,117 @@ function renderSyncPaths() {
 }
 function saveSyncPaths() { postJson('/manage/sync/paths', { paths: syncPaths.join('\n') }, data => { syncPaths = data.paths || []; renderSyncPaths(); warnToast('同步目录已保存'); }); }
 function detectSyncPaths() { postJson('/manage/sync/detect', {}, data => { syncPaths = data.paths || []; renderSyncPaths(); warnToast('已自动加入本地包目录'); }, '自动识别失败'); }
+
+function loadLoginStateManage(force = false) {
+    if (loginStateLoadedKey === activeKey() && !force) return;
+    getJson('/manage/login-state?' + targetQuery(), data => {
+        loginStateData = data || {};
+        loginStatePaths = data.learned || [];
+        loginStateLoadedKey = activeKey();
+        renderLoginStateManage();
+    }, '登录态加载失败');
+}
+
+function renderLoginStateManage() {
+    const data = loginStateData || {};
+    const pending = (data.pending || []).length;
+    const findings = data.findings || [];
+    const missing = ((data.states || []).filter(item => item && item.exists === false)).length;
+    $('#loginStateSummary').text(`${data.learning ? '学习中' : '未学习'} · 已确认 ${loginStatePaths.length} · 候选 ${findings.length} · 待确认 ${pending}${missing ? ` · 缺失 ${missing}` : ''}`);
+    $('#loginStateLearnBtn').text(data.learning ? '完成学习' : '开始学习');
+    $('#loginStateConfirmBtn').prop('disabled', pending === 0).text(pending ? `确认候选(${pending})` : '确认候选');
+    $('#loginStateLearned').html(loginStatePathStates().map(item => buildLoginStateRow(item, true)).join('') || '<div class="empty-state compact">未确认任何登录态路径</div>');
+    $('#loginStateFindings').html(findings.map(item => buildLoginStateRow(item, false)).join('') || '<div class="empty-state compact">暂无学习候选</div>');
+}
+
+function loginStatePathStates() {
+    const byPath = {};
+    ((loginStateData && loginStateData.states) || []).forEach(item => { if (item && item.path) byPath[item.path] = item; });
+    return loginStatePaths.map(path => byPath[path] || { path, displayPath: path, exists: true, file: true, size: 0, confidence: 'selected', reason: '已确认路径' });
+}
+
+function buildLoginStateRow(item, selected) {
+    const path = item.path || '';
+    const ep = escPath(path);
+    const confidence = selected ? 'selected' : (item.confidence || 'low');
+    const title = selected ? '已确认' : confidence === 'high' ? '高置信' : confidence === 'medium' ? '中置信' : '低置信';
+    const size = item.size != null ? formatFileSize(Number(item.size || 0), false) : '';
+    const reason = item.reason || (selected ? '已确认路径' : '学习期间发生变化');
+    const display = item.displayPath || path;
+    const action = selected
+        ? `<button class="file-action danger" type="button" onclick="removeLoginStatePath('${ep}')">移除</button>`
+        : `<button class="file-action" type="button" onclick="addLoginStatePath('${ep}')">确认</button>`;
+    return `<div class="login-file-row">
+        <button class="login-file-main" type="button" onclick="openLoginStateFile('${ep}')">
+            <strong>${escHtml(path)}</strong>
+            <span>${escHtml(reason)}${size ? ` · ${escHtml(size)}` : ''}</span>
+            <small>${escHtml(display)}</small>
+        </button>
+        <span class="file-tag ${confidence === 'low' ? 'muted' : ''}">${escHtml(title)}</span>
+        ${action}
+    </div>`;
+}
+
+function toggleLoginStateLearning() {
+    const learning = !!(loginStateData && loginStateData.learning);
+    postJson('/manage/login-state/learn', { action: learning ? 'finish' : 'begin' }, data => {
+        loginStateData = data || {};
+        loginStatePaths = data.learned || [];
+        loginStateLoadedKey = activeKey();
+        renderLoginStateManage();
+        warnToast(learning ? '登录态学习完成' : '已开始登录态学习');
+    }, '登录态学习失败');
+}
+
+function addLoginStatePath(path) {
+    path = String(path || '').trim();
+    if (!path || loginStatePaths.includes(path)) return;
+    loginStatePaths.push(path);
+    renderLoginStateManage();
+}
+
+function removeLoginStatePath(path) {
+    loginStatePaths = loginStatePaths.filter(item => item !== path);
+    renderLoginStateManage();
+}
+
+function confirmLoginStatePending() {
+    ((loginStateData && loginStateData.pending) || []).forEach(addLoginStatePath);
+    renderLoginStateManage();
+}
+
+function saveLoginStatePaths() {
+    postJson('/manage/login-state/paths', { paths: loginStatePaths.join('\n') }, data => {
+        loginStateData = data || {};
+        loginStatePaths = data.learned || [];
+        loginStateLoadedKey = activeKey();
+        renderLoginStateManage();
+        warnToast('登录态路径已保存');
+    }, '登录态路径保存失败');
+}
+
+function openLoginStateFile(path) {
+    if (!path) return;
+    postJson('/manage/login-state/file', { path }, data => {
+        currentLoginStatePath = data.path || path;
+        $('#loginStatePath').text(data.displayPath || currentLoginStatePath);
+        $('#loginStateContent').val(data.content || '');
+        openDialog('loginStateEditorDialog');
+    }, '登录态文件读取失败');
+}
+
+function saveLoginStateFile() {
+    if (!currentLoginStatePath) return;
+    const content = $('#loginStateContent').val();
+    postJson('/manage/login-state/file', { path: currentLoginStatePath, content }, data => {
+        $('#loginStateContent').val(data.content || '');
+        addLoginStatePath(data.path || currentLoginStatePath);
+        saveLoginStatePaths();
+        warnToast('登录态文件已保存');
+    }, '登录态文件保存失败');
+    closeDialog('loginStateEditorDialog');
+}
+
 function setSyncMode(next) {
     syncMode = next === 'pull' ? 'pull' : 'push';
     $('#syncModePush').toggleClass('active', syncMode === 'push');
@@ -561,7 +678,7 @@ function setSyncMode(next) {
     $('#syncDirectionBtn').text(syncMode === 'push' ? '推送' : '拉取');
 }
 function toggleSyncMode() { setSyncMode(syncMode === 'push' ? 'pull' : 'push'); }
-function syncOptionIds() { return ['syncOptConfig', 'syncOptSpider', 'syncOptWebHome', 'syncOptSearch', 'syncOptHistory', 'syncOptKeep', 'syncOptSettings']; }
+function syncOptionIds() { return ['syncOptConfig', 'syncOptSpider', 'syncOptLoginState', 'syncOptWebHome', 'syncOptSearch', 'syncOptHistory', 'syncOptKeep', 'syncOptSettings']; }
 function allSyncSelected() { return syncOptionIds().every(id => $('#' + id).prop('checked')); }
 function toggleSyncSelection() {
     const checked = !allSyncSelected();
@@ -577,6 +694,7 @@ function syncOptionsPayload() {
     return {
         config: $('#syncOptConfig').prop('checked'),
         spider: $('#syncOptSpider').prop('checked'),
+        loginState: $('#syncOptLoginState').prop('checked'),
         webHome: $('#syncOptWebHome').prop('checked'),
         search: $('#syncOptSearch').prop('checked'),
         history: $('#syncOptHistory').prop('checked'),
@@ -614,7 +732,9 @@ function startSyncManage() {
         .done(res => {
             let data = {};
             try { data = parseJson(res); } catch (e) {}
-            const detail = data.files ? ` · ${data.files} 个文件 · ${formatFileSize(data.zipSize, false)}` : '';
+            const fileCount = Number(data.files || 0) + Number(data.loginFiles || 0);
+            const zipSize = Number(data.zipSize || 0) + Number(data.loginZipSize || 0);
+            const detail = fileCount ? ` · ${fileCount} 个文件 · ${formatFileSize(zipSize, false)}` : '';
             warnToast((syncMode === 'push' ? '推送完成' : '拉取已完成') + detail);
         })
         .fail((xhr, status) => warnToast(requestError(xhr, status, '同步失败')))

@@ -126,6 +126,7 @@
     <string name="setting_enhance">Enhancements</string>
     <string name="setting_debug_log">Debug log</string>
     <string name="setting_manage_page">Management page</string>
+    <string name="setting_login_state">Login state learning</string>
     <string name="setting_site_health_sort">Site health ranking</string>
     <string name="setting_site_health_enable">Enable site health ranking</string>
     <string name="setting_site_health_dialog_sort">Sort site dialog</string>
@@ -328,6 +329,7 @@
     <string name="sync_select_none">Clear</string>
     <string name="sync_item_config">Interfaces and source lists</string>
     <string name="sync_item_spider">Jar/script saved data</string>
+    <string name="sync_item_login_state">Login state</string>
     <string name="sync_item_webhome">WebHome saved data</string>
     <string name="sync_item_search">Search records</string>
     <string name="sync_item_history">Watch history</string>
@@ -359,6 +361,28 @@
     <string name="sync_paths_empty">No folders in this directory</string>
     <string name="sync_paths_selected">Selected: %1$s</string>
     <string name="sync_paths_selected_empty">No folders selected</string>
+    <string name="login_state_message">Learn cookie and login-state file paths for one-key sync. %1$d paths are selected. Use Manage paths to review candidates and inspect file contents.</string>
+    <string name="login_state_learning_message">Learning is active. Log in to the drive account, return here, then finish learning. %1$d paths are currently selected.</string>
+    <string name="login_state_start">Start learning</string>
+    <string name="login_state_finish">Finish learning</string>
+    <string name="login_state_started">Login state learning started</string>
+    <string name="login_state_finished">Login state learning finished: %1$d selected, %2$d pending</string>
+    <string name="login_state_count">%1$d selected · %2$d pending</string>
+    <string name="login_state_learning_count">Learning · %1$d selected · %2$d pending</string>
+    <string name="login_state_learned_title">Selected paths</string>
+    <string name="login_state_pending_title">Pending candidates</string>
+    <string name="login_state_findings_title">Latest findings</string>
+    <string name="login_state_empty">No login state files found</string>
+    <string name="login_state_edit">View/Edit login state file</string>
+    <string name="login_state_saved">Login state file saved</string>
+    <string name="login_state_paths_title">Login state paths</string>
+    <string name="login_state_manage_paths">Manage paths</string>
+    <string name="login_state_paths_empty_selected">No login state paths selected</string>
+    <string name="login_state_paths_selected_count">%1$d selected, %2$d ready, %3$d missing</string>
+    <string name="login_state_confirm_pending">Select pending</string>
+    <string name="login_state_confirm_pending_count">Select pending %1$d</string>
+    <string name="login_state_confirm_empty">No items waiting for confirmation</string>
+    <string name="login_state_confirm_done">%1$d pending items selected</string>
 
     <!-- Player -->
     <string name="player">Player</string>
