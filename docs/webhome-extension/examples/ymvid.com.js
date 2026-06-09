@@ -40,6 +40,7 @@
     inputEditing: false,
     lastPath: "",
     lastMediaUrl: "",
+    lastEpisodeKey: "",
     nativeBusy: false,
     artplayerWrapped: false,
     hlsWrapped: false,
@@ -114,7 +115,9 @@
     if (location.pathname !== state.lastPath) {
       state.lastPath = location.pathname;
       state.lastMediaUrl = "";
+      state.lastEpisodeKey = "";
     }
+    resetMediaCacheIfEpisodeChanged();
     clearPopups();
     enhanceCards();
     enhanceEpisodeList();
@@ -860,7 +863,9 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
       ].join("");
       const primary = panel.querySelector("." + CONFIG.primaryClass);
       const refresh = panel.querySelector(".fm-ymvid-secondary");
-      primary.addEventListener("click", nativePlay);
+      primary.addEventListener("click", function () {
+        nativePlay();
+      });
       refresh.addEventListener("click", function () {
         state.lastMediaUrl = "";
         updatePanelStatus(currentEpisodeText() || "已刷新");
@@ -895,20 +900,21 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     return [text || cleanText(document.title.replace(/\s*\|\s*粤漫之家\s*$/i, "")), episode].filter(Boolean).join(" ");
   }
 
-  async function nativePlay() {
+  async function nativePlay(selectedEpisode) {
     if (state.nativeBusy) return;
     state.nativeBusy = true;
     updatePanelBusy(true);
     try {
+      resetMediaCacheIfEpisodeChanged();
       const sdk = await whenFm();
       if (sdk.vodInline) {
-        const payload = await buildInlineVodPayload(sdk);
+        const payload = await buildInlineVodPayload(sdk, selectedEpisode);
         if (payload && payload.episodes && payload.episodes.length) {
-          updatePanelStatus("打开 App 播放列表");
+          updatePanelStatus(selectedEpisode && selectedEpisode.label ? "打开 " + selectedEpisode.label : "打开 App 播放列表");
           return sdk.vodInline(payload);
         }
       }
-      const mediaUrl = await waitForMediaUrl(6000);
+      const mediaUrl = await waitForMediaUrl(6000, { allowCached: false });
       if (!mediaUrl) {
         updatePanelStatus("未取得播放地址");
         toast("播放地址未准备好");
@@ -929,15 +935,19 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     }
   }
 
-  async function buildInlineVodPayload(sdk) {
+  async function buildInlineVodPayload(sdk, selectedEpisode) {
     const episodes = collectEpisodes();
     if (!episodes.length) return null;
     const title = resourceTitle();
     const pic = posterUrl();
-    const current = episodes.find((item) => item.active) || episodes[0];
+    const selected = normalizeEpisodeSelection(selectedEpisode);
+    const selectedPath = selected ? normalizePath(selected.href) : "";
+    const current = selectedPath ? episodes.find((item) => normalizePath(item.href) === selectedPath) || selected : episodes.find((item) => item.active) || episodes[0];
+    const currentPath = current ? normalizePath(current.href) : "";
     const inlineEpisodes = episodes.map((item) => ({
       name: item.label,
       label: item.label,
+      active: currentPath ? normalizePath(item.href) === currentPath : !!item.active,
       url: item.href,
       pageUrl: item.href,
       resolve: true,
@@ -959,6 +969,16 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     };
   }
 
+  function normalizeEpisodeSelection(episode) {
+    if (!episode) return null;
+    const href = absoluteUrl(episode.href || episode.url || episode.pageUrl);
+    if (!href) return null;
+    return {
+      href: href,
+      label: cleanText(episode.label || episode.name || episode.title)
+    };
+  }
+
   async function resolveInlineEpisode(payload) {
     const data = payload || {};
     const sdk = await whenFm();
@@ -966,11 +986,11 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     if (!pageUrl) throw new Error("missing episode page");
     const samePage = normalizePath(pageUrl) === normalizePath(location.href);
     let mediaUrl = "";
-    if (samePage) mediaUrl = currentMediaUrl() || await waitForMediaUrl(5000);
     if (!mediaUrl) {
       const parts = samePage ? currentEpisodeParts() : await fetchEpisodeParts(pageUrl, sdk);
       mediaUrl = parts ? await decryptEpisodeParts(parts) : "";
     }
+    if (!mediaUrl && samePage) mediaUrl = currentMediaUrl({ allowCached: false }) || await waitForMediaUrl(5000, { allowCached: false });
     mediaUrl = playableMediaUrl(mediaUrl);
     if (!mediaUrl) throw new Error("episode media unavailable");
     return {
@@ -1109,12 +1129,12 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     if (status && message) status.textContent = message;
   }
 
-  function waitForMediaUrl(timeout) {
+  function waitForMediaUrl(timeout, options) {
     const deadline = Date.now() + timeout;
     return new Promise((resolve) => {
       const tick = function () {
         requestPageMediaUrl();
-        const mediaUrl = currentMediaUrl();
+        const mediaUrl = currentMediaUrl(options);
         if (mediaUrl || Date.now() >= deadline) {
           resolve(mediaUrl);
           return;
@@ -1125,17 +1145,25 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     });
   }
 
-  function currentMediaUrl() {
-    if (state.lastMediaUrl) return state.lastMediaUrl;
+  function currentMediaUrl(options) {
+    const allowCached = !options || options.allowCached !== false;
     const computed = computeMediaUrl();
     if (computed) {
       state.lastMediaUrl = computed;
       return computed;
     }
+    if (allowCached && state.lastMediaUrl) return state.lastMediaUrl;
     const video = document.querySelector("#player video,video");
     if (video && video.currentSrc) return playableMediaUrl(video.currentSrc);
     if (video && video.src) return playableMediaUrl(video.src);
     return "";
+  }
+
+  function resetMediaCacheIfEpisodeChanged() {
+    const key = [normalizePath(location.href), encryptedPlayerValue(), playListId(), mainVideoId()].join("|");
+    if (!key || key === state.lastEpisodeKey) return;
+    state.lastEpisodeKey = key;
+    state.lastMediaUrl = "";
   }
 
   function computeMediaUrl() {
@@ -1212,15 +1240,7 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
     document.body.classList.add("fm-ymvid-has-native-episodes");
     const links = container.querySelectorAll("a[href]");
     for (let i = 0; i < links.length; i++) {
-      if (links[i].dataset.fmYmvidEpisode === "1") continue;
-      links[i].dataset.fmYmvidEpisode = "1";
-      links[i].setAttribute("tabindex", "0");
-      links[i].addEventListener("keydown", function (event) {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          links[i].click();
-        }
-      });
+      bindEpisodeLink(links[i]);
     }
     const active = container.querySelector(".fm-ymvid-active");
     if (active && active.scrollIntoView && !active.dataset.fmYmvidSeen) {
@@ -1276,22 +1296,57 @@ body.${CONFIG.tvClass} #${CONFIG.panelId} button {
   function enhanceEpisodeList() {
     const links = document.querySelectorAll(".play-list .item a[href]");
     for (let i = 0; i < links.length; i++) {
-      const link = links[i];
-      if (link.dataset.fmYmvidEpisode === "1") continue;
-      link.dataset.fmYmvidEpisode = "1";
-      link.setAttribute("tabindex", "0");
-      link.addEventListener("keydown", function (event) {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          link.click();
-        }
-      });
+      bindEpisodeLink(links[i]);
     }
     const active = document.querySelector(".play-list .item.active a");
     if (active && active.scrollIntoView && !active.dataset.fmYmvidSeen) {
       active.dataset.fmYmvidSeen = "1";
       setTimeout(() => active.scrollIntoView({ block: "nearest", inline: "center" }), 180);
     }
+  }
+
+  function bindEpisodeLink(link) {
+    if (!link || link.dataset.fmYmvidEpisode === "1") return;
+    link.dataset.fmYmvidEpisode = "1";
+    link.setAttribute("tabindex", "0");
+    link.addEventListener("click", function (event) {
+      handleEpisodeClick(link, event);
+    });
+    link.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleEpisodeClick(link, event);
+      }
+    });
+  }
+
+  function handleEpisodeClick(link, event) {
+    if (!canNativePlay()) return false;
+    if (event && (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0)) return false;
+    const episode = episodeFromLink(link);
+    if (!episode) return false;
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    nativePlay(episode);
+    return true;
+  }
+
+  function episodeFromLink(link) {
+    const href = absoluteUrl(link && link.getAttribute("href"));
+    if (!href) return null;
+    const path = normalizePath(href);
+    const fromList = collectEpisodes().find((item) => normalizePath(item.href) === path);
+    if (fromList) return fromList;
+    return {
+      href: href,
+      label: cleanText(link && (link.querySelector("em") && link.querySelector("em").textContent || link.textContent))
+    };
+  }
+
+  function canNativePlay() {
+    return !!(window.fm || window.fongmiBridge || window.fongmiClient);
   }
 
   function enhanceCards() {

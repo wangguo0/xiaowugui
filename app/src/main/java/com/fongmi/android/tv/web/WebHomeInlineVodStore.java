@@ -6,6 +6,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.player.Source;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -49,6 +50,7 @@ public class WebHomeInlineVodStore {
     public static Result detail(String id) {
         Entry entry = ITEMS.get(id);
         if (entry == null || TextUtils.isEmpty(entry.vod)) return Result.error("WebHome inline VOD not found");
+        SpiderDebug.log("webhome-inline", "detail id=%s found=%s", id, true);
         return Result.vod(Vod.objectFrom(entry.vod));
     }
 
@@ -58,8 +60,10 @@ public class WebHomeInlineVodStore {
         EpisodeSpec episodeSpec = URL_EPISODES.get(id);
         String url = id;
         String format = "";
+        long start = System.currentTimeMillis();
+        SpiderDebug.log("webhome-inline", "player start flag=%s id=%s entry=%s episode=%s", flag, id, entry != null, episodeSpec != null);
         if (episodeSpec != null) {
-            ResolveResult resolved = resolve(entry, episodeSpec);
+            ResolveResult resolved = resolve(entry, id, episodeSpec);
             url = resolved.url;
             format = resolved.format;
             headerSpec = resolved.headerSpec;
@@ -73,7 +77,9 @@ public class WebHomeInlineVodStore {
         result.setHeader(headers(url, headerSpec));
         if (!TextUtils.isEmpty(format)) result.setFormat(format);
         else if (isHls(url)) result.setFormat(HLS_FORMAT);
+        SpiderDebug.log("webhome-inline", "player resolved cost=%sms id=%s url=%s format=%s headers=%s", System.currentTimeMillis() - start, id, url, result.getFormat(), result.getHeader().keySet());
         result.setUrl(Source.get().fetch(result));
+        SpiderDebug.log("webhome-inline", "player fetch ok cost=%sms id=%s url=%s", System.currentTimeMillis() - start, id, result.getUrl().v());
         return result;
     }
 
@@ -124,16 +130,27 @@ public class WebHomeInlineVodStore {
         return new HeaderSpec(result, includeCookies);
     }
 
-    private static ResolveResult resolve(Entry entry, EpisodeSpec episodeSpec) throws Exception {
-        if (!TextUtils.isEmpty(episodeSpec.mediaUrl)) return new ResolveResult(episodeSpec.mediaUrl, episodeSpec.headerSpec, episodeSpec.format);
+    private static ResolveResult resolve(Entry entry, String id, EpisodeSpec episodeSpec) throws Exception {
+        if (!TextUtils.isEmpty(episodeSpec.mediaUrl)) {
+            SpiderDebug.log("webhome-inline", "resolve cached id=%s url=%s", id, episodeSpec.mediaUrl);
+            return new ResolveResult(episodeSpec.mediaUrl, episodeSpec.headerSpec, episodeSpec.format);
+        }
         Resolver resolver = entry != null ? entry.resolver : episodeSpec.resolver;
-        if (!episodeSpec.resolve || resolver == null) return new ResolveResult(Json.safeString(episodeSpec.payload, "url"), episodeSpec.headerSpec, episodeSpec.format);
+        if (!episodeSpec.resolve || resolver == null) {
+            String url = Json.safeString(episodeSpec.payload, "url");
+            SpiderDebug.log("webhome-inline", "resolve direct id=%s url=%s resolve=%s resolver=%s", id, url, episodeSpec.resolve, resolver != null);
+            return new ResolveResult(url, episodeSpec.headerSpec, episodeSpec.format);
+        }
+        long start = System.currentTimeMillis();
+        SpiderDebug.log("webhome-inline", "resolve episode start id=%s page=%s", id, Json.safeString(episodeSpec.payload, "pageUrl"));
         JsonObject resolved = resolver.resolve(episodeSpec.payload.deepCopy());
         String url = Json.safeString(resolved, "url");
         if (TextUtils.isEmpty(url)) throw new IllegalStateException("WebHome inline episode resolve failed");
         HeaderSpec headerSpec = resolvedHeaders(resolved, episodeSpec.headerSpec);
         String format = first(Json.safeString(resolved, "format"), isHls(url) ? HLS_FORMAT : episodeSpec.format);
         URL_HEADERS.put(url, headerSpec);
+        URL_EPISODES.put(id, new EpisodeSpec(episodeSpec.payload.deepCopy(), headerSpec, resolver, false, url, format));
+        SpiderDebug.log("webhome-inline", "resolve episode ok cost=%sms id=%s url=%s", System.currentTimeMillis() - start, id, url);
         return new ResolveResult(url, headerSpec, format);
     }
 

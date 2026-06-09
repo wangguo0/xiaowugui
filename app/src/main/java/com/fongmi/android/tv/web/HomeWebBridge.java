@@ -25,10 +25,13 @@ import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Prefers;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -162,6 +165,7 @@ public class HomeWebBridge {
     }
 
     private String playVodInline(JsonObject payload) {
+        preResolveInlineCurrent(payload);
         String vodId = WebHomeInlineVodStore.put(payload, this::resolveInlineEpisode);
         String title = Json.safeString(payload, "title");
         if (TextUtils.isEmpty(title)) title = Json.safeString(payload, "vod_name");
@@ -177,6 +181,42 @@ public class HomeWebBridge {
         result.addProperty("siteKey", WebHomeInlineVodStore.KEY);
         result.addProperty("vodId", vodId);
         return result.toString();
+    }
+
+    private void preResolveInlineCurrent(JsonObject payload) {
+        JsonObject episode = currentInlineEpisode(payload);
+        if (episode == null || !TextUtils.isEmpty(Json.safeString(episode, "mediaUrl"))) return;
+        String pageUrl = Json.safeString(episode, "pageUrl");
+        long start = System.currentTimeMillis();
+        try {
+            SpiderDebug.log("webhome-inline", "pre-resolve current start mark=%s page=%s", Json.safeString(payload, "mark"), pageUrl);
+            JsonObject resolved = resolveInlineEpisode(episode.deepCopy());
+            String url = Json.safeString(resolved, "url");
+            if (TextUtils.isEmpty(url)) throw new IllegalStateException("empty resolved url");
+            episode.addProperty("mediaUrl", url);
+            if (resolved.has("format")) episode.add("format", resolved.get("format"));
+            if (resolved.has("headers")) episode.add("headers", resolved.get("headers"));
+            if (resolved.has("credentials")) episode.add("credentials", resolved.get("credentials"));
+            if (resolved.has("referer")) episode.add("referer", resolved.get("referer"));
+            SpiderDebug.log("webhome-inline", "pre-resolve current ok cost=%sms url=%s", System.currentTimeMillis() - start, url);
+        } catch (Throwable e) {
+            SpiderDebug.log("webhome-inline", "pre-resolve current failed cost=%sms page=%s error=%s", System.currentTimeMillis() - start, pageUrl, e.getMessage());
+        }
+    }
+
+    private JsonObject currentInlineEpisode(JsonObject payload) {
+        if (payload == null || !payload.has("episodes") || !payload.get("episodes").isJsonArray()) return null;
+        JsonArray episodes = payload.getAsJsonArray("episodes");
+        String mark = Json.safeString(payload, "mark");
+        JsonObject fallback = null;
+        for (JsonElement element : episodes) {
+            if (element == null || !element.isJsonObject()) continue;
+            JsonObject episode = element.getAsJsonObject();
+            if (fallback == null) fallback = episode;
+            if (episode.has("active") && bool(episode, "active")) return episode;
+            if (!TextUtils.isEmpty(mark) && (mark.equals(Json.safeString(episode, "name")) || mark.equals(Json.safeString(episode, "label")) || mark.equals(Json.safeString(episode, "title")))) return episode;
+        }
+        return fallback;
     }
 
     private JsonObject resolveInlineEpisode(JsonObject payload) throws Exception {
@@ -202,16 +242,35 @@ public class HomeWebBridge {
                     fail(e);
                   }
                 })();
-                """.formatted(quote(id), payload == null ? "{}" : payload.toString());
+                """;
+        script = String.format(Locale.ROOT, script, quote(id), payload == null ? "{}" : payload.toString());
+        long start = System.currentTimeMillis();
+        boolean lease = controller.beginInlineEvaluation();
         try {
+            SpiderDebug.log("webhome-inline", "resolve start id=%s page=%s lease=%s", id, Json.safeString(payload, "pageUrl"), lease);
             eval(script);
             String result = future.get(INLINE_RESOLVE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             JsonObject object = WebCall.object(result);
             String error = Json.safeString(object, "error");
             if (!TextUtils.isEmpty(error)) throw new IllegalStateException(error);
+            SpiderDebug.log("webhome-inline", "resolve ok id=%s cost=%sms url=%s", id, System.currentTimeMillis() - start, Json.safeString(object, "url"));
             return object;
+        } catch (Throwable e) {
+            SpiderDebug.log("webhome-inline", "resolve failed id=%s cost=%sms error=%s", id, System.currentTimeMillis() - start, e.getMessage());
+            if (e instanceof Exception) throw (Exception) e;
+            if (e instanceof Error) throw (Error) e;
+            throw new RuntimeException(e);
         } finally {
             inlineResults.remove(id);
+            controller.endInlineEvaluation(lease);
+        }
+    }
+
+    private static boolean bool(JsonObject object, String name) {
+        try {
+            return object != null && object.has(name) && object.get(name).getAsBoolean();
+        } catch (Throwable e) {
+            return false;
         }
     }
 

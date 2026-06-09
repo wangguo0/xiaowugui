@@ -68,6 +68,7 @@ public class HomeWebController {
     private long pauseAt;
     private long lastKeyAt;
     private long lastExtensionReloadAt;
+    private int inlineEvaluationCount;
     private boolean sdkReady;
     private boolean paused;
 
@@ -229,6 +230,9 @@ public class HomeWebController {
 
     public void onResume() {
         paused = false;
+        synchronized (this) {
+            inlineEvaluationCount = 0;
+        }
         webView.onResume();
         webView.resumeTimers();
         recoverAfterResume();
@@ -240,6 +244,36 @@ public class HomeWebController {
         pauseAt = System.currentTimeMillis();
         dispatchLifecycle("fmpause", "{time:" + pauseAt + "}");
         webView.onPause();
+    }
+
+    public boolean beginInlineEvaluation() {
+        synchronized (this) {
+            if (!paused) return false;
+            inlineEvaluationCount++;
+            if (inlineEvaluationCount > 1) return true;
+        }
+        App.post(() -> {
+            if (!paused) return;
+            SpiderDebug.log("webhome-inline", "resume WebView for inline evaluation url=%s", webView.getUrl());
+            webView.onResume();
+            webView.resumeTimers();
+        });
+        return true;
+    }
+
+    public void endInlineEvaluation(boolean active) {
+        if (!active) return;
+        boolean pause;
+        synchronized (this) {
+            if (inlineEvaluationCount > 0) inlineEvaluationCount--;
+            pause = paused && inlineEvaluationCount == 0;
+        }
+        if (!pause) return;
+        App.post(() -> {
+            if (!paused) return;
+            SpiderDebug.log("webhome-inline", "pause WebView after inline evaluation url=%s", webView.getUrl());
+            webView.onPause();
+        });
     }
 
     public void destroy() {
