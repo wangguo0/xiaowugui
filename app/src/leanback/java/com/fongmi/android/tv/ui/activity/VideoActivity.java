@@ -736,11 +736,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private int getEpisodeMaxRows(int rowHeight, int spacing) {
+        int legacyRows = ResUtil.getScreenHeight() < ResUtil.dp2px(560) ? 2 : 3;
         int available = getEpisodeAvailableHeight();
-        if (available <= 0) return ResUtil.getScreenHeight() < ResUtil.dp2px(560) ? 2 : 3;
+        if (available <= 0) return legacyRows;
         int content = Math.max(0, available - mBinding.episode.getPaddingTop() - mBinding.episode.getPaddingBottom());
         int rows = (content + spacing) / (rowHeight + spacing);
-        return Math.max(1, rows);
+        return Math.max(legacyRows, rows);
     }
 
     private int getEpisodeAvailableHeight() {
