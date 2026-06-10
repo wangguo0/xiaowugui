@@ -77,8 +77,10 @@ public class WallConfig extends BaseConfig {
     protected void load(Config config) throws Throwable {
         File file = FileUtil.getWall(0);
         checkUrl(config.getUrl(), file);
-        setWallType(file);
+        int type = wallType(file);
         setSnapshot(file);
+        Setting.putWall(0);
+        Setting.putWallType(type);
     }
 
     @Override
@@ -92,10 +94,10 @@ public class WallConfig extends BaseConfig {
         if (!Path.exists(file)) throw new FileNotFoundException();
     }
 
-    private void setWallType(File file) {
-        Setting.putWallType(0);
-        if (isGif(file)) Setting.putWallType(1);
-        else if (isVideo(file)) Setting.putWallType(2);
+    private int wallType(File file) {
+        if (isGif(file)) return 1;
+        if (isVideo(file)) return 2;
+        return 0;
     }
 
     private void setSnapshot(File file) throws Throwable {

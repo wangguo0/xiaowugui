@@ -1971,10 +1971,12 @@ function configTypeName(type) {
     if (Number(type) === 2) return '壁纸';
     return '影视';
 }
-function showConfigDialog(type = 0, url = '', name = '') {
-    editingConfig = { type: Number(type || 0), oldUrl: url || '' };
-    configFilter = editingConfig.type;
+function showConfigDialog(type = null, url = '', name = '') {
+    const editing = !!url;
+    const selectedType = editing ? Number(type || 0) : Number(configFilter || 0);
+    editingConfig = { type: selectedType, oldUrl: url || '', editing };
     $('#configType').val(String(editingConfig.type));
+    $('#configTypeRow').toggle(editing);
     $('#configName').val(name || '');
     $('#configUrl').val(url || '');
     $('#configDialogTitle').text(url ? '编辑接口' : '新增接口');
@@ -2015,6 +2017,7 @@ function saveConfigDialog() {
     const save = () => postJson('/manage/configs', { type, name, url }, data => {
         configsData = data.items || [];
         configsLoadedKey = activeKey();
+        configFilter = type;
         renderConfigsManage();
         closeDialog('configDialog');
         warnToast('接口已保存');

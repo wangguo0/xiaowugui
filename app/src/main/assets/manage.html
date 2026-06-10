@@ -473,12 +473,14 @@
         <div class="md-dialog config-dialog">
             <div class="md-dialog-title" id="configDialogTitle">新增接口</div>
             <div class="md-dialog-body config-dialog-body">
-                <label class="form-label" for="configType">类型</label>
-                <select id="configType" class="md-input">
-                    <option value="0">影视</option>
-                    <option value="1">直播</option>
-                    <option value="2">壁纸</option>
-                </select>
+                <div id="configTypeRow">
+                    <label class="form-label" for="configType">类型</label>
+                    <select id="configType" class="md-input">
+                        <option value="0">影视</option>
+                        <option value="1">直播</option>
+                        <option value="2">壁纸</option>
+                    </select>
+                </div>
                 <label class="form-label" for="configName">名称</label>
                 <input id="configName" class="md-input" type="text" placeholder="可选，留空时显示接口地址" />
                 <label class="form-label" for="configUrl">接口地址</label>
