@@ -60,6 +60,9 @@ const SYNC_TIMEOUT = 600000;
 const REMOTE_HEALTH_INTERVAL = 6000;
 const REMOTE_HEALTH_BLOCK_MS = 18000;
 const CONFIG_UPLOAD_DIR = 'WebHTV/Config';
+const LOGIN_TEXTAREA_LIMIT = 32 * 1024;
+const LOGIN_TEXTAREA_LINE_LIMIT = 1600;
+const LOGIN_PREVIEW_ROW_CHARS = 1200;
 
 function escPath(s) { return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -834,6 +837,63 @@ function loginStatePreviewText(data) {
     return parts.join(' · ');
 }
 
+function loginStateUsePreviewList(data) {
+    const text = String((data && data.content) || '');
+    return !(data && data.editable) || text.length > LOGIN_TEXTAREA_LIMIT || loginStateMaxLine(text) > LOGIN_TEXTAREA_LINE_LIMIT;
+}
+
+function loginStateMaxLine(text) {
+    let max = 0;
+    let count = 0;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text.charAt(i);
+        if (ch === '\n' || ch === '\r') {
+            max = Math.max(max, count);
+            count = 0;
+        } else {
+            count++;
+        }
+    }
+    return Math.max(max, count);
+}
+
+function loginStatePreviewRows(text) {
+    const rows = [];
+    const value = String(text || '');
+    let start = 0;
+    for (let i = 0; i <= value.length; i++) {
+        if (i < value.length && value.charAt(i) !== '\n' && value.charAt(i) !== '\r') continue;
+        loginStateAddPreviewChunks(rows, value.substring(start, i));
+        if (i + 1 < value.length && value.charAt(i) === '\r' && value.charAt(i + 1) === '\n') i++;
+        start = i + 1;
+    }
+    if (!rows.length) rows.push('');
+    return rows;
+}
+
+function loginStateAddPreviewChunks(rows, line) {
+    if (!line.length) {
+        rows.push('');
+        return;
+    }
+    for (let start = 0; start < line.length; start += LOGIN_PREVIEW_ROW_CHARS) rows.push(line.substring(start, start + LOGIN_PREVIEW_ROW_CHARS));
+}
+
+function renderLoginStatePreviewContent(data) {
+    const content = (data && data.content) || '';
+    const listPreview = loginStateUsePreviewList(data);
+    currentLoginStateEditable = !!(data && data.editable) && !listPreview;
+    $('#loginStateContent')
+        .toggle(!listPreview)
+        .val(listPreview ? '' : content)
+        .prop('readonly', !currentLoginStateEditable)
+        .toggleClass('readonly-code', !currentLoginStateEditable);
+    $('#loginStatePreviewList')
+        .toggle(listPreview)
+        .html(listPreview ? loginStatePreviewRows(content).map(row => `<div class="file-preview-row">${row ? escHtml(row) : '&nbsp;'}</div>`).join('') : '');
+    $('#loginStateSaveBtn').prop('disabled', !currentLoginStateEditable).toggle(currentLoginStateEditable);
+}
+
 function buildLoginStateRow(item, type) {
     const path = item.path || '';
     const ep = escPath(path);
@@ -917,12 +977,9 @@ function openLoginStateFile(path) {
     }
     postJson('/manage/login-state/file', { path }, data => {
         currentLoginStatePath = data.path || path;
-        currentLoginStateEditable = !!data.editable;
         $('#loginStatePath').text(data.displayPath || currentLoginStatePath);
         $('#loginStatePreviewMeta').text(loginStatePreviewText(data)).toggle(!!loginStatePreviewText(data));
-        $('#loginStateContent').val(data.content || '');
-        $('#loginStateContent').prop('readonly', !currentLoginStateEditable).toggleClass('readonly-code', !currentLoginStateEditable);
-        $('#loginStateSaveBtn').prop('disabled', !currentLoginStateEditable).toggle(!data.truncated && currentLoginStateEditable);
+        renderLoginStatePreviewContent(data);
         openDialog('loginStateEditorDialog');
         if (currentLoginStateEditable) setTimeout(() => $('#loginStateContent').trigger('focus'), 80);
     }, '登录态文件读取失败');
@@ -936,11 +993,8 @@ function saveLoginStateFile() {
     }
     const content = $('#loginStateContent').val();
     postJson('/manage/login-state/file', { path: currentLoginStatePath, content }, data => {
-        $('#loginStateContent').val(data.content || '');
-        currentLoginStateEditable = !!data.editable;
         $('#loginStatePreviewMeta').text(loginStatePreviewText(data)).toggle(!!loginStatePreviewText(data));
-        $('#loginStateContent').prop('readonly', !currentLoginStateEditable).toggleClass('readonly-code', !currentLoginStateEditable);
-        $('#loginStateSaveBtn').prop('disabled', !currentLoginStateEditable).toggle(!data.truncated && currentLoginStateEditable);
+        renderLoginStatePreviewContent(data);
         addLoginStatePath(data.path || currentLoginStatePath);
         saveLoginStatePaths();
         warnToast('登录态文件已保存');

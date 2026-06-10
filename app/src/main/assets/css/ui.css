@@ -2597,6 +2597,32 @@ body.manage-page {
     margin: 8px 0;
 }
 
+.file-preview-list {
+    min-height: min(55vh, 420px);
+    max-height: 62vh;
+    overflow: auto;
+    display: none;
+    border: 1px solid var(--md-outline-variant);
+    border-radius: 8px;
+    background: var(--md-surface-container-high);
+    color: var(--md-on-surface);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.file-preview-row {
+    min-height: 18px;
+    padding: 2px 10px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.035);
+}
+
+.file-preview-row:last-child {
+    border-bottom: 0;
+}
+
 .readonly-code {
     opacity: 0.92;
     cursor: default;
