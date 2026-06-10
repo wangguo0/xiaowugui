@@ -12,6 +12,8 @@ import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.WebChromeClient;
+import android.webkit.WebBackForwardList;
+import android.webkit.WebHistoryItem;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -216,8 +218,84 @@ public class HomeWebController {
     public boolean handleBack() {
         if (!isVisible()) return false;
         if (!webView.canGoBack()) return false;
+        String current = webView.getUrl();
+        if (samePage(current, homePage)) {
+            SpiderDebug.log("webhome-webview", "back home boundary current=%s", current);
+            return false;
+        }
+        String previous = previousHistoryUrl();
+        if (!sameSite(current, previous)) {
+            SpiderDebug.log("webhome-webview", "back boundary current=%s previous=%s", current, previous);
+            return false;
+        }
         webView.goBack();
         return true;
+    }
+
+    private String previousHistoryUrl() {
+        try {
+            WebBackForwardList list = webView.copyBackForwardList();
+            int index = list.getCurrentIndex() - 1;
+            WebHistoryItem item = index >= 0 ? list.getItemAtIndex(index) : null;
+            return item == null ? "" : item.getUrl();
+        } catch (Throwable e) {
+            SpiderDebug.log("webhome-webview", "back history unavailable error=%s", e.getMessage());
+            return "";
+        }
+    }
+
+    private boolean sameSite(String current, String target) {
+        if (TextUtils.isEmpty(current) || TextUtils.isEmpty(target)) return false;
+        Uri currentUri = Uri.parse(current);
+        Uri targetUri = Uri.parse(target);
+        String currentScheme = UrlUtil.scheme(currentUri);
+        String targetScheme = UrlUtil.scheme(targetUri);
+        String currentHost = UrlUtil.host(currentUri);
+        String targetHost = UrlUtil.host(targetUri);
+        if (currentHost.isEmpty() || targetHost.isEmpty()) return current.equals(target);
+        return currentScheme.equals(targetScheme) && currentHost.equals(targetHost) && port(currentUri) == port(targetUri);
+    }
+
+    private boolean samePage(String current, String target) {
+        if (!sameSite(current, target)) return false;
+        Uri currentUri = Uri.parse(current);
+        Uri targetUri = Uri.parse(target);
+        return path(currentUri).equals(path(targetUri))
+                && cleanQuery(currentUri).equals(cleanQuery(targetUri))
+                && fragment(currentUri).equals(fragment(targetUri));
+    }
+
+    private String path(Uri uri) {
+        String path = uri.getEncodedPath();
+        return TextUtils.isEmpty(path) ? "/" : path;
+    }
+
+    private String fragment(Uri uri) {
+        String fragment = uri.getEncodedFragment();
+        return fragment == null ? "" : fragment;
+    }
+
+    private String cleanQuery(Uri uri) {
+        String query = uri.getEncodedQuery();
+        if (TextUtils.isEmpty(query)) return "";
+        StringBuilder result = new StringBuilder();
+        for (String part : query.split("&")) {
+            int index = part.indexOf('=');
+            String name = index >= 0 ? part.substring(0, index) : part;
+            if ("_fm_reload".equals(name) || "_fm_restore".equals(name)) continue;
+            if (result.length() > 0) result.append('&');
+            result.append(part);
+        }
+        return result.toString();
+    }
+
+    private int port(Uri uri) {
+        int port = uri.getPort();
+        if (port >= 0) return port;
+        String scheme = UrlUtil.scheme(uri);
+        if ("http".equals(scheme)) return 80;
+        if ("https".equals(scheme)) return 443;
+        return -1;
     }
 
     public void setToolbar(boolean visible) {
