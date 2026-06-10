@@ -304,7 +304,6 @@ function resetViewState() {
     cspLoadedKey = '';
     proxyLoadedKey = '';
     configsLoadedKey = '';
-    $('#file_list').html('');
     currentFiles = [];
     clearFileSelection();
 }
@@ -431,45 +430,81 @@ function loadFileTree(path = '') {
     path = syncNormalize(path);
     if (fileTreeCache[path] || fileTreeLoading.has(path)) return;
     fileTreeLoading.add(path);
-    getJson('/manage/file/tree?' + targetQuery({ path }), data => {
+    const requestPath = path ? '/' + path : '';
+    if (blockOfflineRemote(fileApi(requestPath), null)) {
         fileTreeLoading.delete(path);
-        fileTreeCache[path] = data || { path, dirs: [] };
-        renderFileTree();
-    }, '目录树加载失败');
+        return;
+    }
+    $.ajax({ url: fileApi(requestPath), timeout: FILE_TIMEOUT, cache: false })
+        .done(res => {
+            let data;
+            try { data = parseJson(res); }
+            catch (e) { warnToast('响应格式错误'); return; }
+            fileTreeCache[path] = { path, parent: data.parent || '', items: data.files || [] };
+            renderFileTree();
+        })
+        .fail((xhr, status) => warnToast(requestError(xhr, status, '目录树加载失败')))
+        .always(() => {
+        fileTreeLoading.delete(path);
+        });
 }
 
 function renderFileTree() {
-    const rows = [`<div class="file-tree-root${syncNormalize(currentRoot) ? '' : ' active'}"><button type="button" onclick="listFile('')"><img class="file-icon" src="${icDir}" alt=""><span>全部文件</span></button></div>`];
-    buildFileTreeRows('', 0, rows);
+    const selected = syncNormalize(currentRoot);
+    const rootActive = selected ? '' : ' active';
+    const rootExpanded = fileTreeExpanded.has('');
+    const visible = [];
+    const rows = [`<div class="file-tree-row file-tree-root${rootActive}" style="--depth:0" data-path="">
+        <button class="tree-toggle file-tree-toggle" type="button" onclick="toggleFileTree('')" aria-label="${rootExpanded ? '收起' : '展开'}">${rootExpanded ? '−' : '+'}</button>
+        <span class="tree-check file-tree-check"></span>
+        <button class="file-tree-main" type="button" onclick="listFile('')"><img class="file-icon" src="${icDir}" alt=""><span>全部文件</span></button>
+        <div class="file-tree-actions"></div>
+    </div>`];
+    buildFileTreeRows('', 0, rows, visible);
+    currentFiles = visible;
     $('#fileTree').html(rows.join('') || '<div class="empty-state compact">没有目录</div>');
+    updateFileSelection();
 }
 
-function buildFileTreeRows(path, depth, rows) {
+function buildFileTreeRows(path, depth, rows, visible) {
     path = syncNormalize(path);
+    if (path && !fileTreeExpanded.has(path)) return;
     const tree = fileTreeCache[path];
     if (!tree) {
-        rows.push(`<div class="file-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><div class="file-tree-main"><span>加载中...</span><small>${escHtml(path || '/')}</small></div></div>`);
+        rows.push(`<div class="file-tree-row muted" style="--depth:${depth + 1}"><span class="tree-toggle placeholder"></span><span class="tree-check file-tree-check"></span><div class="file-tree-main"><span>加载中...</span></div><div class="file-tree-actions"></div></div>`);
         loadFileTree(path);
         return;
     }
-    (tree.dirs || []).forEach(item => {
-        const child = syncNormalize(item.path || '');
-        rows.push(buildFileTreeDir(item, depth));
-        if (fileTreeExpanded.has(child)) buildFileTreeRows(child, depth + 1, rows);
+    const items = (tree.items || []).slice().sort((a, b) => {
+        if (a.dir !== b.dir) return b.dir - a.dir;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans');
     });
-    if (tree.truncated) rows.push(`<div class="file-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><div class="file-tree-main"><span>当前目录过多，仅显示前 300 个目录</span><small>${escHtml(path || '/')}</small></div></div>`);
+    if (!items.length && path === syncNormalize(currentRoot)) rows.push(`<div class="file-tree-row muted" style="--depth:${depth + 1}"><span class="tree-toggle placeholder"></span><span class="tree-check file-tree-check"></span><div class="file-tree-main"><span>当前目录没有文件</span></div><div class="file-tree-actions"></div></div>`);
+    items.forEach(item => {
+        if (item.path) visible.push(syncNormalize(item.path));
+        rows.push(buildFileTreeNode(item, depth + 1));
+        if (item.dir === 1 && fileTreeExpanded.has(syncNormalize(item.path || ''))) buildFileTreeRows(item.path, depth + 1, rows, visible);
+    });
 }
 
-function buildFileTreeDir(item, depth) {
+function buildFileTreeNode(item, depth) {
     const path = syncNormalize(item.path || '');
     const ep = escPath(path);
-    const expanded = fileTreeExpanded.has(path);
-    const active = syncNormalize(currentRoot) === path ? ' active' : '';
-    const hasChildren = item.children !== false;
-    const toggle = hasChildren ? `<button class="sync-tree-toggle" type="button" onclick="toggleFileTree('${ep}')" aria-label="${expanded ? '收起' : '展开'}">${expanded ? '−' : '+'}</button>` : '<span class="sync-tree-toggle placeholder"></span>';
-    return `<div class="file-tree-row${active}" style="--depth:${depth}">
+    const isDir = Number(item.dir || 0) === 1;
+    const expanded = isDir && fileTreeExpanded.has(path);
+    const active = isDir && syncNormalize(currentRoot) === path ? ' active' : '';
+    const checked = fileSelection.has(path) ? ' checked' : '';
+    const icon = isDir ? icDir : icFile;
+    const toggle = isDir ? `<button class="tree-toggle file-tree-toggle" type="button" onclick="toggleFileTree('${ep}')" aria-label="${expanded ? '收起' : '展开'}">${expanded ? '−' : '+'}</button>` : '<span class="tree-toggle placeholder"></span>';
+    const click = isDir ? `listFile('${ep}')` : `selectFile('${ep}')`;
+    const actions = isDir
+        ? `<button class="file-action" type="button" onclick="downloadArchive(['${ep}'])">打包</button><button class="file-action danger" type="button" onclick="showDelFolderDialog('${ep}','${escPath(parentPath(path))}')">删除</button>`
+        : `<button class="file-action" type="button" onclick="downloadPath('${ep}')">下载</button><button class="file-action danger" type="button" onclick="showDelFileDialog('${ep}')">删除</button>`;
+    return `<div class="file-tree-row${active}" style="--depth:${depth}" data-path="${escHtml(path)}">
         ${toggle}
-        <button class="file-tree-main" type="button" onclick="listFile('${ep}')"><img class="file-icon" src="${icDir}" alt=""><span>${escHtml(item.name || path)}</span><small>${escHtml(path)}</small></button>
+        <label class="tree-check file-tree-check"><input type="checkbox" aria-label="选择 ${escHtml(item.name || path)}" onchange="toggleFileSelection('${ep}',this.checked)"${checked}></label>
+        <button class="file-tree-main" type="button" onclick="${click}"><img class="file-icon" src="${icon}" alt=""><span>${escHtml(item.name || path)}</span></button>
+        <div class="file-tree-actions">${actions}</div>
     </div>`;
 }
 
@@ -495,21 +530,15 @@ function toggleFileTree(path) {
     }
 }
 
-function buildDirItem(name, time, path, size) {
-    const ep = escPath(path);
-    const checked = fileSelection.has(path) ? ' checked' : '';
-    return `<div class="file-item file-row is-dir"><label class="tree-check file-check"><input type="checkbox" aria-label="选择 ${escHtml(name)}" onchange="toggleFileSelection('${ep}',this.checked)"${checked}></label><button class="file-main file-name-cell" type="button" onclick="listFile('${ep}')"><img class="file-icon" src="${icDir}" alt=""><div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time mobile-meta">${escHtml(time)} · ${formatFileSize(size, true)}</div></div></button><div class="file-time file-time-cell">${escHtml(time)}</div><div class="file-size-cell">${formatFileSize(size, true)}</div><div class="file-actions-cell"><button class="file-action" type="button" onclick="downloadArchive(['${ep}'])">打包</button><button class="file-action danger" type="button" onclick="showDelFolderDialog('${ep}',currentRoot)">删除</button></div></div>`;
-}
-
-function buildFileItem(name, time, path, size) {
-    const ep = escPath(path);
-    const checked = fileSelection.has(path) ? ' checked' : '';
-    return `<div class="file-item file-row"><label class="tree-check file-check"><input type="checkbox" aria-label="选择 ${escHtml(name)}" onchange="toggleFileSelection('${ep}',this.checked)"${checked}></label><button class="file-main file-name-cell" type="button" onclick="selectFile('${ep}')"><img class="file-icon" src="${icFile}" alt=""><div class="file-info"><div class="file-name">${escHtml(name)}</div><div class="file-time mobile-meta">${escHtml(time)} · ${formatFileSize(size, false)}</div></div></button><div class="file-time file-time-cell">${escHtml(time)}</div><div class="file-size-cell">${formatFileSize(size, false)}</div><div class="file-actions-cell"><button class="file-action" type="button" onclick="downloadPath('${ep}')">下载</button><button class="file-action danger" type="button" onclick="showDelFileDialog('${ep}')">删除</button></div></div>`;
+function parentPath(path) {
+    path = syncNormalize(path);
+    const index = path.lastIndexOf('/');
+    return index < 0 ? '' : path.substring(0, index);
 }
 
 function toggleFileSelection(path, checked) { checked ? fileSelection.add(path) : fileSelection.delete(path); updateFileSelection(); }
-function toggleSelectAll(checked) { fileSelection = checked ? new Set(currentFiles) : new Set(); $('#file_list input[type=checkbox]').prop('checked', checked); updateFileSelection(); }
-function clearFileSelection() { fileSelection.clear(); $('#file_list input[type=checkbox],#fileSelectAll').prop('checked', false); updateFileSelection(); }
+function toggleSelectAll(checked) { fileSelection = checked ? new Set(currentFiles) : new Set(); $('#fileTree input[type=checkbox]').prop('checked', checked); updateFileSelection(); }
+function clearFileSelection() { fileSelection.clear(); $('#fileTree input[type=checkbox],#fileSelectAll').prop('checked', false); updateFileSelection(); }
 function updateFileSelection() {
     const count = fileSelection.size;
     const total = currentFiles.length;
@@ -533,17 +562,13 @@ function listFile(path = '') {
         catch (e) { warnToast('响应格式错误'); return; }
         currentRoot = path;
         currentParent = info.parent || '';
-        expandFileTreePath(path);
-        loadFileTree('');
-        loadFileTree(path);
         const files = info.files || [];
         currentFiles = files.map(node => node.path).filter(Boolean);
+        fileTreeCache[syncNormalize(path)] = { path: syncNormalize(path), parent: info.parent || '', items: files };
+        expandFileTreePath(path);
+        loadFileTree('');
         renderFileBreadcrumb(path);
         fileSelection.clear();
-        updateFileSelection();
-        const rows = [];
-        files.forEach(node => rows.push(node.dir === 1 ? buildDirItem(node.name, node.time, node.path, node.size) : buildFileItem(node.name, node.time, node.path, node.size)));
-        $('#file_list').html(rows.join('') || '<div class="empty-state file-empty"><div>当前目录没有文件</div></div>');
         renderFileTree();
     })
         .fail((xhr, status) => warnToast(requestError(xhr, status, '加载失败')))
@@ -666,7 +691,7 @@ function buildSyncTreeRows(path, depth, rows) {
     path = syncNormalize(path);
     const tree = syncTreeCache[path];
     if (!tree) {
-        rows.push(`<div class="sync-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><div class="sync-tree-main"><span>加载中...</span><small>${escHtml(path || '/')}</small></div></div>`);
+        rows.push(`<div class="sync-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><span class="tree-check sync-tree-check"></span><div class="sync-tree-main"><span>加载中...</span></div></div>`);
         loadSyncTree(path);
         return;
     }
@@ -675,7 +700,7 @@ function buildSyncTreeRows(path, depth, rows) {
         rows.push(buildSyncDir(item, depth));
         if (syncTreeExpanded.has(child)) buildSyncTreeRows(child, depth + 1, rows);
     });
-    if (tree.truncated) rows.push(`<div class="sync-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><div class="sync-tree-main"><span>当前目录过多，仅显示前 300 个目录</span><small>${escHtml(path || '/')}</small></div></div>`);
+    if (tree.truncated) rows.push(`<div class="sync-tree-row muted" style="--depth:${depth}"><span class="sync-tree-toggle placeholder"></span><span class="tree-check sync-tree-check"></span><div class="sync-tree-main"><span>当前目录过多，仅显示前 300 个目录</span></div></div>`);
 }
 
 function buildSyncDir(item, depth) {
@@ -689,7 +714,7 @@ function buildSyncDir(item, depth) {
     return `<div class="sync-tree-row" style="--depth:${depth}" data-path="${escHtml(path)}">
         ${toggle}
         <label class="tree-check sync-tree-check"><input id="sync_${itemId(path)}" type="checkbox" onchange="toggleSyncPath('${ep}',this.checked)"${checked}></label>
-        <button class="sync-tree-main" type="button" onclick="${click}"><img class="file-icon" src="${icDir}" alt=""><span>${escHtml(item.name || path)}</span><small>${escHtml(path)}</small></button>
+        <button class="sync-tree-main" type="button" onclick="${click}"><img class="file-icon" src="${icDir}" alt=""><span>${escHtml(item.name || path)}</span></button>
     </div>`;
 }
 
@@ -955,7 +980,7 @@ function renderLoginStateTree(root, targetEl) {
 function buildLoginStateTreeRows(path, depth, rows) {
     const tree = loginStateTreeCache[path];
     if (!tree) {
-        rows.push(`<div class="login-tree-row muted" style="--depth:${depth}"><span class="login-tree-spacer"></span><div class="login-tree-main"><span>加载中...</span><small>${escHtml(path)}</small></div></div>`);
+        rows.push(`<div class="login-tree-row muted" style="--depth:${depth}"><span class="login-tree-spacer"></span><span class="tree-check login-tree-check"></span><div class="login-tree-main"><span>加载中...</span></div></div>`);
         if (!loginStateTreeLoading.has(path)) loadLoginStateTree(path);
         return;
     }
@@ -994,7 +1019,6 @@ function buildLoginStateTreeRow(item, depth) {
     const badge = missing ? '<span class="login-state-badge missing">缺失</span>' : pending ? '<span class="login-state-badge pending">待确认</span>' : hasPending ? '<span class="login-state-badge pending">含待确认</span>' : state === 'checked' ? '<span class="login-state-badge selected">已选</span>' : state === 'partial' ? '<span class="login-state-badge partial">部分</span>' : '';
     const toggle = item.dir ? `<button class="login-tree-toggle" type="button" onclick="toggleLoginStateTree('${ep}')" aria-label="${loginStateExpanded.has(path) ? '收起' : '展开'}">${loginStateExpanded.has(path) ? '−' : '+'}</button>` : '<span class="login-tree-toggle placeholder"></span>';
     const icon = item.dir ? icDir : icFile;
-    const meta = loginStateTreeMeta(item, pending);
     const click = item.dir ? `toggleLoginStateTree('${ep}')` : `openLoginStateFile('${ep}')`;
     return `<div class="login-tree-row ${item.dir ? 'dir' : 'file'} ${pending || hasPending ? 'pending' : ''} ${missing ? 'missing' : ''}" style="--depth:${depth}" data-path="${escHtml(path)}">
         ${toggle}
@@ -1003,16 +1027,8 @@ function buildLoginStateTreeRow(item, depth) {
             <img class="file-icon" src="${icon}" alt="">
             <span>${escHtml(item.name || path)}</span>
             ${badge}
-            <small>${escHtml(meta)}</small>
         </button>
     </div>`;
-}
-function loginStateTreeMeta(item, pending) {
-    const finding = loginStateFindingByPath(item.path || '');
-    if (finding && pending) return `${finding.reason || '待确认'} · ${item.path}`;
-    if (item.dir) return item.path || '';
-    const size = item.size != null ? formatFileSize(Number(item.size || 0), false) : '';
-    return [item.path || '', size].filter(Boolean).join(' · ');
 }
 function toggleLoginStatePath(path, checked) {
     if (checked) addLoginStatePath(path);

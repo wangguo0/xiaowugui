@@ -862,16 +862,13 @@ body.manage-page.local-mode .remote-only {
 
 .file-list-shell { background: var(--md-surface-container); }
 
-.file-browser-grid {
-    display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-    min-height: 420px;
-}
-
 .file-tree-panel {
     min-width: 0;
-    border-right: 1px solid var(--md-outline-variant);
     background: var(--md-surface-container-high);
+}
+
+.file-tree-panel-full {
+    border-right: 0;
 }
 
 .file-tree-title {
@@ -886,7 +883,7 @@ body.manage-page.local-mode .remote-only {
 }
 
 .file-tree {
-    max-height: 62vh;
+    max-height: none;
     overflow: auto;
     padding: 6px;
 }
@@ -900,11 +897,10 @@ body.manage-page.local-mode .remote-only {
     background: var(--md-secondary-container);
 }
 
-.file-tree-root button,
 .file-tree-main {
     width: 100%;
     min-width: 0;
-    min-height: 40px;
+    min-height: 38px;
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
@@ -918,17 +914,14 @@ body.manage-page.local-mode .remote-only {
     cursor: pointer;
 }
 
-.file-tree-root button {
-    padding: 0 8px;
-}
-
 .file-tree-row {
     --depth: 0;
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 28px 34px minmax(0, 1fr) auto;
     align-items: center;
-    min-height: 42px;
-    padding-left: calc(var(--depth) * 14px);
+    gap: 6px;
+    min-height: 44px;
+    padding: 3px 8px 3px calc(8px + var(--depth) * 16px);
     border-radius: 8px;
 }
 
@@ -936,6 +929,41 @@ body.manage-page.local-mode .remote-only {
 .file-tree-root .file-icon {
     width: 22px;
     height: 22px;
+}
+
+.file-tree-toggle,
+.tree-toggle {
+    width: 28px;
+    height: 32px;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: 16px;
+    background: transparent;
+    color: var(--md-primary);
+    font: inherit;
+    font-size: 18px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.tree-toggle.placeholder {
+    width: 28px;
+    height: 1px;
+}
+
+.file-tree-check {
+    width: 34px !important;
+    height: 40px !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-tree-check input {
+    width: 22px;
+    height: 22px;
+    accent-color: var(--md-primary);
 }
 
 .file-tree-row:hover,
@@ -969,27 +997,15 @@ body.manage-page.local-mode .remote-only {
 }
 
 .file-tree-main small {
-    grid-column: 2;
-    color: var(--md-on-surface-variant);
-    font-size: 11px;
-    line-height: 14px;
+    display: none;
 }
 
-.file-table-panel {
-    min-width: 0;
-}
-
-.file-list-head {
-    display: grid;
-    grid-template-columns: minmax(240px, 1fr) 180px 96px 140px;
-    gap: 12px;
+.file-tree-actions {
+    display: flex;
     align-items: center;
-    min-height: 42px;
-    padding: 0 18px 0 64px;
-    border-bottom: 1px solid var(--md-outline-variant);
-    color: var(--md-on-surface-variant);
-    font-size: 12px;
-    font-weight: 700;
+    justify-content: flex-end;
+    gap: 4px;
+    min-width: max-content;
 }
 
 .file-list { border-top: none; }
@@ -1157,21 +1173,24 @@ body.manage-page.local-mode .remote-only {
     .file-control-actions { justify-content: flex-end; }
     .file-selection-bar { align-items: stretch; flex-direction: column; padding: 8px 12px; }
     .file-selection-actions .md-btn { flex: 1 1 120px; }
-    .file-browser-grid { grid-template-columns: 1fr; min-height: 0; }
-    .file-tree-panel { border-right: 0; border-bottom: 1px solid var(--md-outline-variant); }
-    .file-tree { max-height: 220px; }
-    .file-list-head { display: none; }
-    .file-row {
-        grid-template-columns: 34px minmax(0, 1fr);
-        gap: 8px;
-        align-items: start;
-        min-height: 78px;
-        padding: 10px 12px;
+    .file-tree { max-height: none; }
+    .file-tree-row {
+        grid-template-columns: 26px 30px minmax(0, 1fr) auto;
+        gap: 4px;
+        min-height: 44px;
+        padding: 3px 6px 3px calc(6px + var(--depth) * 12px);
     }
-    .file-row .file-main { min-height: 52px; }
-    .file-time-cell, .file-size-cell { display: none; }
-    .mobile-meta { display: block; }
-    .file-actions-cell { grid-column: 2; justify-content: flex-start; }
+    .file-tree-main {
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 6px;
+        min-height: 38px;
+    }
+    .file-tree-main small {
+        grid-column: 2;
+    }
+    .file-tree-actions {
+        gap: 3px;
+    }
     .file-action { min-width: 48px; height: 34px; padding: 0 8px; }
     .crumb { max-width: 140px; }
     .config-card { grid-template-columns: 1fr; align-items: stretch; }
@@ -1832,7 +1851,6 @@ body.manage-page {
 }
 
 .sync-tree-row.muted {
-    grid-template-columns: 28px minmax(0, 1fr);
     color: var(--md-on-surface-variant);
 }
 
@@ -1861,7 +1879,7 @@ body.manage-page {
 
 .sync-tree-main {
     min-width: 0;
-    min-height: 42px;
+    min-height: 38px;
     display: grid;
     grid-template-columns: 26px minmax(0, 1fr);
     align-items: center;
@@ -1889,10 +1907,7 @@ body.manage-page {
 }
 
 .sync-tree-main small {
-    grid-column: 2;
-    color: var(--md-on-surface-variant);
-    font-size: 11px;
-    line-height: 14px;
+    display: none;
 }
 
 .sync-tree-main .file-icon {
@@ -2069,7 +2084,6 @@ body.manage-page {
 }
 
 .login-tree-row.muted {
-    grid-template-columns: 28px minmax(0, 1fr);
     color: var(--md-on-surface-variant);
 }
 
@@ -2099,7 +2113,7 @@ body.manage-page {
 
 .login-tree-main {
     min-width: 0;
-    min-height: 44px;
+    min-height: 38px;
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) auto;
     align-items: center;
@@ -2112,7 +2126,7 @@ body.manage-page {
     cursor: pointer;
 }
 
-.login-tree-main span {
+.login-tree-main > span:not(.login-state-badge) {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2122,14 +2136,7 @@ body.manage-page {
 }
 
 .login-tree-main small {
-    grid-column: 2 / -1;
-    min-width: 0;
-    overflow: hidden;
-    color: var(--md-on-surface-variant);
-    font-size: 11px;
-    line-height: 15px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: none;
 }
 
 .login-tree-main .file-icon {
@@ -3533,14 +3540,13 @@ body.manage-page {
     }
 }
 
-.manage-page .file-tree-root button,
 .manage-page .file-tree-main {
     grid-template-columns: 22px minmax(0, 1fr);
     gap: 8px;
 }
 
 .manage-page .file-tree-row {
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 28px 34px minmax(0, 1fr) auto;
 }
 
 .manage-page .file-tree-root .file-icon,
@@ -3550,20 +3556,24 @@ body.manage-page {
     min-width: 22px;
 }
 
+.manage-page .sync-tree-row,
 .manage-page .login-tree-row {
-    grid-template-columns: 24px 32px minmax(0, 1fr);
+    grid-template-columns: 28px 34px minmax(0, 1fr);
 }
 
+.manage-page .sync-tree-check,
 .manage-page .login-tree-check {
-    width: 32px !important;
-    min-width: 32px !important;
+    width: 34px !important;
+    min-width: 34px !important;
 }
 
+.manage-page .sync-tree-main,
 .manage-page .login-tree-main {
     grid-template-columns: 22px minmax(0, 1fr) auto;
     gap: 8px;
 }
 
+.manage-page .sync-tree-main .file-icon,
 .manage-page .login-tree-main .file-icon {
     width: 22px;
     height: 22px;
@@ -3571,16 +3581,36 @@ body.manage-page {
 }
 
 @media (max-width: 760px) {
-    .manage-page .file-tree-root button,
     .manage-page .file-tree-main {
         grid-template-columns: 22px minmax(0, 1fr);
         gap: 7px;
     }
 
+    .manage-page .sync-tree-row,
     .manage-page .login-tree-row {
-        grid-template-columns: 24px 30px minmax(0, 1fr);
+        grid-template-columns: 26px 30px minmax(0, 1fr);
     }
 
+    .manage-page .file-tree-toggle,
+    .manage-page .sync-tree-toggle,
+    .manage-page .login-tree-toggle {
+        width: 26px;
+        height: 30px;
+    }
+
+    .manage-page .tree-toggle.placeholder,
+    .manage-page .sync-tree-toggle.placeholder,
+    .manage-page .login-tree-toggle.placeholder,
+    .manage-page .login-tree-spacer {
+        width: 26px;
+    }
+
+    .manage-page .file-tree-check {
+        width: 30px !important;
+        min-width: 30px !important;
+    }
+
+    .manage-page .sync-tree-check,
     .manage-page .login-tree-check {
         width: 30px !important;
         min-width: 30px !important;
