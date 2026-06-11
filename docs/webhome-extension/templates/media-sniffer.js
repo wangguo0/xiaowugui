@@ -198,6 +198,11 @@
         padding: 0 8px;
         border: 0;
       }
+      #fm-sniffer-panel button:focus {
+        outline: 2px solid rgba(255,255,255,.85);
+        outline-offset: -2px;
+        background: rgba(255,255,255,.12);
+      }
     `;
     const style = document.createElement("style");
     style.id = "fm-sniffer-style";

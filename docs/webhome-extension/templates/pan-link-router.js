@@ -200,6 +200,11 @@
         color: #fff;
         font-size: 13px;
       }
+      .${CONFIG.buttonClass}:focus {
+        outline: 2px solid rgba(255,255,255,.85);
+        outline-offset: 1px;
+        background: #0d9488;
+      }
       .${CONFIG.statusClass} {
         margin-left: 6px;
         font-size: 12px;

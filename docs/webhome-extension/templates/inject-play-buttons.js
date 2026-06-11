@@ -44,6 +44,10 @@
     if (/pan\.baidu\.com/i.test(url)) return "baidu";
     if (/drive\.uc\.cn/i.test(url)) return "uc";
     if (/pan\.xunlei\.com/i.test(url)) return "xunlei";
+    if (/cloud\.189\.cn/i.test(url)) return "tianyi";
+    if (/123pan\.|123684\.|123685\.|123912\.|123592\.|123865\./i.test(url)) return "123";
+    if (/115\.com|115cdn\.com/i.test(url)) return "115";
+    if (/yun\.139\.com|caiyun\.139\.com/i.test(url)) return "mobile";
     if (/\.(m3u8|mp4|mkv|flv|mov|avi|webm)(\?|#|$)/i.test(url)) return "media";
     return "http";
   }
@@ -112,6 +116,11 @@
         color: #fff;
         font-size: 13px;
         font-weight: 700;
+      }
+      .${CONFIG.buttonClass}:focus {
+        outline: 2px solid rgba(255,255,255,.85);
+        outline-offset: 1px;
+        background: #0d9488;
       }
     `;
     if (typeof GM_addStyle === "function") GM_addStyle(css);
