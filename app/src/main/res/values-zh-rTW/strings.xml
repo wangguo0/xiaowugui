@@ -222,6 +222,8 @@
     <string name="setting_custom_csp_extensions_toggle">擴展</string>
     <string name="setting_custom_csp_extensions">extensions 陣列</string>
     <string name="setting_custom_csp_extensions_invalid">extensions JSON 格式無效</string>
+    <string name="setting_custom_csp_permission_required">站點注入需要檔案存取權限。</string>
+    <string name="setting_custom_csp_save_failed">站點注入保存失敗：%1$s</string>
     <string name="setting_custom_csp_webhome">WebHome</string>
     <string name="setting_custom_csp_common">通用 CSP</string>
     <string name="setting_custom_csp_live">直播</string>

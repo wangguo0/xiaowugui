@@ -223,6 +223,8 @@
     <string name="setting_custom_csp_extensions_toggle">Extensions</string>
     <string name="setting_custom_csp_extensions">extensions array</string>
     <string name="setting_custom_csp_extensions_invalid">Invalid extensions JSON</string>
+    <string name="setting_custom_csp_permission_required">Site injection needs file access permission.</string>
+    <string name="setting_custom_csp_save_failed">Site injection save failed: %1$s</string>
     <string name="setting_custom_csp_webhome">WebHome</string>
     <string name="setting_custom_csp_common">General CSP</string>
     <string name="setting_custom_csp_live">Live</string>

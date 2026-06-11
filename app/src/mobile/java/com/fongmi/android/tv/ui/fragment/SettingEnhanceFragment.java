@@ -25,6 +25,7 @@ import com.fongmi.android.tv.ui.dialog.SiteHealthDialog;
 import com.fongmi.android.tv.ui.dialog.WebHomeExtensionDialog;
 import com.fongmi.android.tv.utils.LoginStateSync;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 
 public class SettingEnhanceFragment extends BaseFragment {
@@ -61,7 +62,10 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.shellProxy.setOnClickListener(view -> ShellProxyDialog.show(this, this::setText));
         mBinding.shellProxy.setOnLongClickListener(v -> false);
         mBinding.shellProxyConfig.setVisibility(View.GONE);
-        mBinding.customCsp.setOnClickListener(view -> CustomCspDialog.show(this, this::setText));
+        mBinding.customCsp.setOnClickListener(view -> PermissionUtil.requestFile(this, granted -> {
+            if (granted) CustomCspDialog.show(this, this::setText);
+            else Notify.show(R.string.setting_custom_csp_permission_required);
+        }));
         mBinding.loginState.setOnClickListener(view -> LoginStateLearnDialog.show(this, this::setText));
         mBinding.oneKeySync.setOnClickListener(v -> OneKeySyncDialog.create().show(requireActivity()));
     }

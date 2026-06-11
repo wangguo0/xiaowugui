@@ -306,7 +306,12 @@ public class CustomCspDialog extends BaseAlertDialog {
         registry.setEnabled(enabled);
         registry.setInsertIndex(getInsertIndex());
         registry.setItems(new ArrayList<>(adapter.getItems()));
-        CustomCspSetting.save(registry);
+        try {
+            CustomCspSetting.save(registry);
+        } catch (Exception e) {
+            Notify.show(e.getMessage());
+            return false;
+        }
         reloadConfigs();
         if (callback != null) callback.run();
         saved = true;
@@ -439,19 +444,27 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private void saveCode(CustomCspSetting.Item item, String code) {
-        Path.write(CustomCspSetting.file(item.getId(), "index.html"), code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        item.setHomePage(CustomCspSetting.localUrl(item.getId(), "index.html"));
-        adapter.notifyDataSetChanged();
+        try {
+            CustomCspSetting.writePage(item.getId(), code);
+            item.setHomePage(CustomCspSetting.localUrl(item.getId(), "index.html"));
+            adapter.notifyDataSetChanged();
+        } catch (Exception e) {
+            Notify.show(e.getMessage());
+        }
     }
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null || pendingImport == null) return;
         String path = FileChooser.getPathFromUri(result.getData().getData());
         if (TextUtils.isEmpty(path)) return;
-        Path.copy(Path.local(path), CustomCspSetting.file(pendingImport.getId(), "index.html"));
-        pendingImport.setHomePage(CustomCspSetting.localUrl(pendingImport.getId(), "index.html"));
-        pendingImport = null;
-        adapter.notifyDataSetChanged();
+        try {
+            CustomCspSetting.copyPage(Path.local(path), pendingImport.getId());
+            pendingImport.setHomePage(CustomCspSetting.localUrl(pendingImport.getId(), "index.html"));
+            pendingImport = null;
+            adapter.notifyDataSetChanged();
+        } catch (Exception e) {
+            Notify.show(e.getMessage());
+        }
     });
 
     private class CspAdapter extends RecyclerView.Adapter<CspAdapter.ViewHolder> {
