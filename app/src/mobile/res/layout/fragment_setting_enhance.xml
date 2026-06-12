@@ -260,7 +260,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="16dp"
-                    android:text="@string/playback_webhook"
+                    android:text="@string/setting_viewing_record_sync"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 

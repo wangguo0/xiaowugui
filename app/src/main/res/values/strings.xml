@@ -132,6 +132,7 @@
     <string name="setting_site_health_dialog_sort">Sort site dialog</string>
     <string name="site_health_clear_done">Site health data cleared</string>
     <string name="setting_web_home_extension">WebHome extensions</string>
+    <string name="setting_viewing_record_sync">Viewing record sync</string>
     <string name="playback_webhook">Webhook reporting</string>
     <string name="playback_webhook_edit">Edit webhook</string>
     <string name="playback_webhook_empty">No webhook endpoint yet</string>
