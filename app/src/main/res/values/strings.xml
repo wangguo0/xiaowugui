@@ -139,8 +139,8 @@
     <string name="playback_webhook_summary">Active %1$d · Total %2$d</string>
     <string name="playback_webhook_name">Name</string>
     <string name="playback_webhook_url">Endpoint URL</string>
-    <string name="playback_webhook_token">Token</string>
-    <string name="playback_webhook_token_optional">Token, optional</string>
+    <string name="playback_webhook_token">Server token</string>
+    <string name="playback_webhook_token_optional">Server token, optional</string>
     <string name="playback_webhook_site_keys">Site keys, blank for all</string>
     <string name="playback_webhook_preset">Field preset</string>
     <string name="playback_webhook_preset_safe">Basic</string>
@@ -160,8 +160,8 @@
     <string name="playback_webhook_active">Active</string>
     <string name="playback_webhook_incomplete">Incomplete</string>
     <string name="playback_webhook_suspended">Suspended</string>
-    <string name="playback_webhook_token_set">Token set</string>
-    <string name="playback_webhook_token_empty">No token</string>
+    <string name="playback_webhook_token_set">Server token set</string>
+    <string name="playback_webhook_token_empty">No server token</string>
     <string name="playback_webhook_all_sites">All sites</string>
     <string name="playback_webhook_sites">Sites %1$s</string>
     <string name="playback_webhook_row_meta">%1$s · %2$s · %3$s</string>
@@ -171,7 +171,7 @@
     <string name="playback_webhook_delete_message">Delete %1$s?</string>
     <string name="playback_webhook_url_invalid">Endpoint URL must start with http</string>
     <string name="playback_webhook_privacy_title">Viewing record sync privacy notice</string>
-    <string name="playback_webhook_privacy_message">Webhook reporting sends your viewing record, including title and progress, to the server you configure.\n\nThe app does not collect or forward this data to other parties. You can disable or delete endpoints at any time. If a token is set, it is sent in the X-WebHTV-Token header so your server can group and verify reports.</string>
+    <string name="playback_webhook_privacy_message">Webhook reporting sends your viewing record, including title and progress, to the server you configure.\n\nThe app does not collect or forward this data to other parties. You can disable or delete endpoints at any time. If a server token is set, it is sent in the X-WebHTV-Token header so your server can group and verify reports.</string>
     <string-array name="playback_webhook_field_descriptions">
         <item>Vod configuration category id.</item>
         <item>App history key, usually siteKey + vodId.</item>

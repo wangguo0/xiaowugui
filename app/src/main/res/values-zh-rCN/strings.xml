@@ -138,8 +138,8 @@
     <string name="playback_webhook_summary">启用 %1$d · 总数 %2$d</string>
     <string name="playback_webhook_name">名称</string>
     <string name="playback_webhook_url">端点 URL</string>
-    <string name="playback_webhook_token">Token</string>
-    <string name="playback_webhook_token_optional">Token，可选</string>
+    <string name="playback_webhook_token">服务端 Token</string>
+    <string name="playback_webhook_token_optional">服务端 Token，可选</string>
     <string name="playback_webhook_site_keys">站点 key，留空为全部</string>
     <string name="playback_webhook_preset">字段预设</string>
     <string name="playback_webhook_preset_safe">基础</string>
@@ -159,8 +159,8 @@
     <string name="playback_webhook_active">运行中</string>
     <string name="playback_webhook_incomplete">未完成</string>
     <string name="playback_webhook_suspended">已暂停</string>
-    <string name="playback_webhook_token_set">已设 Token</string>
-    <string name="playback_webhook_token_empty">无 Token</string>
+    <string name="playback_webhook_token_set">已设服务端 Token</string>
+    <string name="playback_webhook_token_empty">无服务端 Token</string>
     <string name="playback_webhook_all_sites">全部站点</string>
     <string name="playback_webhook_sites">站点 %1$s</string>
     <string name="playback_webhook_row_meta">%1$s · %2$s · %3$s</string>
@@ -170,7 +170,7 @@
     <string name="playback_webhook_delete_message">删除 %1$s？</string>
     <string name="playback_webhook_url_invalid">端点 URL 必须以 http 开头</string>
     <string name="playback_webhook_privacy_title">观影记录同步隐私声明</string>
-    <string name="playback_webhook_privacy_message">Webhook 上报会把您的观影记录（包括影片名称、播放进度）发送到您配置的服务器。\n\nApp 不会收集或转发给第三方；您可以随时停用或删除端点。设置 Token 后会通过 X-WebHTV-Token 请求头发送，方便您的服务器分组和校验上报。</string>
+    <string name="playback_webhook_privacy_message">Webhook 上报会把您的观影记录（包括影片名称、播放进度）发送到您配置的服务器。\n\nApp 不会收集或转发给第三方；您可以随时停用或删除端点。填写服务端 Token 后会通过 X-WebHTV-Token 请求头发送，方便您的服务器分组和校验上报。</string>
     <string-array name="playback_webhook_field_descriptions">
         <item>点播配置分类 id。</item>
         <item>App 历史主键，通常由 siteKey 和 vodId 组成。</item>
