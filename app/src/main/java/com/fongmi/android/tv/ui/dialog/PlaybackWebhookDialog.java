@@ -286,7 +286,7 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         editMode = true;
         editing = config;
         editEnabled = config.enabled && !config.suspended;
-        advanced = hasAdvanced(config);
+        advanced = false;
         binding.title.setText(R.string.playback_webhook_edit);
         binding.add.setVisibility(View.GONE);
         binding.listPanel.setVisibility(View.GONE);
@@ -471,14 +471,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         List<String> fields = new ArrayList<>(PROTOCOL_FIELDS);
         fields.addAll(customFields.isEmpty() ? DEFAULT_CUSTOM_FIELDS : customFields);
         return fields;
-    }
-
-    private boolean hasAdvanced(WebhookConfig config) {
-        return config.suspended || !sameEvents(normalizedEvents(config.events), TIMING_STANDARD_EVENTS) || !WebhookConfig.PRESET_SAFE.equals(config.fieldPreset) || config.maxRetries != 2 || config.progressIntervalSec != 30 || !empty(config.siteKeys) || !empty(config.fields);
-    }
-
-    private boolean empty(List<String> values) {
-        return values == null || values.isEmpty();
     }
 
     private String meta(WebhookConfig config) {
