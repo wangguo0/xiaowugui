@@ -44,20 +44,13 @@ import java.util.Set;
 
 public class PlaybackWebhookDialog extends BaseAlertDialog {
 
-    private static final String TIMING_STANDARD = "standard";
-    private static final String TIMING_START = "start";
-    private static final String TIMING_DETAILED = "detailed";
-
-    private static final List<String> TIMING_STANDARD_EVENTS = Arrays.asList("progress", "ended");
-    private static final List<String> TIMING_START_EVENTS = Arrays.asList("start", "progress", "ended");
-    private static final List<String> TIMING_DETAILED_EVENTS = Arrays.asList("start", "progress", "stop", "ended");
-
     private static final String[] FIELD_KEYS = new String[]{"cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "episodeUrl", "episodeIndex", "appVersion", "client", "clientKey"};
     private static final List<String> PROTOCOL_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey");
-    private static final List<String> SAFE_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed");
-    private static final List<String> STANDARD_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "appVersion", "client", "clientKey");
+    private static final List<String> BASIC_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed");
+    private static final List<String> STANDARD_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "appVersion", "client");
+    private static final List<String> FULL_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "appVersion", "client", "episodeUrl", "episodeIndex", "clientKey");
     private static final List<String> ANONYMOUS_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "historyKey(sha256)", "state", "positionMs", "durationMs", "progress", "speed", "completed");
-    private static final List<String> DEFAULT_CUSTOM_FIELDS = Arrays.asList("siteKey", "vodId", "vodName", "episodeName", "state", "positionMs", "durationMs", "progress", "completed");
+    private static final List<String> DEFAULT_CUSTOM_FIELDS = Arrays.asList("cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed");
 
     private DialogPlaybackWebhookBinding binding;
     private WebhookConfig editing;
@@ -168,9 +161,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         binding.advancedToggle.setOnClickListener(view -> {
             advanced = !advanced;
             updateAdvanced();
-        });
-        binding.timingGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (isChecked) updateTimingSummary();
         });
         binding.presetGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (!isChecked) return;
@@ -297,7 +287,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         bind(config);
         updateAdvanced();
         updateEnabledButton();
-        updateTimingSummary();
         updateFieldsPanel();
         binding.urlLayout.setError(null);
         binding.url.requestFocus();
@@ -313,7 +302,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         binding.retries.setText(String.valueOf(config.maxRetries));
         customFields.clear();
         customFields.addAll(config.fields == null || config.fields.isEmpty() ? DEFAULT_CUSTOM_FIELDS : config.fields);
-        binding.timingGroup.check(timingId(timingMode(config.events)));
         binding.presetGroup.check(presetId(config.fieldPreset));
     }
 
@@ -331,7 +319,7 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         config.token = text(binding.token);
         config.secret = config.token;
         config.keyId = "";
-        config.events = selectedEvents();
+        config.events = WebhookConfig.defaults();
         config.siteKeys = split(text(binding.siteKeys));
         config.fieldPreset = selectedPreset();
         if (WebhookConfig.PRESET_CUSTOM.equals(config.fieldPreset) && customFields.isEmpty()) customFields.addAll(DEFAULT_CUSTOM_FIELDS);
@@ -381,10 +369,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         binding.advancedToggle.setText(advanced ? R.string.playback_webhook_advanced_hide : R.string.playback_webhook_advanced);
     }
 
-    private void updateTimingSummary() {
-        binding.timingSummary.setText(timingSummary(timingMode(selectedEvents())));
-    }
-
     private void updateFieldsPanel() {
         boolean custom = binding.presetGroup.getCheckedButtonId() == R.id.presetCustom;
         binding.selectFields.setVisibility(custom ? View.VISIBLE : View.GONE);
@@ -396,7 +380,7 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         for (int i = 0; i < FIELD_KEYS.length; i++) checked[i] = customFields.contains(FIELD_KEYS[i]);
         new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.playback_webhook_select_fields)
-                .setMultiChoiceItems(FIELD_KEYS, checked, (dialog, which, isChecked) -> {
+                .setMultiChoiceItems(fieldItems(), checked, (dialog, which, isChecked) -> {
                     if (isChecked) customFields.add(FIELD_KEYS[which]);
                     else customFields.remove(FIELD_KEYS[which]);
                 })
@@ -405,49 +389,10 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
                 .show();
     }
 
-    private int timingId(String mode) {
-        if (TIMING_START.equals(mode)) return R.id.timingStart;
-        if (TIMING_DETAILED.equals(mode)) return R.id.timingDetailed;
-        return R.id.timingStandard;
-    }
-
-    private String timingMode(List<String> events) {
-        List<String> values = normalizedEvents(events);
-        if (sameEvents(values, TIMING_DETAILED_EVENTS)) return TIMING_DETAILED;
-        if (sameEvents(values, TIMING_START_EVENTS)) return TIMING_START;
-        return TIMING_STANDARD;
-    }
-
-    private List<String> selectedEvents() {
-        int checked = binding.timingGroup.getCheckedButtonId();
-        if (checked == R.id.timingStart) return new ArrayList<>(TIMING_START_EVENTS);
-        if (checked == R.id.timingDetailed) return new ArrayList<>(TIMING_DETAILED_EVENTS);
-        return new ArrayList<>(TIMING_STANDARD_EVENTS);
-    }
-
-    private List<String> normalizedEvents(List<String> events) {
-        List<String> values = events == null || events.isEmpty() ? WebhookConfig.defaults() : events;
-        List<String> result = new ArrayList<>();
-        for (String event : values) {
-            String value = WebhookConfig.token(event);
-            if (!TextUtils.isEmpty(value)) result.add(value);
-        }
-        return result;
-    }
-
-    private boolean sameEvents(List<String> source, List<String> target) {
-        return new LinkedHashSet<>(source).equals(new LinkedHashSet<>(target));
-    }
-
-    private String timingSummary(String mode) {
-        if (TIMING_START.equals(mode)) return getString(R.string.playback_webhook_timing_start_desc);
-        if (TIMING_DETAILED.equals(mode)) return getString(R.string.playback_webhook_timing_detailed_desc);
-        return getString(R.string.playback_webhook_timing_standard_desc);
-    }
-
     private int presetId(String preset) {
+        preset = WebhookConfig.normalizePreset(preset);
         if (WebhookConfig.PRESET_STANDARD.equals(preset)) return R.id.presetStandard;
-        if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return R.id.presetAnonymous;
+        if (WebhookConfig.PRESET_FULL.equals(preset)) return R.id.presetFull;
         if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return R.id.presetCustom;
         return R.id.presetSafe;
     }
@@ -455,16 +400,18 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
     private String selectedPreset() {
         int checked = binding.presetGroup.getCheckedButtonId();
         if (checked == R.id.presetStandard) return WebhookConfig.PRESET_STANDARD;
-        if (checked == R.id.presetAnonymous) return WebhookConfig.PRESET_ANONYMOUS;
+        if (checked == R.id.presetFull) return WebhookConfig.PRESET_FULL;
         if (checked == R.id.presetCustom) return WebhookConfig.PRESET_CUSTOM;
-        return WebhookConfig.PRESET_SAFE;
+        return WebhookConfig.PRESET_BASIC;
     }
 
     private String fieldsSummary(String preset) {
+        preset = WebhookConfig.normalizePreset(preset);
         if (WebhookConfig.PRESET_STANDARD.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(STANDARD_FIELDS));
+        if (WebhookConfig.PRESET_FULL.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(FULL_FIELDS));
         if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(ANONYMOUS_FIELDS));
         if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(customSummaryFields()));
-        return getString(R.string.playback_webhook_fields_summary, join(SAFE_FIELDS));
+        return getString(R.string.playback_webhook_fields_summary, join(BASIC_FIELDS));
     }
 
     private List<String> customSummaryFields() {
@@ -475,22 +422,27 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
 
     private String meta(WebhookConfig config) {
         String token = TextUtils.isEmpty(token(config)) ? getString(R.string.playback_webhook_token_empty) : getString(R.string.playback_webhook_token_set);
-        String timing = timingName(timingMode(config.events));
         String sites = config.siteKeys == null || config.siteKeys.isEmpty() ? getString(R.string.playback_webhook_all_sites) : getString(R.string.playback_webhook_sites, join(config.siteKeys));
-        return getString(R.string.playback_webhook_row_meta, token, timing, presetName(config.fieldPreset), sites);
-    }
-
-    private String timingName(String mode) {
-        if (TIMING_START.equals(mode)) return getString(R.string.playback_webhook_timing_start);
-        if (TIMING_DETAILED.equals(mode)) return getString(R.string.playback_webhook_timing_detailed);
-        return getString(R.string.playback_webhook_timing_standard);
+        return getString(R.string.playback_webhook_row_meta, token, presetName(config.fieldPreset), sites);
     }
 
     private String presetName(String preset) {
+        preset = WebhookConfig.normalizePreset(preset);
         if (WebhookConfig.PRESET_STANDARD.equals(preset)) return getString(R.string.playback_webhook_preset_standard);
+        if (WebhookConfig.PRESET_FULL.equals(preset)) return getString(R.string.playback_webhook_preset_full);
         if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return getString(R.string.playback_webhook_preset_anonymous);
         if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return getString(R.string.playback_webhook_preset_custom);
         return getString(R.string.playback_webhook_preset_safe);
+    }
+
+    private CharSequence[] fieldItems() {
+        CharSequence[] descriptions = getResources().getTextArray(R.array.playback_webhook_field_descriptions);
+        CharSequence[] items = new CharSequence[FIELD_KEYS.length];
+        for (int i = 0; i < FIELD_KEYS.length; i++) {
+            String description = i < descriptions.length ? descriptions[i].toString() : "";
+            items[i] = TextUtils.isEmpty(description) ? FIELD_KEYS[i] : FIELD_KEYS[i] + "\n" + description;
+        }
+        return items;
     }
 
     private String status(WebhookConfig config) {

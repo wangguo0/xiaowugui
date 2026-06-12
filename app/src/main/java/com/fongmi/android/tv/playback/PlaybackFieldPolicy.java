@@ -9,7 +9,8 @@ public class PlaybackFieldPolicy {
     private static final Set<String> PROTOCOL = set("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey");
     private static final Set<String> OBJECT = set("cid", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName");
     private static final Set<String> PROGRESS = set("state", "positionMs", "durationMs", "progress", "speed", "completed");
-    private static final Set<String> STANDARD = set("appVersion", "client", "clientKey");
+    private static final Set<String> STANDARD = set("appVersion", "client");
+    private static final Set<String> FULL = set("episodeUrl", "episodeIndex", "clientKey");
     private static final Set<String> OPTIONAL = set("episodeUrl", "episodeIndex", "appVersion", "client", "clientKey");
     private static final Set<String> CUSTOM_SAFE = customSafe();
 
@@ -29,12 +30,15 @@ public class PlaybackFieldPolicy {
     }
 
     public static PlaybackFieldPolicy webhook(WebhookConfig config) {
-        String preset = config == null ? WebhookConfig.PRESET_SAFE : config.fieldPreset;
+        String preset = config == null ? WebhookConfig.PRESET_BASIC : WebhookConfig.normalizePreset(config.fieldPreset);
         if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return anonymous();
         if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return custom(config);
         Set<String> fields = base();
         if (WebhookConfig.PRESET_STANDARD.equals(preset)) fields.addAll(STANDARD);
-        if (WebhookConfig.PRESET_STANDARD.equals(preset)) fields.addAll(optional(config));
+        if (WebhookConfig.PRESET_FULL.equals(preset)) {
+            fields.addAll(STANDARD);
+            fields.addAll(FULL);
+        }
         return new PlaybackFieldPolicy(fields, false);
     }
 
@@ -59,13 +63,6 @@ public class PlaybackFieldPolicy {
         fields.addAll(PROTOCOL);
         fields.addAll(OBJECT);
         fields.addAll(PROGRESS);
-        return fields;
-    }
-
-    private static Set<String> optional(WebhookConfig config) {
-        Set<String> fields = new LinkedHashSet<>();
-        if (config == null || config.fields == null) return fields;
-        for (String field : config.fields) if (OPTIONAL.contains(field)) fields.add(field);
         return fields;
     }
 

@@ -106,9 +106,9 @@ public final class PlaybackWebhookStore {
         if (config.id == null || config.id.isEmpty()) config.id = java.util.UUID.randomUUID().toString();
         if (config.name == null) config.name = "";
         if (config.url == null) config.url = "";
-        if (config.events == null) config.events = WebhookConfig.defaults();
+        config.events = WebhookConfig.defaults();
         if (config.siteKeys == null) config.siteKeys = new ArrayList<>();
-        if (config.fieldPreset == null || config.fieldPreset.isEmpty()) config.fieldPreset = WebhookConfig.PRESET_SAFE;
+        config.fieldPreset = WebhookConfig.normalizePreset(config.fieldPreset);
         if (config.fields == null) config.fields = new ArrayList<>();
         if (config.token == null) config.token = config.secret == null ? "" : config.secret;
         if (config.secret == null) config.secret = "";

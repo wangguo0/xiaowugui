@@ -228,80 +228,6 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
-                        android:text="@string/playback_webhook_timing_title"
-                        android:textColor="#5F6368"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.button.MaterialButtonToggleGroup
-                        android:id="@+id/timingGroup"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        app:selectionRequired="true"
-                        app:singleSelection="true">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/timingStandard"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="38dp"
-                            android:layout_weight="1"
-                            android:minHeight="38dp"
-                            android:minWidth="0dp"
-                            android:paddingStart="2dp"
-                            android:paddingEnd="2dp"
-                            android:text="@string/playback_webhook_timing_standard"
-                            android:textColor="@color/dialog_toggle_button_text"
-                            android:textSize="12sp"
-                            app:backgroundTint="@color/dialog_toggle_button_bg"
-                            app:strokeColor="@color/dialog_outlined_button_stroke" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/timingStart"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="38dp"
-                            android:layout_weight="1"
-                            android:minHeight="38dp"
-                            android:minWidth="0dp"
-                            android:paddingStart="2dp"
-                            android:paddingEnd="2dp"
-                            android:text="@string/playback_webhook_timing_start"
-                            android:textColor="@color/dialog_toggle_button_text"
-                            android:textSize="12sp"
-                            app:backgroundTint="@color/dialog_toggle_button_bg"
-                            app:strokeColor="@color/dialog_outlined_button_stroke" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/timingDetailed"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="38dp"
-                            android:layout_weight="1"
-                            android:minHeight="38dp"
-                            android:minWidth="0dp"
-                            android:paddingStart="2dp"
-                            android:paddingEnd="2dp"
-                            android:text="@string/playback_webhook_timing_detailed"
-                            android:textColor="@color/dialog_toggle_button_text"
-                            android:textSize="12sp"
-                            app:backgroundTint="@color/dialog_toggle_button_bg"
-                            app:strokeColor="@color/dialog_outlined_button_stroke" />
-
-                    </com.google.android.material.button.MaterialButtonToggleGroup>
-
-                    <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/timingSummary"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="5dp"
-                        android:textColor="#5F6368"
-                        android:textSize="12sp" />
-
-                    <com.google.android.material.textview.MaterialTextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
                         android:text="@string/playback_webhook_preset"
                         android:textColor="#5F6368"
                         android:textSize="12sp" />
@@ -347,7 +273,7 @@
                             app:strokeColor="@color/dialog_outlined_button_stroke" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/presetAnonymous"
+                            android:id="@+id/presetFull"
                             style="@style/Widget.Material3.Button.OutlinedButton"
                             android:layout_width="0dp"
                             android:layout_height="38dp"
@@ -356,7 +282,7 @@
                             android:minWidth="0dp"
                             android:paddingStart="2dp"
                             android:paddingEnd="2dp"
-                            android:text="@string/playback_webhook_preset_anonymous"
+                            android:text="@string/playback_webhook_preset_full"
                             android:textColor="@color/dialog_toggle_button_text"
                             android:textSize="12sp"
                             app:backgroundTint="@color/dialog_toggle_button_bg"
