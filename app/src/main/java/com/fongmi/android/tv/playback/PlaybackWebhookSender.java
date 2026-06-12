@@ -27,6 +27,7 @@ public final class PlaybackWebhookSender {
     private final Map<String, Object> endpointLocks = new ConcurrentHashMap<>();
 
     public void sendImmediate(PlaybackRecord record) {
+        if (!ViewingRecordSyncStore.isEnabled()) return;
         for (WebhookConfig config : PlaybackWebhookStore.list()) {
             if (!matches(config, record) || !config.acceptsEvent(record.event)) continue;
             enqueue(config, delivery(config, record));
@@ -34,6 +35,7 @@ public final class PlaybackWebhookSender {
     }
 
     public void scheduleProgress(PlaybackRecord record) {
+        if (!ViewingRecordSyncStore.isEnabled()) return;
         for (WebhookConfig config : PlaybackWebhookStore.list()) {
             if (!matches(config, record) || !config.acceptsEvent(EVENT_PROGRESS)) continue;
             if (config.progressIntervalSec <= 0) continue;
@@ -49,6 +51,7 @@ public final class PlaybackWebhookSender {
     }
 
     public void sendFinalThen(PlaybackRecord record, String event) {
+        if (!ViewingRecordSyncStore.isEnabled()) return;
         for (WebhookConfig config : PlaybackWebhookStore.list()) {
             if (!matches(config, record)) continue;
             cancelProgress(config.id);
@@ -76,7 +79,7 @@ public final class PlaybackWebhookSender {
 
     private Delivery delivery(WebhookConfig config, PlaybackRecord record) {
         JsonObject object = record.toJson(PlaybackFieldPolicy.webhook(config));
-        return new Delivery(object.toString(), value(object, "eventId"), value(object, "dedupeKey"));
+        return new Delivery(object.toString(), value(object, "eventId"), value(object, "dedupeKey"), record.configKey, record.configName);
     }
 
     private String value(JsonObject object, String key) {
@@ -129,6 +132,8 @@ public final class PlaybackWebhookSender {
             builder.header("Idempotency-Key", delivery.eventId);
         }
         if (!TextUtils.isEmpty(delivery.dedupeKey)) builder.header("X-WebHTV-Dedupe-Key", delivery.dedupeKey);
+        if (!TextUtils.isEmpty(delivery.configKey)) builder.header("X-WebHTV-Config-Key", delivery.configKey);
+        if (!TextUtils.isEmpty(delivery.configName)) builder.header("X-WebHTV-Config-Name", delivery.configName);
         try (Response response = OkHttp.client(TIMEOUT_MS).newCall(builder.build()).execute()) {
             if (!response.isSuccessful()) throw new IllegalStateException("HTTP " + response.code());
         }
@@ -147,11 +152,15 @@ public final class PlaybackWebhookSender {
         private final String payload;
         private final String eventId;
         private final String dedupeKey;
+        private final String configKey;
+        private final String configName;
 
-        private Delivery(String payload, String eventId, String dedupeKey) {
+        private Delivery(String payload, String eventId, String dedupeKey, String configKey, String configName) {
             this.payload = payload;
             this.eventId = eventId;
             this.dedupeKey = dedupeKey;
+            this.configKey = configKey;
+            this.configName = configName;
         }
     }
 }

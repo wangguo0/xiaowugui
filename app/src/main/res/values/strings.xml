@@ -133,6 +133,32 @@
     <string name="site_health_clear_done">Site health data cleared</string>
     <string name="setting_web_home_extension">WebHome extensions</string>
     <string name="setting_viewing_record_sync">Viewing record sync</string>
+    <string name="viewing_record_sync_entry_summary">%1$s · Remote %2$d/%3$d · Webhook %4$d/%5$d</string>
+    <string name="viewing_record_sync_switches">Switches</string>
+    <string name="viewing_record_sync_master_desc">Controls remote sync and webhook reporting.</string>
+    <string name="viewing_record_sync_local_write">Allow local API changes</string>
+    <string name="viewing_record_sync_local_write_desc">Allow crawler HTTP API to write or delete local viewing progress. Reading current playback is still available when off.</string>
+    <string name="playback_remote_sync">Remote sync</string>
+    <string name="playback_remote_sync_manage">Manage</string>
+    <string name="playback_remote_sync_edit">Edit remote sync</string>
+    <string name="playback_remote_sync_empty">No remote sync source yet</string>
+    <string name="playback_remote_sync_summary">Active %1$d · Total %2$d</string>
+    <string name="playback_remote_sync_name">Name</string>
+    <string name="playback_remote_sync_url">Remote API URL</string>
+    <string name="playback_remote_sync_token_optional">Server token, optional</string>
+    <string name="playback_remote_sync_interval">Interval min</string>
+    <string name="playback_remote_sync_max_items">Max items</string>
+    <string name="playback_remote_sync_startup">Sync on startup</string>
+    <string name="playback_remote_sync_now">Sync</string>
+    <string name="playback_remote_sync_saved">Remote sync saved</string>
+    <string name="playback_remote_sync_done">Applied %1$d · Skipped %2$d · Failed %3$d</string>
+    <string name="playback_remote_sync_result">Fetched %1$d · Applied %2$d · Skipped %3$d · Failed %4$d</string>
+    <string name="playback_remote_sync_last_at">Last %1$s</string>
+    <string name="playback_remote_sync_last_error">Error: %1$s</string>
+    <string name="playback_remote_sync_never">Never synced</string>
+    <string name="playback_remote_sync_delete_title">Delete remote sync</string>
+    <string name="playback_remote_sync_delete_message">Delete %1$s?</string>
+    <string name="playback_webhook_manage">Manage</string>
     <string name="playback_webhook">Webhook reporting</string>
     <string name="playback_webhook_edit">Edit webhook</string>
     <string name="playback_webhook_empty">No webhook endpoint yet</string>
@@ -173,7 +199,9 @@
     <string name="playback_webhook_privacy_title">Viewing record sync privacy notice</string>
     <string name="playback_webhook_privacy_message">Webhook reporting sends your viewing record, including title and progress, to the server you configure.\n\nThe app does not collect or forward this data to other parties. You can disable or delete endpoints at any time. If a server token is set, it is sent in the X-WebHTV-Token header so your server can group and verify reports.</string>
     <string-array name="playback_webhook_field_descriptions">
-        <item>Vod configuration category id.</item>
+        <item>Local vod configuration id. Not stable across devices.</item>
+        <item>Stable vod configuration key, used to separate different interfaces.</item>
+        <item>Vod configuration display name.</item>
         <item>App history key, usually siteKey + vodId.</item>
         <item>Source site key.</item>
         <item>Source site display name.</item>

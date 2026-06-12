@@ -21,78 +21,48 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
-import com.fongmi.android.tv.databinding.DialogPlaybackWebhookBinding;
-import com.fongmi.android.tv.playback.PlaybackWebhookStore;
-import com.fongmi.android.tv.playback.WebhookConfig;
+import com.fongmi.android.tv.databinding.DialogPlaybackRemoteSyncBinding;
+import com.fongmi.android.tv.playback.PlaybackRemoteSyncResult;
+import com.fongmi.android.tv.playback.PlaybackRemoteSyncStore;
+import com.fongmi.android.tv.playback.PlaybackRemoteSyncer;
+import com.fongmi.android.tv.playback.RemoteSyncConfig;
 import com.fongmi.android.tv.ui.custom.CustomTextListener;
+import com.fongmi.android.tv.utils.Formatters;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Task;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textview.MaterialTextView;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
-public class PlaybackWebhookDialog extends BaseAlertDialog {
+public class PlaybackRemoteSyncDialog extends BaseAlertDialog {
 
-    private static final String[] FIELD_KEYS = new String[]{"cid", "configKey", "configName", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "episodeUrl", "episodeIndex", "appVersion", "client", "clientKey"};
-    private static final List<String> PROTOCOL_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey");
-    private static final List<String> BASIC_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "configKey", "configName", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed");
-    private static final List<String> STANDARD_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "configKey", "configName", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "appVersion", "client");
-    private static final List<String> FULL_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "cid", "configKey", "configName", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed", "appVersion", "client", "episodeUrl", "episodeIndex", "clientKey");
-    private static final List<String> ANONYMOUS_FIELDS = Arrays.asList("schema", "event", "eventId", "timestamp", "sessionId", "dedupeKey", "historyKey(sha256)", "state", "positionMs", "durationMs", "progress", "speed", "completed");
-    private static final List<String> DEFAULT_CUSTOM_FIELDS = Arrays.asList("cid", "configKey", "configName", "historyKey", "siteKey", "siteName", "vodId", "vodName", "vodPic", "flag", "episodeName", "state", "positionMs", "durationMs", "progress", "speed", "completed");
-
-    private DialogPlaybackWebhookBinding binding;
-    private WebhookConfig editing;
+    private DialogPlaybackRemoteSyncBinding binding;
+    private RemoteSyncConfig editing;
     private Runnable callback;
     private boolean editMode;
     private boolean advanced;
     private boolean editEnabled;
-    private final Set<String> customFields = new LinkedHashSet<>();
-
-    public static void show(Fragment fragment, Runnable callback) {
-        show(fragment.requireActivity(), callback);
-    }
 
     public static void show(FragmentActivity activity, Runnable callback) {
-        if (!PlaybackWebhookStore.isPrivacyAccepted()) {
-            showPrivacy(activity, () -> showDialog(activity, callback));
-        } else {
-            showDialog(activity, callback);
-        }
-    }
-
-    private static void showDialog(FragmentActivity activity, Runnable callback) {
-        PlaybackWebhookDialog dialog = new PlaybackWebhookDialog();
+        PlaybackRemoteSyncDialog dialog = new PlaybackRemoteSyncDialog();
         dialog.callback = callback;
         dialog.show(activity.getSupportFragmentManager(), null);
     }
 
-    private static void showPrivacy(FragmentActivity activity, Runnable callback) {
-        new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.playback_webhook_privacy_title)
-                .setMessage(R.string.playback_webhook_privacy_message)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
-                    PlaybackWebhookStore.acceptPrivacy();
-                    callback.run();
-                })
-                .show();
-    }
-
     @Override
     protected ViewBinding getBinding() {
-        return binding = DialogPlaybackWebhookBinding.inflate(getLayoutInflater());
+        return binding = DialogPlaybackRemoteSyncBinding.inflate(getLayoutInflater());
     }
 
     @Override
@@ -131,20 +101,18 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
     public void onDestroyView() {
         binding = null;
         editing = null;
-        customFields.clear();
         super.onDestroyView();
     }
 
     @Override
     protected void initView() {
         setupInputs();
-        renderList();
         showList();
     }
 
     @Override
     protected void initEvent() {
-        binding.add.setOnClickListener(view -> showEdit(new WebhookConfig()));
+        binding.add.setOnClickListener(view -> showEdit(new RemoteSyncConfig()));
         binding.negative.setOnClickListener(view -> {
             if (editMode) showList();
             else dismiss();
@@ -162,23 +130,12 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
             advanced = !advanced;
             updateAdvanced();
         });
-        binding.presetGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) return;
-            if (checkedId == R.id.presetCustom && customFields.isEmpty()) customFields.addAll(DEFAULT_CUSTOM_FIELDS);
-            updateFieldsPanel();
-        });
-        binding.selectFields.setOnClickListener(view -> showFieldPicker());
         binding.url.addTextChangedListener(new CustomTextListener() {
             @Override
             public void afterTextChanged(Editable editable) {
                 binding.urlLayout.setError(null);
             }
         });
-    }
-
-    @Override
-    public void onCancel(@NonNull DialogInterface dialog) {
-        super.onCancel(dialog);
     }
 
     @Override
@@ -195,15 +152,14 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
     }
 
     private void renderList() {
-        if (binding == null) return;
-        List<WebhookConfig> configs = PlaybackWebhookStore.list();
-        binding.summary.setText(getString(R.string.playback_webhook_summary, PlaybackWebhookStore.activeCount(), configs.size()));
+        List<RemoteSyncConfig> configs = PlaybackRemoteSyncStore.list();
+        binding.summary.setText(getString(R.string.playback_remote_sync_summary, PlaybackRemoteSyncStore.activeCount(), configs.size()));
         binding.empty.setVisibility(configs.isEmpty() ? View.VISIBLE : View.GONE);
-        binding.endpointList.removeAllViews();
-        for (WebhookConfig config : configs) binding.endpointList.addView(row(config));
+        binding.sourceList.removeAllViews();
+        for (RemoteSyncConfig config : configs) binding.sourceList.addView(row(config));
     }
 
-    private View row(WebhookConfig config) {
+    private View row(RemoteSyncConfig config) {
         LinearLayoutCompat root = new LinearLayoutCompat(requireContext());
         root.setOrientation(LinearLayoutCompat.VERTICAL);
         root.setPadding(dp(10), dp(9), dp(10), dp(9));
@@ -219,15 +175,12 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setOrientation(LinearLayoutCompat.HORIZONTAL);
         root.addView(header, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        MaterialTextView title = text(config.displayName(), 15, Color.BLACK, true);
-        header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        MaterialTextView status = badge(status(config), statusColor(config));
-        header.addView(status);
+        header.addView(text(config.displayName(), 15, Color.BLACK, true), new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        header.addView(badge(status(config), statusColor(config)));
 
         addDetail(root, config.url);
         addDetail(root, meta(config));
-        if (config.suspended && !TextUtils.isEmpty(config.lastError)) addDetail(root, getString(R.string.playback_webhook_last_error, config.lastError), Color.parseColor("#B3261E"));
+        if (!TextUtils.isEmpty(config.lastError)) addDetail(root, getString(R.string.playback_remote_sync_last_error, config.lastError), Color.parseColor("#B3261E"));
 
         LinearLayoutCompat actions = new LinearLayoutCompat(requireContext());
         actions.setGravity(Gravity.CENTER_VERTICAL);
@@ -236,16 +189,17 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         actionParams.topMargin = dp(7);
         root.addView(actions, actionParams);
 
-        MaterialButton toggle = actionButton(config.enabled && !config.suspended ? R.string.setting_disable : R.string.setting_enable, !config.enabled || config.suspended, false);
+        MaterialButton toggle = actionButton(config.enabled ? R.string.setting_disable : R.string.setting_enable, !config.enabled, false);
         toggle.setOnClickListener(view -> {
-            config.enabled = !config.enabled || config.suspended;
-            config.suspended = false;
-            config.failureCount = 0;
-            config.lastError = "";
-            PlaybackWebhookStore.upsert(config);
+            config.enabled = !config.enabled;
+            PlaybackRemoteSyncStore.upsert(config);
             renderList();
         });
         actions.addView(toggle, actionLayout(0));
+
+        MaterialButton sync = actionButton(R.string.playback_remote_sync_now, true, false);
+        sync.setOnClickListener(view -> syncNow(config.id));
+        actions.addView(sync, actionLayout(8));
 
         MaterialButton edit = actionButton(R.string.dialog_edit, false, false);
         edit.setOnClickListener(view -> showEdit(copy(config)));
@@ -260,8 +214,7 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
     private void showList() {
         editMode = false;
         editing = null;
-        customFields.clear();
-        binding.title.setText(R.string.playback_webhook);
+        binding.title.setText(R.string.playback_remote_sync);
         binding.add.setVisibility(View.VISIBLE);
         binding.listPanel.setVisibility(View.VISIBLE);
         binding.editPanel.setVisibility(View.GONE);
@@ -272,12 +225,12 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         binding.add.requestFocus();
     }
 
-    private void showEdit(WebhookConfig config) {
+    private void showEdit(RemoteSyncConfig config) {
         editMode = true;
         editing = config;
-        editEnabled = config.enabled && !config.suspended;
+        editEnabled = config.enabled;
         advanced = false;
-        binding.title.setText(R.string.playback_webhook_edit);
+        binding.title.setText(R.string.playback_remote_sync_edit);
         binding.add.setVisibility(View.GONE);
         binding.listPanel.setVisibility(View.GONE);
         binding.editPanel.setVisibility(View.VISIBLE);
@@ -287,28 +240,24 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         bind(config);
         updateAdvanced();
         updateEnabledButton();
-        updateFieldsPanel();
         binding.urlLayout.setError(null);
         binding.url.requestFocus();
         binding.contentScroll.scrollTo(0, 0);
     }
 
-    private void bind(WebhookConfig config) {
+    private void bind(RemoteSyncConfig config) {
         binding.name.setText(config.name);
         binding.url.setText(config.url);
-        binding.token.setText(token(config));
+        binding.token.setText(config.token);
         binding.siteKeys.setText(join(config.siteKeys));
-        binding.interval.setText(String.valueOf(config.progressIntervalSec));
-        binding.retries.setText(String.valueOf(config.maxRetries));
-        customFields.clear();
-        customFields.addAll(config.fields == null || config.fields.isEmpty() ? DEFAULT_CUSTOM_FIELDS : config.fields);
-        binding.presetGroup.check(presetId(config.fieldPreset));
+        binding.interval.setText(String.valueOf(config.intervalMinutes));
+        binding.maxItems.setText(String.valueOf(config.maxItems));
+        binding.syncOnStartup.setChecked(config.syncOnStartup);
     }
 
     private void saveEdit() {
-        WebhookConfig config = editing == null ? new WebhookConfig() : editing;
+        RemoteSyncConfig config = editing == null ? new RemoteSyncConfig() : editing;
         config.enabled = editEnabled;
-        config.suspended = false;
         config.name = text(binding.name);
         config.url = text(binding.url);
         if (TextUtils.isEmpty(config.url) || !config.url.startsWith("http")) {
@@ -317,20 +266,13 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
             return;
         }
         config.token = text(binding.token);
-        config.secret = config.token;
-        config.keyId = "";
-        config.events = WebhookConfig.defaults();
         config.siteKeys = split(text(binding.siteKeys));
-        config.fieldPreset = selectedPreset();
-        if (WebhookConfig.PRESET_CUSTOM.equals(config.fieldPreset) && customFields.isEmpty()) customFields.addAll(DEFAULT_CUSTOM_FIELDS);
-        config.fields = WebhookConfig.PRESET_CUSTOM.equals(config.fieldPreset) ? new ArrayList<>(customFields) : new ArrayList<>();
-        config.progressIntervalSec = Math.max(0, intValue(binding.interval, 30));
-        config.maxRetries = Math.max(0, Math.min(3, intValue(binding.retries, 2)));
-        config.failureCount = 0;
+        config.intervalMinutes = Math.max(0, intValue(binding.interval, 0));
+        config.maxItems = Math.max(1, Math.min(1000, intValue(binding.maxItems, 100)));
+        config.syncOnStartup = binding.syncOnStartup.isChecked();
         config.lastError = "";
-        config.lastFailureAt = 0;
-        PlaybackWebhookStore.upsert(config);
-        Notify.show(R.string.playback_webhook_saved);
+        PlaybackRemoteSyncStore.upsert(config);
+        Notify.show(R.string.playback_remote_sync_saved);
         if (callback != null) callback.run();
         showList();
     }
@@ -340,23 +282,36 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         confirmDelete(editing);
     }
 
-    private void confirmDelete(WebhookConfig config) {
+    private void confirmDelete(RemoteSyncConfig config) {
         AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.playback_webhook_delete_title)
-                .setMessage(getString(R.string.playback_webhook_delete_message, config.displayName()))
+                .setTitle(R.string.playback_remote_sync_delete_title)
+                .setMessage(getString(R.string.playback_remote_sync_delete_message, config.displayName()))
                 .setNegativeButton(R.string.dialog_negative, null)
                 .setPositiveButton(R.string.setting_delete, null)
                 .create();
         dialog.setOnShowListener(d -> {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus();
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-                PlaybackWebhookStore.remove(config.id);
+                PlaybackRemoteSyncStore.remove(config.id);
                 if (callback != null) callback.run();
                 dialog.dismiss();
                 showList();
             });
         });
         dialog.show();
+    }
+
+    private void syncNow(String id) {
+        Notify.show(R.string.sync_progress);
+        Task.execute(() -> {
+            PlaybackRemoteSyncResult result = PlaybackRemoteSyncer.sync(id);
+            App.post(() -> {
+                if (binding == null) return;
+                renderList();
+                Notify.show(result.success ? getString(R.string.playback_remote_sync_done, result.applied, result.skipped, result.failed) : result.message);
+                if (callback != null) callback.run();
+            });
+        });
     }
 
     private void updateEnabledButton() {
@@ -369,118 +324,43 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         binding.advancedToggle.setText(advanced ? R.string.playback_webhook_advanced_hide : R.string.playback_webhook_advanced);
     }
 
-    private void updateFieldsPanel() {
-        boolean custom = binding.presetGroup.getCheckedButtonId() == R.id.presetCustom;
-        binding.selectFields.setVisibility(custom ? View.VISIBLE : View.GONE);
-        binding.fieldSummary.setText(fieldsSummary(selectedPreset()));
-    }
-
-    private void showFieldPicker() {
-        boolean[] checked = new boolean[FIELD_KEYS.length];
-        for (int i = 0; i < FIELD_KEYS.length; i++) checked[i] = customFields.contains(FIELD_KEYS[i]);
-        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.playback_webhook_select_fields)
-                .setMultiChoiceItems(fieldItems(), checked, (dialog, which, isChecked) -> {
-                    if (isChecked) customFields.add(FIELD_KEYS[which]);
-                    else customFields.remove(FIELD_KEYS[which]);
-                })
-                .setNegativeButton(R.string.dialog_negative, null)
-                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> updateFieldsPanel())
-                .show();
-    }
-
-    private int presetId(String preset) {
-        preset = WebhookConfig.normalizePreset(preset);
-        if (WebhookConfig.PRESET_STANDARD.equals(preset)) return R.id.presetStandard;
-        if (WebhookConfig.PRESET_FULL.equals(preset)) return R.id.presetFull;
-        if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return R.id.presetCustom;
-        return R.id.presetSafe;
-    }
-
-    private String selectedPreset() {
-        int checked = binding.presetGroup.getCheckedButtonId();
-        if (checked == R.id.presetStandard) return WebhookConfig.PRESET_STANDARD;
-        if (checked == R.id.presetFull) return WebhookConfig.PRESET_FULL;
-        if (checked == R.id.presetCustom) return WebhookConfig.PRESET_CUSTOM;
-        return WebhookConfig.PRESET_BASIC;
-    }
-
-    private String fieldsSummary(String preset) {
-        preset = WebhookConfig.normalizePreset(preset);
-        if (WebhookConfig.PRESET_STANDARD.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(STANDARD_FIELDS));
-        if (WebhookConfig.PRESET_FULL.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(FULL_FIELDS));
-        if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(ANONYMOUS_FIELDS));
-        if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return getString(R.string.playback_webhook_fields_summary, join(customSummaryFields()));
-        return getString(R.string.playback_webhook_fields_summary, join(BASIC_FIELDS));
-    }
-
-    private List<String> customSummaryFields() {
-        List<String> fields = new ArrayList<>(PROTOCOL_FIELDS);
-        fields.addAll(customFields.isEmpty() ? DEFAULT_CUSTOM_FIELDS : customFields);
-        return fields;
-    }
-
-    private String meta(WebhookConfig config) {
-        String token = TextUtils.isEmpty(token(config)) ? getString(R.string.playback_webhook_token_empty) : getString(R.string.playback_webhook_token_set);
+    private String meta(RemoteSyncConfig config) {
+        String token = TextUtils.isEmpty(config.token) ? getString(R.string.playback_webhook_token_empty) : getString(R.string.playback_webhook_token_set);
         String sites = config.siteKeys == null || config.siteKeys.isEmpty() ? getString(R.string.playback_webhook_all_sites) : getString(R.string.playback_webhook_sites, join(config.siteKeys));
-        return getString(R.string.playback_webhook_row_meta, token, presetName(config.fieldPreset), sites);
+        String last = config.lastSuccessAt > 0 ? getString(R.string.playback_remote_sync_last_at, time(config.lastSuccessAt)) : getString(R.string.playback_remote_sync_never);
+        String result = getString(R.string.playback_remote_sync_result, config.lastFetched, config.lastApplied, config.lastSkipped, config.lastFailed);
+        return token + " · " + sites + " · " + last + " · " + result;
     }
 
-    private String presetName(String preset) {
-        preset = WebhookConfig.normalizePreset(preset);
-        if (WebhookConfig.PRESET_STANDARD.equals(preset)) return getString(R.string.playback_webhook_preset_standard);
-        if (WebhookConfig.PRESET_FULL.equals(preset)) return getString(R.string.playback_webhook_preset_full);
-        if (WebhookConfig.PRESET_ANONYMOUS.equals(preset)) return getString(R.string.playback_webhook_preset_anonymous);
-        if (WebhookConfig.PRESET_CUSTOM.equals(preset)) return getString(R.string.playback_webhook_preset_custom);
-        return getString(R.string.playback_webhook_preset_safe);
-    }
-
-    private CharSequence[] fieldItems() {
-        CharSequence[] descriptions = getResources().getTextArray(R.array.playback_webhook_field_descriptions);
-        CharSequence[] items = new CharSequence[FIELD_KEYS.length];
-        for (int i = 0; i < FIELD_KEYS.length; i++) {
-            String description = i < descriptions.length ? descriptions[i].toString() : "";
-            items[i] = TextUtils.isEmpty(description) ? FIELD_KEYS[i] : FIELD_KEYS[i] + "\n" + description;
-        }
-        return items;
-    }
-
-    private String status(WebhookConfig config) {
-        if (config.suspended) return getString(R.string.playback_webhook_suspended);
+    private String status(RemoteSyncConfig config) {
         if (config.enabled && config.isUsable()) return getString(R.string.playback_webhook_active);
         return getString(config.enabled ? R.string.playback_webhook_incomplete : R.string.setting_disable);
     }
 
-    private int statusColor(WebhookConfig config) {
-        if (config.suspended) return Color.parseColor("#B3261E");
+    private int statusColor(RemoteSyncConfig config) {
         if (config.enabled && config.isUsable()) return Color.parseColor("#137333");
         return Color.parseColor("#5F6368");
     }
 
-    private WebhookConfig copy(WebhookConfig source) {
-        WebhookConfig target = new WebhookConfig();
+    private RemoteSyncConfig copy(RemoteSyncConfig source) {
+        RemoteSyncConfig target = new RemoteSyncConfig();
         target.id = source.id;
         target.name = source.name;
         target.enabled = source.enabled;
-        target.suspended = source.suspended;
         target.url = source.url;
-        target.events = source.events == null ? new ArrayList<>() : new ArrayList<>(source.events);
+        target.token = source.token;
         target.siteKeys = source.siteKeys == null ? new ArrayList<>() : new ArrayList<>(source.siteKeys);
-        target.fieldPreset = source.fieldPreset;
-        target.fields = source.fields == null ? new ArrayList<>() : new ArrayList<>(source.fields);
-        target.token = token(source);
-        target.secret = target.token;
-        target.keyId = "";
-        target.progressIntervalSec = source.progressIntervalSec;
-        target.maxRetries = source.maxRetries;
-        target.failureCount = source.failureCount;
-        target.lastFailureAt = source.lastFailureAt;
+        target.syncOnStartup = source.syncOnStartup;
+        target.intervalMinutes = source.intervalMinutes;
+        target.maxItems = source.maxItems;
+        target.lastSyncAt = source.lastSyncAt;
+        target.lastSuccessAt = source.lastSuccessAt;
+        target.lastFetched = source.lastFetched;
+        target.lastApplied = source.lastApplied;
+        target.lastSkipped = source.lastSkipped;
+        target.lastFailed = source.lastFailed;
         target.lastError = source.lastError;
         return target;
-    }
-
-    private String token(WebhookConfig config) {
-        return TextUtils.isEmpty(config.token) ? safe(config.secret) : safe(config.token);
     }
 
     private List<String> split(String text) {
@@ -507,10 +387,6 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
 
     private String text(EditText input) {
         return input.getText() == null ? "" : input.getText().toString().trim();
-    }
-
-    private String safe(String value) {
-        return value == null ? "" : value;
     }
 
     private void setupScrollableText(EditText input) {
@@ -594,12 +470,16 @@ public class PlaybackWebhookDialog extends BaseAlertDialog {
         return view;
     }
 
-    private GradientDrawable rowBackground(WebhookConfig config) {
+    private GradientDrawable rowBackground(RemoteSyncConfig config) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(Color.parseColor(config.suspended ? "#FFF7F7" : "#F5F6F7"));
+        drawable.setColor(Color.parseColor("#F5F6F7"));
         drawable.setStroke(dp(1), Color.parseColor(config.isUsable() ? "#DADCE0" : "#E2E5E8"));
         drawable.setCornerRadius(dp(6));
         return drawable;
+    }
+
+    private String time(long millis) {
+        return Formatters.LOCAL_DATETIME.format(Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()));
     }
 
     private int dp(int value) {

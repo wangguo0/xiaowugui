@@ -132,6 +132,32 @@
     <string name="site_health_clear_done">站点健康记录已清空</string>
     <string name="setting_web_home_extension">WebHome 扩展</string>
     <string name="setting_viewing_record_sync">观影记录同步</string>
+    <string name="viewing_record_sync_entry_summary">%1$s · 远端 %2$d/%3$d · Webhook %4$d/%5$d</string>
+    <string name="viewing_record_sync_switches">开关</string>
+    <string name="viewing_record_sync_master_desc">控制远端同步和 Webhook 上报。</string>
+    <string name="viewing_record_sync_local_write">允许本机 API 修改</string>
+    <string name="viewing_record_sync_local_write_desc">允许爬虫通过本机 HTTP API 写入或清理本地观影进度。关闭后仍可读取当前播放记录。</string>
+    <string name="playback_remote_sync">远端同步</string>
+    <string name="playback_remote_sync_manage">管理</string>
+    <string name="playback_remote_sync_edit">编辑远端同步</string>
+    <string name="playback_remote_sync_empty">暂无远端同步源</string>
+    <string name="playback_remote_sync_summary">启用 %1$d · 总数 %2$d</string>
+    <string name="playback_remote_sync_name">名称</string>
+    <string name="playback_remote_sync_url">远端 API URL</string>
+    <string name="playback_remote_sync_token_optional">服务端 Token，可选</string>
+    <string name="playback_remote_sync_interval">间隔分钟</string>
+    <string name="playback_remote_sync_max_items">最大条数</string>
+    <string name="playback_remote_sync_startup">启动时同步</string>
+    <string name="playback_remote_sync_now">同步</string>
+    <string name="playback_remote_sync_saved">远端同步已保存</string>
+    <string name="playback_remote_sync_done">写入 %1$d · 跳过 %2$d · 失败 %3$d</string>
+    <string name="playback_remote_sync_result">拉取 %1$d · 写入 %2$d · 跳过 %3$d · 失败 %4$d</string>
+    <string name="playback_remote_sync_last_at">最近 %1$s</string>
+    <string name="playback_remote_sync_last_error">错误：%1$s</string>
+    <string name="playback_remote_sync_never">从未同步</string>
+    <string name="playback_remote_sync_delete_title">删除远端同步</string>
+    <string name="playback_remote_sync_delete_message">删除 %1$s？</string>
+    <string name="playback_webhook_manage">管理</string>
     <string name="playback_webhook">Webhook 上报</string>
     <string name="playback_webhook_edit">编辑 Webhook</string>
     <string name="playback_webhook_empty">暂无 Webhook 端点</string>
@@ -172,7 +198,9 @@
     <string name="playback_webhook_privacy_title">观影记录同步隐私声明</string>
     <string name="playback_webhook_privacy_message">Webhook 上报会把您的观影记录（包括影片名称、播放进度）发送到您配置的服务器。\n\nApp 不会收集或转发给第三方；您可以随时停用或删除端点。填写服务端 Token 后会通过 X-WebHTV-Token 请求头发送，方便您的服务器分组和校验上报。</string>
     <string-array name="playback_webhook_field_descriptions">
-        <item>点播配置分类 id。</item>
+        <item>本地点播配置 id，跨设备不稳定。</item>
+        <item>点播接口稳定 key，用于区分不同接口。</item>
+        <item>点播接口显示名称。</item>
         <item>App 历史主键，通常由 siteKey 和 vodId 组成。</item>
         <item>来源站点 key。</item>
         <item>来源站点显示名称。</item>

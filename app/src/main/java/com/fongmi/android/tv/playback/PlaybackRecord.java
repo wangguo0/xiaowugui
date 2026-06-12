@@ -31,6 +31,8 @@ public class PlaybackRecord {
     public String sessionId;
     public String dedupeKey;
     public int cid;
+    public String configKey;
+    public String configName;
     public String historyKey;
     public String siteKey;
     public String siteName;
@@ -58,6 +60,8 @@ public class PlaybackRecord {
         this.eventId = "";
         this.sessionId = "";
         this.dedupeKey = "";
+        this.configKey = "";
+        this.configName = "";
         this.historyKey = "";
         this.siteKey = "";
         this.siteName = "";
@@ -85,6 +89,8 @@ public class PlaybackRecord {
         record.sessionId = sessionId == null ? "" : sessionId;
         if (history == null) return record;
         record.cid = history.getCid();
+        record.configKey = PlaybackConfigIdentity.keyForCid(record.cid);
+        record.configName = PlaybackConfigIdentity.nameForCid(record.cid);
         record.historyKey = safe(history.getKey());
         record.siteKey = part(record.historyKey, 0);
         record.vodId = part(record.historyKey, 1);
@@ -123,6 +129,8 @@ public class PlaybackRecord {
         if (policy.includes("sessionId")) record.sessionId = sessionId;
         if (policy.includes("dedupeKey")) record.dedupeKey = dedupeKey;
         if (policy.includes("cid")) record.cid = cid;
+        if (policy.includes("configKey")) record.configKey = configKey;
+        if (policy.includes("configName")) record.configName = configName;
         if (policy.includes("historyKey")) record.historyKey = policy.hashHistoryKey() ? sha256(historyKey) : historyKey;
         if (policy.includes("siteKey")) record.siteKey = siteKey;
         if (policy.includes("siteName")) record.siteName = siteName;
@@ -154,6 +162,8 @@ public class PlaybackRecord {
         if (policy.includes("sessionId") && !TextUtils.isEmpty(sessionId)) object.addProperty("sessionId", sessionId);
         if (policy.includes("dedupeKey") && !TextUtils.isEmpty(dedupeKey)) object.addProperty("dedupeKey", dedupeKey);
         if (policy.includes("cid")) object.addProperty("cid", cid);
+        if (policy.includes("configKey") && !TextUtils.isEmpty(configKey)) object.addProperty("configKey", configKey);
+        if (policy.includes("configName") && !TextUtils.isEmpty(configName)) object.addProperty("configName", configName);
         if (policy.includes("historyKey")) object.addProperty("historyKey", policy.hashHistoryKey() ? sha256(historyKey) : historyKey);
         if (policy.includes("siteKey")) object.addProperty("siteKey", siteKey);
         if (policy.includes("siteName")) object.addProperty("siteName", siteName);
@@ -185,6 +195,8 @@ public class PlaybackRecord {
         record.sessionId = sessionId;
         record.dedupeKey = dedupeKey;
         record.cid = cid;
+        record.configKey = configKey;
+        record.configName = configName;
         record.historyKey = historyKey;
         record.siteKey = siteKey;
         record.siteName = siteName;
@@ -215,6 +227,8 @@ public class PlaybackRecord {
         sessionId = "";
         dedupeKey = "";
         cid = 0;
+        configKey = "";
+        configName = "";
         historyKey = "";
         siteKey = "";
         siteName = "";
@@ -328,7 +342,7 @@ public class PlaybackRecord {
     }
 
     private static String dedupeKey(PlaybackRecord record) {
-        return sha256(join(record.historyKey, record.siteKey, record.vodId, record.vodName, record.flag, record.episodeName, record.episodeUrl));
+        return sha256(join(record.configKey, record.historyKey, record.siteKey, record.vodId, record.vodName, record.flag, record.episodeName, record.episodeUrl));
     }
 
     private static String clientKey() {
