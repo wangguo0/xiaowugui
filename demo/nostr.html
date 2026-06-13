@@ -2052,8 +2052,13 @@
       flex: 0 0 clamp(240px, 20vw, 310px);
       max-width: clamp(240px, 20vw, 310px);
       height: 96px;
-      display: grid;
-      grid-template-columns: 96px minmax(0, 1fr);
+      display: -webkit-box;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-box-orient: horizontal;
+      -webkit-box-direction: normal;
+      -webkit-flex-direction: row;
+      flex-direction: row;
       align-items: center;
       border-radius: 8px;
       background: transparent;
@@ -2065,7 +2070,9 @@
       width: 96px;
       max-width: 96px;
       height: 96px;
-      flex: none;
+      -webkit-box-flex: 0;
+      -webkit-flex: 0 0 96px;
+      flex: 0 0 96px;
       margin: 0;
       aspect-ratio: auto;
       border-radius: 999px;
@@ -2075,10 +2082,18 @@
     }
 
     #detailSheet.detail-large .person-card div {
+      -webkit-box-flex: 1;
+      -webkit-flex: 1 1 auto;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: auto;
       padding: 0 0 0 18px;
+      overflow: hidden;
     }
 
     #detailSheet.detail-large .person-card b {
+      display: block;
+      color: rgba(255, 255, 255, .94);
       font-size: clamp(18px, 1.55vw, 24px);
       font-weight: 820;
       line-height: 1.08;
