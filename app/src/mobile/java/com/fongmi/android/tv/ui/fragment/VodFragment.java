@@ -48,8 +48,9 @@ import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.web.WebHomeChrome;
 import com.fongmi.android.tv.web.HomeWebController;
+import com.fongmi.android.tv.web.WebHomeChrome;
+import com.fongmi.android.tv.web.WebHomeChromeStartup;
 import com.fongmi.android.tv.web.WebHomeViewport;
 import com.google.gson.JsonObject;
 
@@ -284,8 +285,10 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void loadHome() {
+        Site home = getHome();
+        WebHomeChromeStartup.remember(getConfig(), home);
         setTitle();
-        if (mWeb != null && mWeb.load(getHome())) {
+        if (mWeb != null && mWeb.load(home)) {
             clearPagerTypes();
             hideProgress();
             hideNativeContent();
@@ -323,9 +326,11 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         switch (event.getType()) {
             case HOME:
                 if (mWeb != null && mWeb.isVisible()) {
+                    Site home = getHome();
+                    WebHomeChromeStartup.remember(getConfig(), home);
                     requestNormalChrome();
                     setTitle();
-                    if (!mWeb.load(getHome(), true)) {
+                    if (!mWeb.load(home, true)) {
                         showNativeContent();
                         homeContent();
                     }

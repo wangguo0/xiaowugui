@@ -46,6 +46,7 @@ import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.UrlUtil;
+import com.fongmi.android.tv.web.WebHomeChromeStartup;
 import com.fongmi.android.tv.web.WebHomeViewport;
 import com.github.catvod.net.OkHttp;
 import com.google.android.material.navigation.NavigationBarView;
@@ -59,6 +60,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private FragmentStateManager mManager;
     private ActivityHomeBinding mBinding;
     private WebHomeChromeController mChrome;
+    private Config mStartupConfig;
     private int orientation;
 
     @Override
@@ -81,7 +83,8 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     @Override
     protected void initView(Bundle savedInstanceState) {
         orientation = getResources().getConfiguration().orientation;
-        mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState);
+        mStartupConfig = Config.vod();
+        mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState, WebHomeChromeStartup.restore(mStartupConfig));
         mBinding.navigation.setOnItemSelectedListener(this);
         PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
         initFragment(savedInstanceState);
@@ -131,7 +134,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void initConfig() {
-        VodConfig.get().init().load(getCallback());
+        VodConfig.get().config(mStartupConfig == null ? Config.vod() : mStartupConfig).load(getCallback());
         LiveConfig.get().init().load();
         WallConfig.get().init();
     }
@@ -145,6 +148,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
             @Override
             public void error(String msg) {
+                resetVodChrome();
                 checkAction(getIntent());
                 StateEvent.empty();
                 Notify.show(msg);

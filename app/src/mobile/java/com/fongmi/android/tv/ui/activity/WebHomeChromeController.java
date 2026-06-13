@@ -48,14 +48,20 @@ final class WebHomeChromeController {
     private String previousMode;
     private int safeBottomMax;
 
-    WebHomeChromeController(HomeActivity activity, ActivityHomeBinding binding, Host host, Bundle savedInstanceState) {
+    WebHomeChromeController(HomeActivity activity, ActivityHomeBinding binding, Host host, Bundle savedInstanceState, JsonObject startupChrome) {
         this.activity = activity;
         this.binding = binding;
         this.host = host;
         this.navigationBaseHeight = binding.navigation.getLayoutParams().height;
-        this.mode = savedInstanceState == null ? WebHomeChrome.NORMAL : WebHomeChrome.normalize(savedInstanceState.getString(STATE_MODE), WebHomeChrome.NORMAL);
-        this.previousMode = savedInstanceState == null ? WebHomeChrome.NORMAL : WebHomeChrome.normalize(savedInstanceState.getString(STATE_PREVIOUS_MODE), WebHomeChrome.NORMAL);
-        this.options = WebHomeChromeOptions.from(null, mode);
+        if (savedInstanceState == null && startupChrome != null) {
+            this.options = WebHomeChromeOptions.from(startupChrome, WebHomeChrome.EDGE);
+            this.mode = WebHomeChrome.normalize(options.mode, WebHomeChrome.EDGE);
+            this.previousMode = WebHomeChrome.IMMERSIVE.equals(mode) ? WebHomeChrome.NORMAL : mode;
+        } else {
+            this.mode = savedInstanceState == null ? WebHomeChrome.NORMAL : WebHomeChrome.normalize(savedInstanceState.getString(STATE_MODE), WebHomeChrome.NORMAL);
+            this.previousMode = savedInstanceState == null ? WebHomeChrome.NORMAL : WebHomeChrome.normalize(savedInstanceState.getString(STATE_PREVIOUS_MODE), WebHomeChrome.NORMAL);
+            this.options = WebHomeChromeOptions.from(null, mode);
+        }
         this.viewport = WebHomeViewport.EMPTY.withChrome(mode, isImmersive());
         init();
     }
