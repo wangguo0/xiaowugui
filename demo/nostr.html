@@ -4740,6 +4740,14 @@
           });
           return;
         }
+        if (isNativeLeanbackClient() && ui.setChrome) {
+          if (visible === true) {
+            ui.setChrome({ mode: isHomeFullscreenEnabled() ? "edge" : "tv-overlay" });
+            return;
+          }
+          ui.setChrome({ mode: "tv-full" });
+          return;
+        }
         if (ui.setToolbar) ui.setToolbar(visible);
       } catch (e) {}
     }

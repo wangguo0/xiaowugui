@@ -745,6 +745,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     protected void onBackInvoked() {
         if (mWeb != null && mWeb.handleBack()) {
             return;
+        } else if (consumeTvFullscreenBack()) {
+            return;
         } else if (mBinding.progressLayout.isProgress()) {
             showContent();
         } else if (mPresenter.isDelete()) {
@@ -755,6 +757,14 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             if (PlaybackService.isRunning()) moveTaskToBack(true);
             else super.onBackInvoked();
         }
+    }
+
+    private boolean consumeTvFullscreenBack() {
+        if (mWeb == null || !mWeb.isVisible()) return false;
+        if (!TV_FULL.equals(webChromeMode) && !TV_TOOLBAR_HIDDEN.equals(webChromeMode)) return false;
+        applyTvChrome(TV_OVERLAY);
+        requestTitleFocus();
+        return true;
     }
 
     @Override
