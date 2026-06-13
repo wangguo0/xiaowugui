@@ -9718,24 +9718,23 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const activeEl = document.activeElement;
       const restoreSeason = activeEl && $("seasonTabs").contains(activeEl) && activeEl.dataset.seasonNumber || "";
       const singleSeason = seasons.length === 1;
-      $("seasonTabs").replaceChildren(...seasons.map((season, index) => {
-        const button = document.createElement("button");
-        button.className = "chip" + (singleSeason ? "" : " focusable") + (index === 0 ? " active" : "");
-        button.type = "button";
-        button.dataset.seasonNumber = String(season.season_number);
-        button.textContent = season.name || "第 " + season.season_number + " 季";
-        if (singleSeason) {
-          button.tabIndex = -1;
-          button.setAttribute("aria-hidden", "true");
+      if (singleSeason) {
+        $("seasonTabs").replaceChildren();
+      } else {
+        $("seasonTabs").replaceChildren(...seasons.map((season, index) => {
+          const button = document.createElement("button");
+          button.className = "chip focusable" + (index === 0 ? " active" : "");
+          button.type = "button";
+          button.dataset.seasonNumber = String(season.season_number);
+          button.textContent = season.name || "第 " + season.season_number + " 季";
+          button.addEventListener("click", () => {
+            document.querySelectorAll("#seasonTabs .chip").forEach((el) => el.classList.remove("active"));
+            button.classList.add("active");
+            loadSeason(item, season.season_number);
+          });
           return button;
-        }
-        button.addEventListener("click", () => {
-          document.querySelectorAll("#seasonTabs .chip").forEach((el) => el.classList.remove("active"));
-          button.classList.add("active");
-          loadSeason(item, season.season_number);
-        });
-        return button;
-      }));
+        }));
+      }
       if (restoreSeason && !singleSeason) requestAnimationFrame(() => focusRemoteTarget(findByDataset($("seasonTabs"), "seasonNumber", restoreSeason) || $("seasonTabs").querySelector(".chip.active") || $("seasonTabs").querySelector(".chip")));
       const first = detail["season/1"] || null;
       if (first && first.episodes) renderEpisodes(first.episodes);
