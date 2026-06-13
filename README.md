@@ -176,7 +176,7 @@ Content-Type: application/json
 
 ### 7. PanSou 网盘搜索集成示例
 
-`demo/nostr-合并.html` 的详情页集成了 PanSou 类搜索能力,支持:
+`demo/nostr.html` 的详情页集成了 PanSou 类搜索能力,支持:
 
 - 自定义盘搜服务地址、账号密码认证、自定义 TG 频道。
 - 按网盘类型分 Tab 展示,对支持的类型调用 App 内置检测,只检测可见范围内的结果,检测结果用状态圆点表达。
@@ -186,7 +186,7 @@ PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果
 
 ### 8. Nostr + TMDB 推荐首页示例
 
-`demo/nostr-合并.html` 是一个完整的 WebHome 首页示例,不只是 SDK demo。它包含:
+`demo/nostr.html` 是一个完整的 WebHome 首页示例,不只是 SDK demo。它包含:
 
 - TMDB 今日趋势、电影、剧集、动画等榜单,中国大陆内容优先的推荐分区。
 - 瀑布流卡片布局,移动端一行 3 个,宽屏自动显示更多列。
@@ -206,9 +206,7 @@ PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果
 
 | 文件 | 说明 |
 | --- | --- |
-| `demo/nostr-合并.html` | 正式推荐首页示例,集成 TMDB、Nostr、PanSou、网盘检测、透明背景 |
-| `demo/nostr-分级.html` / `nostr-半透明.html` / `nostr-沉浸式.html` | 推荐首页的分级过滤/半透明/沉浸式变体 |
-| `demo/check.html` | 网盘检测能力测试页 |
+| `demo/nostr.html` | 正式推荐首页示例,集成 TMDB、Nostr、PanSou、网盘检测、透明背景 |
 
 配置示例:
 
@@ -220,7 +218,7 @@ PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果
       "name": "WebHome 推荐",
       "type": 3,
       "api": "csp_Demo",
-      "homePage": "./nostr-合并.html"
+      "homePage": "./nostr.html"
     }
   ]
 }
