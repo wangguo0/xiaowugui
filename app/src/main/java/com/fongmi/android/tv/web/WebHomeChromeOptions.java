@@ -14,6 +14,8 @@ public final class WebHomeChromeOptions {
     public static final String STYLE_AUTO = "auto";
     public static final String STYLE_LIGHT = "light";
     public static final String STYLE_DARK = "dark";
+    public static final String RESTORE_NONE = "none";
+    public static final String RESTORE_NATIVE = "native";
 
     public final String mode;
     public final String statusBarStyle;
@@ -36,7 +38,7 @@ public final class WebHomeChromeOptions {
     }
 
     public static WebHomeChromeOptions legacyImmersive() {
-        return new WebHomeChromeOptions(WebHomeChrome.IMMERSIVE, STYLE_AUTO, STYLE_AUTO, "native", Color.TRANSPARENT, Color.TRANSPARENT);
+        return new WebHomeChromeOptions(WebHomeChrome.IMMERSIVE, STYLE_AUTO, STYLE_AUTO, RESTORE_NATIVE, Color.TRANSPARENT, Color.TRANSPARENT);
     }
 
     public static WebHomeChromeOptions fromSite(Site site) {

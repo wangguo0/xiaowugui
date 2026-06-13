@@ -2673,10 +2673,13 @@
     }
 
     html.native-mobile-app.mobile-detail-translucent #detailSheet:not(.detail-large) .mobile-detail-back {
-      top: max(12px, var(--safe-top));
-      left: 12px;
+      position: relative;
+      top: auto;
+      left: auto;
+      align-self: flex-start;
       width: 42px;
       height: 42px;
+      margin: 0 0 10px;
       color: rgba(255, 255, 255, .92);
       background: rgba(12, 18, 24, .18);
       border-color: rgba(255, 255, 255, .16);
@@ -4743,7 +4746,7 @@
             mode: home ? isHomeFullscreenEnabled() ? "edge" : "normal" : "immersive",
             statusBarStyle: "light",
             navigationBarStyle: "light",
-            restoreAffordance: home ? "auto" : "native",
+            restoreAffordance: home ? "auto" : "none",
             startup: home
           });
           return;

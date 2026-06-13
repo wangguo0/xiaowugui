@@ -717,7 +717,7 @@ function classify(url) {
 弹层与滚动：
 
 - 自绘面板打开时给 `body` 加锁滚动类，关闭时**必须移除**；关闭后恢复原滚动位置。
-- 进入自绘全屏详情可 `fm.ui.setChrome({ mode: "immersive", restoreAffordance: "native" })`，自绘仅图标返回按钮，关闭时 `fm.ui.restoreChrome()` 或 `fm.ui.setChrome({ mode: "edge" })` 回到首页融合。`fm.ui.setToolbar(false)` 只作为旧脚本兼容，不再作为新脚本推荐写法。
+- 进入自绘全屏详情可 `fm.ui.setChrome({ mode: "immersive", restoreAffordance: "none" })`，自绘仅图标返回按钮，关闭时 `fm.ui.restoreChrome()` 或 `fm.ui.setChrome({ mode: "edge" })` 回到首页融合；缺少自绘返回兜底时才用 `restoreAffordance: "native"`。`fm.ui.setToolbar(false)` 只作为旧脚本兼容，不再作为新脚本推荐写法。
 
 ### 12.3 电视端
 

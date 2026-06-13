@@ -117,6 +117,7 @@ final class WebHomeChromeController {
 
     boolean consumeBack() {
         if (!isActive() || !isImmersive()) return false;
+        if (WebHomeChromeOptions.RESTORE_NONE.equals(options.restoreAffordance)) return false;
         restore();
         return true;
     }
@@ -196,7 +197,8 @@ final class WebHomeChromeController {
     }
 
     private void applyRestoreButton(WebHomeViewport current, boolean active) {
-        boolean visible = active && (WebHomeChrome.IMMERSIVE.equals(mode) || "native".equals(options.restoreAffordance) && WebHomeChrome.hidesNativeChrome(mode));
+        boolean restoreDisabled = WebHomeChromeOptions.RESTORE_NONE.equals(options.restoreAffordance);
+        boolean visible = active && !restoreDisabled && (WebHomeChrome.IMMERSIVE.equals(mode) || WebHomeChromeOptions.RESTORE_NATIVE.equals(options.restoreAffordance) && WebHomeChrome.hidesNativeChrome(mode));
         binding.chromeRestore.setVisibility(visible ? View.VISIBLE : View.GONE);
         ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) binding.chromeRestore.getLayoutParams();
         int margin = ResUtil.dp2px(8);
