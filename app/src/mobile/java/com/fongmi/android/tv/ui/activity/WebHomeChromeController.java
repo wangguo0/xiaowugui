@@ -16,7 +16,6 @@ import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.ActivityHomeBinding;
-import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.WebHomeChrome;
 import com.fongmi.android.tv.web.WebHomeChromeOptions;
@@ -68,11 +67,6 @@ final class WebHomeChromeController {
 
     private void init() {
         binding.getRoot().setFitsSystemWindows(false);
-        binding.chromeRestore.setOnClickListener(view -> restore());
-        binding.chromeRestore.setOnLongClickListener(view -> {
-            apply(WebHomeChromeOptions.normal());
-            return true;
-        });
         ViewCompat.setOnApplyWindowInsetsListener(binding.getRoot(), (view, windowInsets) -> {
             insets = windowInsets;
             applyLayout();
@@ -193,21 +187,6 @@ final class WebHomeChromeController {
         if (binding.navigation.getVisibility() == View.VISIBLE) container.addRule(RelativeLayout.ABOVE, binding.navigation.getId());
         else container.removeRule(RelativeLayout.ABOVE);
         binding.container.setLayoutParams(container);
-        applyRestoreButton(current, active);
-    }
-
-    private void applyRestoreButton(WebHomeViewport current, boolean active) {
-        boolean restoreDisabled = WebHomeChromeOptions.RESTORE_NONE.equals(options.restoreAffordance);
-        boolean visible = active && !restoreDisabled && (WebHomeChrome.IMMERSIVE.equals(mode) || WebHomeChromeOptions.RESTORE_NATIVE.equals(options.restoreAffordance) && WebHomeChrome.hidesNativeChrome(mode));
-        binding.chromeRestore.setVisibility(visible ? View.VISIBLE : View.GONE);
-        ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) binding.chromeRestore.getLayoutParams();
-        int margin = ResUtil.dp2px(8);
-        int top = current.getSafeTop() + margin;
-        int right = current.getSafeRight() + margin;
-        if (params.topMargin == top && params.rightMargin == right) return;
-        params.topMargin = top;
-        params.rightMargin = right;
-        binding.chromeRestore.setLayoutParams(params);
     }
 
     private void dispatchViewport() {
