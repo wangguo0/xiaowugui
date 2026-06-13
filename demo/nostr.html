@@ -3210,6 +3210,7 @@
     .connection-dock {
       position: relative;
       z-index: 50;
+      width: auto;
       width: fit-content;
       max-width: 100%;
       justify-self: end;
@@ -3226,6 +3227,8 @@
     .connection-toggle {
       width: auto;
       min-height: 34px;
+      display: inline-flex;
+      align-items: center;
       display: grid;
       grid-template-columns: auto auto auto;
       align-items: center;
@@ -3258,6 +3261,10 @@
       right: 0;
       top: calc(100% + 8px);
       z-index: 80;
+      width: 420px;
+      max-width: 92vw;
+      max-width: calc(100vw - 28px);
+      max-width: calc(var(--fm-web-width, 100vw) - 28px);
       width: min(calc(var(--fm-web-width, 100vw) - 28px), 420px);
       max-width: calc(var(--fm-web-width, 100vw) - 28px);
       margin: 0;
@@ -3275,12 +3282,15 @@
     }
 
     .connection-grid {
+      display: block;
       display: grid;
       gap: 8px;
       margin-top: 10px;
     }
 
     .connection-item {
+      display: flex;
+      align-items: baseline;
       display: grid;
       grid-template-columns: minmax(56px, 74px) minmax(0, 1fr);
       gap: 8px;
@@ -3290,11 +3300,14 @@
     }
 
     .connection-item b {
+      flex: 0 0 74px;
       color: var(--muted);
       font-weight: 700;
     }
 
-    .connection-item span {
+    .connection-item span,
+    .connection-item > .detail-style-segmented {
+      flex: 1 1 auto;
       min-width: 0;
       word-break: break-word;
     }
@@ -3309,6 +3322,7 @@
 
     .detail-style-segmented {
       min-width: 0;
+      display: inline-flex;
       display: inline-grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 2px;
@@ -3381,6 +3395,8 @@
     }
 
     .connection-body .actions {
+      display: flex;
+      flex-wrap: wrap;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
       gap: 8px;
@@ -3973,6 +3989,11 @@
 
     html.no-layout-gap .connection-item > b {
       margin-right: 8px;
+    }
+
+    html.no-css-functions .connection-body {
+      width: 420px;
+      max-width: calc(100vw - 28px);
     }
 
     html.no-layout-gap .pan-disk-grid {
@@ -6012,6 +6033,8 @@
       const body = $("connectionBody");
       if (!dock || !body) return;
       body.style.setProperty("--connection-shift", "0px");
+      const width = connectionPanelWidth();
+      if (width) body.style.width = `${width}px`;
       if (!dock.classList.contains("open")) return;
       requestAnimationFrame(() => {
         const rect = body.getBoundingClientRect();
@@ -6021,6 +6044,12 @@
         if (rect.right + shift > window.innerWidth - pad) shift = window.innerWidth - pad - rect.right;
         body.style.setProperty("--connection-shift", `${Math.round(shift)}px`);
       });
+    }
+
+    function connectionPanelWidth() {
+      const viewport = Math.min(window.innerWidth || 0, document.documentElement && document.documentElement.clientWidth || 0) || window.innerWidth || document.documentElement && document.documentElement.clientWidth || 0;
+      if (!viewport) return 420;
+      return Math.round(Math.min(420, Math.max(220, viewport - 28)));
     }
 
     function setConnectionPanelOpen(open) {
