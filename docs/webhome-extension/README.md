@@ -464,7 +464,7 @@ await fm.cache.del("key", "rule");
 
 | 接口 | 说明 |
 | --- | --- |
-| `fm.ui.setChrome(options)` | 运行时切换 WebHome chrome。手机端支持 `normal` / `edge` / `immersive`；首页融合用 `edge`，专注详情页才用 `immersive`。`options` 可含 `mode`、`statusBarStyle`、`navigationBarStyle`、`restoreAffordance`、`scrim` |
+| `fm.ui.setChrome(options)` | 运行时切换 WebHome chrome。手机端支持 `normal` / `edge` / `immersive`；首页融合用 `edge`，专注详情页才用 `immersive`。`options` 可含 `mode`、`statusBarStyle`、`navigationBarStyle`、`restoreAffordance`、`scrim`。仅首页全屏偏好这类“下次冷启动也要生效”的设置才带 `startup: true`，Native 只持久化 `normal` / `edge`，不会保存 `immersive` |
 | `fm.ui.restoreChrome()` | 从 `immersive` 回到进入前的 chrome；关闭自绘详情页时优先用它，或显式 `setChrome({ mode: "edge" })` |
 | `fm.ui.getViewport()` | 返回当前 WebView 尺寸、安全区、手势区、系统栏高度和 `chromeMode`；持续变化看 `fmviewport` |
 | `fm.ui.setToolbar(visible)` | legacy chrome API。`false` 在手机端等价旧式沉浸行为，会隐藏原生顶部/底部和系统栏；新脚本不要用它表示首页融合，保留给旧页面兼容 |

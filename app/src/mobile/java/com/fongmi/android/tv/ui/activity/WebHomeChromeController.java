@@ -92,6 +92,10 @@ final class WebHomeChromeController {
         apply(WebHomeChromeOptions.fromSite(site));
     }
 
+    void applyDefault(JsonObject chrome) {
+        apply(WebHomeChromeOptions.from(chrome, WebHomeChrome.EDGE));
+    }
+
     void setChrome(JsonObject payload) {
         apply(WebHomeChromeOptions.from(payload, mode));
     }

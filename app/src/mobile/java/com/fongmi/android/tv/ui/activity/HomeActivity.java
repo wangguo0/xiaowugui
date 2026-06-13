@@ -258,11 +258,20 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void applyWebHomeDefaultChrome(Site site) {
-        if (mChrome != null) mChrome.applyDefault(site);
+        if (mChrome != null) mChrome.applyDefault(WebHomeChromeStartup.resolve(VodConfig.get().getConfig(), site));
     }
 
     public void setWebHomeChrome(JsonObject payload) {
+        if (isStartupChrome(payload)) WebHomeChromeStartup.remember(VodConfig.get().getConfig(), VodConfig.get().getHome(), payload);
         if (mChrome != null) mChrome.setChrome(payload);
+    }
+
+    private boolean isStartupChrome(JsonObject payload) {
+        try {
+            return payload != null && payload.has("startup") && payload.get("startup").getAsBoolean();
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     public void restoreWebHomeChrome() {

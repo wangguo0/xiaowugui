@@ -4222,6 +4222,10 @@
                 <button class="detail-style-option focusable" id="ratingLimitOnBtn" type="button" data-rating-limit="on">开启</button>
                 <button class="detail-style-option focusable" id="ratingLimitOffBtn" type="button" data-rating-limit="off">关闭</button>
               </div></div>
+              <div class="connection-item"><b>首页全屏</b><div class="detail-style-segmented" id="homeFullscreenSegmented" role="group" aria-label="首页全屏">
+                <button class="detail-style-option focusable" id="homeFullscreenOnBtn" type="button" data-home-fullscreen="on">开启</button>
+                <button class="detail-style-option focusable" id="homeFullscreenOffBtn" type="button" data-home-fullscreen="off">关闭</button>
+              </div></div>
               <div class="connection-item"><b>手机详情</b><div class="detail-style-segmented" id="mobileDetailStyleSegmented" role="group" aria-label="手机详情样式">
                 <button class="detail-style-option focusable" id="mobileDetailImmersiveBtn" type="button" data-mobile-detail-style="immersive">沉浸式</button>
                 <button class="detail-style-option focusable" id="mobileDetailTranslucentBtn" type="button" data-mobile-detail-style="translucent">半透明</button>
@@ -4546,7 +4550,7 @@
       },
       deleteState: { loaded: false, users: {} },
       tmdb: { config: null, configDirty: false },
-      uiPrefs: { loaded: false, mobileDetailStyle: "immersive", ratingLimitEnabled: true },
+      uiPrefs: { loaded: false, mobileDetailStyle: "immersive", homeFullscreenEnabled: true, ratingLimitEnabled: true },
       autoBlocked: { loaded: false, items: {}, pending: {}, queue: [], queued: {}, active: 0, timer: 0, viewportTimer: 0, refreshTimer: 0, saveTimer: 0, version: 0 },
       blocked: { loaded: false, items: {}, selecting: false, holdTimer: 0, holdTarget: null, longPressFired: false, pointer: null, suppressClickUntil: 0, saveTimer: 0, lastPosition: null, restoring: false, restoreSeq: 0 },
       pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
@@ -4705,11 +4709,13 @@
       try {
         const ui = sdk().ui || {};
         if (isNativeMobileClient() && ui.setChrome) {
+          const home = visible === true;
           ui.setChrome({
-            mode: visible ? "edge" : "immersive",
+            mode: home ? isHomeFullscreenEnabled() ? "edge" : "normal" : "immersive",
             statusBarStyle: "light",
             navigationBarStyle: "light",
-            restoreAffordance: visible ? "auto" : "native"
+            restoreAffordance: home ? "auto" : "native",
+            startup: home
           });
           return;
         }
@@ -4769,7 +4775,11 @@
     function sanitizeUiPrefs(value) {
       const raw = value && typeof value === "object" ? value : {};
       const style = raw.mobileDetailStyle === "translucent" ? "translucent" : "immersive";
-      return { mobileDetailStyle: style, ratingLimitEnabled: raw.ratingLimitEnabled === false ? false : true };
+      return { mobileDetailStyle: style, homeFullscreenEnabled: raw.homeFullscreenEnabled === false ? false : true, ratingLimitEnabled: raw.ratingLimitEnabled === false ? false : true };
+    }
+
+    function isHomeFullscreenEnabled() {
+      return !state.uiPrefs || state.uiPrefs.homeFullscreenEnabled !== false;
     }
 
     function isRatingLimitEnabled() {
@@ -4781,6 +4791,7 @@
       state.uiPrefs = Object.assign({ loaded: state.uiPrefs && state.uiPrefs.loaded }, prefs);
       document.documentElement.classList.toggle("mobile-detail-translucent", prefs.mobileDetailStyle === "translucent");
       renderUiPrefsControls();
+      syncNativeToolbarForRoute();
       if ($("detailSheet") && $("detailSheet").classList.contains("active")) {
         resetDetailCoverFrame($("detailImage") && $("detailImage").parentElement);
         scheduleDetailTextClamp();
@@ -4810,14 +4821,31 @@
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
+      const fullscreen = isHomeFullscreenEnabled() ? "on" : "off";
+      document.querySelectorAll("[data-home-fullscreen]").forEach((button) => {
+        const active = button.dataset.homeFullscreen === fullscreen;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
     }
 
     async function setMobileDetailStyle(style) {
-      state.uiPrefs = Object.assign({}, state.uiPrefs || {}, sanitizeUiPrefs({ mobileDetailStyle: style }), { loaded: true });
+      const next = style === "translucent" ? "translucent" : "immersive";
+      state.uiPrefs = Object.assign({}, sanitizeUiPrefs(state.uiPrefs || {}), { mobileDetailStyle: next, loaded: true });
       applyUiPrefs();
       if (window.fongmiBridge && !window.fm) await waitForNativeSdk(1200);
       try { await sdk().cache.set(cacheKey("uiPrefs"), JSON.stringify(sanitizeUiPrefs(state.uiPrefs))); } catch (e) {}
       toast(state.uiPrefs.mobileDetailStyle === "translucent" ? "手机详情：半透明背景" : "手机详情：全屏沉浸式");
+      scheduleUiSnapshotSave();
+    }
+
+    async function setHomeFullscreenEnabled(enabled) {
+      state.uiPrefs = Object.assign({}, state.uiPrefs || {}, sanitizeUiPrefs(state.uiPrefs || {}), { homeFullscreenEnabled: enabled !== false, loaded: true });
+      applyUiPrefs();
+      if (window.fongmiBridge && !window.fm) await waitForNativeSdk(1200);
+      try { await sdk().cache.set(cacheKey("uiPrefs"), JSON.stringify(sanitizeUiPrefs(state.uiPrefs))); } catch (e) {}
+      syncNativeToolbarForRoute();
+      toast(isHomeFullscreenEnabled() ? "首页全屏：已开启" : "首页全屏：已关闭");
       scheduleUiSnapshotSave();
     }
 
@@ -11951,6 +11979,20 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           const next = event.key === "ArrowRight" ? "off" : "on";
           setRatingLimitEnabled(next !== "off").then(() => {
             const target = document.querySelector(`[data-rating-limit="${next}"]`);
+            if (target) focusRemoteTarget(target);
+          }).catch(() => {});
+        });
+      });
+      document.querySelectorAll("[data-home-fullscreen]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setHomeFullscreenEnabled(button.dataset.homeFullscreen !== "off").catch(() => {});
+        });
+        button.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const next = event.key === "ArrowRight" ? "off" : "on";
+          setHomeFullscreenEnabled(next !== "off").then(() => {
+            const target = document.querySelector(`[data-home-fullscreen="${next}"]`);
             if (target) focusRemoteTarget(target);
           }).catch(() => {});
         });
