@@ -9,7 +9,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.webkit.WebView;
-import android.widget.RelativeLayout;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -84,9 +84,15 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 public class HomeActivity extends BaseActivity implements CustomTitleView.Listener, VodPresenter.OnClickListener, FuncPresenter.OnClickListener, HistoryPresenter.OnClickListener, TypeAdapter.OnClickListener, HomeWebController.Listener {
+
+    private static final String TV_NORMAL = "tv-normal";
+    private static final String TV_TOOLBAR_HIDDEN = "tv-toolbar-hidden";
+    private static final String TV_OVERLAY = "tv-overlay";
+    private static final String TV_FULL = "tv-full";
 
     private ActivityHomeBinding mBinding;
     private ArrayObjectAdapter mHistoryAdapter;
@@ -100,6 +106,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private Result mResult;
     private Result mHomeResult;
     private Clock mClock;
+    private String webChromeMode = TV_NORMAL;
+    private String webDefaultChromeMode = TV_FULL;
     private boolean webToolbarVisible = true;
     private boolean loadingHomeCategory;
 
@@ -164,6 +172,10 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     @Override
     protected void initEvent() {
         mBinding.title.setListener(this);
+        mBinding.toolbar.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            syncNativeContentInset();
+            syncWebOverlayLayout();
+        });
         mBinding.recycler.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
@@ -181,6 +193,36 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void updateToolbarVisibility(boolean visible) {
         mBinding.toolbar.setVisibility(visible && webToolbarVisible ? View.VISIBLE : View.GONE);
+        syncNativeContentInset();
+        syncWebOverlayLayout();
+    }
+
+    private void syncNativeContentInset() {
+        int top = isToolbarVisible() ? toolbarHeight() : 0;
+        if (mBinding.nativeContent.getPaddingTop() == top) return;
+        mBinding.nativeContent.setPadding(mBinding.nativeContent.getPaddingLeft(), top, mBinding.nativeContent.getPaddingRight(), mBinding.nativeContent.getPaddingBottom());
+    }
+
+    private void syncWebOverlayLayout() {
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mBinding.webOverlay.getLayoutParams();
+        int top = constrainWebBelowToolbar() ? toolbarHeight() : 0;
+        if (params.topMargin == top) return;
+        params.topMargin = top;
+        mBinding.webOverlay.setLayoutParams(params);
+    }
+
+    private boolean constrainWebBelowToolbar() {
+        return TV_NORMAL.equals(webChromeMode) && isToolbarVisible();
+    }
+
+    private boolean isToolbarVisible() {
+        return mBinding.toolbar.getVisibility() == View.VISIBLE;
+    }
+
+    private int toolbarHeight() {
+        int height = mBinding.toolbar.getHeight();
+        if (height <= 0) height = mBinding.toolbar.getMeasuredHeight();
+        return height > 0 ? height : ResUtil.dp2px(80);
     }
 
     private boolean isTopRow(int position) {
@@ -226,7 +268,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private void setWebView() {
         SpiderDebug.log("startup", "webview create start cost=%sms", System.currentTimeMillis() - App.time());
         mWeb = new HomeWebController(this, getHomeWeb(), this);
-        mWeb.setViewport(tvViewport("tv-normal"));
+        mWeb.setViewport(tvViewport(webChromeMode));
         SpiderDebug.log("startup", "webview create end cost=%sms", System.currentTimeMillis() - App.time());
     }
 
@@ -240,7 +282,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         mHomeWeb.setFocusable(true);
         mHomeWeb.setFocusableInTouchMode(true);
         mHomeWeb.setVisibility(View.GONE);
-        mBinding.progressLayout.addView(mHomeWeb, new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
+        mBinding.webOverlay.addView(mHomeWeb, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         return mHomeWeb;
     }
 
@@ -349,9 +391,12 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             mBinding.typeRecycler.setVisibility(View.GONE);
             mBinding.recycler.setVisibility(View.GONE);
             mBinding.progressLayout.showContent();
+            showWebOverlay();
             return;
         }
         if (mWeb != null) mWeb.hide();
+        hideWebOverlay();
+        applyTvChrome(TV_NORMAL);
         mBinding.recycler.setVisibility(View.VISIBLE);
         mResult = Result.empty();
         mHomeResult = Result.empty();
@@ -359,6 +404,15 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         clearRecommendRows();
         mAdapter.add("progress");
         mViewModel.homeContent();
+    }
+
+    private void showWebOverlay() {
+        mBinding.webOverlay.setVisibility(View.VISIBLE);
+        syncWebOverlayLayout();
+    }
+
+    private void hideWebOverlay() {
+        mBinding.webOverlay.setVisibility(View.GONE);
     }
 
     private void setTypes(Result result) {
@@ -640,7 +694,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
                 if (KeyUtil.isActionDown(event) && KeyUtil.isDownKey(event)) return requestWebFocus();
                 return super.dispatchKeyEvent(event);
             }
-            if (KeyUtil.isUpKey(event)) return super.dispatchKeyEvent(event);
+            if (KeyUtil.isUpKey(event) && isToolbarVisible()) return super.dispatchKeyEvent(event);
             if (mWeb.dispatchKeyEvent(event)) return true;
             return super.dispatchKeyEvent(event);
         }
@@ -718,13 +772,13 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onWebLoading() {
-        webToolbarVisible = true;
-        updateToolbarVisibility(true);
+        showWebOverlay();
         mBinding.progressLayout.showProgress();
     }
 
     @Override
     public void onWebReady() {
+        showWebOverlay();
         mBinding.progressLayout.showContent();
         mBinding.typeRecycler.setVisibility(View.GONE);
         mBinding.recycler.setVisibility(View.GONE);
@@ -732,48 +786,44 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void onWebError() {
-        webToolbarVisible = true;
-        updateToolbarVisibility(true);
+        applyTvChrome(TV_NORMAL);
         if (mWeb != null) mWeb.hide();
+        hideWebOverlay();
         mBinding.recycler.setVisibility(View.VISIBLE);
         getVideo(true);
     }
 
     @Override
     public void setToolbar(boolean visible) {
-        webToolbarVisible = visible;
-        updateToolbarVisibility(visible);
-        if (mWeb != null) mWeb.setViewport(tvViewport(visible ? "tv-normal" : "tv-toolbar-hidden"));
+        applyTvChrome(visible ? webDefaultChromeMode : TV_TOOLBAR_HIDDEN);
     }
 
     @Override
     public void applyDefaultChrome(Site site) {
-        String mode = tvMode(site == null ? "" : site.getChromeMode());
-        setToolbar(!"tv-toolbar-hidden".equals(mode));
-        if (mWeb != null) mWeb.setViewport(tvViewport(mode));
+        webDefaultChromeMode = tvDefaultMode(site == null ? "" : site.getChromeMode());
+        applyTvChrome(webDefaultChromeMode);
     }
 
     @Override
     public void setChrome(JsonObject payload) {
-        String mode = tvMode(Json.safeString(payload, "mode"));
-        setToolbar(!"tv-toolbar-hidden".equals(mode));
-        if (mWeb != null) mWeb.setViewport(tvViewport(mode));
+        applyTvChrome(tvRuntimeMode(Json.safeString(payload, "mode")));
     }
 
     @Override
     public void restoreChrome() {
-        setToolbar(true);
+        applyTvChrome(webDefaultChromeMode);
     }
 
     @Override
     public WebHomeViewport getViewport() {
-        return tvViewport(webToolbarVisible ? "tv-normal" : "tv-toolbar-hidden");
+        return tvViewport(webChromeMode);
     }
 
     @Override
     public void openVod() {
-        setToolbar(true);
+        applyTvChrome(TV_NORMAL);
         if (mWeb != null) mWeb.hide();
+        hideWebOverlay();
         getVideo(true);
     }
 
@@ -782,10 +832,29 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         SettingActivity.start(this);
     }
 
-    private String tvMode(String mode) {
-        if ("tv-toolbar-hidden".equals(mode)) return mode;
-        if ("tv-overlay".equals(mode) || "tv-full".equals(mode)) return "tv-toolbar-hidden";
-        return "tv-normal";
+    private void applyTvChrome(String mode) {
+        webChromeMode = mode;
+        webToolbarVisible = TV_NORMAL.equals(mode) || TV_OVERLAY.equals(mode);
+        updateToolbarVisibility(webToolbarVisible);
+        syncWebOverlayLayout();
+        if (mWeb != null) mWeb.setViewport(tvViewport(mode));
+    }
+
+    private String tvDefaultMode(String mode) {
+        return tvMode(mode, TV_FULL);
+    }
+
+    private String tvRuntimeMode(String mode) {
+        return tvMode(mode, webChromeMode);
+    }
+
+    private String tvMode(String mode, String fallback) {
+        String value = TextUtils.isEmpty(mode) ? "" : mode.trim().toLowerCase(Locale.ROOT);
+        if (TV_NORMAL.equals(value) || "normal".equals(value)) return TV_NORMAL;
+        if (TV_TOOLBAR_HIDDEN.equals(value)) return TV_TOOLBAR_HIDDEN;
+        if (TV_OVERLAY.equals(value)) return TV_OVERLAY;
+        if (TV_FULL.equals(value) || "edge".equals(value) || "immersive".equals(value)) return TV_FULL;
+        return fallback;
     }
 
     private WebHomeViewport tvViewport(String mode) {

@@ -860,17 +860,20 @@ WebHome 自绘操作区不需要复刻原 App 顶部/底部位置。更好的体
 | `tv-overlay` | 推荐默认增强 | 半透明/自动隐藏 | 近似全屏，可保留顶部信息层 | 原生只做轻量状态/时钟 |
 | `tv-full` | WebHome 完全接管 | 隐藏 | 全屏 | WebHome 必须处理遥控器焦点和常用入口 |
 
-当前代码下的临时兼容模式：
+2026-06-13 TV 端实施回填：
 
-1. 电视端可保留现有 `setToolbar(false)`，让 WebHome 主动隐藏顶部 toolbar。
-2. 这个能力只能命名为 legacy toolbar hidden 或 `tv-toolbar-hidden`，不能宣称为 `tv-full`。因为 WebView 仍是加到 `progressLayout` 内，父布局不是覆盖全屏的容器。
-3. 若首期不改布局，`setChrome({ mode: "tv-full" })` 不应映射到 `setToolbar(false)`；可以先不开放 `tv-full`，或让它返回不支持/降级到 `tv-toolbar-hidden` 并在 `fmviewport.chromeMode` 中如实反馈。
+1. `activity_home.xml` 已改为叠层结构：原生内容层、全屏 `webOverlay`、顶部 toolbar overlay。
+2. WebView 已从 `progressLayout` 移入全屏 `webOverlay`，`tv-full` 可以真正覆盖顶部 toolbar 区域。
+3. `tv-overlay` 保留顶部 toolbar overlay，WebView 全屏铺底；`tv-full` 隐藏 toolbar，让 WebHome 接管首屏。
+4. `tv-toolbar-hidden` 仍作为 legacy mode 名称保留，但底层也使用全屏 overlay，并在 `fmviewport.chromeMode` 中如实返回 `tv-toolbar-hidden`。
+5. 跨端配置里的 `edge` / `immersive` 在 TV 端映射为 `tv-full`；显式 `tv-normal` / `normal` 才保留顶部 toolbar。
+6. 旧 `setToolbar(true)` 在 TV 端恢复当前站点默认 chrome，避免 Nostr 这类页面的路由同步把默认全屏误恢复成 `tv-normal`。
 
-真正 `tv-overlay` / `tv-full` 的落地要求：
+真正 `tv-overlay` / `tv-full` 的落地要求已经完成前 3 项，仍需按设备回归后续体验项：
 
-1. 将 `activity_home.xml` 根结构改为 `FrameLayout`，或新增覆盖全屏的 `webOverlay` 容器。
-2. WebView 放入全屏 overlay 容器，toolbar/typeRecycler/recycler 作为可隐藏或半透明的原生层。
-3. `tv-overlay` 保留轻量原生状态层；`tv-full` 隐藏原生层，让 WebHome 完全接管首屏。
+1. 将 `activity_home.xml` 根结构改为 `FrameLayout`，或新增覆盖全屏的 `webOverlay` 容器。（已完成）
+2. WebView 放入全屏 overlay 容器，toolbar/typeRecycler/recycler 作为可隐藏或半透明的原生层。（已完成）
+3. `tv-overlay` 保留轻量原生状态层；`tv-full` 隐藏原生层，让 WebHome 完全接管首屏。（已完成）
 4. 注入 TV 安全边距变量，例如：
    - `--fm-tv-safe-left: 48dp`
    - `--fm-tv-safe-right: 48dp`
@@ -928,7 +931,7 @@ Android TV 官方设计强调：
 
 1. 先做 `fmviewport v2`，同时给手机端和电视端注入不同安全区。
 2. 手机端新增 `edge`，拆开隐藏原生 UI 和隐藏系统栏。
-3. 电视端首期若不改布局，只保留 legacy `setToolbar(false)` / `tv-toolbar-hidden`；真正 `tv-full` 必须随 TD-8 的 overlay 化一起做。
+3. 电视端已完成 TD-8 overlay 化后，`tv-full` / `tv-overlay` 可以作为真实 TV WebHome chrome mode 使用；`setToolbar(false)` 只保留为 legacy `tv-toolbar-hidden` 入口。
 4. 补常用 action：手机端新增 `openVod`（对齐已有 `openSetting`），电视端可选 `openPush`。
 5. WebHome 模板分别做 mobile/tv 两套布局策略，而不是一套 CSS 硬适配。
 
@@ -978,11 +981,11 @@ Android TV 官方设计强调：
 - 问题：一旦进入 edge（根不再 fit），导航栏会与系统手势条/三键栏重叠。
 - 改造：edge 模式给 `navigation` 加底部 `systemBars`/`systemGestures` inset padding，或将其改为浮于内容之上的 overlay。
 
-### TD-8（P0，TV 端工作量最大）TV `activity_home` 为垂直 `LinearLayout`，WebView 无法覆盖顶部 toolbar
+### TD-8（P0，TV 端工作量最大，2026-06-13 已落地）TV `activity_home` overlay 化，全屏 WebView 接管顶部区域
 
-- 现状：leanback `activity_home.xml` 根是垂直 `LinearLayoutCompat`（toolbar → typeRecycler → progressLayout），WebView 运行时被 `addView` 进 `progressLayout`（`HomeActivity.java:239`）。
-- 问题：结构上 WebHome 永远盖不住顶部 toolbar——这正是用户观察到"TV 端 WebHome 顶部区域不是 HTML 范围"的根因（方案 §12.4 已点出现象）。`tv-overlay`/`tv-full` 要让 WebHome 接管顶部，必须改层级。
-- 改造：根改为 `FrameLayout`（或新增覆盖全屏的 `webOverlay` 容器）承载 WebView，toolbar 作为可隐藏/半透明的 overlay 浮在其上。这是 TV 端唯一的结构性改造，回归风险集中在焦点顺序，需重点测 D-pad。
+- 原现状：leanback `activity_home.xml` 根是垂直 `LinearLayoutCompat`（toolbar → typeRecycler → progressLayout），WebView 运行时被 `addView` 进 `progressLayout`。
+- 原问题：结构上 WebHome 永远盖不住顶部 toolbar——这正是用户观察到"TV 端 WebHome 顶部区域不是 HTML 范围"的根因。`tv-overlay`/`tv-full` 要让 WebHome 接管顶部，必须改层级。
+- 已改造：根改为 `FrameLayout` 叠层，新增全屏 `webOverlay` 承载 WebView，toolbar 作为可隐藏/半透明的 overlay 浮在其上。回归风险集中在焦点顺序，需重点测 D-pad。
 
 ### TD-9（P1）`onWindowFocusChanged` 无 mode 感知
 
@@ -1034,7 +1037,7 @@ P2（清理）：TD-4 合并 cutout 来源。
 | Q5 | 目标 WebView 版本是否实测存在自动 padding（TD-11）？据此决定 edge 容器是否完全不 pad | 默认"完全不 pad，只靠 JS 注入" | 双重内缩 bug |
 | Q6 | 系统栏图标 `auto` 首期实现：跟随 App 深浅主题，不做像素采样？ | 是 | 实现复杂度 vs 复杂背景可读性 |
 | Q7 | 恢复入口策略：edge 是否显示原生悬浮恢复？是否需要 JS 异常/加载超时自动露出入口？阈值多少？ | edge 仅返回键恢复；immersive 必显原生入口；超时自动露出（阈值待定） | 防止用户被困 |
-| Q8 | TV 端首期范围：是否立刻把 `activity_home` 改 `FrameLayout` overlay（真 tv-overlay/tv-full）？ | 定案：隐藏 toolbar 只能叫 legacy / `tv-toolbar-hidden`；真正 `tv-full` 必须随 overlay 结构改造一起做，不把 `setToolbar(false)` 冒充 `tv-full` | TD-8 工作量与回归风险 |
+| Q8 | TV 端首期范围：是否立刻把 `activity_home` 改 `FrameLayout` overlay（真 tv-overlay/tv-full）？ | 已落地：隐藏 toolbar 仍叫 legacy / `tv-toolbar-hidden`；`tv-full` / `tv-overlay` 已随 TD-8 overlay 结构改造成为真实 mode | 继续回归 D-pad 焦点与旧脚本兼容 |
 | Q9 | 高风险 action 白名单判定来源：站点 `key` 白名单 / 配置声明 / 可信标志从何而来？ | 待定 | 安全边界可落地性 |
 | Q10 | 移除 `FLAG_FULLSCREEN`（TD-2）影响面：`hideSystemUI` 还被 `ScanActivity`/`LiveActivity`/`VideoActivity`/leanback `BaseActivity` 等复用，是否有调用方依赖其 legacy 全屏行为？ | 需逐一回归 | 播放/扫码等全屏场景 |
 | Q11 | `setChrome` 是否需要持久化（如用户"首页默认沉浸"偏好）？存 `Setting` 还是 `fm.cache`？ | 待定；注意这只指用户偏好——Activity 重建后的 mode 恢复是 TD-1 的硬要求，不在待定范围 | 偏好记忆 |
@@ -1106,9 +1109,9 @@ padding: ... calc(18px + var(--fm-safe-bottom) + env(safe-area-inset-bottom));
 | 位置 | 现状 | 实施后需要补/改 |
 | --- | --- | --- |
 | §5 点播站点配置（`homePage` / `webHome` 字段附近） | 已有 `chromeMode` / `webHomeChrome`，并说明启动期快照预应用 | 后续若新增用户级默认模式设置，再补设置优先级 |
-| §16 SDK 总览 | 已新增 `fm.ui.setChrome`、`fm.ui.restoreChrome`、`fm.ui.getViewport`、`fm.openVod` | TV 端 `tv-overlay/tv-full` 真正实现前仍按当前降级说明 |
+| §16 SDK 总览 | 已新增 `fm.ui.setChrome`、`fm.ui.restoreChrome`、`fm.ui.getViewport`、`fm.openVod`，TV 端 `tv-overlay/tv-full` 已接入真实 overlay | 继续补充用户级默认模式设置时的优先级 |
 | `fm.ui.setToolbar` 语义说明 | 已标注 legacy chrome API，新 WebHome 使用 `setChrome` | 旧脚本兼容路径保留 |
-| Chrome 模式章节 | 已新增 `normal/edge/immersive` 及 TV 降级模式说明 | 沉浸偏好持久化仍属 Q11 |
+| Chrome 模式章节 | 已新增 `normal/edge/immersive` 及 TV `tv-normal/tv-toolbar-hidden/tv-overlay/tv-full` 说明 | 沉浸偏好持久化仍属 Q11 |
 | 视口/安全区章节 | 已列 `fmviewport` 字段、`--fm-*` CSS 变量、`max(var(--fm-safe-*), env(...))` 去重规则 | IME 仍按 TD-13/Q15 后续真机结论调整 |
 | 命名规范和迁移说明 | 已补短别名规则和存量 WebHome 迁移清单 | 若新增 `site/config` 写操作 API，继续按 §6.0 规则审查 |
 | 全屏相关行为 | 已通过 chrome runtime 收口 WebHome 场景 | `Util.hideSystemUI` 其他 Activity 调用仍需按 Q10 独立回归 |
