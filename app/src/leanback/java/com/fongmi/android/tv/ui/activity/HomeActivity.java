@@ -212,7 +212,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
     private boolean constrainWebBelowToolbar() {
-        return TV_NORMAL.equals(webChromeMode) && isToolbarVisible();
+        return (TV_NORMAL.equals(webChromeMode) || TV_OVERLAY.equals(webChromeMode)) && isToolbarVisible();
     }
 
     private boolean isToolbarVisible() {

@@ -4729,6 +4729,14 @@
       if (!force && !isTvMode() && !isNativeMobileClient()) return;
       try {
         const ui = sdk().ui || {};
+        if (isNativeLeanbackClient() && ui.setChrome) {
+          if (visible === true) {
+            ui.setChrome({ mode: isHomeFullscreenEnabled() ? "edge" : "tv-normal" });
+            return;
+          }
+          ui.setChrome({ mode: "tv-full" });
+          return;
+        }
         if (isNativeMobileClient() && ui.setChrome) {
           const home = visible === true;
           ui.setChrome({
@@ -4738,14 +4746,6 @@
             restoreAffordance: home ? "auto" : "native",
             startup: home
           });
-          return;
-        }
-        if (isNativeLeanbackClient() && ui.setChrome) {
-          if (visible === true) {
-            ui.setChrome({ mode: isHomeFullscreenEnabled() ? "edge" : "tv-normal" });
-            return;
-          }
-          ui.setChrome({ mode: "tv-full" });
           return;
         }
         if (ui.setToolbar) ui.setToolbar(visible);
