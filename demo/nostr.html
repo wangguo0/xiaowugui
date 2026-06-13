@@ -373,8 +373,8 @@
       transform: translateY(-8px);
     }
 
-    html.native-mobile-app body.detail-active .mobile-detail-back,
-    html.native-mobile-app body.episode-active .image-viewer .mobile-detail-back {
+    html.native-phone-app body.detail-active .mobile-detail-back,
+    html.native-phone-app body.episode-active .image-viewer .mobile-detail-back {
       display: grid;
     }
 
@@ -3412,6 +3412,62 @@
       white-space: nowrap;
     }
 
+    html.tv-mode .search {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    html.tv-mode .search .field {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    html.tv-mode .search .btn,
+    html.tv-mode .search .icon-btn,
+    html.tv-mode .search > .connection-dock {
+      flex: 0 0 auto;
+      margin-left: 10px;
+    }
+
+    html.tv-mode .search .btn,
+    html.tv-mode .search .icon-btn {
+      height: 44px;
+      min-height: 44px;
+      align-self: stretch;
+    }
+
+    html.tv-mode .search > .connection-dock {
+      width: auto;
+      min-width: 76px;
+      align-self: stretch;
+      justify-self: auto;
+    }
+
+    html.tv-mode .search > .connection-dock .connection-toggle {
+      width: 100%;
+      min-width: 76px;
+      height: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    html.tv-mode .search > .connection-dock .dot,
+    html.tv-mode .search > .connection-dock .connection-title,
+    html.tv-mode .search > .connection-dock .connection-arrow {
+      flex: 0 0 auto;
+      display: inline-block;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
     .pan-config {
       display: grid;
       gap: 8px;
@@ -4718,7 +4774,9 @@
     }
 
     function syncClientModeClasses() {
-      document.documentElement.classList.toggle("native-mobile-app", isNativeMobileClient());
+      const nativeMobile = isNativeMobileClient();
+      document.documentElement.classList.toggle("native-mobile-app", nativeMobile);
+      document.documentElement.classList.toggle("native-phone-app", nativeMobile && isPhoneViewport());
     }
 
     function setTvMode(tv) {
@@ -7592,8 +7650,12 @@
     }
 
     function syncDetailBackFocusability(large) {
+      const root = document.documentElement;
       const close = $("closeDetailBtn");
-      if (close) close.tabIndex = large ? -1 : 0;
+      const mobile = $("mobileDetailBackBtn");
+      const phoneBack = root && root.classList.contains("native-phone-app") && !large;
+      if (close) close.tabIndex = large || phoneBack ? -1 : 0;
+      if (mobile) mobile.tabIndex = phoneBack ? 0 : -1;
     }
 
     function isKnownList(id) {
@@ -13456,7 +13518,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const sheet = $("detailSheet");
       const button = $("mobileDetailBackBtn");
       if (!sheet || !button) return;
-      const hide = document.documentElement.classList.contains("native-mobile-app") && sheet.classList.contains("active") && !sheet.classList.contains("detail-large") && sheet.scrollTop > 120;
+      const hide = document.documentElement.classList.contains("native-phone-app") && sheet.classList.contains("active") && !sheet.classList.contains("detail-large") && sheet.scrollTop > 120;
       button.classList.toggle("is-hidden", hide);
     }
 
@@ -13473,6 +13535,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     window.addEventListener("fmviewport", () => {
       state.gridColumnCache = {};
+      syncClientModeClasses();
       document.body.style.minHeight = getComputedStyle(document.documentElement).getPropertyValue("--fm-web-height");
       lockViewportWidth();
       fitConnectionPanel();
@@ -13485,6 +13548,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
 
     window.addEventListener("resize", () => {
       state.gridColumnCache = {};
+      syncClientModeClasses();
       lockViewportWidth();
       fitConnectionPanel();
       const detailLayoutChanged = syncDetailLayout();
