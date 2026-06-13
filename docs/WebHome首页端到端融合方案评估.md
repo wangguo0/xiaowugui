@@ -868,7 +868,7 @@ WebHome 自绘操作区不需要复刻原 App 顶部/底部位置。更好的体
 4. `tv-toolbar-hidden` 仍作为 legacy mode 名称保留，但底层也使用全屏 overlay，并在 `fmviewport.chromeMode` 中如实返回 `tv-toolbar-hidden`。
 5. 跨端配置里的 `edge` / `immersive` 在 TV 端映射为 `tv-full`；显式 `tv-normal` / `normal` 才保留顶部 toolbar。
 6. 旧 `setToolbar(true)` 在 TV 端恢复当前站点默认 chrome，避免 Nostr 这类页面的路由同步把默认全屏误恢复成 `tv-normal`。
-7. TV 首页边界下按返回键会先从 `tv-full` / `tv-toolbar-hidden` 切到 `tv-overlay` 露出 toolbar；Nostr 状态面板关闭“首页全屏”也发 `tv-overlay`，不把用户临时退出全屏误写成 `tv-normal`。
+7. TV 首页边界下按返回键会先从 `tv-full` / `tv-toolbar-hidden` 切到 `tv-normal` 露出 toolbar，并让 WebView 下移避让；Nostr 状态面板关闭“首页全屏”也发 `tv-normal`，避免 `tv-overlay` 覆盖 WebHome 顶部内容。
 
 真正 `tv-overlay` / `tv-full` 的落地要求已经完成前 3 项，仍需按设备回归后续体验项：
 

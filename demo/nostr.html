@@ -4742,7 +4742,7 @@
         }
         if (isNativeLeanbackClient() && ui.setChrome) {
           if (visible === true) {
-            ui.setChrome({ mode: isHomeFullscreenEnabled() ? "edge" : "tv-overlay" });
+            ui.setChrome({ mode: isHomeFullscreenEnabled() ? "edge" : "tv-normal" });
             return;
           }
           ui.setChrome({ mode: "tv-full" });

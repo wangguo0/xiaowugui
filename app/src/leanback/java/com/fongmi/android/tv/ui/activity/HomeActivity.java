@@ -690,6 +690,10 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             return true;
         }
         if (mWeb != null && mWeb.isVisible()) {
+            if (KeyUtil.isBackKey(event)) {
+                if (KeyUtil.isActionUp(event)) onBackInvoked();
+                return true;
+            }
             if (mBinding.toolbar.hasFocus()) {
                 if (KeyUtil.isActionDown(event) && KeyUtil.isDownKey(event)) return requestWebFocus();
                 return super.dispatchKeyEvent(event);
@@ -743,9 +747,12 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     protected void onBackInvoked() {
-        if (mWeb != null && mWeb.handleBack()) {
+        if (mWeb != null && mWeb.isVisible() && mWeb.handleBack()) {
             return;
-        } else if (consumeTvFullscreenBack()) {
+        } else if (mWeb != null && mWeb.isVisible() && consumeTvFullscreenBack()) {
+            return;
+        } else if (mWeb != null && mWeb.isVisible()) {
+            exitHome();
             return;
         } else if (mBinding.progressLayout.isProgress()) {
             showContent();
@@ -754,17 +761,20 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         } else if (mBinding.recycler.getSelectedPosition() != 0) {
             mBinding.recycler.scrollToPosition(0);
         } else {
-            if (PlaybackService.isRunning()) moveTaskToBack(true);
-            else super.onBackInvoked();
+            exitHome();
         }
     }
 
     private boolean consumeTvFullscreenBack() {
-        if (mWeb == null || !mWeb.isVisible()) return false;
         if (!TV_FULL.equals(webChromeMode) && !TV_TOOLBAR_HIDDEN.equals(webChromeMode)) return false;
-        applyTvChrome(TV_OVERLAY);
+        applyTvChrome(TV_NORMAL);
         requestTitleFocus();
         return true;
+    }
+
+    private void exitHome() {
+        if (PlaybackService.isRunning()) moveTaskToBack(true);
+        else super.onBackInvoked();
     }
 
     @Override
