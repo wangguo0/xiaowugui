@@ -3431,24 +3431,69 @@
       align-self: stretch;
     }
 
+    html.tv-mode .search #searchSubmitBtn {
+      box-sizing: border-box;
+      min-width: 98px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    html.tv-mode .search #searchSubmitBtn .icon {
+      display: block;
+      flex: 0 0 auto;
+      margin-right: 7px;
+    }
+
+    html.tv-mode .search #homeSettingBtn {
+      box-sizing: border-box;
+      width: 58px;
+      min-width: 58px;
+      max-width: 58px;
+      flex-basis: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      line-height: 1;
+    }
+
+    html.tv-mode .search #homeSettingBtn .icon {
+      display: block;
+      width: 24px;
+      height: 24px;
+      margin: 0;
+    }
+
     html.tv-mode .search > .connection-dock {
-      width: auto;
-      min-width: 76px;
+      box-sizing: border-box;
+      width: 104px;
+      min-width: 104px;
+      max-width: 104px;
+      flex-basis: 104px;
+      height: 44px;
+      min-height: 44px;
       align-self: stretch;
       justify-self: auto;
+      overflow: visible;
     }
 
     html.tv-mode .search > .connection-dock .connection-toggle {
+      box-sizing: border-box;
       width: 100%;
-      min-width: 76px;
+      min-width: 104px;
+      max-width: 104px;
       height: 44px;
       min-height: 44px;
-      display: inline-flex;
+      display: flex;
       flex-direction: row;
       flex-wrap: nowrap;
       align-items: center;
       justify-content: center;
-      gap: 7px;
+      padding: 0 11px;
       white-space: nowrap;
       line-height: 1;
     }
@@ -3460,6 +3505,26 @@
       display: inline-block;
       line-height: 1;
       white-space: nowrap;
+    }
+
+    html.tv-mode .search > .connection-dock .dot {
+      width: 10px;
+      height: 10px;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    html.tv-mode .search > .connection-dock .connection-title {
+      font-size: 15px;
+      font-weight: 800;
+      margin-right: 7px;
+      vertical-align: middle;
+    }
+
+    html.tv-mode .search > .connection-dock .connection-arrow {
+      font-size: 15px;
+      margin-left: 0;
+      vertical-align: middle;
     }
 
     .pan-config {
