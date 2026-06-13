@@ -30,6 +30,8 @@ final class WebHomeChromeController {
 
     interface Host {
 
+        boolean isWebHomeChromeActive();
+
         void onWebHomeChromeChanged(String mode);
 
         void onWebHomeViewportChanged(WebHomeViewport viewport);
@@ -96,14 +98,21 @@ final class WebHomeChromeController {
         apply(WebHomeChromeOptions.from(null, previousMode));
     }
 
+    void refreshLayout() {
+        applySystemBars();
+        applyCutoutMode();
+        applyLayout();
+        dispatchViewport();
+    }
+
     boolean consumeBack() {
-        if (!isImmersive()) return false;
+        if (!isActive() || !isImmersive()) return false;
         restore();
         return true;
     }
 
     void onWindowFocusChanged(boolean hasFocus) {
-        if (hasFocus && isImmersive()) Util.hideSystemUI(activity);
+        if (hasFocus && isActive() && isImmersive()) Util.hideSystemUI(activity);
     }
 
     void onConfigurationChanged() {
@@ -130,33 +139,33 @@ final class WebHomeChromeController {
         if (!WebHomeChrome.IMMERSIVE.equals(nextMode)) previousMode = nextMode;
         mode = nextMode;
         options = next;
-        applySystemBars();
-        applyCutoutMode();
-        applyLayout();
-        dispatchViewport();
+        refreshLayout();
         host.onWebHomeChromeChanged(mode);
     }
 
     private void applySystemBars() {
+        String effectiveMode = effectiveMode();
+        WebHomeChromeOptions effectiveOptions = isActive() ? options : WebHomeChromeOptions.normal();
         Window window = activity.getWindow();
-        window.setStatusBarColor(options.topScrim);
-        window.setNavigationBarColor(options.bottomScrim);
+        window.setStatusBarColor(effectiveOptions.topScrim);
+        window.setNavigationBarColor(effectiveOptions.bottomScrim);
         WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
-        controller.setAppearanceLightStatusBars(useDarkIcons(options.statusBarStyle));
-        controller.setAppearanceLightNavigationBars(useDarkIcons(options.navigationBarStyle));
-        if (isImmersive()) Util.hideSystemUI(activity);
+        controller.setAppearanceLightStatusBars(useDarkIcons(effectiveOptions.statusBarStyle));
+        controller.setAppearanceLightNavigationBars(useDarkIcons(effectiveOptions.navigationBarStyle));
+        if (WebHomeChrome.IMMERSIVE.equals(effectiveMode)) Util.hideSystemUI(activity);
         else Util.showSystemUI(activity);
     }
 
     private void applyCutoutMode() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
         WindowManager.LayoutParams params = activity.getWindow().getAttributes();
-        params.layoutInDisplayCutoutMode = WebHomeChrome.hidesNativeChrome(mode) ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+        params.layoutInDisplayCutoutMode = WebHomeChrome.hidesNativeChrome(effectiveMode()) ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
         activity.getWindow().setAttributes(params);
     }
 
     private void applyLayout() {
-        boolean normal = WebHomeChrome.NORMAL.equals(mode);
+        boolean active = isActive();
+        boolean normal = !active || WebHomeChrome.NORMAL.equals(mode);
         binding.navigation.setVisibility(normal ? View.VISIBLE : View.GONE);
         WebHomeViewport current = buildViewport();
         int top = normal ? current.getSafeTop() : 0;
@@ -173,11 +182,11 @@ final class WebHomeChromeController {
         if (binding.navigation.getVisibility() == View.VISIBLE) container.addRule(RelativeLayout.ABOVE, binding.navigation.getId());
         else container.removeRule(RelativeLayout.ABOVE);
         binding.container.setLayoutParams(container);
-        applyRestoreButton(current);
+        applyRestoreButton(current, active);
     }
 
-    private void applyRestoreButton(WebHomeViewport current) {
-        boolean visible = WebHomeChrome.IMMERSIVE.equals(mode) || "native".equals(options.restoreAffordance) && WebHomeChrome.hidesNativeChrome(mode);
+    private void applyRestoreButton(WebHomeViewport current, boolean active) {
+        boolean visible = active && (WebHomeChrome.IMMERSIVE.equals(mode) || "native".equals(options.restoreAffordance) && WebHomeChrome.hidesNativeChrome(mode));
         binding.chromeRestore.setVisibility(visible ? View.VISIBLE : View.GONE);
         ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) binding.chromeRestore.getLayoutParams();
         int margin = ResUtil.dp2px(8);
@@ -195,9 +204,18 @@ final class WebHomeChromeController {
     }
 
     private WebHomeViewport buildViewport() {
+        String mode = effectiveMode();
         WebHomeViewport current = WebHomeViewport.from(insets, mode, safeBottomMax);
         safeBottomMax = Math.max(safeBottomMax, current.getSafeBottom());
         return WebHomeViewport.from(insets, mode, safeBottomMax);
+    }
+
+    private boolean isActive() {
+        return host.isWebHomeChromeActive();
+    }
+
+    private String effectiveMode() {
+        return isActive() ? mode : WebHomeChrome.NORMAL;
     }
 
     private boolean isImmersive() {

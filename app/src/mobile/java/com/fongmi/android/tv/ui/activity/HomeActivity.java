@@ -180,10 +180,9 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void change(int position) {
-        resetVodChrome();
         setNavigationVisible(true);
-        if (position < 2) mBinding.navigation.setSelectedItemId(position == 0 ? R.id.vod : R.id.setting);
-        else mManager.change(position);
+        if (position < 2) selectNavigation(position);
+        else changeFragment(position);
     }
 
     public void setNavigationVisible(boolean visible) {
@@ -227,12 +226,27 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        resetVodChrome();
         setNavigationVisible(true);
-        if (item.getItemId() == R.id.setting) return mManager.change(1);
-        if (item.getItemId() == R.id.vod) return mManager.change(0);
+        if (item.getItemId() == R.id.setting) return changeFragment(1);
+        if (item.getItemId() == R.id.vod) return changeFragment(0);
         if (item.getItemId() == R.id.live) return openLive();
         return false;
+    }
+
+    private void selectNavigation(int position) {
+        int itemId = position == 0 ? R.id.vod : R.id.setting;
+        if (mBinding.navigation.getSelectedItemId() == itemId) changeFragment(position);
+        else mBinding.navigation.setSelectedItemId(itemId);
+    }
+
+    private boolean changeFragment(int position) {
+        boolean changed = mManager.change(position);
+        refreshWebHomeChromeLayout();
+        return changed;
+    }
+
+    private void refreshWebHomeChromeLayout() {
+        if (mChrome != null) mChrome.refreshLayout();
     }
 
     private void resetVodChrome() {
@@ -269,6 +283,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     public WebHomeViewport getWebHomeViewport() {
         return mChrome == null ? WebHomeViewport.EMPTY : mChrome.getViewport();
+    }
+
+    @Override
+    public boolean isWebHomeChromeActive() {
+        return mManager != null && mManager.isVisible(0);
     }
 
     @Override
