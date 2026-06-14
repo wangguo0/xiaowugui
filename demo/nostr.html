@@ -2318,6 +2318,7 @@
       margin: max(410px, calc(var(--mobile-hero-min) - 220px)) 0 12px;
     }
 
+    html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.logo-pending #detailTitle,
     html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.has-logo #detailTitle {
       display: none;
     }
@@ -8992,6 +8993,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         clearDetailExtras();
       } catch (e) {
         $("detailTitle").textContent = item && item.title || "详情";
+        clearDetailTitleLogo();
         setDetailTextContent("详情渲染失败：" + (e.message || "unknown"));
       }
       if (!opts.skipHistory && location.hash !== "#detail") history.pushState({ sheet: "detail" }, "", "#detail");
@@ -9020,7 +9022,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       clearInlineEpisodePreview({ restoreDetail: false });
       resetDetailTextClamp();
       $("detailTitle").textContent = item.title;
-      clearDetailTitleLogo();
+      prepareDetailTitleLogo();
       const fallbackText = item.desc || item.remark || "";
       setDetailTextContent(fallbackText || "");
       renderDetailMeta(item, state.detail);
@@ -9060,10 +9062,26 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       }));
     }
 
-    function clearDetailTitleLogo() {
+    function isMobileDetailLogoCandidate() {
+      return !!(document.documentElement.classList.contains("native-mobile-app") && !useLargeDetailLayout());
+    }
+
+    function prepareDetailTitleLogo() {
+      clearDetailTitleLogo();
+      if (!isMobileDetailLogoCandidate()) return;
       const logo = $("detailTitleLogo");
       const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
-      if (row) row.classList.remove("has-logo");
+      if (row) row.classList.add("logo-pending");
+    }
+
+    function clearDetailTitleLogo(options) {
+      const opts = options || {};
+      const logo = $("detailTitleLogo");
+      const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
+      if (row) {
+        row.classList.remove("has-logo");
+        if (!opts.keepPending) row.classList.remove("logo-pending");
+      }
       if (!logo) return;
       logo.onload = null;
       logo.onerror = null;
@@ -9075,17 +9093,29 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     function renderDetailTitleLogo(item, detail) {
       const logo = $("detailTitleLogo");
       const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
-      clearDetailTitleLogo();
-      if (!document.documentElement.classList.contains("native-mobile-app") || useLargeDetailLayout()) return;
+      if (!isMobileDetailLogoCandidate()) {
+        clearDetailTitleLogo();
+        return;
+      }
       const logoPath = bestDetailLogo(detail);
-      if (!logo || !row || !logoPath) return;
+      if (!logo || !row || !logoPath) {
+        clearDetailTitleLogo();
+        return;
+      }
       const src = displayImage(logoPath, { size: "w500" });
-      if (!src) return;
+      if (!src) {
+        clearDetailTitleLogo();
+        return;
+      }
+      clearDetailTitleLogo({ keepPending: true });
       const title = item && item.title || $("detailTitle") && $("detailTitle").textContent || "详情";
       logo.dataset.logoSrc = src;
       logo.alt = title;
       logo.onload = () => {
-        if (logo.dataset.logoSrc === src) row.classList.add("has-logo");
+        if (logo.dataset.logoSrc === src) {
+          row.classList.remove("logo-pending");
+          row.classList.add("has-logo");
+        }
       };
       logo.onerror = () => {
         if (logo.dataset.logoSrc === src) clearDetailTitleLogo();
@@ -9418,6 +9448,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         state.detail = body;
         renderDetailExtras(item, body);
       } catch (e) {
+        clearDetailTitleLogo();
         setDetailTextContent(`详情加载失败：${e.message || "unknown"}`);
         scheduleDetailTextClamp();
         toast("详情加载失败");
