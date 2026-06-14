@@ -370,11 +370,15 @@ public class HomeWebBridge {
         String url = Json.safeString(payload, "url");
         String title = Json.safeString(payload, "title");
         String type = Json.safeString(payload, "type");
+        String pic = Json.safeString(payload, "pic");
+        String wall = wallPic(payload);
         if (TextUtils.isEmpty(url)) throw new IllegalArgumentException("url不能为空");
         final String playUrl = stripPush(url.trim());
         final String playTitle = TextUtils.isEmpty(title) ? playUrl : title;
+        final String playPic = pic;
+        final String playWall = wall;
         SpiderDebug.log("webhome", "pan.play route=%s type=%s title=%s url=%s", SiteApi.PUSH, type, playTitle, playUrl);
-        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle));
+        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall));
         return "{}";
     }
 

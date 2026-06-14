@@ -10859,11 +10859,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       let url = String(item && (item.normalizedUrl || item.normalized_url || item.url) || "").trim();
       if (!url) return null;
       if (/^push:\/\//i.test(url)) url = url.replace(/^push:\/\//i, "");
+      const artworkSource = state.selected || item || {};
       return {
         type: normalizePanDiskType(item && item.diskType),
         url,
         password: item && item.password || "",
-        title: item && (item.title || state.pan.keyword || item.url) || ""
+        title: item && (item.title || state.pan.keyword || item.url) || "",
+        pic: artworkSource && artworkSource.pic || "",
+        wallPic: playbackWallPic(artworkSource)
       };
     }
 

@@ -412,9 +412,9 @@ await fm.play("https://example.com/video.m3u8", "影片名", {
 
 ### 7.3 网盘与推送
 
-#### `fm.pan.play({ type, url, password, title })`
+#### `fm.pan.play({ type, url, password, title, pic, wallPic })`
 
-统一推送播放入口：网盘分享、`magnet:`、`ed2k:`、`thunder:`、`jianpian:`、普通 http 均可，内部走 `SiteApi.PUSH`/`push_agent`/`pvideo` 链路。`type` 只用于语义和日志，不参与路由。开头的 `push://` 会自动剥离。不受网盘检测开关影响。
+统一推送播放入口：网盘分享、`magnet:`、`ed2k:`、`thunder:`、`jianpian:`、普通 http 均可，内部走 `SiteApi.PUSH`/`push_agent`/`pvideo` 链路。`type` 只用于语义和日志，不参与路由。开头的 `push://` 会自动剥离。不受网盘检测开关影响。`pic` 是播放页海报/默认 artwork，`wallPic` 是播放页背景图；这两个字段只影响原生播放页展示，不参与网盘解析。
 
 推荐 `type`：`quark` / `aliyun` / `baidu` / `uc` / `xunlei` / `tianyi` / `123` / `115` / `mobile` / `magnet` / `ed2k` / `thunder` / `jianpian` / `http`。
 
@@ -635,7 +635,7 @@ function classify(url) {
 }
 ```
 
-`media` → `fm.play()`；其余 → `fm.pan.play({ type, url, title })`。
+`media` → `fm.play()`；其余 → `fm.pan.play({ type, url, title, pic, wallPic })`，其中 `pic` 取详情页海报，`wallPic` 取详情页横屏剧照/backdrop。
 
 ## 10. 注入策略选择
 

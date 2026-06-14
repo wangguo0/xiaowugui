@@ -5,6 +5,8 @@
     linkSelector: "a[href],[data-url],[data-href],[data-link],[data-clipboard-text]",
     itemSelector: ".item,.card,.download-item,.resource-item,li,article",
     titleSelector: "h1,h2,.title,.name",
+    posterSelector: ".poster img,.cover img,.video-pic img",
+    backdropSelector: ".backdrop img,.banner img,.hero img,.video-backdrop img",
     buttonClass: "fm-pan-play",
     statusClass: "fm-pan-status",
     enableCheck: true,
@@ -72,6 +74,30 @@
     return (titleEl && (titleEl.getAttribute("title") || titleEl.textContent || "").trim()) || (el.textContent || "").trim() || pageTitle();
   }
 
+  function absoluteUrl(value) {
+    const url = String(value || "").trim();
+    if (!url) return "";
+    try {
+      return /^https?:/i.test(url) ? url : new URL(url, location.href).href;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  function imageFrom(selector) {
+    const el = selector && document.querySelector(selector);
+    return el ? absoluteUrl(el.currentSrc || el.src || el.getAttribute("data-src")) : "";
+  }
+
+  function playPayload(button, url, type) {
+    const pic = imageFrom(CONFIG.posterSelector);
+    const wallPic = imageFrom(CONFIG.backdropSelector);
+    const payload = { type, url, title: itemTitle(button) };
+    if (pic) payload.pic = pic;
+    if (wallPic) payload.wallPic = wallPic;
+    return payload;
+  }
+
   function scan() {
     document.querySelectorAll(CONFIG.linkSelector).forEach((link) => {
       if (link.dataset.fmPanReady === "1") return;
@@ -121,7 +147,7 @@
     const url = button.dataset.url || "";
     const type = button.dataset.type || typeOf(url) || "http";
     whenFm()
-      .then((sdk) => sdk.pan.play({ type, url, title: itemTitle(button) }))
+      .then((sdk) => sdk.pan.play(playPayload(button, url, type)))
       .catch((error) => {
         log("play error", error && (error.stack || error.message) || error);
         if (window.fm && fm.ext) fm.ext.toast("调用网盘播放失败");
