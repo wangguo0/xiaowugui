@@ -151,7 +151,9 @@ Rules:
 
 - Do not default focus to search inputs.
 - Inputs are readonly until OK/touch enters edit mode.
+- Editable inputs own Backspace. Capture-phase Back/Escape handlers must skip Backspace when the active text field is not readonly, otherwise deleting one character can close panels or clear results.
 - Direction keys stay inside an open local domain.
+- New dynamic rails must be inserted into the complete directional graph, not only rendered into the DOM. If search results sit between top chips and content, route chips down -> results, results up -> chips, results down -> content, and content first row up -> results in both deterministic fast paths and geometry fallback.
 - Back first handles local domain state, then WebView history, then `fm.back()`.
 - Dynamic lists use stable `data-*` keys and restore focus after patching.
 - `focus({ preventScroll: true })`, then schedule scroll correction in `requestAnimationFrame`.

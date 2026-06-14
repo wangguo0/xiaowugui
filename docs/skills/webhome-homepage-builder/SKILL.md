@@ -38,6 +38,7 @@ Prefer one self-contained HTML file unless the user explicitly asks for a multi-
 - Transparent App background with a non-App browser fallback background.
 - A first inline ES5 bootstrap that polyfills small API gaps and adds fallback classes such as `fm-native`, `no-layout-gap`, `no-css-functions`, and `no-aspect-ratio`.
 - A business script that waits for `fmsdk` when App SDK data is required, and provides browser-preview fallbacks.
+- Native playback calls that pass known artwork: use `pic` for poster/default artwork and `wallPic` for playback-page background/backdrop.
 - A config snippet showing `sites[].homePage` usage.
 
 Configuration example:
@@ -66,7 +67,7 @@ Design the homepage in these layers:
 7. Routing: use History API for detail, image, sync, and nested panels; let App return handling work with same-origin history boundaries.
 8. Restore: save short TTL UI snapshots to `fm.cache`; restore deep UI only on `_fm_restore=1`, `fmresume`, `pageshow`, or playback return.
 
-When the data source is an existing website rather than a documented API, first run `python3 scripts/probe_webhome_target.py <url>` and follow `references/js-reverse-and-waf-workflow.md`. If the probe reports `waf-blocked`, do not build a direct scraping homepage unless the user provides an authorized API, owner-controlled proxy, public feed, or HAR/HTML from an authorized session. Prefer a WebHome extension when the App WebView can normally load the page and the useful data only exists in same-origin runtime state.
+When the data source is an existing website rather than a documented API, first run `python3 scripts/probe_webhome_target.py <url>` and follow `references/js-reverse-and-waf-workflow.md`. If direct `curl`/probe/`fm.req`-style access is abnormal, switch to a normal browser observation path such as Playwright, CDP, Chrome DevTools, or App WebView debugging before deciding the implementation vehicle; capture network, DOM, console, and request initiator evidence. If the probe reports `waf-blocked`, do not build a direct scraping homepage unless the user provides an authorized API, owner-controlled proxy, public feed, or HAR/HTML from an authorized session. Prefer a WebHome extension when the App WebView can normally load the page and the useful data only exists in same-origin runtime state.
 
 ## SDK Rules
 
@@ -75,9 +76,11 @@ Use these WebHome SDK APIs instead of browser-only assumptions:
 - `fm.req(url, options)` for API data. It bypasses CORS through Native OkHttp and returns `{ ok, status, headers, body, error }`.
 - `fm.res(url, options)` for DOM resources. It returns a local `/webResource` URL and supports headers, cookies, Range, and CORS.
 - `fm.search(keyword, { direct: true })` to jump into App search with fewer return layers.
-- `fm.play(url, title, options)` for direct media URLs.
-- `fm.vod(siteKey, vodId, title, pic)` for native CSP detail/playback.
-- `fm.pan.play({ type, url, password, title })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback.
+- `fm.play(url, title, options)` for direct media URLs. Include `options.pic` and `options.wallPic` when known; `wallPic` is the playback-page background and should usually be a landscape backdrop.
+- `fm.vod(siteKey, vodId, title, pic, options)` for native CSP detail/playback. Pass `options.wallPic` when the homepage knows a backdrop.
+- `fm.vodInline(payload)` for temporary multi-episode native playback. Include `vod_pic`/`pic` and `wallPic` in the payload.
+- `fm.preloadArtwork(pic, wallPic)` after detail artwork is known, so Native can prewarm the player images. Do not block the user click waiting for this preload.
+- `fm.pan.play({ type, url, password, title, pic, wallPic })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback. `pic` and `wallPic` only affect the native playback page artwork; they do not affect pan/pvideo parsing.
 - `fm.config()` before `fm.pan.check()`. If `driveCheck` is false, do not call detection.
 - `fm.history()` and `fm.stat()` to compensate watch progress after native playback.
 - `fm.ui.setChrome()`, `fm.ui.restoreChrome()`, and `fm.ui.getViewport()` for homepage chrome and safe-area integration.
@@ -110,7 +113,9 @@ TV remote:
 - Give every actionable card, tab, button, result item, and panel control a stable focus target and key.
 - Trap directional keys inside active local domains such as search suggestions, settings/status panels, PanSou results, image viewers, and detail sheets.
 - Make text fields `readonly` by default on TV; OK/touch enters edit mode, blur/back exits edit mode.
+- Let editable text fields keep `Backspace`; global capture/back handlers must skip `Backspace` when the active input or textarea is not `readOnly`.
 - Prefer deterministic grid/list navigation by index and cached column count. Use geometry search only as a fallback.
+- When adding a dynamic rail between existing focus layers, wire both fast-path and fallback navigation in both directions. For example, search results between chips and content should route chips down -> results, results up -> chips, results down -> active grid, and active-grid first row up -> results.
 - Focus style must not change layout dimensions. Use outline, existing border, background, or light transform.
 
 ## Performance Rules
@@ -133,6 +138,7 @@ For PanSou-like resource search:
 - Detect only supported disk types and only visible results; batch `fm.pan.check()` in groups of about 10.
 - Rank health states as playable first: `ok`, `locked`, pending/idle, unsupported/uncertain, then `bad`.
 - Before `fm.pan.play()`, save detail scroll, result scroll, active type, focus key, and selected result so native-playback return can restore context.
+- Before `fm.play()`, `fm.vod()`, `fm.vodInline()`, or `fm.pan.play()`, pass the best known `pic` and `wallPic`. Use poster art for `pic`, landscape/backdrop/still art for `wallPic`, and let `pic` be the fallback only when no backdrop exists.
 
 For watch preference or recommendation systems:
 
@@ -151,7 +157,8 @@ When creating a homepage, provide:
 4. Complete single-file HTML or direct file edits.
 5. `sites[]` config snippet with `homePage` and chrome choice.
 6. Test steps for browser preview, App WebHome, mobile, TV remote, native playback, PanSou detection, and debug logs.
-7. Known risks: third-party library syntax baseline, API key handling, relay/service availability, selector/data assumptions, WAF/session assumptions, and old WebView residual risks.
+7. Playback artwork plan: what value is used for `pic`, what value is used for `wallPic`, and whether `fm.preloadArtwork()` is called before playback.
+8. Known risks: third-party library syntax baseline, API key handling, relay/service availability, selector/data assumptions, WAF/session assumptions, and old WebView residual risks.
 
 When reviewing an existing homepage, lead with compatibility blockers, then SDK misuse, TV focus/return bugs, performance regressions, and visual/UX issues.
 

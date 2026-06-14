@@ -81,11 +81,13 @@ The demo separates fast paths and fallback:
 - Homepage grid uses `data-card-index` and cached `gridColumns()`.
 - Horizontal rails use previous/next siblings.
 - Tabs and search form use explicit directional rules.
+- Search results are a normal homepage focus layer, not an overlay. When visible, deterministic navigation must include chips -> search results -> active content grid and the reverse path from the content grid first row back through search results.
 - PanSou tabs/results are a local focus domain.
 - Search suggestions are a local focus domain.
 - Connection/status panel is a local focus domain.
 - Detail/image overlays become the active `focusScopeRoot()`.
 - `nearestFocusable()` geometry search only handles irregular fallback cases.
+- Capture-phase Back/Escape handlers must not consume Backspace from a non-readonly text input. In TV edit mode, Backspace should delete text; Escape or blur exits edit mode.
 
 Use `focusRemoteTarget()` as the only focus entry point. It should:
 

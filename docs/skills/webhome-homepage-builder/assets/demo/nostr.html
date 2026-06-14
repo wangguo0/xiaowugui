@@ -7743,6 +7743,55 @@
       renderRail("searchRail", ranked(state.searchItems).slice(0, 18));
     }
 
+    function firstSearchResultCard() {
+      return searchResultCardNear(null);
+    }
+
+    function visibleSearchResultCards() {
+      const rail = $("searchRail");
+      const section = $("searchSection");
+      if (!rail || !section || section.style.display === "none") return [];
+      return Array.from(rail.querySelectorAll(".card")).filter(isVisibleFocusable);
+    }
+
+    function searchResultCardNear(source) {
+      const cards = visibleSearchResultCards();
+      return focusableCardNear(cards, source);
+    }
+
+    function activeGridCardNear(source) {
+      const grid = activeMediaGrid();
+      if (!grid) return null;
+      const cards = Array.from(grid.querySelectorAll(".card")).filter(isVisibleFocusable);
+      if (!cards.length) return null;
+      const columns = Math.max(1, gridColumns(grid));
+      return focusableCardNear(cards.slice(0, columns), source) || cards[0];
+    }
+
+    function focusableCardNear(cards, source) {
+      if (!cards || !cards.length) return null;
+      if (!source || !source.getBoundingClientRect) return cards[0];
+      const from = center(source.getBoundingClientRect()).x;
+      let best = cards[0];
+      let bestScore = Infinity;
+      cards.forEach((card) => {
+        const score = Math.abs(center(card.getBoundingClientRect()).x - from);
+        if (score < bestScore) {
+          best = card;
+          bestScore = score;
+        }
+      });
+      return best;
+    }
+
+    function focusSearchResultsAfterRender() {
+      if (!isTvMode() || !state.searchItems.length) return;
+      requestAnimationFrame(() => {
+        const target = firstSearchResultCard();
+        if (target) focusRemoteTarget(target);
+      });
+    }
+
     function clearSearchResults() {
       state.searchItems = [];
       if ($("searchInput")) $("searchInput").value = "";
@@ -8696,6 +8745,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         state.searchItems = results.map((item, index) => normalizeTmdb(item, { id: "search", title: "搜索", mediaType: item.media_type }, index)).filter(hasPoster).slice(0, 18);
         setStatus("tmdb", `搜索成功 ${state.searchItems.length} 条`);
         renderSearch();
+        focusSearchResultsAfterRender();
         scheduleUiSnapshotSave();
       } catch (e) {
         setStatus("tmdb", "搜索失败：" + (e.message || "unknown"));
@@ -12448,6 +12498,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       document.addEventListener("keydown", (event) => {
         const key = normalizeRemoteKey(event);
         if (key !== "Escape" && key !== "Backspace") return;
+        if (shouldKeepBackspaceForTextEditing(event)) return;
         if (state.blocked.selecting) return;
         if (collapseInlineEpisodePreview(event)) return;
         if (handleSearchSuggestBackKey(event)) return;
@@ -12496,6 +12547,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (el.tagName !== "INPUT") return false;
       const type = String(el.getAttribute("type") || "text").toLowerCase();
       return !["button", "checkbox", "radio", "submit", "reset", "range", "color"].includes(type);
+    }
+
+    function shouldKeepBackspaceForTextEditing(event) {
+      if (!event || normalizeRemoteKey(event) !== "Backspace") return false;
+      const active = document.activeElement;
+      return !!(active && isTextEditingElement(active) && !active.readOnly && !active.disabled);
     }
 
     function isPanelTextField(el) {
@@ -12601,6 +12658,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function handleSearchBackKey(event) {
+      if (shouldKeepBackspaceForTextEditing(event)) return false;
       if (!state.searchItems.length || !$("searchSection") || $("searchSection").style.display === "none") return false;
       const active = document.activeElement;
       const inSearch = active && ($("searchSection").contains(active) || $("searchForm").contains(active));
@@ -12614,6 +12672,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function handleSearchSuggestBackKey(event) {
+      if (shouldKeepBackspaceForTextEditing(event)) return false;
       if (!isSearchSuggestOpen()) return false;
       const active = document.activeElement;
       const input = $("searchInput");
@@ -13165,7 +13224,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const chips = $("chips");
       if (!chips || !chips.contains(active)) return null;
       if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(chips, active, key === "ArrowRight" ? 1 : -1, ".chip");
-      if (key === "ArrowDown" && active === activeHomeChip()) return firstActiveGridCard();
+      if (key === "ArrowDown" && active === activeHomeChip()) return firstSearchResultCard() || firstActiveGridCard();
       return null;
     }
 
@@ -13184,7 +13243,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       else if (key === "ArrowRight" && index % columns < columns - 1) targetIndex = index + 1;
       else if (key === "ArrowUp") {
         targetIndex = index - columns;
-        if (targetIndex < 0) return activeHomeChip();
+        if (targetIndex < 0) return searchResultCardNear(card) || activeHomeChip();
       }
       else if (key === "ArrowDown") targetIndex = index + columns;
       if (targetIndex >= 0 && targetIndex < count) return homeGridCardAt(grid, targetIndex);
@@ -13199,6 +13258,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const rail = active && active.closest && active.closest("#searchRail");
       if (!rail || !rail.contains(active)) return null;
       if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(rail, active, key === "ArrowRight" ? 1 : -1, ".card");
+      if (key === "ArrowUp") return activeHomeChip();
+      if (key === "ArrowDown") return activeGridCardNear(active) || firstActiveGridCard();
       return null;
     }
 
@@ -13297,7 +13358,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const active = document.activeElement;
       const current = fromEl || (isVisibleFocusable(active) ? active : null);
       if (key === "ArrowDown" && current && current.closest && current.closest("#chips") && current === activeHomeChip()) {
-        const target = firstActiveGridCard();
+        const target = firstSearchResultCard() || firstActiveGridCard();
         if (target) return target;
       }
       if (key === "ArrowUp" && current && current.classList && current.classList.contains("card")) {
@@ -13305,7 +13366,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (grid && grid === activeMediaGrid()) {
           let index = Number(current.dataset.cardIndex || -1);
           if (!Number.isFinite(index) || index < 0) index = Array.prototype.indexOf.call(grid.children, current);
-          if (index >= 0 && index < gridColumns(grid)) return activeHomeChip();
+          if (index >= 0 && index < gridColumns(grid)) return searchResultCardNear(current) || activeHomeChip();
         }
       }
       const list = visibleFocusable();
