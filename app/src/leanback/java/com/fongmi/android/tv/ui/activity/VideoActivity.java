@@ -132,6 +132,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private View mFocus2;
     private Result mPendingDetail;
     private Result mPendingPlayer;
+    private String mContextWallUrl;
     private String playHealthKey;
     private long detailStartTime;
     private long playerStartTime;
@@ -1129,11 +1130,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setArtwork(String url) {
         if (mHistory != null) mHistory.setVodPic(url);
         loadArtwork(url);
+        setContextWall(url);
     }
 
     private void setArtwork() {
         if (mHistory == null) return;
-        loadArtwork(mHistory.getVodPic());
+        setArtwork(mHistory.getVodPic());
     }
 
     private void loadArtwork(String url) {
@@ -1148,6 +1150,43 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 mBinding.exo.setDefaultArtwork(errorDrawable);
             }
         });
+    }
+
+    private void setContextWall(String url) {
+        String wall = Objects.toString(url, "");
+        if (TextUtils.isEmpty(wall)) {
+            mContextWallUrl = "";
+            hideContextWall();
+            return;
+        }
+        if (Objects.equals(mContextWallUrl, wall)) return;
+        mContextWallUrl = wall;
+        if (isGone(mBinding.contextWall)) {
+            mBinding.contextWall.setBackgroundColor(0xFF000000);
+            mBinding.contextWall.setVisibility(View.VISIBLE);
+        }
+        ImgUtil.load(this, wall, new CustomTarget<>() {
+            @Override
+            public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
+                if (!Objects.equals(mContextWallUrl, wall)) return;
+                mBinding.contextWall.setBackgroundColor(0x00000000);
+                mBinding.contextWall.setImageDrawable(resource);
+                mBinding.contextWall.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onLoadFailed(@Nullable Drawable errorDrawable) {
+                if (!Objects.equals(mContextWallUrl, wall)) return;
+                mContextWallUrl = "";
+                hideContextWall();
+            }
+        });
+    }
+
+    private void hideContextWall() {
+        mBinding.contextWall.setImageDrawable(null);
+        mBinding.contextWall.setBackgroundColor(0x00000000);
+        mBinding.contextWall.setVisibility(View.GONE);
     }
 
     private void setPartAdapter() {
