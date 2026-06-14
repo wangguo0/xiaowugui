@@ -8389,7 +8389,7 @@
       }
       try {
         rememberWatchIntent(item, "view");
-        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic);
+        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic, vodPlaybackOptions(item));
         startWatchTracking(item);
       } catch (e) {
         toast("打开最近观看失败：" + (e.message || "unknown"));
@@ -8408,11 +8408,68 @@
         rememberDetailReturn(button);
         rememberWatchIntent(state.selected, "view");
         startWatchTracking(state.selected);
-        await sdk().vod(history.siteKey, history.vodId, history.title || state.selected.title, history.pic || state.selected.pic);
+        const playbackItem = Object.assign({}, state.selected || {}, history || {}, {
+          title: history.title || state.selected.title,
+          pic: history.pic || state.selected.pic
+        });
+        await sdk().vod(history.siteKey, history.vodId, playbackItem.title, playbackItem.pic, vodPlaybackOptions(playbackItem));
       } catch (e) {
         stopWatchTracking(false);
         toast("继续观看失败：" + (e.message || "unknown"));
       }
+    }
+
+    function vodPlaybackOptions(item) {
+      const wallPic = playbackWallPic(item);
+      return wallPic ? { wallPic } : {};
+    }
+
+    function playbackWallPic(item) {
+      const source = item || {};
+      const matched = findMediaByContent(source) || null;
+      const selected = state.selected || null;
+      const selectedMatches = selected && (samePlaybackMedia(source, selected) || samePlaybackMedia(matched, selected));
+      return firstPlaybackWallPic([
+        source.wallPic,
+        selectedMatches ? currentDetailWallPic() : "",
+        source.landscape,
+        matched && matched.landscape,
+        selectedMatches && selected.landscape
+      ]);
+    }
+
+    function firstPlaybackWallPic(values) {
+      for (const value of values || []) {
+        const url = String(value || "").trim();
+        if (url) return url;
+      }
+      return "";
+    }
+
+    function currentDetailWallPic() {
+      const sheet = $("detailSheet");
+      if (!sheet || !sheet.classList.contains("active")) return "";
+      const images = state.detailCover && state.detailCover.images || [];
+      if (!images.length) return "";
+      const index = Math.max(0, Math.min(Number(state.detailCover.index || 0), images.length - 1));
+      return images[index] || images[0] || "";
+    }
+
+    function samePlaybackMedia(a, b) {
+      if (!a || !b) return false;
+      const keyA = playbackMediaKey(a);
+      const keyB = playbackMediaKey(b);
+      if (keyA && keyB && keyA === keyB) return true;
+      const titleA = normalizeTitle(a.title || a.vodName || a.name || a.query || "");
+      const titleB = normalizeTitle(b.title || b.vodName || b.name || b.query || "");
+      return !!(titleA && titleB && titleA === titleB);
+    }
+
+    function playbackMediaKey(item) {
+      if (!item) return "";
+      if (item.tmdbId && item.mediaType) return "tmdb:" + String(item.mediaType) + ":" + String(item.tmdbId);
+      const id = String(item.id || "");
+      return /^tmdb:/i.test(id) ? id.toLowerCase() : "";
     }
 
     function mediaDomKey(item) {
