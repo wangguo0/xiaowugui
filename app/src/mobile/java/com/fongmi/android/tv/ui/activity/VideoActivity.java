@@ -183,6 +183,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect) {
+        ImgUtil.preload(activity, pic);
         Intent intent = new Intent(activity, VideoActivity.class);
         intent.putExtra("collect", collect);
         intent.putExtra("mark", mark);
@@ -1092,6 +1093,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         if (Objects.equals(mContextWallUrl, wall)) return;
         mContextWallUrl = wall;
+        resetContextWallAlpha();
         if (isGone(mBinding.contextWall)) {
             mBinding.contextWall.setBackgroundColor(0xFF000000);
             mBinding.contextWall.setVisibility(View.VISIBLE);
@@ -1100,6 +1102,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             @Override
             public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
                 if (!Objects.equals(mContextWallUrl, wall)) return;
+                resetContextWallAlpha();
                 mBinding.contextWall.setBackgroundColor(0x00000000);
                 mBinding.contextWall.setImageDrawable(resource);
                 mBinding.contextWall.setVisibility(View.VISIBLE);
@@ -1114,7 +1117,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         });
     }
 
+    private void resetContextWallAlpha() {
+        mBinding.contextWall.animate().cancel();
+        mBinding.contextWall.setAlpha(1f);
+    }
+
     private void hideContextWall() {
+        resetContextWallAlpha();
         mBinding.contextWall.setImageDrawable(null);
         mBinding.contextWall.setBackgroundColor(0x00000000);
         mBinding.contextWall.setVisibility(View.GONE);
