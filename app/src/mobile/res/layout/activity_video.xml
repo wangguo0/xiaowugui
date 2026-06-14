@@ -6,14 +6,13 @@
     android:layout_height="match_parent"
     android:tag="port">
 
-    <ImageView
+    <com.fongmi.android.tv.ui.custom.ContextWallImageView
         android:id="@+id/contextWall"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@id/video"
         android:layout_alignParentBottom="true"
         android:importantForAccessibility="no"
-        android:scaleType="centerCrop"
         android:visibility="gone" />
 
     <View

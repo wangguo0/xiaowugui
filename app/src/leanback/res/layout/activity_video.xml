@@ -6,12 +6,11 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <ImageView
+    <com.fongmi.android.tv.ui.custom.ContextWallImageView
         android:id="@+id/contextWall"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:importantForAccessibility="no"
-        android:scaleType="centerCrop"
         android:visibility="gone" />
 
     <FrameLayout
@@ -60,9 +59,9 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_alignTop="@id/video"
-        android:layout_alignBottom="@id/video"
+        android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
         android:layout_toEndOf="@id/video"
         android:background="@drawable/shape_video_context_scrim_side" />
 
