@@ -4706,6 +4706,7 @@
       pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
       detailCover: { images: [], index: 0, timer: 0, token: 0, swipe: null },
+      playbackArtworkPreloadKey: "",
       episodeViewer: { episodes: [], effectiveIndexes: [], index: -1, episodeNumber: "", swipe: null },
       episodePreview: { active: false, expanded: false, index: -1, episodeNumber: "", lastEpisodeNumber: "", infoHeight: 0 },
       deviceMode: "unknown",
@@ -4806,6 +4807,7 @@
         openSetting: async () => toast("请在 App 中打开设置"),
         history: async () => [],
         vod: async (siteKey, vodId, title) => toast("原生播放：" + (title || vodId || siteKey || "")),
+        preloadArtwork: async () => {},
         pan: { check, play },
         check,
         ui: {
@@ -6610,6 +6612,7 @@
       button.setAttribute("aria-hidden", match ? "false" : "true");
       if (actions) actions.classList.toggle("has-continue", !!match);
       if (searchText) searchText.textContent = match ? "搜索" : "搜索播放";
+      preloadDetailPlaybackArtwork();
     }
 
     function shouldRefreshRecentList() {
@@ -8424,6 +8427,33 @@
       return wallPic ? { wallPic } : {};
     }
 
+    function preloadDetailPlaybackArtwork() {
+      if (!state.selected) return;
+      const history = findDetailContinueHistory(state.selected);
+      const item = history && history.siteKey && history.vodId
+        ? Object.assign({}, state.selected || {}, history || {}, {
+          title: history.title || state.selected.title,
+          pic: history.pic || state.selected.pic
+        })
+        : state.selected;
+      preloadPlaybackArtwork(item);
+    }
+
+    function preloadPlaybackArtwork(item) {
+      const api = sdk();
+      if (!api || !api.preloadArtwork) return;
+      const pic = item && item.pic || "";
+      const wallPic = playbackWallPic(item);
+      if (!pic && !wallPic) return;
+      const key = [mediaDomKey(item), pic, wallPic].join("\n");
+      if (state.playbackArtworkPreloadKey === key) return;
+      state.playbackArtworkPreloadKey = key;
+      try {
+        const result = api.preloadArtwork(pic, wallPic);
+        if (result && result.catch) result.catch(() => {});
+      } catch (e) {}
+    }
+
     function playbackWallPic(item) {
       const source = item || {};
       const matched = findMediaByContent(source) || null;
@@ -9725,6 +9755,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         item.pic = item.pic || posterFallback;
         setDetailCoverCarousel([], posterFallback, { allowPoster: true, keepLoading: false });
       }
+      preloadDetailPlaybackArtwork();
     }
 
     function bestDetailBackdrops(detail, limit) {

@@ -116,6 +116,7 @@ public class HomeWebBridge {
                 case "player.playUrl" -> playUrl(payload);
                 case "player.playVod" -> playVod(payload);
                 case "player.playVodInline" -> playVodInline(payload);
+                case "player.preloadArtwork" -> preloadArtwork(payload);
                 case "player.control" -> control(payload);
                 case "player.status" -> WebCall.request(statusPayload());
                 case "app.search" -> search(payload);
@@ -160,7 +161,7 @@ public class HomeWebBridge {
         final String playPic = pic;
         final String playWall = wall;
         SpiderDebug.log("webhome", "player.playUrl title=%s url=%s", playTitle, playUrl);
-        startVideoPreloaded(SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall);
+        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall));
         return "{}";
     }
 
@@ -170,7 +171,7 @@ public class HomeWebBridge {
         String title = Json.safeString(payload, "title");
         String pic = Json.safeString(payload, "pic");
         String wall = wallPic(payload);
-        startVideoPreloaded(siteKey, vodId, title, pic, null, wall);
+        App.post(() -> VideoActivity.start(activity, siteKey, vodId, title, pic, null, wall));
         return "{}";
     }
 
@@ -188,15 +189,21 @@ public class HomeWebBridge {
         final String playMark = mark;
         final String playWall = wall;
         SpiderDebug.log("webhome", "player.playVodInline title=%s id=%s mark=%s", playTitle, vodId, playMark);
-        startVideoPreloaded(WebHomeInlineVodStore.KEY, vodId, playTitle, playPic, playMark, playWall);
+        App.post(() -> VideoActivity.start(activity, WebHomeInlineVodStore.KEY, vodId, playTitle, playPic, playMark, playWall));
         JsonObject result = new JsonObject();
         result.addProperty("siteKey", WebHomeInlineVodStore.KEY);
         result.addProperty("vodId", vodId);
         return result.toString();
     }
 
-    private void startVideoPreloaded(String key, String id, String title, String pic, String mark, String wall) {
-        ImgUtil.preload(activity, pic, wall, () -> VideoActivity.start(activity, key, id, title, pic, mark, wall));
+    private String preloadArtwork(JsonObject payload) {
+        String pic = Json.safeString(payload, "pic");
+        String wall = wallPic(payload);
+        App.post(() -> {
+            ImgUtil.preload(activity, pic);
+            if (!TextUtils.isEmpty(wall) && !TextUtils.equals(wall, pic)) ImgUtil.preload(activity, wall);
+        });
+        return "{}";
     }
 
     private String wallPic(JsonObject payload) {
