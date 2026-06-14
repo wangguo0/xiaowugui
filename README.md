@@ -56,6 +56,8 @@ https://github.com/user-attachments/assets/7249b787-a720-406c-8365-acaa0995cb6a
 
 WebHome 扩展的示例和模板见 [docs/webhome-extension/](docs/webhome-extension/) 或 [CNB仓库](https://cnb.cool/fish2018/ext) 。
 
+AI 编程客户端如何接入和复用 Skills,见 [AI客户端Skills使用说明.md](docs/AI客户端Skills使用说明.md) 。
+
 ## 二开重点
 
 ### 1. CSP 站点支持自定义 WebHome 首页
