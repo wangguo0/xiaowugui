@@ -49,7 +49,7 @@ public class ContextWallImageView extends AppCompatImageView {
 
         float viewRatio = viewWidth / (float) viewHeight;
         float drawableRatio = drawableWidth / (float) drawableHeight;
-        boolean narrow = drawableRatio < viewRatio * 0.85f;
+        boolean narrow = drawableRatio < Math.min(1.2f, viewRatio * 0.75f);
         float scale;
         float dx;
         float dy;

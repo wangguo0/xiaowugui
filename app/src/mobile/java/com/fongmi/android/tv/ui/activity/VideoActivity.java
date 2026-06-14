@@ -182,13 +182,23 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         start(activity, key, id, name, pic, mark, false);
     }
 
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, String wallPic) {
+        start(activity, key, id, name, pic, mark, false, wallPic);
+    }
+
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect) {
+        start(activity, key, id, name, pic, mark, collect, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic) {
         ImgUtil.preload(activity, pic);
+        if (!TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
         intent.putExtra("collect", collect);
         intent.putExtra("mark", mark);
         intent.putExtra("name", name);
         intent.putExtra("pic", pic);
+        intent.putExtra("wallPic", wallPic);
         intent.putExtra("key", key);
         intent.putExtra("id", id);
         activity.startActivity(intent);
@@ -200,6 +210,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private String getPic() {
         return Objects.toString(getIntent().getStringExtra("pic"), "");
+    }
+
+    private String getWallPic() {
+        return Objects.toString(getIntent().getStringExtra("wallPic"), "");
     }
 
     private String getMark() {
@@ -460,6 +474,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         getIntent().putExtra("key", item.getSiteKey());
         getIntent().putExtra("pic", item.getPic());
         getIntent().putExtra("id", item.getId());
+        getIntent().removeExtra("wallPic");
         mBinding.swipeLayout.setRefreshing(true);
         mBinding.swipeLayout.setEnabled(false);
         mBinding.scroll.scrollTo(0, 0);
@@ -1062,7 +1077,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setArtwork(String url) {
         if (mHistory != null) mHistory.setVodPic(url);
         loadArtwork(url);
-        setContextWall(url);
+        setContextWall(getContextWall(url));
     }
 
     private void setArtwork() {
@@ -1082,6 +1097,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 mBinding.exo.setDefaultArtwork(errorDrawable);
             }
         });
+    }
+
+    private String getContextWall(String fallback) {
+        String wall = getWallPic();
+        if (!TextUtils.isEmpty(wall)) return wall;
+        return isPort() ? Objects.toString(fallback, "") : "";
     }
 
     private void setContextWall(String url) {
@@ -1155,13 +1176,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private boolean hasInitialPreview() {
-        return !getName().isEmpty() || !getPic().isEmpty();
+        return !getName().isEmpty() || !getPic().isEmpty() || !getWallPic().isEmpty();
     }
 
     private void showInitialPreview() {
         mBinding.progressLayout.showContent();
         mBinding.name.setText(getName());
         if (!getPic().isEmpty()) setArtwork(getPic());
+        else if (!getWallPic().isEmpty()) setContextWall(getWallPic());
     }
 
     private History createHistory(Vod item) {
