@@ -143,6 +143,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Clock mClock;
     private PiP mPiP;
     private String mContextWallUrl;
+    private String mContextWallLockedUrl;
     private String playHealthKey;
     private long detailStartTime;
     private long playerStartTime;
@@ -1105,8 +1106,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return Objects.toString(fallback, "");
     }
 
-    private void setContextWall(String url) {
+    private String lockContextWall(String url) {
         String wall = Objects.toString(url, "");
+        if (mContextWallLockedUrl == null && !TextUtils.isEmpty(wall)) mContextWallLockedUrl = wall;
+        return mContextWallLockedUrl == null ? wall : mContextWallLockedUrl;
+    }
+
+    private void setContextWall(String url) {
+        String wall = lockContextWall(url);
         if (TextUtils.isEmpty(wall)) {
             mContextWallUrl = "";
             hideContextWall();
