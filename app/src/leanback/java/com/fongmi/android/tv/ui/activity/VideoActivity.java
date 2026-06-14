@@ -1146,7 +1146,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setArtwork(String url) {
         if (mHistory != null) mHistory.setVodPic(url);
         loadArtwork(url);
-        setContextWall(getContextWall());
+        setContextWall(getContextWall(url));
     }
 
     private void setArtwork() {
@@ -1168,8 +1168,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         });
     }
 
-    private String getContextWall() {
-        return getWallPic();
+    private String getContextWall(String fallback) {
+        String wall = getWallPic();
+        if (!TextUtils.isEmpty(wall)) return wall;
+        return Objects.toString(fallback, "");
     }
 
     private void setContextWall(String url) {

@@ -1102,7 +1102,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private String getContextWall(String fallback) {
         String wall = getWallPic();
         if (!TextUtils.isEmpty(wall)) return wall;
-        return isPort() ? Objects.toString(fallback, "") : "";
+        return Objects.toString(fallback, "");
     }
 
     private void setContextWall(String url) {
