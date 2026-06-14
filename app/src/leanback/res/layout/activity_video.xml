@@ -57,8 +57,18 @@
 
     </FrameLayout>
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignTop="@id/video"
+        android:layout_alignBottom="@id/video"
+        android:layout_alignParentEnd="true"
+        android:layout_toEndOf="@id/video"
+        android:background="@drawable/shape_video_context_scrim_side" />
+
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/name"
+        style="@style/Video.ContextText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
@@ -71,6 +81,7 @@
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/remark"
+        style="@style/Video.ContextText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/name"
@@ -94,6 +105,7 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/site"
+            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="12dp"
@@ -104,6 +116,7 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/year"
+            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="12dp"
@@ -114,6 +127,7 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/area"
+            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="12dp"
@@ -124,6 +138,7 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/type"
+            style="@style/Video.ContextText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:singleLine="true"
@@ -135,6 +150,7 @@
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/director"
+        style="@style/Video.ContextText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@+id/row1"
@@ -149,6 +165,7 @@
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/actor"
+        style="@style/Video.ContextText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_below="@+id/director"
@@ -175,7 +192,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
-            android:background="@drawable/selector_item"
+            android:background="@drawable/selector_video_item"
             android:drawablePadding="6dp"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -193,7 +210,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
-            android:background="@drawable/selector_item"
+            android:background="@drawable/selector_video_item"
             android:drawablePadding="6dp"
             android:focusable="true"
             android:focusableInTouchMode="true"
@@ -210,7 +227,7 @@
             android:id="@+id/change1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/selector_item"
+            android:background="@drawable/selector_video_item"
             android:drawablePadding="6dp"
             android:focusable="true"
             android:focusableInTouchMode="true"
