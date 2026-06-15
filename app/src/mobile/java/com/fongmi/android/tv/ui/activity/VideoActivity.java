@@ -193,7 +193,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic) {
         ImgUtil.preload(activity, pic);
-        if (!TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
+        if (Setting.isPlaybackArtworkWall() && !TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
         intent.putExtra("collect", collect);
         intent.putExtra("mark", mark);
@@ -1113,6 +1113,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setContextWall(String url) {
+        if (!Setting.isPlaybackArtworkWall()) {
+            mContextWallUrl = "";
+            hideContextWall();
+            return;
+        }
         String wall = lockContextWall(url);
         if (TextUtils.isEmpty(wall)) {
             mContextWallUrl = "";

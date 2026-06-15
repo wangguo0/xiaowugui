@@ -185,7 +185,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         long launch = System.currentTimeMillis();
         SpiderDebug.log("video-flow", "launch request key=%s id=%s name=%s collect=%s cast=%s", key, id, name, collect, cast);
         ImgUtil.preload(activity, pic);
-        if (!TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
+        if (Setting.isPlaybackArtworkWall() && !TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
         intent.putExtra("launchTime", launch);
         intent.putExtra("collect", collect);
@@ -1182,6 +1182,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setContextWall(String url) {
+        if (!Setting.isPlaybackArtworkWall()) {
+            mContextWallUrl = "";
+            hideContextWall();
+            return;
+        }
         String wall = lockContextWall(url);
         if (TextUtils.isEmpty(wall)) {
             mContextWallUrl = "";
