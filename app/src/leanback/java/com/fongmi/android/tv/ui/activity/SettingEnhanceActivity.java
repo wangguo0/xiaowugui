@@ -2,6 +2,7 @@ package com.fongmi.android.tv.ui.activity;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 
@@ -31,6 +32,9 @@ import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 
 public class SettingEnhanceActivity extends BaseActivity {
 
+    private static final String URL_GITHUB = "https://github.com/fish2018/webhtv";
+    private static final String URL_CNB = "https://cnb.cool/fish2018/ext";
+
     private ActivitySettingEnhanceBinding mBinding;
 
     public static void start(Activity activity) {
@@ -54,6 +58,8 @@ public class SettingEnhanceActivity extends BaseActivity {
 
     @Override
     protected void initEvent() {
+        mBinding.githubRepo.setOnClickListener(view -> openRepo(URL_GITHUB));
+        mBinding.cnbRepo.setOnClickListener(view -> openRepo(URL_CNB));
         mBinding.driveCheck.setOnClickListener(this::setDriveCheck);
         mBinding.debugLog.setOnClickListener(this::setDebugLog);
         mBinding.siteHealthSort.setOnClickListener(view -> SiteHealthDialog.show(this, this::setText));
@@ -120,6 +126,14 @@ public class SettingEnhanceActivity extends BaseActivity {
         WebHomeExtensionRegistry.get().clear();
         Notify.show(R.string.web_home_extension_clear_done);
         return true;
+    }
+
+    private void openRepo(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            Notify.show(R.string.manage_page_no_browser);
+        }
     }
 
     @Override
