@@ -54,7 +54,7 @@ https://github.com/user-attachments/assets/7249b787-a720-406c-8365-acaa0995cb6a
 - Android Intent、DLNA、MediaSession
 - CORS、Cookie 和网络策略
 
-WebHome 主页、扩展、模板、示例和 AI skills 统一放在 [webhome-devkit/](webhome-devkit/)：
+WebHome 主页、扩展、模板、示例和 AI skills 统一放在 [webhome-devkit/](webhome-devkit/) （附 [独立CNB仓库](https://cnb.cool/fish2018/ext)）：
 
 - 扩展脚本开发指南见 [webhome-devkit/README.md](webhome-devkit/README.md)。
 - 扩展示例见 [webhome-devkit/examples/extensions/](webhome-devkit/examples/extensions/)。
@@ -62,7 +62,6 @@ WebHome 主页、扩展、模板、示例和 AI skills 统一放在 [webhome-dev
 - 模板见 [webhome-devkit/templates/](webhome-devkit/templates/)。
 - AI 编程客户端如何接入和复用 Skills,见 [webhome-devkit/skills/](webhome-devkit/skills/)。
 
-`webhome-devkit/` 原独立仓库路径可对应到 [CNB仓库](https://cnb.cool/fish2018/ext)；放入主项目后不再使用顶层 `ext/` 命名，避免和 CSP 配置里的 `ext` 字段混淆。
 
 ## 二开重点
 
