@@ -38,6 +38,7 @@ Prefer one self-contained HTML file unless the user explicitly asks for a multi-
 - Transparent App background with a non-App browser fallback background.
 - A first inline ES5 bootstrap that polyfills small API gaps and adds fallback classes such as `fm-native`, `no-layout-gap`, `no-css-functions`, and `no-aspect-ratio`.
 - A business script that waits for `fmsdk` when App SDK data is required, and provides browser-preview fallbacks.
+- Native playback/search calls that pass known artwork: use `pic` for poster/default artwork and `wallPic` for playback-page background/backdrop.
 - A config snippet showing `sites[].homePage` usage.
 
 Configuration example:
@@ -74,10 +75,12 @@ Use these WebHome SDK APIs instead of browser-only assumptions:
 
 - `fm.req(url, options)` for API data. It bypasses CORS through Native OkHttp and returns `{ ok, status, headers, body, error }`.
 - `fm.res(url, options)` for DOM resources. It returns a local `/webResource` URL and supports headers, cookies, Range, and CORS.
-- `fm.search(keyword, { direct: true })` to jump into App search with fewer return layers.
-- `fm.play(url, title, options)` for direct media URLs.
-- `fm.vod(siteKey, vodId, title, pic)` for native CSP detail/playback.
-- `fm.pan.play({ type, url, password, title })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback.
+- `fm.search(keyword, { direct: true, pic, wallPic })` to jump into App search with fewer return layers while preserving WebHome detail artwork for later native playback from search results.
+- `fm.play(url, title, options)` for direct media URLs. Include `options.pic` and `options.wallPic` when known; `wallPic` is the only playback-page background source.
+- `fm.vod(siteKey, vodId, title, pic, options)` for native CSP detail/playback. Pass `options.wallPic` when the homepage knows a backdrop.
+- `fm.vodInline(payload)` for temporary multi-episode native playback. Include `vod_pic`/`pic` and `wallPic` in the payload.
+- `fm.preloadArtwork(pic, wallPic)` after detail artwork is known, so Native can prewarm the player images. Do not block the user click waiting for this preload.
+- `fm.pan.play({ type, url, password, title, pic, wallPic })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback.
 - `fm.config()` before `fm.pan.check()`. If `driveCheck` is false, do not call detection.
 - `fm.history()` and `fm.stat()` to compensate watch progress after native playback.
 - `fm.ui.setChrome()`, `fm.ui.restoreChrome()`, and `fm.ui.getViewport()` for homepage chrome and safe-area integration.
@@ -134,6 +137,8 @@ For PanSou-like resource search:
 - Detect only supported disk types and only visible results; batch `fm.pan.check()` in groups of about 10.
 - Rank health states as playable first: `ok`, `locked`, pending/idle, unsupported/uncertain, then `bad`.
 - Before `fm.pan.play()`, save detail scroll, result scroll, active type, focus key, and selected result so native-playback return can restore context.
+- Before `fm.search()` from a detail page, pass `{ direct: true, pic, wallPic }` so native search-result playback can still use the WebHome backdrop.
+- Before `fm.play()`, `fm.vod()`, `fm.vodInline()`, or `fm.pan.play()`, pass the best known `pic` and `wallPic`. Use poster art for `pic` and landscape/backdrop/still art for `wallPic`; do not rely on `pic` as a playback background fallback.
 
 For watch preference or recommendation systems:
 

@@ -1353,6 +1353,14 @@
       margin: 0;
     }
 
+    .detail-title-logo {
+      display: none;
+      max-width: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+
     .detail-title-meta {
       display: inline-flex;
       align-items: baseline;
@@ -1573,19 +1581,17 @@
     }
 
     #detailSheet.detail-large::before {
-      background-image:
-        linear-gradient(90deg, rgba(4, 12, 19, .98) 0%, rgba(4, 12, 19, .88) 30%, rgba(4, 12, 19, .42) 58%, rgba(4, 12, 19, .54) 100%),
-        linear-gradient(180deg, rgba(4, 12, 19, .08) 0%, rgba(4, 12, 19, .66) 72%, #06111b 100%),
-        var(--detail-hero-bg, none);
+      background-image: var(--detail-hero-bg, none);
       background-size: cover;
-      background-position: center, center, right top;
-      opacity: .98;
+      background-position: center top;
+      filter: brightness(1) saturate(1.05);
+      opacity: 1;
     }
 
     #detailSheet.detail-large::after {
       background:
-        linear-gradient(90deg, rgba(6, 17, 27, .18) 0%, rgba(6, 17, 27, 0) 46%, rgba(6, 17, 27, .3) 100%),
-        linear-gradient(180deg, transparent 0%, rgba(6, 17, 27, .78) 56%, #06111b 100%);
+        linear-gradient(90deg, rgba(6, 17, 27, .9) 0%, rgba(6, 17, 27, .72) 32%, rgba(6, 17, 27, .22) 66%, rgba(6, 17, 27, .1) 100%),
+        linear-gradient(180deg, rgba(6, 17, 27, .08) 0%, rgba(6, 17, 27, .2) 48%, #06111b 100%);
     }
 
     #detailSheet.detail-large > * {
@@ -1594,21 +1600,7 @@
     }
 
     #detailSheet.detail-large .detail-cover {
-      position: fixed;
-      top: 0;
-      right: 0;
-      z-index: 1;
-      width: min(68vw, 940px);
-      max-width: none;
-      height: min(66vh, 620px);
-      min-height: 360px;
-      max-height: none;
-      margin: 0;
-      aspect-ratio: auto;
-      border-radius: 0;
-      overflow: hidden;
-      pointer-events: none;
-      background: transparent;
+      display: none !important;
     }
 
     #detailSheet.detail-large .detail-cover[data-cover-mode="landscape"] {
@@ -2205,20 +2197,18 @@
     html.native-mobile-app #detailSheet:not(.detail-large)::before {
       bottom: 0;
       background:
-        linear-gradient(180deg, rgba(4, 8, 12, .02) 0%, rgba(4, 8, 12, .06) 34%, rgba(4, 8, 12, .58) 67%, #081016 100%),
+        linear-gradient(180deg, rgba(4, 8, 12, 0) 0%, rgba(4, 8, 12, 0) 54%, rgba(5, 10, 15, .3) 76%, #081016 100%),
         var(--detail-hero-bg, none);
       background-size: cover;
       background-position: center top;
-      filter: saturate(.96) contrast(.98);
-      opacity: .98;
+      filter: brightness(1) saturate(1.05);
+      opacity: 1;
     }
 
     html.native-mobile-app #detailSheet:not(.detail-large)::after {
       bottom: 0;
       background:
-        radial-gradient(circle at 50% 18%, rgba(255, 255, 255, .08), transparent 30%),
-        linear-gradient(180deg, rgba(2, 5, 8, .08) 0%, rgba(3, 7, 11, .08) 38%, rgba(5, 10, 15, .72) 70%, #081016 100%),
-        linear-gradient(90deg, rgba(3, 7, 11, .28), rgba(3, 7, 11, .02) 42%, rgba(3, 7, 11, .28));
+        linear-gradient(180deg, rgba(2, 5, 8, 0) 0%, rgba(3, 7, 11, 0) 52%, rgba(5, 10, 15, .28) 70%, rgba(5, 10, 15, .78) 88%, #081016 100%);
     }
 
     html.native-mobile-app #detailSheet:not(.detail-large) > * {
@@ -2270,8 +2260,7 @@
       inset: 0;
       z-index: 2;
       background:
-        linear-gradient(180deg, rgba(0, 0, 0, .06) 0%, rgba(0, 0, 0, .05) 46%, rgba(5, 9, 13, .62) 78%, #081016 100%),
-        linear-gradient(90deg, rgba(4, 8, 12, .18), transparent 38%, rgba(4, 8, 12, .18));
+        linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 56%, rgba(5, 9, 13, .22) 72%, rgba(5, 9, 13, .72) 90%, #081016 100%);
     }
 
     html.native-mobile-app #detailSheet:not(.detail-large) .detail-cover.poster-mode::after {
@@ -2287,7 +2276,7 @@
       height: 100%;
       object-fit: cover !important;
       object-position: center top;
-      filter: saturate(.94) contrast(.98) brightness(.82);
+      filter: brightness(1) saturate(1.05);
     }
 
     html.native-mobile-app #detailSheet:not(.detail-large) .detail-info {
@@ -2332,6 +2321,19 @@
     html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row {
       display: block;
       margin: max(410px, calc(var(--mobile-hero-min) - 220px)) 0 12px;
+    }
+
+    html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.logo-pending #detailTitle,
+    html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.has-logo #detailTitle {
+      display: none;
+    }
+
+    html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.has-logo .detail-title-logo {
+      display: block;
+      max-width: calc(100vw - var(--mobile-detail-x) * 2 - 92px);
+      max-height: 96px;
+      margin: 0 0 12px;
+      filter: drop-shadow(0 5px 22px rgba(0, 0, 0, .62));
     }
 
     html.native-mobile-app #detailSheet:not(.detail-large) .detail-info h2 {
@@ -2643,6 +2645,10 @@
         font-size: 34px;
       }
 
+      html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-row.has-logo .detail-title-logo {
+        max-height: 78px;
+      }
+
       html.native-mobile-app #detailSheet:not(.detail-large) .detail-title-meta {
         font-size: 18px;
       }
@@ -2755,6 +2761,17 @@
       gap: 8px;
       flex-wrap: wrap;
       margin: 0 0 8px;
+    }
+
+    html.native-mobile-app.mobile-detail-translucent #detailSheet:not(.detail-large) .detail-title-row.has-logo {
+      display: block;
+    }
+
+    html.native-mobile-app.mobile-detail-translucent #detailSheet:not(.detail-large) .detail-title-row.has-logo .detail-title-logo {
+      max-width: 78vw;
+      max-height: 54px;
+      margin: 0 0 8px;
+      filter: none;
     }
 
     html.native-mobile-app.mobile-detail-translucent #detailSheet:not(.detail-large) .detail-info h2 {
@@ -4385,6 +4402,10 @@
                 <button class="detail-style-option focusable" id="homeFullscreenOnBtn" type="button" data-home-fullscreen="on">开启</button>
                 <button class="detail-style-option focusable" id="homeFullscreenOffBtn" type="button" data-home-fullscreen="off">关闭</button>
               </div></div>
+              <div class="connection-item"><b>高清剧照</b><div class="detail-style-segmented" id="highResBackdropSegmented" role="group" aria-label="高清剧照">
+                <button class="detail-style-option focusable" id="highResBackdropOnBtn" type="button" data-high-res-backdrop="on">开启</button>
+                <button class="detail-style-option focusable" id="highResBackdropOffBtn" type="button" data-high-res-backdrop="off">关闭</button>
+              </div></div>
               <div class="connection-item"><b>手机详情</b><div class="detail-style-segmented" id="mobileDetailStyleSegmented" role="group" aria-label="手机详情样式">
                 <button class="detail-style-option focusable" id="mobileDetailImmersiveBtn" type="button" data-mobile-detail-style="immersive">沉浸式</button>
                 <button class="detail-style-option focusable" id="mobileDetailTranslucentBtn" type="button" data-mobile-detail-style="translucent">半透明</button>
@@ -4450,6 +4471,7 @@
     </div>
     <div class="detail-info">
       <div class="detail-title-row">
+        <img class="detail-title-logo" id="detailTitleLogo" alt="">
         <h2 id="detailTitle"></h2>
         <span class="detail-title-meta" id="detailTitleMeta"></span>
       </div>
@@ -4705,12 +4727,13 @@
       },
       deleteState: { loaded: false, users: {} },
       tmdb: { config: null, configDirty: false },
-      uiPrefs: { loaded: false, mobileDetailStyle: "immersive", homeFullscreenEnabled: true, ratingLimitEnabled: true },
+      uiPrefs: { loaded: false, mobileDetailStyle: "immersive", homeFullscreenEnabled: true, ratingLimitEnabled: true, highResBackdropEnabled: true },
       autoBlocked: { loaded: false, items: {}, pending: {}, queue: [], queued: {}, active: 0, timer: 0, viewportTimer: 0, refreshTimer: 0, saveTimer: 0, version: 0 },
       blocked: { loaded: false, items: {}, selecting: false, holdTimer: 0, holdTarget: null, longPressFired: false, pointer: null, suppressClickUntil: 0, saveTimer: 0, lastPosition: null, restoring: false, restoreSeq: 0 },
       pan: { config: null, configDirty: false, loading: false, keyword: "", activeType: "", results: [], health: {}, pending: {}, queued: new Map(), inFlight: new Set(), observer: null, flushTimer: 0, pollTimers: [], pollRound: 0, viewToken: "", renderKeys: "", tabKeys: "", checkEnabled: false, focusKey: "", focusMode: "", playbackReturn: null },
       watch: { item: null, timer: 0, bestMs: 0, durationMs: 0, lastAt: 0, published: false, intentAction: "" },
       detailCover: { images: [], index: 0, timer: 0, token: 0, swipe: null },
+      playbackArtworkPreloadKey: "",
       episodeViewer: { episodes: [], effectiveIndexes: [], index: -1, episodeNumber: "", swipe: null },
       episodePreview: { active: false, expanded: false, index: -1, episodeNumber: "", lastEpisodeNumber: "", infoHeight: 0 },
       deviceMode: "unknown",
@@ -4811,6 +4834,7 @@
         openSetting: async () => toast("请在 App 中打开设置"),
         history: async () => [],
         vod: async (siteKey, vodId, title) => toast("原生播放：" + (title || vodId || siteKey || "")),
+        preloadArtwork: async () => {},
         pan: { check, play },
         check,
         ui: {
@@ -4975,7 +4999,12 @@
     function sanitizeUiPrefs(value) {
       const raw = value && typeof value === "object" ? value : {};
       const style = raw.mobileDetailStyle === "translucent" ? "translucent" : "immersive";
-      return { mobileDetailStyle: style, homeFullscreenEnabled: raw.homeFullscreenEnabled === false ? false : true, ratingLimitEnabled: raw.ratingLimitEnabled === false ? false : true };
+      return {
+        mobileDetailStyle: style,
+        homeFullscreenEnabled: raw.homeFullscreenEnabled === false ? false : true,
+        ratingLimitEnabled: raw.ratingLimitEnabled === false ? false : true,
+        highResBackdropEnabled: raw.highResBackdropEnabled === false ? false : true
+      };
     }
 
     function isHomeFullscreenEnabled() {
@@ -4984,6 +5013,10 @@
 
     function isRatingLimitEnabled() {
       return !state.uiPrefs || state.uiPrefs.ratingLimitEnabled !== false;
+    }
+
+    function isHighResBackdropEnabled() {
+      return !state.uiPrefs || state.uiPrefs.highResBackdropEnabled !== false;
     }
 
     function applyUiPrefs() {
@@ -5027,6 +5060,12 @@
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
+      const highResBackdrop = isHighResBackdropEnabled() ? "on" : "off";
+      document.querySelectorAll("[data-high-res-backdrop]").forEach((button) => {
+        const active = button.dataset.highResBackdrop === highResBackdrop;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
     }
 
     async function setMobileDetailStyle(style) {
@@ -5046,6 +5085,17 @@
       try { await sdk().cache.set(cacheKey("uiPrefs"), JSON.stringify(sanitizeUiPrefs(state.uiPrefs))); } catch (e) {}
       syncNativeToolbarForRoute();
       toast(isHomeFullscreenEnabled() ? "首页全屏：已开启" : "首页全屏：已关闭");
+      scheduleUiSnapshotSave();
+    }
+
+    async function setHighResBackdropEnabled(enabled) {
+      state.uiPrefs = Object.assign({}, state.uiPrefs || {}, sanitizeUiPrefs(state.uiPrefs || {}), { highResBackdropEnabled: enabled !== false, loaded: true });
+      applyUiPrefs();
+      if (window.fongmiBridge && !window.fm) await waitForNativeSdk(1200);
+      try { await sdk().cache.set(cacheKey("uiPrefs"), JSON.stringify(sanitizeUiPrefs(state.uiPrefs))); } catch (e) {}
+      state.playbackArtworkPreloadKey = "";
+      preloadDetailPlaybackArtwork();
+      toast(isHighResBackdropEnabled() ? "高清剧照：已开启" : "高清剧照：已关闭");
       scheduleUiSnapshotSave();
     }
 
@@ -6453,6 +6503,14 @@
       return nativeImage(url);
     }
 
+    function playbackImage(url) {
+      const value = String(url || "").trim();
+      if (!value) return "";
+      const tmdbPath = tmdbImagePath(value);
+      if (tmdbPath) return tmdbImageUrl(tmdbPath, isHighResBackdropEnabled() ? "original" : "w780");
+      return value;
+    }
+
     function nativeImage(url) {
       if (!url) return "";
       if (isTmdbImage(url)) return url;
@@ -6650,6 +6708,7 @@
       button.setAttribute("aria-hidden", match ? "false" : "true");
       if (actions) actions.classList.toggle("has-continue", !!match);
       if (searchText) searchText.textContent = match ? "搜索" : "搜索播放";
+      preloadDetailPlaybackArtwork();
     }
 
     function shouldRefreshRecentList() {
@@ -7783,6 +7842,55 @@
       renderRail("searchRail", ranked(state.searchItems).slice(0, 18));
     }
 
+    function firstSearchResultCard() {
+      return searchResultCardNear(null);
+    }
+
+    function visibleSearchResultCards() {
+      const rail = $("searchRail");
+      const section = $("searchSection");
+      if (!rail || !section || section.style.display === "none") return [];
+      return Array.from(rail.querySelectorAll(".card")).filter(isVisibleFocusable);
+    }
+
+    function searchResultCardNear(source) {
+      const cards = visibleSearchResultCards();
+      return focusableCardNear(cards, source);
+    }
+
+    function activeGridCardNear(source) {
+      const grid = activeMediaGrid();
+      if (!grid) return null;
+      const cards = Array.from(grid.querySelectorAll(".card")).filter(isVisibleFocusable);
+      if (!cards.length) return null;
+      const columns = Math.max(1, gridColumns(grid));
+      return focusableCardNear(cards.slice(0, columns), source) || cards[0];
+    }
+
+    function focusableCardNear(cards, source) {
+      if (!cards || !cards.length) return null;
+      if (!source || !source.getBoundingClientRect) return cards[0];
+      const from = center(source.getBoundingClientRect()).x;
+      let best = cards[0];
+      let bestScore = Infinity;
+      cards.forEach((card) => {
+        const score = Math.abs(center(card.getBoundingClientRect()).x - from);
+        if (score < bestScore) {
+          best = card;
+          bestScore = score;
+        }
+      });
+      return best;
+    }
+
+    function focusSearchResultsAfterRender() {
+      if (!isTvMode() || !state.searchItems.length) return;
+      requestAnimationFrame(() => {
+        const target = firstSearchResultCard();
+        if (target) focusRemoteTarget(target);
+      });
+    }
+
     function clearSearchResults() {
       state.searchItems = [];
       if ($("searchInput")) $("searchInput").value = "";
@@ -8429,7 +8537,7 @@
       }
       try {
         rememberWatchIntent(item, "view");
-        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic);
+        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic, vodPlaybackOptions(item));
         startWatchTracking(item);
       } catch (e) {
         toast("打开最近观看失败：" + (e.message || "unknown"));
@@ -8448,11 +8556,95 @@
         rememberDetailReturn(button);
         rememberWatchIntent(state.selected, "view");
         startWatchTracking(state.selected);
-        await sdk().vod(history.siteKey, history.vodId, history.title || state.selected.title, history.pic || state.selected.pic);
+        const playbackItem = Object.assign({}, state.selected || {}, history || {}, {
+          title: history.title || state.selected.title,
+          pic: state.selected.pic || history.pic || ""
+        });
+        await sdk().vod(history.siteKey, history.vodId, playbackItem.title, playbackItem.pic, vodPlaybackOptions(playbackItem));
       } catch (e) {
         stopWatchTracking(false);
         toast("继续观看失败：" + (e.message || "unknown"));
       }
+    }
+
+    function vodPlaybackOptions(item) {
+      const wallPic = playbackWallPic(item);
+      return wallPic ? { wallPic } : {};
+    }
+
+    function preloadDetailPlaybackArtwork() {
+      if (!state.selected) return;
+      const history = findDetailContinueHistory(state.selected);
+      const item = history && history.siteKey && history.vodId
+        ? Object.assign({}, state.selected || {}, history || {}, {
+          title: history.title || state.selected.title,
+          pic: history.pic || state.selected.pic
+        })
+        : state.selected;
+      preloadPlaybackArtwork(item);
+    }
+
+    function preloadPlaybackArtwork(item) {
+      const api = sdk();
+      if (!api || !api.preloadArtwork) return;
+      const pic = item && item.pic || "";
+      const wallPic = playbackWallPic(item);
+      if (!pic && !wallPic) return;
+      const key = [mediaDomKey(item), pic, wallPic].join("\n");
+      if (state.playbackArtworkPreloadKey === key) return;
+      state.playbackArtworkPreloadKey = key;
+      try {
+        const result = api.preloadArtwork(pic, wallPic);
+        if (result && result.catch) result.catch(() => {});
+      } catch (e) {}
+    }
+
+    function playbackWallPic(item) {
+      const source = item || {};
+      const matched = findMediaByContent(source) || null;
+      const selected = state.selected || null;
+      const selectedMatches = selected && (samePlaybackMedia(source, selected) || samePlaybackMedia(matched, selected));
+      return playbackImage(firstPlaybackWallPic([
+        source.wallPic,
+        selectedMatches ? currentDetailWallPic() : "",
+        source.landscape,
+        matched && matched.landscape,
+        selectedMatches && selected.landscape
+      ]));
+    }
+
+    function firstPlaybackWallPic(values) {
+      for (const value of values || []) {
+        const url = String(value || "").trim();
+        if (url) return url;
+      }
+      return "";
+    }
+
+    function currentDetailWallPic() {
+      const sheet = $("detailSheet");
+      if (!sheet || !sheet.classList.contains("active")) return "";
+      const images = state.detailCover && state.detailCover.images || [];
+      if (!images.length) return "";
+      const index = Math.max(0, Math.min(Number(state.detailCover.index || 0), images.length - 1));
+      return images[index] || images[0] || "";
+    }
+
+    function samePlaybackMedia(a, b) {
+      if (!a || !b) return false;
+      const keyA = playbackMediaKey(a);
+      const keyB = playbackMediaKey(b);
+      if (keyA && keyB && keyA === keyB) return true;
+      const titleA = normalizeTitle(a.title || a.vodName || a.name || a.query || "");
+      const titleB = normalizeTitle(b.title || b.vodName || b.name || b.query || "");
+      return !!(titleA && titleB && titleA === titleB);
+    }
+
+    function playbackMediaKey(item) {
+      if (!item) return "";
+      if (item.tmdbId && item.mediaType) return "tmdb:" + String(item.mediaType) + ":" + String(item.tmdbId);
+      const id = String(item.id || "");
+      return /^tmdb:/i.test(id) ? id.toLowerCase() : "";
     }
 
     function mediaDomKey(item) {
@@ -8736,6 +8928,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         state.searchItems = results.map((item, index) => normalizeTmdb(item, { id: "search", title: "搜索", mediaType: item.media_type }, index)).filter(hasPoster).slice(0, 18);
         setStatus("tmdb", `搜索成功 ${state.searchItems.length} 条`);
         renderSearch();
+        focusSearchResultsAfterRender();
         scheduleUiSnapshotSave();
       } catch (e) {
         setStatus("tmdb", "搜索失败：" + (e.message || "unknown"));
@@ -8878,6 +9071,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         clearDetailExtras();
       } catch (e) {
         $("detailTitle").textContent = item && item.title || "详情";
+        clearDetailTitleLogo();
         setDetailTextContent("详情渲染失败：" + (e.message || "unknown"));
       }
       if (!opts.skipHistory && location.hash !== "#detail") history.pushState({ sheet: "detail" }, "", "#detail");
@@ -8906,6 +9100,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       clearInlineEpisodePreview({ restoreDetail: false });
       resetDetailTextClamp();
       $("detailTitle").textContent = item.title;
+      prepareDetailTitleLogo();
       const fallbackText = item.desc || item.remark || "";
       setDetailTextContent(fallbackText || "");
       renderDetailMeta(item, state.detail);
@@ -8943,6 +9138,90 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         sep.textContent = "·";
         return [sep, span];
       }));
+    }
+
+    function isMobileDetailLogoCandidate() {
+      return !!(document.documentElement.classList.contains("native-mobile-app") && !useLargeDetailLayout());
+    }
+
+    function prepareDetailTitleLogo() {
+      clearDetailTitleLogo();
+      if (!isMobileDetailLogoCandidate()) return;
+      const logo = $("detailTitleLogo");
+      const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
+      if (row) row.classList.add("logo-pending");
+    }
+
+    function clearDetailTitleLogo(options) {
+      const opts = options || {};
+      const logo = $("detailTitleLogo");
+      const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
+      if (row) {
+        row.classList.remove("has-logo");
+        if (!opts.keepPending) row.classList.remove("logo-pending");
+      }
+      if (!logo) return;
+      logo.onload = null;
+      logo.onerror = null;
+      logo.dataset.logoSrc = "";
+      logo.removeAttribute("src");
+      logo.alt = "";
+    }
+
+    function renderDetailTitleLogo(item, detail) {
+      const logo = $("detailTitleLogo");
+      const row = logo && logo.closest ? logo.closest(".detail-title-row") : null;
+      if (!isMobileDetailLogoCandidate()) {
+        clearDetailTitleLogo();
+        return;
+      }
+      const logoPath = bestDetailLogo(detail);
+      if (!logo || !row || !logoPath) {
+        clearDetailTitleLogo();
+        return;
+      }
+      const src = displayImage(logoPath, { size: "w500" });
+      if (!src) {
+        clearDetailTitleLogo();
+        return;
+      }
+      clearDetailTitleLogo({ keepPending: true });
+      const title = item && item.title || $("detailTitle") && $("detailTitle").textContent || "详情";
+      logo.dataset.logoSrc = src;
+      logo.alt = title;
+      logo.onload = () => {
+        if (logo.dataset.logoSrc === src) {
+          row.classList.remove("logo-pending");
+          row.classList.add("has-logo");
+        }
+      };
+      logo.onerror = () => {
+        if (logo.dataset.logoSrc === src) clearDetailTitleLogo();
+      };
+      logo.src = src;
+    }
+
+    function bestDetailLogo(detail) {
+      const logos = detail && detail.images && Array.isArray(detail.images.logos) ? detail.images.logos : [];
+      if (!logos.length) return "";
+      const original = String(detail && detail.original_language || "").toLowerCase();
+      const sorted = logos
+        .filter((logo) => logo && logo.file_path)
+        .sort((a, b) => detailLogoScore(b, original) - detailLogoScore(a, original));
+      return sorted[0] && sorted[0].file_path || "";
+    }
+
+    function detailLogoScore(logo, originalLanguage) {
+      const lang = String(logo && logo.iso_639_1 || "").toLowerCase();
+      let languageScore = 1000;
+      if (lang === "zh" || lang === "cn") languageScore = 6000;
+      else if (lang === "en") languageScore = 5000;
+      else if (lang && originalLanguage && lang === originalLanguage) languageScore = 4500;
+      else if (!lang) languageScore = 3500;
+      const vote = Number(logo && logo.vote_average || 0);
+      const count = Number(logo && logo.vote_count || 0);
+      const width = Number(logo && logo.width || 0);
+      return languageScore + vote * 100 + Math.min(count, 500) * 2 + Math.min(width, 1200) / 4;
     }
 
     function setDetailCoverCarousel(landscapes, poster, options) {
@@ -9247,6 +9526,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         state.detail = body;
         renderDetailExtras(item, body);
       } catch (e) {
+        clearDetailTitleLogo();
         setDetailTextContent(`详情加载失败：${e.message || "unknown"}`);
         scheduleDetailTextClamp();
         toast("详情加载失败");
@@ -9258,6 +9538,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (overview) setDetailTextContent(overview);
       renderDetailMeta(item, detail);
       renderDetailTitleMeta(item, detail);
+      renderDetailTitleLogo(item, detail);
       scheduleDetailTextClamp();
       renderDetailCoverFromDetail(item, detail);
       renderCast(detail.credits && detail.credits.cast || []);
@@ -9708,6 +9989,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         item.pic = item.pic || posterFallback;
         setDetailCoverCarousel([], posterFallback, { allowPoster: true, keepLoading: false });
       }
+      preloadDetailPlaybackArtwork();
     }
 
     function bestDetailBackdrops(detail, limit) {
@@ -10811,11 +11093,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       let url = String(item && (item.normalizedUrl || item.normalized_url || item.url) || "").trim();
       if (!url) return null;
       if (/^push:\/\//i.test(url)) url = url.replace(/^push:\/\//i, "");
+      const artworkSource = state.selected || item || {};
       return {
         type: normalizePanDiskType(item && item.diskType),
         url,
         password: item && item.password || "",
-        title: item && (item.title || state.pan.keyword || item.url) || ""
+        title: item && (item.title || state.pan.keyword || item.url) || "",
+        pic: artworkSource && artworkSource.pic || "",
+        wallPic: playbackWallPic(artworkSource)
       };
     }
 
@@ -10936,7 +11221,13 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     async function nativeSearch(title) {
       if (!title) return;
       rememberDetailReturn($("detailSearchBtn"));
-      await sdk().search(title, { direct: true });
+      const item = state.selected || {};
+      const wallPic = playbackWallPic(item);
+      await sdk().search(title, {
+        direct: true,
+        pic: item.pic || "",
+        wallPic
+      });
       toast("已发起原生搜索");
     }
 
@@ -12206,6 +12497,20 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
           }).catch(() => {});
         });
       });
+      document.querySelectorAll("[data-high-res-backdrop]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setHighResBackdropEnabled(button.dataset.highResBackdrop !== "off").catch(() => {});
+        });
+        button.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const next = event.key === "ArrowRight" ? "off" : "on";
+          setHighResBackdropEnabled(next !== "off").then(() => {
+            const target = document.querySelector(`[data-high-res-backdrop="${next}"]`);
+            if (target) focusRemoteTarget(target);
+          }).catch(() => {});
+        });
+      });
       const panConfig = document.querySelector(".pan-config");
       if (panConfig) {
         panConfig.addEventListener("input", markPanConfigDirty);
@@ -12488,6 +12793,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       document.addEventListener("keydown", (event) => {
         const key = normalizeRemoteKey(event);
         if (key !== "Escape" && key !== "Backspace") return;
+        if (shouldKeepBackspaceForTextEditing(event)) return;
         if (state.blocked.selecting) return;
         if (collapseInlineEpisodePreview(event)) return;
         if (handleSearchSuggestBackKey(event)) return;
@@ -12536,6 +12842,12 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       if (el.tagName !== "INPUT") return false;
       const type = String(el.getAttribute("type") || "text").toLowerCase();
       return !["button", "checkbox", "radio", "submit", "reset", "range", "color"].includes(type);
+    }
+
+    function shouldKeepBackspaceForTextEditing(event) {
+      if (!event || normalizeRemoteKey(event) !== "Backspace") return false;
+      const active = document.activeElement;
+      return !!(active && isTextEditingElement(active) && !active.readOnly && !active.disabled);
     }
 
     function isPanelTextField(el) {
@@ -12641,6 +12953,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function handleSearchBackKey(event) {
+      if (shouldKeepBackspaceForTextEditing(event)) return false;
       if (!state.searchItems.length || !$("searchSection") || $("searchSection").style.display === "none") return false;
       const active = document.activeElement;
       const inSearch = active && ($("searchSection").contains(active) || $("searchForm").contains(active));
@@ -12654,6 +12967,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
     }
 
     function handleSearchSuggestBackKey(event) {
+      if (shouldKeepBackspaceForTextEditing(event)) return false;
       if (!isSearchSuggestOpen()) return false;
       const active = document.activeElement;
       const input = $("searchInput");
@@ -13205,7 +13519,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const chips = $("chips");
       if (!chips || !chips.contains(active)) return null;
       if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(chips, active, key === "ArrowRight" ? 1 : -1, ".chip");
-      if (key === "ArrowDown" && active === activeHomeChip()) return firstActiveGridCard();
+      if (key === "ArrowDown" && active === activeHomeChip()) return firstSearchResultCard() || firstActiveGridCard();
       return null;
     }
 
@@ -13224,7 +13538,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       else if (key === "ArrowRight" && index % columns < columns - 1) targetIndex = index + 1;
       else if (key === "ArrowUp") {
         targetIndex = index - columns;
-        if (targetIndex < 0) return activeHomeChip();
+        if (targetIndex < 0) return searchResultCardNear(card) || activeHomeChip();
       }
       else if (key === "ArrowDown") targetIndex = index + columns;
       if (targetIndex >= 0 && targetIndex < count) return homeGridCardAt(grid, targetIndex);
@@ -13239,6 +13553,8 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const rail = active && active.closest && active.closest("#searchRail");
       if (!rail || !rail.contains(active)) return null;
       if (key === "ArrowLeft" || key === "ArrowRight") return fastHomeSibling(rail, active, key === "ArrowRight" ? 1 : -1, ".card");
+      if (key === "ArrowUp") return activeHomeChip();
+      if (key === "ArrowDown") return activeGridCardNear(active) || firstActiveGridCard();
       return null;
     }
 
@@ -13337,7 +13653,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       const active = document.activeElement;
       const current = fromEl || (isVisibleFocusable(active) ? active : null);
       if (key === "ArrowDown" && current && current.closest && current.closest("#chips") && current === activeHomeChip()) {
-        const target = firstActiveGridCard();
+        const target = firstSearchResultCard() || firstActiveGridCard();
         if (target) return target;
       }
       if (key === "ArrowUp" && current && current.classList && current.classList.contains("card")) {
@@ -13345,7 +13661,7 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
         if (grid && grid === activeMediaGrid()) {
           let index = Number(current.dataset.cardIndex || -1);
           if (!Number.isFinite(index) || index < 0) index = Array.prototype.indexOf.call(grid.children, current);
-          if (index >= 0 && index < gridColumns(grid)) return activeHomeChip();
+          if (index >= 0 && index < gridColumns(grid)) return searchResultCardNear(current) || activeHomeChip();
         }
       }
       const list = visibleFocusable();

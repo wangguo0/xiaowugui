@@ -2000,7 +2000,7 @@ http://127.0.0.1:{port}/webResource?url={encodedUrl}&headers={encodedJson}&crede
 - `pic`：竖版海报/播放器默认 artwork，也会写入历史、收藏等原生数据。
 - `wallPic`：播放页背景图，推荐传横屏剧照/backdrop。App 不会自动判断横竖屏，调用方应自己把横屏图放到 `wallPic`。
 
-播放页背景优先级为 `wallPic -> pic -> App 默认背景`。如果 `wallPic` 为空、加载失败或没有传，播放页会用 `pic` 兜底；这时看到竖版海报背景是正常兜底结果，不代表 `wallPic` 被自动转换。
+播放页背景只使用 `wallPic`。如果 `wallPic` 为空、加载失败或没有传，播放页不再用 `pic` 兜底，而是显示 App 默认背景/壁纸；`pic` 仍用于播放器默认 artwork、历史和收藏等原生数据。
 
 ### 18.1 播放直链 `fm.play(url, title, options)`
 
@@ -2020,7 +2020,7 @@ await fm.play("https://example.com/video.m3u8", "标题", {
 | `url` | string | 是 | 播放地址。可以是普通媒体 URL，也可以是 App 可识别的特殊协议地址 |
 | `title` | string | 否 | 播放页标题；为空时使用最终播放 URL |
 | `options.pic` | string | 否 | 播放页海报/默认 artwork |
-| `options.wallPic` | string | 否 | 播放页背景图，优先于 `pic` |
+| `options.wallPic` | string | 否 | 播放页背景图；为空时使用 App 默认背景/壁纸，不用 `pic` 兜底 |
 | `options.headers` | object | 否 | 播放请求头；传入后 SDK 会把播放 URL 转成 `/webResource` 本地网关地址 |
 | `options.credentials` | string | 否 | 传 `include` 时 SDK 会把播放 URL 转成 `/webResource` 本地网关地址，并让网关自动带 Cookie |
 
@@ -2046,7 +2046,7 @@ await fm.vod("site_key", "vod_id", "影片名", "https://example.com/poster.jpg"
 | `vodId` | string | 是 | 目标站点详情 ID，即 Spider/API 的 `vod_id` |
 | `title` | string | 否 | 播放/详情标题 |
 | `pic` | string | 否 | 海报 URL |
-| `options.wallPic` | string | 否 | 播放页背景图，优先于 `pic` |
+| `options.wallPic` | string | 否 | 播放页背景图；为空时使用 App 默认背景/壁纸，不用 `pic` 兜底 |
 
 行为：
 
@@ -2078,7 +2078,7 @@ await fm.vodInline({
 | `vod_id` | string | 否 | 临时 VOD ID；为空时 Native 自动生成 |
 | `vod_name` / `title` | string | 否 | 播放页标题 |
 | `vod_pic` / `pic` | string | 否 | 海报 URL |
-| `wallPic` | string | 否 | 播放页背景图，优先于 `vod_pic` / `pic` |
+| `wallPic` | string | 否 | 播放页背景图；为空时使用 App 默认背景/壁纸，不用 `vod_pic` / `pic` 兜底 |
 | `vod_play_from` | string | 否 | 播放线路名，默认 `WebHome` |
 | `mark` | string | 否 | 默认选中的集名，例如 `02` |
 | `headers` | object | 否 | 播放直链请求头，会传给播放器 |
@@ -2089,7 +2089,7 @@ await fm.vodInline({
 行为：
 
 - Native 把 payload 注册为内存级临时 VOD，再打开 `VideoActivity`。
-- `vod_pic` / `pic` 用作海报，`wallPic` 用作播放页背景图；没有 `wallPic` 时背景使用海报兜底。
+- `vod_pic` / `pic` 用作海报和播放器默认 artwork，`wallPic` 用作播放页背景图；没有 `wallPic` 时背景使用 App 默认背景/壁纸。
 - 原生播放页会按 `episodes` 显示集数、上一集、下一集和更多集数弹窗。
 - 如果 `episodes[].resolve` 为 `true`，Native 不会在进入播放页前批量请求所有播放地址，而是在用户点击某一集时调用 `window.__fmWebHomeInlineResolver(episode)`，resolver 返回 `{ url, format, headers, credentials }` 后即时播放。
 - 适合 WebHome 扩展已解析出多集直链，或只拿到集数页面但不想实现完整 CSP Spider 的场景。
@@ -2168,7 +2168,11 @@ const status = await fm.stat();
 ### 19.1 搜索 `fm.search(keyword, options)`
 
 ```js
-await fm.search("仙逆", { direct: true });
+await fm.search("仙逆", {
+  direct: true,
+  pic: "https://example.com/poster.jpg",
+  wallPic: "https://example.com/backdrop.jpg"
+});
 ```
 
 参数：
@@ -2177,8 +2181,10 @@ await fm.search("仙逆", { direct: true });
 | --- | --- | --- | --- | --- |
 | `keyword` | string | 是 | 非空字符串 | 搜索关键词 |
 | `options.direct` | boolean | 否 | 默认 `false` | `true` 时调用 `SearchActivity.direct()`，尽量直接进入搜索结果列表，减少 WebHome 到原生搜索页之间的返回层级；`false` 时调用普通搜索入口 |
+| `options.pic` | string | 否 | 默认 `""` | 从 WebHome 详情页传给原生搜索结果后续播放链路的海报/默认 artwork；搜索结果自身有海报时优先用结果海报 |
+| `options.wallPic` | string | 否 | 默认 `""` | 从 WebHome 详情页传给原生搜索结果后续播放链路的播放页背景图 |
 
-返回值为 `{}`。搜索页是否有结果由当前配置站点决定。
+返回值为 `{}`。搜索页是否有结果由当前配置站点决定。WebHome 详情页的“搜索播放”如果希望用户从原生搜索结果进入播放器后仍看到同一张横屏背景，应传 `wallPic`；如果没有 `wallPic`，播放页不会用搜索结果海报作为背景兜底。
 
 ### 19.2 点播、收藏、直播和设置入口
 
@@ -2512,7 +2518,7 @@ WebHome 列表最佳实践：
 | `password` | string | 否 | 默认 `""` | 当前 Native `pan.play` 不读取该字段；底层 `push_agent`、JAR 或 pvideo 如果需要提取码，需要从 URL 或自身逻辑中处理 |
 | `title` | string | 否 | 默认使用 `url` | 原生播放页标题 |
 | `pic` | string | 否 | 默认 `""` | 播放页海报/默认 artwork，推荐传详情页竖版海报 |
-| `wallPic` | string | 否 | 默认 `""` | 播放页背景图，优先于 `pic`，推荐传详情页横屏剧照/backdrop |
+| `wallPic` | string | 否 | 默认 `""` | 播放页背景图，推荐传详情页横屏剧照/backdrop；为空时使用 App 默认背景/壁纸 |
 
 推荐 `type` 主值：
 
@@ -3213,7 +3219,7 @@ async function playPan(item) {
 }
 ```
 
-`pic` 是播放页海报或默认 artwork，通常取竖版封面；`wallPic` 是播放页背景，优先取横屏剧照/backdrop。详情页能拿到图片时，可以先调用 `fm.preloadArtwork(pic, wallPic)`，但不要在用户点击播放时等待预加载完成。
+`pic` 是播放页海报或默认 artwork，通常取竖版封面；`wallPic` 是播放页背景，优先取横屏剧照/backdrop。播放页背景不会用 `pic` 兜底。详情页能拿到图片时，可以先调用 `fm.preloadArtwork(pic, wallPic)`，但不要在用户点击播放时等待预加载完成。
 
 ### 25.5 在线播放按钮和动态页面
 
@@ -3425,13 +3431,14 @@ CSS 注意：
 
 - TMDB 榜单、搜索、详情、剧照、演员、季集信息。
 - Nostr 去中心化偏好热榜。
-- App SDK 搜索播放。
+- App SDK 搜索播放；从详情页跳转时调用 `fm.search(title, { direct: true, pic, wallPic })`，让原生搜索结果进入播放器后仍可使用 WebHome 详情页的 `wallPic`。
 - 播放时长采样和最近观看补偿。
 - 透明背景和半透明控件。
-- 状态面板、身份管理、数据删除。
+- 状态面板、身份管理、数据删除；状态面板提供“高清剧照”开关，开启后播放页 `wallPic` 使用 TMDB `original` 横屏图，关闭时使用常规尺寸图。
 - TMDB Key、盘搜地址、TG 频道、账号、密码和网盘类型配置。
 - TV 大屏详情布局、剧情概要、演职员、相关推荐和推荐屏蔽。
 - PanSou 搜索、认证、TG 频道、网盘检测、`fm.pan.play` 播放。
+- 播放页背景只从 `wallPic` 取图；没有横屏剧照/backdrop 时不使用海报 `pic` 兜底，保留 App 默认背景/壁纸。
 - 旧 WebView 兼容引导层：ES5 书写的头部 polyfill、特性检测和 `no-layout-gap` / `no-css-functions` / `no-aspect-ratio` 降级类（8-214 行），详见 15.1-15.5。
 
 Nostr 使用：
@@ -4070,7 +4077,7 @@ Vod 条目字段：
 
 ### 27.13 WebHome 相关技巧
 
-- WebHome 页面可调用 `fm.search(keyword, { direct: true })`，减少返回层级。
+- WebHome 页面可调用 `fm.search(keyword, { direct: true, pic, wallPic })`，减少返回层级，并把详情页图片带入搜索结果后续播放链路。
 - WebHome 可调用 `fm.history()` 读取最近观看，用于补偿网页在播放页后台时漏掉的播放进度。
 - WebHome 可通过 `fm.config().driveCheck` 判断网盘检测开关。
 - WebHome 可用 `fm.res(url, { headers })` 给图片、字幕、视频资源生成本地网关地址，处理跨域和 headers。
@@ -4242,7 +4249,7 @@ WebHome 在原生播放页期间可能暂停定时器。推荐：
 1. 单文件 HTML，除必要第三方库外不引入构建流程。
 2. App 内优先使用 `fm.req` 请求 API，避免 CORS。
 3. 图片和资源优先使用 `fm.res`。
-4. 搜索播放使用 `fm.search(keyword, { direct: true })`。
+4. 搜索播放使用 `fm.search(keyword, { direct: true, pic, wallPic })`，其中 `wallPic` 取横屏剧照/backdrop；没有 `wallPic` 时不要期望播放页用海报当背景。
 5. 多层页面使用 History API。
 6. 移动端优先，电视端保证遥控器焦点可用。
 7. 透明背景不要给 `html/body` 写死纯色背景，App 环境保持页面级透明。

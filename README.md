@@ -95,7 +95,7 @@ WebHome 页面会注入 `window.fongmi` 和简写 `window.fm`,网页可以直接
 | `fm.vod(siteKey, vodId, title, pic, options)` | 打开 App 原生 CSP 详情/播放链路,`options.wallPic` 可指定播放页背景图 |
 | `fm.vodInline(payload)` | 从 WebHome 传入临时 VOD,支持多集直链或按集即时解析,打开 App 原生播放页 |
 | `fm.preloadArtwork(pic, wallPic)` | 后台预热播放页海报和背景图,不阻塞后续播放跳转 |
-| `fm.search(keyword, { direct })` | 调用 App 搜索,支持直接进入搜索结果 |
+| `fm.search(keyword, { direct, pic, wallPic })` | 调用 App 搜索,支持直接进入搜索结果,可把详情页图片带入后续播放 |
 | `fm.openLive()` / `fm.openKeep()` / `fm.openSetting()` | 打开 App 原生直播、收藏和设置入口 |
 | `fm.history()` | 读取最近观看记录 |
 | `fm.stat()` | 获取当前播放状态、进度、时长等信息 |
@@ -110,7 +110,7 @@ WebHome 页面会注入 `window.fongmi` 和简写 `window.fm`,网页可以直接
 | `fm.ui.setToolbar(visible)` | 控制 App 工具栏显示 |
 | `fm.back()` / `fm.reload()` | 处理网页返回和刷新 |
 
-播放页图片语义:`pic` 是海报/播放器默认图,`wallPic` 是播放页背景图。App 不会自动判断横竖屏,WebHome 应把竖版海报放在 `pic`,把横屏剧照/背景图放在 `wallPic`;播放背景优先级为 `wallPic -> pic -> App 默认背景`。`fm.play`、`fm.vod`、`fm.vodInline`、`fm.pan.play` 共用这套语义。详情页拿到图片后可先调用 `fm.preloadArtwork(pic, wallPic)` 预热原生 Glide 缓存,点击继续观看或播放时仍应直接调用 `fm.vod`/`fm.play`/`fm.vodInline`/`fm.pan.play`,不要在点击后等待预热。
+播放页图片语义:`pic` 是海报/播放器默认图,`wallPic` 是播放页背景图。App 不会自动判断横竖屏,WebHome 应把竖版海报放在 `pic`,把横屏剧照/背景图放在 `wallPic`;播放背景只使用 `wallPic`,没有 `wallPic` 时显示 App 默认背景/壁纸,不会再用 `pic` 兜底。`fm.play`、`fm.vod`、`fm.vodInline`、`fm.pan.play` 共用这套语义;`fm.search(keyword, { direct: true, pic, wallPic })` 可把详情页图片带到原生搜索结果后续播放链路。详情页拿到图片后可先调用 `fm.preloadArtwork(pic, wallPic)` 预热原生 Glide 缓存,点击继续观看、搜索播放或播放时仍应直接调用对应入口,不要在点击后等待预热。
 
 SDK 相关事件:
 
@@ -203,7 +203,7 @@ PanSou 搜索结果可能是异步补充的,示例页会轮询合并新增结果
 - Nostr 去中心化偏好同步;用户搜索、点击、播放时长等行为参与推荐计算,同一用户对同一条目的热度去重。
 - 状态面板展示 SDK、TMDB、Nostr、PanSou、发布状态和身份信息。
 - 支持清理本机测试数据和发布 Nostr 删除事件。
-- 详情页优先使用 TMDB 横屏剧照作为播放页 `wallPic`,没有横屏图时只传海报 `pic`;进入详情后会后台预热原生播放页图片,不阻塞"继续观看"跳转。
+- 详情页优先使用 TMDB 横屏剧照作为播放页 `wallPic`,状态面板可开启高清剧照以向播放页传 TMDB `original` 图;没有横屏图时只传海报 `pic`,播放页不显示背景图而使用 App 默认背景/壁纸。进入详情后会后台预热原生播放页图片,不阻塞"继续观看"或"搜索播放"跳转。
 
 示例页使用 TMDB API,请自行替换或管理 API Key,并遵守对应服务条款。
 

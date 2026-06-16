@@ -129,6 +129,18 @@ On pause, pagehide, resume, or return:
 - publish/sync only after the threshold and only once per media/user;
 - clear pending watch after success or near completion.
 
+## Playback Artwork Pattern
+
+The demo separates poster/default artwork from playback background:
+
+- `pic` comes from the selected media, history item, or native search result and is used as poster/default artwork.
+- `playbackWallPic(item)` picks the best landscape image from explicit `wallPic`, current detail backdrop, selected media landscape image, or matched media landscape image. When high-resolution backdrop mode is enabled, TMDB backdrop URLs are upgraded to `original` for native playback.
+- `vodPlaybackOptions(item)` returns `{ wallPic }` for `fm.vod()` when a backdrop exists.
+- Detail search playback calls `fm.search(title, { direct: true, pic, wallPic })` so native search-result playback can retain the WebHome backdrop.
+- `buildPanPlayPayload(item)` passes `pic` and `wallPic` to `fm.pan.play()` so pan/push playback uses the same native artwork.
+- `preloadPlaybackArtwork(item)` calls `fm.preloadArtwork(pic, wallPic)` once per media/artwork pair and ignores preload failure.
+- Native playback backgrounds are not derived from `pic`; if `wallPic` is missing, the player uses the App default background/wallpaper.
+
 ## What Not To Copy Blindly
 
 - The bundled TMDB API key and relay list are example defaults; production pages should make them configurable or user-provided.
