@@ -14,7 +14,7 @@ import java.util.Set;
 
 public final class CspWarmup {
 
-    private static final long DELAY_MS = 1500;
+    private static final long DELAY_MS = 500;
     private static final Object LOCK = new Object();
 
     private static final Set<String> attemptedKeys = new HashSet<>();
@@ -26,7 +26,10 @@ public final class CspWarmup {
         if (!Setting.isCspWarmup()) return;
         String key = configKey();
         synchronized (LOCK) {
-            if (!attemptedKeys.add(key)) return;
+            if (!attemptedKeys.add(key)) {
+                SpiderDebug.log("csp-warmup", "skip duplicate reason=%s config=%s", reason, key);
+                return;
+            }
         }
         SpiderDebug.log("csp-warmup", "schedule reason=%s config=%s delay=%sms", reason, key, DELAY_MS);
         App.post(() -> Task.execute(() -> run(key, reason)), DELAY_MS);
@@ -44,6 +47,7 @@ public final class CspWarmup {
                 SpiderDebug.log("csp-warmup", "skip no native csp reason=%s cost=%sms", reason, System.currentTimeMillis() - start);
                 return;
             }
+            SpiderDebug.log("csp-warmup", "init start reason=%s site=%s api=%s", reason, site.getKey(), site.getApi());
             site.recent().spider();
             SpiderDebug.log("csp-warmup", "done reason=%s site=%s api=%s cost=%sms", reason, site.getKey(), site.getApi(), System.currentTimeMillis() - start);
         } catch (Throwable e) {

@@ -6,6 +6,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.github.catvod.crawler.Spider;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.crawler.SpiderNull;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
@@ -39,6 +40,7 @@ public class JarLoader {
     }
 
     public void clear() {
+        SpiderDebug.log("jar-loader", "clear loaders=%s spiders=%s methods=%s", loaders.size(), spiders.size(), methods.size());
         spiders.values().forEach(Spider::destroy);
         loaders.clear();
         methods.clear();
@@ -49,34 +51,56 @@ public class JarLoader {
 
     public void setRecent(String recent) {
         this.recent = recent;
+        SpiderDebug.log("jar-loader", "recent=%s", recent);
     }
 
     private void load(String key, File file) {
-        if (Thread.interrupted()) return;
-        if (!Path.exists(file) || !file.setReadOnly()) return;
+        long start = System.currentTimeMillis();
+        if (Thread.interrupted()) {
+            SpiderDebug.log("jar-loader", "load skip interrupted key=%s", key);
+            return;
+        }
+        if (!Path.exists(file)) {
+            SpiderDebug.log("jar-loader", "load skip missing key=%s file=%s", key, file);
+            return;
+        }
+        if (!file.setReadOnly()) {
+            SpiderDebug.log("jar-loader", "load skip readonly failed key=%s file=%s size=%s", key, file.getAbsolutePath(), file.length());
+            return;
+        }
         String cachePath = Path.jar().getAbsolutePath();
+        SpiderDebug.log("jar-loader", "load start key=%s file=%s size=%s cache=%s", key, file.getAbsolutePath(), file.length(), cachePath);
         DexClassLoader loader = new DexClassLoader(file.getAbsolutePath(), cachePath, cachePath, App.get().getClassLoader());
-        invokeInit(loader);
+        invokeInit(key, loader);
         invokeProxy(key, loader);
         loaders.put(key, loader);
+        SpiderDebug.log("jar-loader", "load done key=%s cost=%sms", key, System.currentTimeMillis() - start);
     }
 
-    private void invokeInit(DexClassLoader loader) {
+    private void invokeInit(String key, DexClassLoader loader) {
+        long start = System.currentTimeMillis();
         try {
+            SpiderDebug.log("jar-loader", "jar init start key=%s", key);
             Class<?> clz = loader.loadClass("com.github.catvod.spider.Init");
             Method method = clz.getMethod("init", Context.class);
             method.invoke(clz, App.get());
+            SpiderDebug.log("jar-loader", "jar init done key=%s cost=%sms", key, System.currentTimeMillis() - start);
         } catch (Throwable e) {
+            SpiderDebug.log("jar-loader", "jar init error key=%s cost=%sms error=%s", key, System.currentTimeMillis() - start, error(e));
+            SpiderDebug.log("jar-loader", e);
             e.printStackTrace();
         }
     }
 
     private void invokeProxy(String key, DexClassLoader loader) {
+        long start = System.currentTimeMillis();
         try {
             Class<?> clz = loader.loadClass("com.github.catvod.spider.Proxy");
             Method method = clz.getMethod("proxy", Map.class);
             methods.put(key, method);
+            SpiderDebug.log("jar-loader", "proxy method ready key=%s cost=%sms", key, System.currentTimeMillis() - start);
         } catch (Throwable e) {
+            SpiderDebug.log("jar-loader", "proxy method missing key=%s cost=%sms error=%s", key, System.currentTimeMillis() - start, error(e));
             e.printStackTrace();
         }
     }
@@ -91,6 +115,7 @@ public class JarLoader {
             String md5 = texts.length > 1 ? texts[1].trim() : "";
             if (md5.startsWith("http")) md5 = OkHttp.string(md5).trim();
             jar = texts[0];
+            SpiderDebug.log("jar-loader", "parse start key=%s source=%s md5=%s", key, source(jar), !md5.isEmpty());
             if (!md5.isEmpty() && Util.equals(jar, md5)) {
                 load(key, Path.jar(jar));
             } else if (jar.startsWith("http")) {
@@ -116,19 +141,38 @@ public class JarLoader {
         String jaKey = Util.md5(jar);
         String spKey = jaKey + key;
         return spiders.computeIfAbsent(spKey, k -> {
+            long start = System.currentTimeMillis();
             try {
+                SpiderDebug.log("jar-loader", "spider init start site=%s api=%s jar=%s ext=%s", key, api, jaKey, ext == null ? 0 : ext.length());
                 parseJar(jaKey, jar);
                 DexClassLoader loader = loaders.get(jaKey);
-                if (loader == null) return new SpiderNull();
+                if (loader == null) {
+                    SpiderDebug.log("jar-loader", "spider init skip loader missing site=%s api=%s jar=%s cost=%sms", key, api, jaKey, System.currentTimeMillis() - start);
+                    return new SpiderNull();
+                }
                 Spider spider = (Spider) loader.loadClass("com.github.catvod.spider." + api.split("csp_")[1]).newInstance();
                 spider.siteKey = key;
                 spider.init(App.get(), ext);
+                SpiderDebug.log("jar-loader", "spider init done site=%s api=%s jar=%s class=%s cost=%sms", key, api, jaKey, spider.getClass().getName(), System.currentTimeMillis() - start);
                 return spider;
             } catch (Throwable e) {
+                SpiderDebug.log("jar-loader", "spider init error site=%s api=%s jar=%s cost=%sms error=%s", key, api, jaKey, System.currentTimeMillis() - start, error(e));
+                SpiderDebug.log("jar-loader", e);
                 e.printStackTrace();
                 return new SpiderNull();
             }
         });
+    }
+
+    private String source(String jar) {
+        if (jar.startsWith("http")) return "http:" + Util.md5(jar);
+        if (jar.startsWith("file")) return "file:" + jar.length();
+        return jar;
+    }
+
+    private String error(Throwable e) {
+        Throwable cause = e.getCause() == null ? e : e.getCause();
+        return cause.getClass().getSimpleName() + ":" + cause.getMessage();
     }
 
     private DexClassLoader requireRecentLoader() {

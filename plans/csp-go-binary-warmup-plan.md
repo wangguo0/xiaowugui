@@ -115,8 +115,9 @@ SiteApi.homeContent(site);
 
 - 模式：`轻量启动`
 - 站点选择：`自动选择`
-- 执行时机：点播接口首次加载后，如果默认首页走 WebHome，则在 WebHome 首屏加载成功后延迟后台执行，避免影响首屏。
+- 执行时机：点播接口首次加载后，如果默认首页走 WebHome，则在 WebHome 初始化前延迟后台执行，避免等 WebHome 页面完全加载后才开始。
 - 去重策略：同一 App 进程、同一接口配置只尝试一次；刷新 WebHome 页面不再次触发。
+- 不做端口探测：不同 Go 二进制端口不同，通用逻辑只观察 jar/spider 初始化链路，不硬编码 `9966` 等端口。
 
 自动选择站点规则：
 
@@ -139,7 +140,7 @@ SiteApi.homeContent(site);
 csp_warmup_enabled = false
 csp_warmup_mode = init
 csp_warmup_site_key = ""
-csp_warmup_delay_ms = 1500
+csp_warmup_delay_ms = 500
 ```
 
 含义：
@@ -217,23 +218,23 @@ Task.execute(() -> {
 
 移动端：
 
-- `VodFragment.loadHome()` 中，WebHome load 成功后可以 `CspWarmup.schedule("webhome")`。
+- `VodFragment.loadHome()` 中，只要当前首页配置了 `homePage` 就在 `mWeb.load(home)` 之前调度，避免 WebHome 页面加载耗时影响二进制启动。
 - `RefreshEvent.HOME` 只刷新 WebHome 页面，不调用预热。
 - 原生首页分支不用额外触发，因为原生 `homeContent()` 已经会触发 CSP。
 
 TV 端：
 
-- `HomeActivity` 中 WebHome overlay 加载成功后同样调用 `CspWarmup.schedule("webhome")`。
+- `HomeActivity.getVideo(false)` 中，当前首页配置了 `homePage` 时先调度预热，再创建/加载 WebHome。
+- 强制原生或 WebHome 刷新不额外调度。
 
-更通用的方式：
+## 调试日志
 
-- 在 `VodConfig.load(...)` 成功回调后触发一次。
-- 但需要避免原生首页场景重复预热。
+为排查 Go 二进制偶发启动失败，建议开启“调试日志”后观察以下 tag：
 
-推荐第一版：
+- `csp-warmup`：预热是否调度、是否重复跳过、选择到哪个 `site/api`、`site.recent().spider()` 耗时和异常。
+- `jar-loader`：jar 是否加载、全局 `com.github.catvod.spider.Init.init(Context)` 是否执行、具体 `Spider.init(Context, ext)` 是否执行、耗时和异常。
 
-- WebHome load 成功后触发。
-- 因为问题只发生在 WebHome 默认主页场景。
+不在 App 层判断端口 ready，因为不同 go 二进制可能使用不同端口。若需要进一步判断，只能由具体 jar 或配置提供可选健康检查地址。
 
 ## 日志与诊断
 

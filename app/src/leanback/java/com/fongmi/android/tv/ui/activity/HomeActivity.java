@@ -386,6 +386,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     private void getVideo(boolean forceNative) {
         if (!forceNative && getHome().hasHomePage()) {
+            CspWarmup.schedule("tv-interface");
             ensureWebView();
         }
         if (!forceNative && mWeb != null && mWeb.load(getHome())) {
@@ -393,7 +394,6 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             mBinding.recycler.setVisibility(View.GONE);
             mBinding.progressLayout.showContent();
             showWebOverlay();
-            CspWarmup.schedule("tv-webhome");
             return;
         }
         if (mWeb != null) mWeb.hide();

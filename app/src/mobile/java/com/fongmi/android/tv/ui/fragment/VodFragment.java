@@ -309,11 +309,11 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         Site home = getHome();
         WebHomeChromeStartup.remember(getConfig(), home);
         setTitle();
+        if (home.hasHomePage()) CspWarmup.schedule("mobile-interface");
         if (mWeb != null && mWeb.load(home)) {
             clearPagerTypes();
             hideProgress();
             hideNativeContent();
-            CspWarmup.schedule("mobile-webhome");
         } else {
             showNativeContent();
             homeContent();
