@@ -28,6 +28,8 @@ public interface GitCloudProvider {
 
     GitRepo createRepo(GitAccount account, String token, CreateRepoRequest request) throws GitCloudException;
 
+    void deleteRepo(GitAccount account, String token, GitRepo repo) throws GitCloudException;
+
     List<GitBranch> listBranches(GitAccount account, String token, GitRepo repo) throws GitCloudException;
 
     List<GitFile> listFiles(GitAccount account, String token, GitRepo repo, String ref, String path) throws GitCloudException;

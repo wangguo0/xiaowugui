@@ -85,6 +85,11 @@ public class GitHubProvider extends BaseGitProvider {
     }
 
     @Override
+    public void deleteRepo(GitAccount account, String token, GitRepo repo) throws GitCloudException {
+        delete(API + "/repos/" + encPath(repo.fullName), token);
+    }
+
+    @Override
     public List<GitBranch> listBranches(GitAccount account, String token, GitRepo repo) throws GitCloudException {
         JsonArray array = getArray(API + "/repos/" + encPath(repo.fullName) + "/branches?per_page=100", token);
         List<GitBranch> branches = new ArrayList<>();

@@ -42,12 +42,20 @@ abstract class BaseGitProvider implements GitCloudProvider {
         return request("PUT", url, token, payload).object();
     }
 
+    protected void delete(String url, String token) throws GitCloudException {
+        request("DELETE", url, token, null);
+    }
+
     protected HttpResult request(String method, String url, String token, JsonObject payload) throws GitCloudException {
         Request.Builder builder = new Request.Builder().url(url);
         headers(builder, token);
         RequestBody body = payload == null ? null : RequestBody.create(App.gson().toJson(payload), JSON);
         if ("POST".equals(method)) builder.post(body == null ? RequestBody.create(new byte[0]) : body);
         else if ("PUT".equals(method)) builder.put(body == null ? RequestBody.create(new byte[0]) : body);
+        else if ("DELETE".equals(method)) {
+            if (body == null) builder.delete();
+            else builder.delete(body);
+        }
         else builder.get();
         try (Response response = OkHttp.client().newCall(builder.build()).execute()) {
             ResponseBody responseBody = response.body();

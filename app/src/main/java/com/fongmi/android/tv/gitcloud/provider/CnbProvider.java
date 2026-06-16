@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.gitcloud.provider;
 
 import android.text.TextUtils;
+import android.util.Base64;
 
 import com.fongmi.android.tv.gitcloud.AccountInfo;
 import com.fongmi.android.tv.gitcloud.CreateRepoRequest;
@@ -20,6 +21,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +83,11 @@ public class CnbProvider extends BaseGitProvider {
     }
 
     @Override
+    public void deleteRepo(GitAccount account, String token, GitRepo repo) throws GitCloudException {
+        delete(repoApi(repo), token);
+    }
+
+    @Override
     public List<GitBranch> listBranches(GitAccount account, String token, GitRepo repo) throws GitCloudException {
         JsonArray array = getArray(repoApi(repo) + "/-/git/branches?page=1&page_size=100", token);
         List<GitBranch> branches = new ArrayList<>();
@@ -110,7 +117,19 @@ public class CnbProvider extends BaseGitProvider {
 
     @Override
     public GitFileContent readFile(GitAccount account, String token, GitRepo repo, String ref, String path) throws GitCloudException {
-        throw new GitCloudException("CNB 文件读取接口未启用，请通过 raw 下载或同步后读取");
+        String branch = branch(account, token, repo, ref);
+        String url = repoApi(repo) + "/-/git/contents/" + encPath(path);
+        if (!TextUtils.isEmpty(branch)) url += "?ref=" + enc(branch);
+        JsonObject object = get(url, token);
+        GitFileContent content = new GitFileContent();
+        content.file = file(account, repo, branch, object);
+        if (TextUtils.isEmpty(content.file.path)) content.file.path = path;
+        if (TextUtils.isEmpty(content.file.name)) content.file.name = name(path);
+        String encoded = str(object, "content").replace("\n", "");
+        String encoding = str(object, "encoding");
+        content.data = "base64".equalsIgnoreCase(encoding) && !TextUtils.isEmpty(encoded) ? Base64.decode(encoded, Base64.DEFAULT) : encoded.getBytes(StandardCharsets.UTF_8);
+        content.text = new String(content.data, StandardCharsets.UTF_8);
+        return content;
     }
 
     @Override
@@ -167,6 +186,12 @@ public class CnbProvider extends BaseGitProvider {
             if (!TextUtils.isEmpty(value)) return value;
         }
         return "";
+    }
+
+    private String name(String path) {
+        if (TextUtils.isEmpty(path)) return "";
+        int slash = path.lastIndexOf('/');
+        return slash >= 0 ? path.substring(slash + 1) : path;
     }
 
     private String branch(GitAccount account, String token, GitRepo repo, String ref) throws GitCloudException {
