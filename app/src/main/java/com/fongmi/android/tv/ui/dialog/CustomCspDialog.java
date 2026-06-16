@@ -446,7 +446,6 @@ public class CustomCspDialog extends BaseAlertDialog {
         recognizeInput = createInput(true);
         recognizeInput.setMinLines(10);
         recognizeInput.setMaxLines(16);
-        recognizeInput.setHint(R.string.setting_custom_csp_recognize_hint);
         setupScrollableText(recognizeInput);
         binding.editPanel.addView(createRecognizePanel(recognizeInput));
         binding.negative.setText(R.string.playback_webhook_back);
