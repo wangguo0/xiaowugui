@@ -310,6 +310,12 @@
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">Site Injection</string>
     <string name="setting_custom_csp_add">Add</string>
+    <string name="setting_custom_csp_recognize">Detect</string>
+    <string name="setting_custom_csp_recognize_title">Detect sites</string>
+    <string name="setting_custom_csp_recognize_hint">Paste site JSON snippets</string>
+    <string name="setting_custom_csp_recognize_empty">Paste site JSON first</string>
+    <string name="setting_custom_csp_recognize_invalid">No valid site JSON detected</string>
+    <string name="setting_custom_csp_recognize_done">Added %1$d items</string>
     <string name="setting_custom_csp_count">%1$d/%2$d active</string>
     <string name="setting_custom_csp_api">API / csp class</string>
     <string name="setting_custom_csp_code">Code</string>

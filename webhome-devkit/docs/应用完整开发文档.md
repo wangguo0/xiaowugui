@@ -3719,13 +3719,14 @@ Proxy 壳代理使用方式：
 1. 入口：设置 -> 增强功能 -> 站点注入。管理页面 `/m` 里也提供同等配置能力。
 2. 全局开关关闭时，不会修改当前接口；单条条目关闭时，该条不会插入。
 3. 主列表只显示名称、类型、核心地址、Key、启用/可用状态和常用操作。点击“新增”或“修改”进入独立表单，取消不会写入草稿，保存后才刷新列表。
-4. 插入位置限制在 `sites`/`lives` 前 10 位内。界面显示为 1 到 10，显示“1”表示插入到列表第 0 位前面。
-5. WebHome 类型只需要维护名称、Key、WebHome 地址和可选站点级扩展；适合把本地 HTML 文件、手写 HTML 代码或在线链接作为网页首页。新增条目的默认 Key 会根据名称生成稳定值，便于 WebHome 扩展使用 `cspKeyRegex` 匹配；手动修改 Key 后会保留用户填写值。
-6. WebHome 行的 Key 下方有“扩展”开关，默认关闭。打开后输入框显示为“扩展 URL / JSON”，最简单只填一个 JS URL，例如 `https://example.com/site.js`。表单也兼容 `extensions` 数组或单个扩展对象，保存时会包装为数组；也可以点“文件”选择本地 `.js`、`.css` 或 `.json`，本地 JS 会生成内联 `code` 扩展对象，CSS 会生成 `GM_addStyle(...)`，JSON 会规范化为数组。站点级 `extensions` 默认绑定当前站点 `key`，通常不需要再写 `cspKeyRegex`。
-7. 通用 CSP 类型会显示 `type`、`api`、`ext`、`jar`、`click`、`playUrl`、`hide`、`searchable`、`changeable`、`quickSearch`、`indexs`、`timeout`、`categories`、`header`、`style` 等站点参数，也支持直接编辑完整 Site JSON。
-8. 直播类型只生成注入到 `lives` 列表的 Live 条目，不额外创建独立直播接口或独立 CSP 加载方式。常用参数优先显示 `name`、`url`、`ua`、`epg`、`logo`，其中 `ua` 新增时默认 `okhttp`；`type` 和 `playerType` 不在界面展示，保存时默认写入 `type: 0`、`playerType: 2`。`header`、`timeout`、`groups`、`catchup`、`core`、`boot`、`pass` 等低频参数收在高级区，也支持直接编辑完整 Live JSON。
-9. JSON raw 支持完整 registry、`sites`/`lives` 数组、单个 site object 或单个 live object；单个 live object 保存后会作为 `lives` 注入项处理。保存后会自动刷新当前点播配置和直播配置，让注入结果立即生效。
-10. 站点注入文件存放在 `/sdcard/TV/CustomCsp/`。默认一键同步目录包含 `TV`，因此开启“Jar/脚本保存数据”并保留 `TV` 目录时会同步这些注入文件；如果用户从同步目录中移除了 `TV`，则不会自动同步。
+4. 顶部“识别”用于粘贴单个或多个松散站点 JSON 片段，例如 `{...}, {...}` 或结尾带逗号的单个对象。识别结果会复用同一套配置解析逻辑，自动归类为 WebHome、通用 CSP 或直播，并追加到当前 UI 列表；如果当前在 JSON 文本模式，会同步追加到 JSON 文本。
+5. 插入位置限制在 `sites`/`lives` 前 10 位内。界面显示为 1 到 10，显示“1”表示插入到列表第 0 位前面。
+6. WebHome 类型只需要维护名称、Key、WebHome 地址和可选站点级扩展；适合把本地 HTML 文件、手写 HTML 代码或在线链接作为网页首页。新增条目的默认 Key 会根据名称生成稳定值，便于 WebHome 扩展使用 `cspKeyRegex` 匹配；手动修改 Key 后会保留用户填写值。
+7. WebHome 行的 Key 下方有“扩展”开关，默认关闭。打开后输入框显示为“扩展 URL / JSON”，最简单只填一个 JS URL，例如 `https://example.com/site.js`。表单也兼容 `extensions` 数组或单个扩展对象，保存时会包装为数组；也可以点“文件”选择本地 `.js`、`.css` 或 `.json`，本地 JS 会生成内联 `code` 扩展对象，CSS 会生成 `GM_addStyle(...)`，JSON 会规范化为数组。站点级 `extensions` 默认绑定当前站点 `key`，通常不需要再写 `cspKeyRegex`。
+8. 通用 CSP 类型会显示 `type`、`api`、`ext`、`jar`、`click`、`playUrl`、`hide`、`searchable`、`changeable`、`quickSearch`、`indexs`、`timeout`、`categories`、`header`、`style` 等站点参数，也支持直接编辑完整 Site JSON。
+9. 直播类型只生成注入到 `lives` 列表的 Live 条目，不额外创建独立直播接口或独立 CSP 加载方式。常用参数优先显示 `name`、`url`、`ua`、`epg`、`logo`，其中 `ua` 新增时默认 `okhttp`；`type` 和 `playerType` 不在界面展示，保存时默认写入 `type: 0`、`playerType: 2`。`header`、`timeout`、`groups`、`catchup`、`core`、`boot`、`pass` 等低频参数收在高级区，也支持直接编辑完整 Live JSON。
+10. JSON raw 支持完整 registry、`sites`/`lives` 数组、单个 site object 或单个 live object；单个 live object 保存后会作为 `lives` 注入项处理。保存后会自动刷新当前点播配置和直播配置，让注入结果立即生效。
+11. 站点注入文件存放在 `/sdcard/TV/CustomCsp/`。默认一键同步目录包含 `TV`，因此开启“Jar/脚本保存数据”并保留 `TV` 目录时会同步这些注入文件；如果用户从同步目录中移除了 `TV`，则不会自动同步。
 
 站点注入配置文件示例：
 

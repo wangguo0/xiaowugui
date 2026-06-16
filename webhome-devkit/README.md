@@ -198,7 +198,7 @@ URL 是否被当作"脚本"判定规则：包含 `.js` 或以 `file://`、`local
 
 字符串 URL 指向 `.js` 时自动生成 `id`（`remote_<urlHash>`）/`name`（文件名），按默认 `document-end` 注入。简写无法设置 `version`、`runAt`、`depends`；需要时换完整对象。
 
-站点注入表单里 Key 下方有"扩展"开关，打开后输入框显示为"扩展 URL / JSON"。最简单只填一个 JS URL，例如 `https://example.com/site.js`；也兼容 `extensions` 数组或单个扩展对象，保存时规范化。也可以点"文件"选择本地 `.js` / `.css` / `.json`，本地 JS 会生成内联 `code` 扩展对象，CSS 会生成 `GM_addStyle(...)`，JSON 会规范化为 `extensions` 数组。
+站点注入顶部有"识别"按钮，可粘贴单个或多个松散站点 JSON 片段（包括 `{...}, {...}` 或结尾带逗号的对象），自动归类并追加到 UI 列表或 JSON 文本。站点注入表单里 Key 下方有"扩展"开关，打开后输入框显示为"扩展 URL / JSON"。最简单只填一个 JS URL，例如 `https://example.com/site.js`；也兼容 `extensions` 数组或单个扩展对象，保存时规范化。也可以点"文件"选择本地 `.js` / `.css` / `.json`，本地 JS 会生成内联 `code` 扩展对象，CSS 会生成 `GM_addStyle(...)`，JSON 会规范化为 `extensions` 数组。
 
 ### 4.4 全局扩展
 

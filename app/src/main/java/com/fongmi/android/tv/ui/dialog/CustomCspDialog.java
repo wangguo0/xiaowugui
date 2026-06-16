@@ -169,6 +169,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         });
         setupScrollableText(binding.jsonText);
         binding.add.setOnClickListener(view -> addItem());
+        binding.recognize.setOnClickListener(view -> showRecognizeDialog());
         binding.negative.setOnClickListener(view -> {
             if (editMode) showList();
             else closeAndSave(false);
@@ -425,6 +426,86 @@ public class CustomCspDialog extends BaseAlertDialog {
         updateEnabledText();
         setInsertIndex(registry.getInsertIndex());
         return true;
+    }
+
+    private void showRecognizeDialog() {
+        syncAllVisibleRows();
+        TextInputEditText input = createInput(true);
+        input.setMinLines(10);
+        input.setMaxLines(16);
+        input.setHint(R.string.setting_custom_csp_recognize_hint);
+        setupScrollableText(input);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.setting_custom_csp_recognize_title)
+                .setView(createInputPanel(R.string.setting_custom_csp_recognize_hint, input))
+                .setPositiveButton(R.string.dialog_positive, null)
+                .setNegativeButton(R.string.dialog_negative, null)
+                .create();
+        dialog.setOnShowListener(view -> dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(button -> {
+            if (importRecognizedText(input.getText() == null ? "" : input.getText().toString())) dialog.dismiss();
+        }));
+        dialog.show();
+    }
+
+    private boolean importRecognizedText(String text) {
+        if (TextUtils.isEmpty(text) || TextUtils.isEmpty(text.trim())) {
+            Notify.show(R.string.setting_custom_csp_recognize_empty);
+            return false;
+        }
+        List<CustomCspSetting.Item> items;
+        try {
+            items = recognizedItems(text);
+        } catch (Exception e) {
+            Notify.show(R.string.setting_custom_csp_recognize_invalid);
+            return false;
+        }
+        if (items.isEmpty()) {
+            Notify.show(R.string.setting_custom_csp_recognize_invalid);
+            return false;
+        }
+        if (textMode && !syncFormFromJson(true)) return false;
+        else if (!textMode) syncAllVisibleRows();
+        List<CustomCspSetting.Item> next = new ArrayList<>(adapter.getItems());
+        next.addAll(items);
+        adapter.setItems(next);
+        if (textMode) syncJsonFromForm(false);
+        Notify.show(getString(R.string.setting_custom_csp_recognize_done, items.size()));
+        return true;
+    }
+
+    private List<CustomCspSetting.Item> recognizedItems(String text) throws Exception {
+        String value = stripRecognizeText(text);
+        List<String> candidates = new ArrayList<>();
+        candidates.add(value);
+        String stripped = stripTrailingSeparators(value);
+        if (!TextUtils.equals(value, stripped)) candidates.add(stripped);
+        if (!stripped.startsWith("[")) candidates.add("[" + stripped + "]");
+        Exception failure = null;
+        for (String candidate : candidates) {
+            try {
+                CustomCspSetting.Registry parsed = CustomCspSetting.parse(candidate);
+                List<CustomCspSetting.Item> items = new ArrayList<>(parsed.getItems());
+                items.removeIf(item -> item == null || !item.isValid());
+                if (!items.isEmpty()) return items;
+            } catch (Exception e) {
+                failure = e;
+            }
+        }
+        if (failure != null) throw failure;
+        return Collections.emptyList();
+    }
+
+    private String stripRecognizeText(String text) {
+        String value = text == null ? "" : text.trim();
+        value = value.replaceAll("(?m)^```[a-zA-Z0-9_-]*\\s*$", "");
+        value = value.replaceAll("(?m)^```\\s*$", "");
+        return value.trim();
+    }
+
+    private String stripTrailingSeparators(String text) {
+        String value = text == null ? "" : text.trim();
+        while (value.endsWith(",")) value = value.substring(0, value.length() - 1).trim();
+        return value;
     }
 
     private int getInsertIndex() {
