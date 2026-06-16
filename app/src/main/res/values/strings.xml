@@ -310,6 +310,7 @@
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">Site Injection</string>
     <string name="setting_custom_csp_add">Add</string>
+    <string name="setting_custom_csp_insert_short">Pos</string>
     <string name="setting_custom_csp_recognize">Detect</string>
     <string name="setting_custom_csp_recognize_title">Detect sites</string>
     <string name="setting_custom_csp_recognize_hint">Paste site JSON snippets</string>

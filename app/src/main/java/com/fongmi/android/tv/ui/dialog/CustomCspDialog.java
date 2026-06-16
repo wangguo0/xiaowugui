@@ -78,12 +78,14 @@ public class CustomCspDialog extends BaseAlertDialog {
     private CustomCspSetting.Item pendingImport;
     private boolean pendingExtensionImport;
     private CspEditor editor;
+    private TextInputEditText recognizeInput;
     private CustomCspSetting.Item editingItem;
     private int editingPosition = -1;
     private Runnable callback;
     private boolean enabled;
     private boolean textMode;
     private boolean editMode;
+    private boolean recognizeMode;
     private boolean saved;
     private long lastAddTime;
 
@@ -169,7 +171,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         });
         setupScrollableText(binding.jsonText);
         binding.add.setOnClickListener(view -> addItem());
-        binding.recognize.setOnClickListener(view -> showRecognizeDialog());
+        binding.recognize.setOnClickListener(view -> showRecognizePanel());
         binding.negative.setOnClickListener(view -> {
             if (editMode) showList();
             else closeAndSave(false);
@@ -253,6 +255,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.recycler.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
         binding.jsonLayout.setVisibility(textMode ? View.VISIBLE : View.GONE);
         binding.add.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
+        binding.recognize.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.enabled.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.globalPanel.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.modeGroup.setVisibility(editMode ? View.GONE : View.VISIBLE);
@@ -285,6 +288,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private boolean onPositive() {
+        if (recognizeMode) return saveRecognize();
         if (editMode) return saveEdit();
         return closeAndSave(true);
     }
@@ -305,7 +309,9 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private void showList() {
         editMode = false;
+        recognizeMode = false;
         editor = null;
+        recognizeInput = null;
         editingItem = null;
         editingPosition = -1;
         binding.editPanel.removeAllViews();
@@ -313,7 +319,8 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.positive.setText(R.string.dialog_positive);
         updateModeVisibility();
         adapter.notifyDataSetChanged();
-        binding.add.requestFocus();
+        if (textMode) binding.jsonText.requestFocus();
+        else binding.add.requestFocus();
     }
 
     private void showEdit(CustomCspSetting.Item item, int position) {
@@ -428,23 +435,44 @@ public class CustomCspDialog extends BaseAlertDialog {
         return true;
     }
 
-    private void showRecognizeDialog() {
+    private void showRecognizePanel() {
         syncAllVisibleRows();
-        TextInputEditText input = createInput(true);
-        input.setMinLines(10);
-        input.setMaxLines(16);
-        input.setHint(R.string.setting_custom_csp_recognize_hint);
-        setupScrollableText(input);
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.setting_custom_csp_recognize_title)
-                .setView(createInputPanel(R.string.setting_custom_csp_recognize_hint, input))
-                .setPositiveButton(R.string.dialog_positive, null)
-                .setNegativeButton(R.string.dialog_negative, null)
-                .create();
-        dialog.setOnShowListener(view -> dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(button -> {
-            if (importRecognizedText(input.getText() == null ? "" : input.getText().toString())) dialog.dismiss();
-        }));
-        dialog.show();
+        editMode = true;
+        recognizeMode = true;
+        editor = null;
+        editingItem = null;
+        editingPosition = -1;
+        binding.editPanel.removeAllViews();
+        recognizeInput = createInput(true);
+        recognizeInput.setMinLines(10);
+        recognizeInput.setMaxLines(16);
+        recognizeInput.setHint(R.string.setting_custom_csp_recognize_hint);
+        setupScrollableText(recognizeInput);
+        binding.editPanel.addView(createRecognizePanel(recognizeInput));
+        binding.negative.setText(R.string.playback_webhook_back);
+        binding.positive.setText(R.string.dialog_positive);
+        updateModeVisibility();
+        binding.contentScroll.scrollTo(0, 0);
+        recognizeInput.requestFocus();
+    }
+
+    private View createRecognizePanel(TextInputEditText input) {
+        LinearLayoutCompat container = new LinearLayoutCompat(requireContext());
+        container.setOrientation(LinearLayoutCompat.VERTICAL);
+        container.setPadding(0, dp(4), 0, 0);
+        MaterialTextView title = text(getString(R.string.setting_custom_csp_recognize_title), 18, Color.BLACK, true);
+        container.addView(title, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = dp(10);
+        container.addView(createInputPanel(R.string.setting_custom_csp_recognize_hint, input), params);
+        return container;
+    }
+
+    private boolean saveRecognize() {
+        if (recognizeInput == null) return false;
+        if (!importRecognizedText(recognizeInput.getText() == null ? "" : recognizeInput.getText().toString())) return false;
+        showList();
+        return true;
     }
 
     private boolean importRecognizedText(String text) {

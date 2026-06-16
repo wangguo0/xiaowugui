@@ -309,6 +309,7 @@
     <string name="setting_shell_proxy_config">Proxy</string>
     <string name="setting_custom_csp">站点注入</string>
     <string name="setting_custom_csp_add">新增</string>
+    <string name="setting_custom_csp_insert_short">位置</string>
     <string name="setting_custom_csp_recognize">识别</string>
     <string name="setting_custom_csp_recognize_title">自动识别</string>
     <string name="setting_custom_csp_recognize_hint">粘贴站点 JSON 片段</string>
