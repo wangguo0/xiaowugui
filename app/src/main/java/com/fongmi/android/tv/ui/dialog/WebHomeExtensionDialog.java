@@ -701,8 +701,20 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
                     for (int i = 0; i < sites.size(); i++) if (checked[i]) editor.siteKeys.add(sites.get(i).getKey());
                     if (editor.siteKeys.isEmpty()) editor.siteKeys.add(VodConfig.get().getHome().getKey());
                     updateSitePickerText(editor);
+                    syncMatchTextFromSites(editor);
                 })
                 .show();
+    }
+
+    private void syncMatchTextFromSites(SourceEditor editor) {
+        if (editor == null || editor.match == null) return;
+        List<String> matches = new ArrayList<>();
+        for (String key : editor.siteKeys) {
+            if (TextUtils.isEmpty(key)) continue;
+            String regex = exactSiteRegex(key);
+            if (!matches.contains(regex)) matches.add(regex);
+        }
+        editor.match.setText(TextUtils.join("\n", matches));
     }
 
     private void updateSitePickerText(SourceEditor editor) {
