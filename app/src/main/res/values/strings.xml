@@ -381,6 +381,10 @@
     <string name="setting_proxy_rule_count">%1$d rules</string>
     <string name="setting_proxy_invalid">Invalid proxy URL</string>
     <string name="setting_proxy_suggest">Auto suggest</string>
+    <string name="setting_proxy_recognize">Auto detect</string>
+    <string name="setting_proxy_recognize_empty">Paste proxy rules first</string>
+    <string name="setting_proxy_recognize_failed">No proxy rule detected</string>
+    <string name="setting_proxy_recognize_done">Detected %1$d proxy rules</string>
     <string name="setting_proxy_test">Test proxy</string>
     <string name="setting_proxy_select_site">Select source</string>
     <string name="setting_proxy_no_site">No source available</string>
