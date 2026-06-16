@@ -381,6 +381,7 @@
     <string name="setting_proxy_invalid">代理地址无效</string>
     <string name="setting_proxy_suggest">自动建议</string>
     <string name="setting_proxy_recognize">自动识别</string>
+    <string name="setting_proxy_recognize_hint">粘贴完整配置、proxy 片段、规则数组或单个规则对象</string>
     <string name="setting_proxy_recognize_empty">请先粘贴 Proxy 规则</string>
     <string name="setting_proxy_recognize_failed">未识别到 Proxy 规则</string>
     <string name="setting_proxy_recognize_done">已识别 %1$d 条 Proxy 规则</string>

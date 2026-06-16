@@ -382,6 +382,7 @@
     <string name="setting_proxy_invalid">Invalid proxy URL</string>
     <string name="setting_proxy_suggest">Auto suggest</string>
     <string name="setting_proxy_recognize">Auto detect</string>
+    <string name="setting_proxy_recognize_hint">Paste full config, proxy snippet, rule array, or one rule object</string>
     <string name="setting_proxy_recognize_empty">Paste proxy rules first</string>
     <string name="setting_proxy_recognize_failed">No proxy rule detected</string>
     <string name="setting_proxy_recognize_done">Detected %1$d proxy rules</string>

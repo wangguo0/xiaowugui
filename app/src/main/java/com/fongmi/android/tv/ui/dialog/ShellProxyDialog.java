@@ -65,6 +65,8 @@ public class ShellProxyDialog extends BaseAlertDialog {
     private boolean syncing;
     private boolean proxyEnabled;
     private boolean textMode = true;
+    private boolean recognizeMode;
+    private boolean beforeRecognizeTextMode = true;
     private boolean saved;
     private boolean testing;
 
@@ -137,6 +139,7 @@ public class ShellProxyDialog extends BaseAlertDialog {
         binding.rules.setSelection(binding.rules.length());
         setupEditableText(binding.defaultUrl, false);
         setupEditableText(binding.rules, true);
+        setupEditableText(binding.recognizeInput, true);
         binding.ruleRecycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.ruleRecycler.setItemAnimator(null);
         binding.ruleRecycler.setAdapter(adapter);
@@ -163,6 +166,10 @@ public class ShellProxyDialog extends BaseAlertDialog {
             if (actionId == EditorInfo.IME_ACTION_DONE) onPositive();
             return true;
         });
+        binding.recognizeInput.setOnEditorActionListener((textView, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) onPositive();
+            return true;
+        });
         binding.rules.addTextChangedListener(new CustomTextListener() {
             @Override
             public void afterTextChanged(Editable editable) {
@@ -174,7 +181,10 @@ public class ShellProxyDialog extends BaseAlertDialog {
             if (checkedId == R.id.textMode) showTextMode(true);
             if (checkedId == R.id.uiMode) showTextMode(false);
         });
-        binding.negative.setOnClickListener(view -> dismiss());
+        binding.negative.setOnClickListener(view -> {
+            if (recognizeMode) showRecognizeMode(false);
+            else dismiss();
+        });
         binding.positive.setOnClickListener(view -> onPositive());
         binding.addRule.setOnClickListener(view -> {
             adapter.add(new Rule("", ""));
@@ -182,7 +192,7 @@ public class ShellProxyDialog extends BaseAlertDialog {
             binding.ruleRecycler.scrollToPosition(adapter.getItemCount() - 1);
         });
         binding.suggestRule.setOnClickListener(view -> showSuggestSiteDialog());
-        binding.recognizeRule.setOnClickListener(view -> recognizeRules());
+        binding.recognizeRule.setOnClickListener(view -> showRecognizeMode(true));
         binding.testRule.setOnClickListener(view -> testProxy());
     }
 
@@ -241,15 +251,46 @@ public class ShellProxyDialog extends BaseAlertDialog {
     }
 
     private void showTextMode(boolean text) {
+        if (recognizeMode) return;
         textMode = text;
         if (textMode) syncTextFromRules();
         else {
             updateRulesFromText();
             if (adapter.getItemCount() == 0) adapter.add(new Rule("", ""));
         }
+        updateModeVisibility();
+    }
+
+    private void showRecognizeMode(boolean show) {
+        if (show) {
+            syncTextFromRulesIfNeeded();
+            beforeRecognizeTextMode = textMode;
+            recognizeMode = true;
+            binding.recognizeInput.setText("");
+            binding.negative.setText(R.string.playback_webhook_back);
+            binding.positive.setText(R.string.dialog_positive);
+            updateModeVisibility();
+            binding.contentScroll.scrollTo(0, 0);
+            binding.recognizeInput.requestFocus();
+            return;
+        }
+        recognizeMode = false;
+        binding.negative.setText(R.string.dialog_negative);
+        binding.positive.setText(R.string.dialog_positive);
+        showTextMode(beforeRecognizeTextMode);
+    }
+
+    private void updateModeVisibility() {
         binding.rulesLayout.setVisibility(textMode ? View.VISIBLE : View.GONE);
         binding.ruleEditor.setVisibility(textMode ? View.GONE : View.VISIBLE);
-        binding.addRule.setVisibility(textMode ? View.GONE : View.VISIBLE);
+        binding.recognizeLayout.setVisibility(recognizeMode ? View.VISIBLE : View.GONE);
+        binding.rulesLayout.setVisibility(!recognizeMode && textMode ? View.VISIBLE : View.GONE);
+        binding.ruleEditor.setVisibility(!recognizeMode && !textMode ? View.VISIBLE : View.GONE);
+        binding.modeGroup.setVisibility(recognizeMode ? View.GONE : View.VISIBLE);
+        binding.addRule.setVisibility(recognizeMode || textMode ? View.GONE : View.VISIBLE);
+        binding.suggestRule.setVisibility(recognizeMode ? View.GONE : View.VISIBLE);
+        binding.recognizeRule.setVisibility(recognizeMode ? View.GONE : View.VISIBLE);
+        binding.testRule.setVisibility(recognizeMode ? View.GONE : View.VISIBLE);
         binding.modePanel.requestLayout();
         binding.modePanel.invalidate();
     }
@@ -349,23 +390,45 @@ public class ShellProxyDialog extends BaseAlertDialog {
         Notify.show(ResUtil.getString(R.string.setting_proxy_suggest_added, added, hosts.size()));
     }
 
-    private void recognizeRules() {
-        String text = binding.rules.getText() == null ? "" : binding.rules.getText().toString();
+    private boolean saveRecognizedRules() {
+        String text = binding.recognizeInput.getText() == null ? "" : binding.recognizeInput.getText().toString();
         if (TextUtils.isEmpty(text.trim())) {
             Notify.show(R.string.setting_proxy_recognize_empty);
-            return;
+            return false;
         }
         List<Rule> items = Rule.parseDetected(text);
         if (items.isEmpty()) {
             Notify.show(R.string.setting_proxy_recognize_failed);
-            return;
+            return false;
         }
-        adapter.setItems(items);
+        List<Rule> next = mergeRules(adapter.getItems(), items);
+        adapter.setItems(next);
         proxyEnabled = true;
         updateProxyEnabledText();
         syncTextFromRules();
-        showTextMode(false);
+        showRecognizeMode(false);
         Notify.show(ResUtil.getString(R.string.setting_proxy_recognize_done, items.size()));
+        return true;
+    }
+
+    private List<Rule> mergeRules(List<Rule> current, List<Rule> incoming) {
+        List<Rule> result = new ArrayList<>();
+        Set<String> exists = new LinkedHashSet<>();
+        for (Rule item : current) addRuleIfAbsent(result, exists, item);
+        for (Rule item : incoming) addRuleIfAbsent(result, exists, item);
+        if (result.isEmpty()) result.add(new Rule("", ""));
+        return result;
+    }
+
+    private void addRuleIfAbsent(List<Rule> result, Set<String> exists, Rule item) {
+        if (item == null) return;
+        String hosts = item.hosts == null ? "" : item.hosts.trim();
+        String url = item.url == null ? "" : item.url.trim();
+        if (hosts.isEmpty() && url.isEmpty()) return;
+        String key = hosts.toLowerCase(Locale.ROOT) + "=>" + url;
+        if (exists.contains(key)) return;
+        result.add(new Rule(hosts, url));
+        exists.add(key);
     }
 
     private Set<String> getHosts(List<Rule> items) {
@@ -453,6 +516,10 @@ public class ShellProxyDialog extends BaseAlertDialog {
     }
 
     private void onPositive() {
+        if (recognizeMode) {
+            saveRecognizedRules();
+            return;
+        }
         if (save(true)) dismiss();
     }
 

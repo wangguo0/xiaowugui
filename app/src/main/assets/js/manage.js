@@ -1810,9 +1810,7 @@ function applyProxySuggest(key, all) {
     }, '自动建议失败');
 }
 function showProxyRecognizeDialog() {
-    if (proxyMode === 'form') syncProxyTextFromForm();
-    const current = $('#proxyRules').val().trim();
-    $('#proxyRecognizeInput').val(current);
+    $('#proxyRecognizeInput').val('');
     openDialog('proxyRecognizeDialog');
 }
 function applyProxyRecognize() {

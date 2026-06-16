@@ -221,6 +221,36 @@
 
                 </androidx.appcompat.widget.LinearLayoutCompat>
 
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/recognizeLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"
+                    app:boxBackgroundColor="@color/white"
+                    app:boxCollapsedPaddingTop="0dp"
+                    app:boxStrokeColor="@color/dialog_outlined_button_stroke"
+                    app:hintEnabled="true"
+                    app:hintTextColor="#5F6368">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/recognizeInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="monospace"
+                        android:gravity="start|top"
+                        android:hint="@string/setting_proxy_recognize_hint"
+                        android:imeOptions="actionDone"
+                        android:importantForAutofill="no"
+                        android:inputType="textMultiLine|textNoSuggestions"
+                        android:minLines="6"
+                        android:scrollHorizontally="true"
+                        android:selectAllOnFocus="false"
+                        android:singleLine="false"
+                        android:textColor="@color/black"
+                        android:textColorHint="#666666" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
             </FrameLayout>
 
         </androidx.appcompat.widget.LinearLayoutCompat>
