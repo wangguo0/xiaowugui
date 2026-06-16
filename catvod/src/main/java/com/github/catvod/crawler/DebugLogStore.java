@@ -5,10 +5,10 @@ import android.text.TextUtils;
 import com.github.catvod.Init;
 import com.github.catvod.utils.Prefers;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
@@ -24,8 +24,6 @@ public class DebugLogStore {
     private static final ThreadLocal<SimpleDateFormat> FORMAT = ThreadLocal.withInitial(() -> new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US));
     private static final String FILE_NAME = "webhtv-debug-log.txt";
     private static final String PREF_ENABLED = "debug_log";
-    private static final int MAX_LINES = 2000;
-    private static final int MAX_FILE_BYTES = 1024 * 1024;
     private static final int MAX_MESSAGE_CHARS = 12000;
     private static long version;
     private static volatile boolean enabled;
@@ -56,7 +54,6 @@ public class DebugLogStore {
         String line = FORMAT.get().format(new Date()) + " [" + Thread.currentThread().getName() + "] " + safe(tag) + ": " + limit(msg);
         synchronized (LOCK) {
             LINES.addLast(line);
-            trimLinesLocked();
             version++;
             writeLocked(line);
         }
@@ -133,7 +130,6 @@ public class DebugLogStore {
             try (FileOutputStream stream = new FileOutputStream(file, true)) {
                 stream.write((line + "\n").getBytes(StandardCharsets.UTF_8));
             }
-            if (file.length() > MAX_FILE_BYTES) rewriteLocked();
         } catch (Throwable ignored) {
         }
     }
@@ -142,44 +138,22 @@ public class DebugLogStore {
         try {
             File file = file();
             if (file == null || !file.exists()) return;
-            String text = readTail(file);
+            String text = readAll(file);
             if (TextUtils.isEmpty(text)) return;
             LINES.clear();
             for (String line : text.split("\\r?\\n")) {
                 if (!TextUtils.isEmpty(line)) LINES.addLast(line);
-                trimLinesLocked();
             }
-            if (file.length() > MAX_FILE_BYTES || LINES.size() >= MAX_LINES) rewriteLocked();
         } catch (Throwable e) {
         }
     }
 
-    private static String readTail(File file) throws Exception {
-        long length = file.length();
-        long offset = Math.max(0, length - MAX_FILE_BYTES);
-        byte[] data = new byte[(int) (length - offset)];
-        try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {
-            raf.seek(offset);
-            raf.readFully(data);
-        }
-        String text = new String(data, StandardCharsets.UTF_8);
-        if (offset <= 0) return text;
-        int firstBreak = text.indexOf('\n');
-        return firstBreak >= 0 ? text.substring(firstBreak + 1) : text;
-    }
-
-    private static void trimLinesLocked() {
-        while (LINES.size() > MAX_LINES) LINES.removeFirst();
-    }
-
-    private static void rewriteLocked() {
-        try {
-            File file = file();
-            if (file == null) return;
-            try (FileOutputStream stream = new FileOutputStream(file, false)) {
-                for (String line : LINES) stream.write((line + "\n").getBytes(StandardCharsets.UTF_8));
-            }
-        } catch (Throwable ignored) {
+    private static String readAll(File file) throws Exception {
+        try (FileInputStream input = new FileInputStream(file); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+            return output.toString(StandardCharsets.UTF_8.name());
         }
     }
 
