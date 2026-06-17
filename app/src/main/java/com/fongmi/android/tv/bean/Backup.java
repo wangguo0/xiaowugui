@@ -144,6 +144,7 @@ public class Backup {
     }
 
     private static boolean include(String key, SyncOptions options) {
+        if (key.startsWith("remote_trust_")) return false;
         if (key.startsWith("cache_")) return options.isWebHome() || options.isSpider();
         if (key.startsWith("config_")) return options.isConfig();
         if ("keyword".equals(key) || "hot".equals(key)) return options.isSearch();

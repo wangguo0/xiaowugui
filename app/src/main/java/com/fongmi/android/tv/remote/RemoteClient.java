@@ -1,0 +1,137 @@
+package com.fongmi.android.tv.remote;
+
+import android.text.TextUtils;
+
+import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.BuildConfig;
+import com.fongmi.android.tv.bean.Device;
+import com.fongmi.android.tv.remote.RemoteModels.BindCodeResponse;
+import com.fongmi.android.tv.remote.RemoteModels.PollResponse;
+import com.fongmi.android.tv.remote.RemoteModels.RegisterResponse;
+import com.fongmi.android.tv.remote.RemoteModels.RemoteBindGrant;
+import com.fongmi.android.tv.remote.RemoteModels.RemoteCommandResult;
+import com.fongmi.android.tv.remote.RemoteModels.RemoteGroup;
+import com.fongmi.android.tv.remote.RemoteModels.RemoteProfile;
+import com.github.catvod.net.OkHttp;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+
+public final class RemoteClient {
+
+    private static final long TIMEOUT = TimeUnit.SECONDS.toMillis(12);
+    private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+
+    private final RemoteProfile profile;
+
+    public RemoteClient(RemoteProfile profile) {
+        this.profile = profile;
+    }
+
+    public JsonObject capabilities() throws IOException {
+        return requestJson("GET", "/api/server/capabilities", null);
+    }
+
+    public RegisterResponse register() throws IOException {
+        ensureDeviceIdentity(profile);
+        Device device = Device.get();
+        JsonObject body = baseDeviceBody();
+        body.addProperty("name", device.getName());
+        body.addProperty("role", "app");
+        body.addProperty("type", device.getType());
+        body.addProperty("appVersion", BuildConfig.VERSION_NAME);
+        body.add("capabilities", App.gson().toJsonTree(new RemoteModels.RemoteCapabilities()));
+        JsonArray groups = new JsonArray();
+        if (profile.groups != null) {
+            for (RemoteGroup group : profile.groups) {
+                if (group != null && !TextUtils.isEmpty(group.groupToken)) {
+                    JsonObject item = new JsonObject();
+                    item.addProperty("groupToken", group.groupToken);
+                    groups.add(item);
+                }
+            }
+        }
+        body.add("groups", groups);
+        RegisterResponse response = App.gson().fromJson(requestJson("POST", "/api/device/register", body), RegisterResponse.class);
+        if (response != null) {
+            if (!TextUtils.isEmpty(response.deviceToken)) profile.deviceToken = response.deviceToken;
+            else if (!TextUtils.isEmpty(response.deviceSecret)) profile.deviceToken = response.deviceSecret;
+            if (!TextUtils.isEmpty(response.deviceId)) profile.deviceId = response.deviceId;
+        }
+        ensureDeviceIdentity(profile);
+        return response;
+    }
+
+    public BindCodeResponse createBindCode(RemoteBindGrant grant) throws IOException {
+        ensureDeviceIdentity(profile);
+        JsonObject body = baseDeviceBody();
+        body.addProperty("grantId", grant.grantId);
+        body.addProperty("bindGrantToken", grant.bindGrantToken);
+        return App.gson().fromJson(requestJson("POST", "/api/device/bind-code", body), BindCodeResponse.class);
+    }
+
+    public PollResponse poll() throws IOException {
+        ensureDeviceIdentity(profile);
+        JsonObject body = baseDeviceBody();
+        JsonArray groups = new JsonArray();
+        if (profile.groups != null) {
+            for (RemoteGroup group : profile.groups) {
+                if (group != null && !TextUtils.isEmpty(group.groupToken)) {
+                    JsonObject item = new JsonObject();
+                    item.addProperty("groupToken", group.groupToken);
+                    groups.add(item);
+                }
+            }
+        }
+        body.add("groups", groups);
+        return App.gson().fromJson(requestJson("POST", "/api/device/poll", body), PollResponse.class);
+    }
+
+    public void commandResult(String commandId, RemoteCommandResult result) throws IOException {
+        if (TextUtils.isEmpty(commandId)) return;
+        ensureDeviceIdentity(profile);
+        JsonObject body = baseDeviceBody();
+        body.addProperty("ok", result != null && result.ok);
+        body.addProperty("accepted", result != null && result.accepted);
+        body.addProperty("message", result == null ? "" : result.message);
+        if (result != null && result.data != null) body.add("data", result.data);
+        requestJson("POST", "/api/commands/" + commandId + "/result", body);
+    }
+
+    private JsonObject baseDeviceBody() {
+        JsonObject body = new JsonObject();
+        body.addProperty("deviceId", profile.deviceId);
+        body.addProperty("deviceToken", profile.deviceToken);
+        body.addProperty("deviceSecret", profile.deviceToken);
+        return body;
+    }
+
+    private JsonObject requestJson(String method, String path, JsonObject payload) throws IOException {
+        Request.Builder builder = new Request.Builder().url(profile.serverOrigin + path);
+        if (!TextUtils.isEmpty(profile.deviceId)) builder.header("x-device-id", profile.deviceId);
+        if (!TextUtils.isEmpty(profile.deviceToken)) builder.header("x-device-token", profile.deviceToken);
+        if ("POST".equals(method)) builder.post(RequestBody.create(payload == null ? "{}" : App.gson().toJson(payload), JSON));
+        else builder.get();
+        try (Response response = OkHttp.client(TIMEOUT).newCall(builder.build()).execute()) {
+            ResponseBody body = response.body();
+            String text = body == null ? "" : body.string();
+            if (!response.isSuccessful()) throw new IOException("HTTP " + response.code() + (TextUtils.isEmpty(text) ? "" : ": " + text));
+            if (TextUtils.isEmpty(text)) return new JsonObject();
+            JsonObject object = App.gson().fromJson(text, JsonObject.class);
+            return object == null ? new JsonObject() : object;
+        }
+    }
+
+    private static void ensureDeviceIdentity(RemoteProfile profile) {
+        if (TextUtils.isEmpty(profile.deviceToken)) profile.deviceToken = RemoteTokens.randomCapability("dtk");
+        profile.deviceId = RemoteTokens.deviceId(profile.serverOrigin, profile.deviceToken);
+    }
+}

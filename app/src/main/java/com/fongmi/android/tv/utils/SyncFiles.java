@@ -166,6 +166,7 @@ public class SyncFiles {
     }
 
     private static boolean skip(String path) {
+        if ("WebHTV/RemoteTrust".equals(path) || path.startsWith("WebHTV/RemoteTrust/")) return true;
         String name = path.substring(path.lastIndexOf('/') + 1);
         return ".DS_Store".equals(name) || name.startsWith("._");
     }
