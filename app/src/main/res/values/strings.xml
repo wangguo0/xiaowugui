@@ -161,6 +161,7 @@
     <string name="remote_trust_bind_code">Binding code</string>
     <string name="remote_trust_device_alias">Device alias</string>
     <string name="remote_trust_add_device">Add device</string>
+    <string name="remote_trust_add_short">Add</string>
     <string name="remote_trust_refresh_devices">Refresh devices</string>
     <string name="remote_trust_no_devices">No managed devices. Generate a code on the target device and add it here.</string>
     <string name="remote_trust_device_online">Online</string>
@@ -180,6 +181,7 @@
     <string name="remote_trust_code_required">Enter binding code</string>
     <string name="remote_trust_group_title">Group %1$s</string>
     <string name="remote_trust_self_device">This device</string>
+    <string name="remote_trust_controlled_device">Managed device</string>
     <string name="remote_trust_command_result">Command %1$s · %2$s</string>
     <string name="remote_trust_command_success">Success</string>
     <string name="remote_trust_command_failed">Failed</string>

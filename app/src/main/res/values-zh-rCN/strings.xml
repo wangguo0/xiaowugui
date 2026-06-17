@@ -160,6 +160,7 @@
     <string name="remote_trust_bind_code">绑定码</string>
     <string name="remote_trust_device_alias">设备备注</string>
     <string name="remote_trust_add_device">添加设备</string>
+    <string name="remote_trust_add_short">添加</string>
     <string name="remote_trust_refresh_devices">刷新设备</string>
     <string name="remote_trust_no_devices">暂无管理设备。请先在目标设备生成绑定码，再在这里添加。</string>
     <string name="remote_trust_device_online">在线</string>
@@ -179,6 +180,7 @@
     <string name="remote_trust_code_required">请输入绑定码</string>
     <string name="remote_trust_group_title">设备组 %1$s</string>
     <string name="remote_trust_self_device">本机</string>
+    <string name="remote_trust_controlled_device">可控设备</string>
     <string name="remote_trust_command_result">命令 %1$s · %2$s</string>
     <string name="remote_trust_command_success">执行成功</string>
     <string name="remote_trust_command_failed">执行失败</string>

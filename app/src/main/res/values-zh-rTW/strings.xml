@@ -160,6 +160,7 @@
     <string name="remote_trust_bind_code">綁定碼</string>
     <string name="remote_trust_device_alias">設備備註</string>
     <string name="remote_trust_add_device">加入設備</string>
+    <string name="remote_trust_add_short">加入</string>
     <string name="remote_trust_refresh_devices">刷新設備</string>
     <string name="remote_trust_no_devices">暫無管理設備。請先在目標設備產生綁定碼，再在這裡加入。</string>
     <string name="remote_trust_device_online">在線</string>
@@ -179,6 +180,7 @@
     <string name="remote_trust_code_required">請輸入綁定碼</string>
     <string name="remote_trust_group_title">設備組 %1$s</string>
     <string name="remote_trust_self_device">本機</string>
+    <string name="remote_trust_controlled_device">可控設備</string>
     <string name="remote_trust_command_result">命令 %1$s · %2$s</string>
     <string name="remote_trust_command_success">執行成功</string>
     <string name="remote_trust_command_failed">執行失敗</string>
