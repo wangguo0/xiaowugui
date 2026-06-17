@@ -167,7 +167,7 @@
     <string name="remote_trust_device_offline">Offline</string>
     <string name="remote_trust_selected_device">Selected: %1$s</string>
     <string name="remote_trust_action_status">Status</string>
-    <string name="remote_trust_action_search">Search</string>
+    <string name="remote_trust_action_search">Search playback</string>
     <string name="remote_trust_action_push">Push</string>
     <string name="remote_trust_action_log">Log</string>
     <string name="remote_trust_search_keyword">Search keyword</string>
@@ -191,8 +191,14 @@
     <string name="remote_trust_device_list">Managed devices</string>
     <string name="remote_trust_bind_local">Bind this device</string>
     <string name="remote_trust_go_settings">Open settings</string>
+    <string name="remote_trust_service_entry">Service</string>
+    <string name="remote_trust_done">Done</string>
+    <string name="remote_trust_bind_code_inline">Code %1$s</string>
+    <string name="remote_trust_bind_code_empty">Code --</string>
+    <string name="remote_trust_bind_code_loading">Code ...</string>
+    <string name="remote_trust_bind_code_unavailable">Not configured</string>
     <string name="remote_trust_command_result_title">Result</string>
-    <string name="remote_trust_settings_title">Relay settings</string>
+    <string name="remote_trust_settings_title">Relay service</string>
     <string name="remote_trust_detect_service">Check service</string>
     <string name="remote_trust_copy_diagnostics">Copy diagnostics</string>
     <string name="remote_trust_diagnostics_copied">Diagnostics copied</string>
@@ -218,6 +224,9 @@
     <string name="remote_trust_cap_sync">Remote sync</string>
     <string name="remote_trust_cap_push">Push</string>
     <string name="remote_trust_cap_log">Recent log</string>
+    <string name="remote_trust_advanced">Advanced</string>
+    <string name="remote_trust_advanced_hide">Hide advanced</string>
+    <string name="remote_trust_reset_local">Reset local trust data</string>
     <string name="setting_login_state">Login state learning</string>
     <string name="setting_site_health_sort">Site health ranking</string>
     <string name="setting_site_health_enable">Enable site health ranking</string>

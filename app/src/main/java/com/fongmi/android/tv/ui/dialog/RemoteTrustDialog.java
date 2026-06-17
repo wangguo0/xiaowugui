@@ -10,11 +10,14 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
@@ -87,14 +90,18 @@ public final class RemoteTrustDialog {
         dialog.setOnShowListener(d -> {
             configureWindow(activity, dialog);
             binding.close.setOnClickListener(v -> dialog.dismiss());
-            binding.devicesTab.setOnClickListener(v -> {
-                binding.page = PAGE_DEVICES;
+            binding.bindCodeButton.setOnClickListener(v -> copyCode(activity, binding));
+            binding.enableToggle.setOnClickListener(v -> toggleEnabled(activity, binding));
+            binding.statusButton.setOnClickListener(v -> {
+                binding.statusExpanded = !binding.statusExpanded;
                 render(activity, binding);
             });
-            binding.settingsTab.setOnClickListener(v -> {
-                binding.page = PAGE_SETTINGS;
+            binding.serviceButton.setOnClickListener(v -> {
+                if (binding.page == PAGE_SETTINGS) applyServerIfNeeded(activity, binding);
+                binding.page = binding.page == PAGE_SETTINGS ? PAGE_DEVICES : PAGE_SETTINGS;
                 render(activity, binding);
             });
+            bindServerInput(activity, binding);
         });
         dialog.show();
     }
@@ -107,22 +114,32 @@ public final class RemoteTrustDialog {
         binding.root.setBackground(background(context, "#FFFFFF", Color.TRANSPARENT, 16));
 
         LinearLayoutCompat header = row(context);
-        MaterialTextView title = text(context, context.getString(R.string.setting_remote_trust), 21, "#202124", true);
-        header.addView(title, weight());
+        MaterialTextView title = text(context, context.getString(R.string.setting_remote_trust), 18, "#202124", true);
+        header.addView(title);
+        binding.bindCodeButton = pillButton(context, context.getString(R.string.remote_trust_bind_code_empty));
+        LinearLayoutCompat.LayoutParams codeParams = new LinearLayoutCompat.LayoutParams(0, dp(context, 34), 1);
+        codeParams.setMarginStart(dp(context, 8));
+        header.addView(binding.bindCodeButton, codeParams);
+        binding.enableToggle = compactButton(context, R.string.setting_enable);
+        LinearLayoutCompat.LayoutParams enableParams = new LinearLayoutCompat.LayoutParams(dp(context, 56), dp(context, 34));
+        enableParams.setMarginStart(dp(context, 8));
+        header.addView(binding.enableToggle, enableParams);
         binding.close = closeButton(context);
-        header.addView(binding.close, new LinearLayoutCompat.LayoutParams(dp(context, 38), dp(context, 38)));
+        LinearLayoutCompat.LayoutParams closeParams = new LinearLayoutCompat.LayoutParams(dp(context, 34), dp(context, 34));
+        closeParams.setMarginStart(dp(context, 6));
+        header.addView(binding.close, closeParams);
         binding.root.addView(header, matchWrap());
 
         binding.summary = text(context, "", 13, "#5F6368", false);
         binding.summary.setPadding(0, dp(context, 2), 0, dp(context, 6));
         binding.root.addView(binding.summary, matchWrap());
 
-        LinearLayoutCompat tabs = row(context);
-        binding.devicesTab = tab(context, R.string.remote_trust_tab_devices);
-        binding.settingsTab = tab(context, R.string.remote_trust_tab_settings);
-        tabs.addView(binding.devicesTab, weight());
-        tabs.addView(binding.settingsTab, leftWeight(context, 6));
-        binding.root.addView(tabs, topMargin(matchWrap(), 6));
+        LinearLayoutCompat toolbar = row(context);
+        binding.statusButton = statusButton(context, context.getString(R.string.remote_trust_status_unbound));
+        toolbar.addView(binding.statusButton, weight());
+        binding.serviceButton = outline(context, context.getString(R.string.remote_trust_service_entry));
+        toolbar.addView(binding.serviceButton, fixed(context, 72, 34));
+        binding.root.addView(toolbar, topMargin(matchWrap(), 6));
 
         binding.scroll = new NestedScrollView(context);
         binding.scroll.setFillViewport(false);
@@ -135,7 +152,9 @@ public final class RemoteTrustDialog {
         binding.server = input(context, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
         binding.serverLayout = inputLayout(context, R.string.remote_trust_server_url, binding.server);
         binding.enabled = check(context, R.string.remote_trust_enable);
+        binding.enabled.setChecked(true);
         binding.keepOnline = check(context, R.string.remote_trust_keep_online);
+        binding.keepOnline.setChecked(true);
         return binding;
     }
 
@@ -147,6 +166,7 @@ public final class RemoteTrustDialog {
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | WindowManager.LayoutParams.SOFT_INPUT_STATE_UNCHANGED);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }
@@ -156,12 +176,12 @@ public final class RemoteTrustDialog {
         binding.actions.clear();
         binding.content.removeAllViews();
         binding.summary.setText(RemoteStore.summary(context) + (Setting.hasFileAccess() ? "" : "\n" + context.getString(R.string.remote_trust_file_permission_hint)));
-        binding.devicesTab.setChecked(binding.page == PAGE_DEVICES || binding.page == PAGE_DETAIL);
-        binding.settingsTab.setChecked(binding.page == PAGE_SETTINGS);
+        updateHeader(context, binding);
         if (binding.page == PAGE_SETTINGS) renderSettings(context, binding);
         else if (binding.page == PAGE_DETAIL) renderDeviceDetail(context, binding);
         else renderDevices(context, binding);
         setBusy(binding, binding.busy);
+        ensureAuto(activityOf(context), binding);
         if (binding.callback != null) binding.callback.run();
     }
 
@@ -175,22 +195,142 @@ public final class RemoteTrustDialog {
         }
         binding.server.setText(TextUtils.isEmpty(profile.serverUrl) ? profile.serverOrigin : profile.serverUrl);
         binding.enabled.setChecked(profile.enabled);
-        binding.keepOnline.setChecked(profile.keepOnline);
+        binding.keepOnline.setChecked(true);
+        if (!profile.keepOnline) {
+            profile.keepOnline = true;
+            RemoteStore.upsertProfile(profile);
+            RemoteAgent.get().start();
+        }
+    }
+
+    private static void updateHeader(Context context, Binding binding) {
+        RemoteProfile profile = currentProfile(binding);
+        boolean enabled = profile == null ? binding.enabled.isChecked() : profile.enabled;
+        binding.enableToggle.setText(enabled ? R.string.setting_disable : R.string.setting_enable);
+        binding.enabled.setChecked(enabled);
+        binding.bindCodeButton.setText(bindCodeText(context, binding, profile));
+        binding.serviceButton.setText(binding.page == PAGE_SETTINGS ? R.string.remote_trust_done : R.string.remote_trust_service_entry);
+        String status = statusText(context, binding, profile);
+        binding.statusButton.setText(status);
+        applyStatusStyle(context, binding.statusButton, profile, binding.serviceStateText);
+    }
+
+    private static String bindCodeText(Context context, Binding binding, RemoteProfile profile) {
+        if (profile == null) return context.getString(R.string.remote_trust_bind_code_unavailable);
+        if (binding.creatingBindCode) return context.getString(R.string.remote_trust_bind_code_loading);
+        if (TextUtils.isEmpty(binding.bindCode)) return context.getString(R.string.remote_trust_bind_code_empty);
+        return context.getString(R.string.remote_trust_bind_code_inline, binding.bindCode);
+    }
+
+    private static String statusText(Context context, Binding binding, RemoteProfile profile) {
+        if (profile == null) return context.getString(R.string.remote_trust_status_unbound);
+        if (!profile.enabled) return context.getString(R.string.setting_disable);
+        if (binding.busy && TextUtils.isEmpty(binding.serviceStateText)) return context.getString(R.string.remote_trust_detect_service);
+        if (!TextUtils.isEmpty(binding.serviceStateText)) return binding.serviceStateText;
+        return context.getString(R.string.remote_trust_service_unchecked);
+    }
+
+    private static void applyStatusStyle(Context context, MaterialButton button, RemoteProfile profile, String state) {
+        int bg = Color.parseColor("#F1F3F4");
+        int fg = Color.parseColor("#5F6368");
+        int stroke = Color.parseColor("#DADCE0");
+        if (profile != null && profile.enabled && TextUtils.equals(state, context.getString(R.string.remote_trust_service_ok))) {
+            bg = Color.parseColor("#E6F4EA");
+            fg = Color.parseColor("#137333");
+            stroke = Color.parseColor("#CEEAD6");
+        } else if (profile != null && profile.enabled && TextUtils.equals(state, context.getString(R.string.remote_trust_service_error))) {
+            bg = Color.parseColor("#FCE8E6");
+            fg = Color.parseColor("#B3261E");
+            stroke = Color.parseColor("#F2B8B5");
+        } else if (profile != null && profile.enabled) {
+            bg = Color.parseColor("#E8F0FE");
+            fg = Color.parseColor("#174EA6");
+            stroke = Color.parseColor("#D2E3FC");
+        }
+        button.setBackgroundTintList(ColorStateList.valueOf(bg));
+        button.setTextColor(fg);
+        button.setStrokeColor(ColorStateList.valueOf(stroke));
+    }
+
+    private static void ensureAuto(FragmentActivity activity, Binding binding) {
+        if (activity == null || binding.busy) return;
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null || !profile.enabled) return;
+        if (TextUtils.isEmpty(binding.bindCode) && !binding.autoBindAttempted) {
+            binding.creatingBindCode = true;
+            createBindCode(activity, binding, false, true);
+            return;
+        }
+        if (!binding.autoDetected && !binding.autoDetectStarted) detectService(activity, binding, true);
+    }
+
+    private static FragmentActivity activityOf(Context context) {
+        return context instanceof FragmentActivity ? (FragmentActivity) context : null;
+    }
+
+    private static void toggleEnabled(FragmentActivity activity, Binding binding) {
+        RemoteProfile profile = currentProfile(binding);
+        boolean enabled = profile == null ? binding.enabled.isChecked() : profile.enabled;
+        enabled = !enabled;
+        binding.enabled.setChecked(enabled);
+        if (profile != null) {
+            profile.enabled = enabled;
+            profile.keepOnline = true;
+            RemoteStore.upsertProfile(profile);
+            if (enabled) RemoteAgent.get().start();
+            else RemoteAgent.get().start();
+        }
+        render(activity, binding);
+    }
+
+    private static void bindServerInput(FragmentActivity activity, Binding binding) {
+        binding.server.setSingleLine(true);
+        binding.server.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        binding.server.setOnFocusChangeListener((view, hasFocus) -> {
+            if (hasFocus) {
+                showKeyboard(activity, binding.server);
+            } else {
+                applyServerIfNeeded(activity, binding);
+            }
+        });
+        binding.server.setOnEditorActionListener((view, actionId, event) -> {
+            boolean done = actionId == EditorInfo.IME_ACTION_DONE || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER);
+            if (!done) return false;
+            hideKeyboard(activity, binding.server);
+            binding.server.clearFocus();
+            applyServerIfNeeded(activity, binding);
+            return true;
+        });
+        binding.server.setOnClickListener(v -> showKeyboard(activity, binding.server));
+    }
+
+    private static void showKeyboard(Context context, View view) {
+        if (view == null) return;
+        view.requestFocus();
+        view.postDelayed(() -> {
+            InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (manager != null) manager.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
+        }, 120);
+    }
+
+    private static void hideKeyboard(Context context, View view) {
+        InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (manager != null && view != null) manager.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
     private static void renderDevices(Context context, Binding binding) {
         RemoteProfile profile = currentProfile(binding);
-        binding.content.addView(sectionTitle(context, R.string.remote_trust_local_status), matchWrap());
-        binding.content.addView(panel(context, localStatus(context, profile)), topMargin(matchWrap(), 6));
+        if (binding.statusExpanded) binding.content.addView(statusDetailPanel(context, profile, binding), matchWrap());
 
-        LinearLayoutCompat actions = row(context);
-        MaterialButton bind = primaryAction(binding, context, R.string.remote_trust_bind_local);
-        MaterialButton add = tonalAction(binding, context, R.string.remote_trust_add_device);
-        bind.setOnClickListener(v -> showBindCodeDialog((FragmentActivity) context, binding));
+        MaterialButton add = profile == null ? primaryAction(binding, context, R.string.remote_trust_go_settings) : primaryAction(binding, context, R.string.remote_trust_add_device);
         add.setOnClickListener(v -> showAddDeviceDialog((FragmentActivity) context, binding));
-        actions.addView(bind, weight());
-        actions.addView(add, leftWeight(context));
-        binding.content.addView(actions, topMargin(matchWrap(), 10));
+        if (profile == null) {
+            add.setOnClickListener(v -> {
+                binding.page = PAGE_SETTINGS;
+                render(context, binding);
+            });
+        }
+        binding.content.addView(add, topMargin(fixedHeight(context, 36), binding.statusExpanded ? 10 : 0));
 
         LinearLayoutCompat titleRow = row(context);
         titleRow.addView(sectionTitle(context, R.string.remote_trust_device_list), weight());
@@ -202,14 +342,6 @@ public final class RemoteTrustDialog {
         List<DeviceRow> rows = deviceRows(profile);
         if (rows.isEmpty()) {
             binding.content.addView(emptyPanel(context, context.getString(R.string.remote_trust_no_devices)), topMargin(matchWrap(), 8));
-            if (profile == null) {
-                MaterialButton settings = outlineAction(binding, context, R.string.remote_trust_go_settings);
-                settings.setOnClickListener(v -> {
-                    binding.page = PAGE_SETTINGS;
-                    render(context, binding);
-                });
-                binding.content.addView(settings, topMargin(matchWrap(), 10));
-            }
             return;
         }
         for (DeviceRow row : rows) {
@@ -244,27 +376,27 @@ public final class RemoteTrustDialog {
         binding.content.addView(sectionTitle(context, deviceName(row.device)), topMargin(matchWrap(), 12));
         binding.content.addView(panel(context, deviceDetailText(context, profile, row.group, row.device)), topMargin(matchWrap(), 6));
 
-        LinearLayoutCompat row1 = row(context);
-        MaterialButton status = primaryAction(binding, context, R.string.remote_trust_action_status);
-        MaterialButton search = tonalAction(binding, context, R.string.remote_trust_action_search);
+        LinearLayoutCompat tools = row(context);
+        MaterialButton status = smallOutlineAction(binding, context, R.string.remote_trust_action_status);
+        MaterialButton log = smallOutlineAction(binding, context, R.string.remote_trust_action_log);
         status.setOnClickListener(v -> sendCommand((FragmentActivity) context, binding, "device.status", new JsonObject()));
-        search.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_search, R.string.remote_trust_search_keyword, "action.search", "word"));
-        row1.addView(status, weight());
-        row1.addView(search, leftWeight(context));
-        binding.content.addView(row1, topMargin(matchWrap(), 12));
-
-        LinearLayoutCompat row2 = row(context);
-        MaterialButton push = tonalAction(binding, context, R.string.remote_trust_action_push);
-        MaterialButton log = outlineAction(binding, context, R.string.remote_trust_action_log);
-        push.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_push, R.string.remote_trust_push_url, "action.push", "url"));
         log.setOnClickListener(v -> {
             JsonObject payload = new JsonObject();
             payload.addProperty("limit", 200);
             sendCommand((FragmentActivity) context, binding, "log.recent", payload);
         });
-        row2.addView(push, weight());
-        row2.addView(log, leftWeight(context));
-        binding.content.addView(row2, topMargin(matchWrap(), 8));
+        tools.addView(status, weight());
+        tools.addView(log, leftWeight(context));
+        binding.content.addView(tools, topMargin(matchWrap(), 10));
+
+        LinearLayoutCompat row1 = row(context);
+        MaterialButton search = primaryAction(binding, context, R.string.remote_trust_action_search);
+        MaterialButton push = tonalAction(binding, context, R.string.remote_trust_action_push);
+        search.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_search, R.string.remote_trust_search_keyword, "action.search", "word"));
+        push.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_push, R.string.remote_trust_push_url, "action.push", "url"));
+        row1.addView(search, weight());
+        row1.addView(push, leftWeight(context));
+        binding.content.addView(row1, topMargin(matchWrap(), 12));
 
         if (!TextUtils.isEmpty(binding.lastResult)) {
             binding.content.addView(sectionTitle(context, R.string.remote_trust_command_result_title), topMargin(matchWrap(), 14));
@@ -277,29 +409,7 @@ public final class RemoteTrustDialog {
         binding.content.addView(binding.serverLayout, topMargin(matchWrap(), 8));
 
         String state = TextUtils.isEmpty(binding.serviceStateText) ? context.getString(R.string.remote_trust_service_unchecked) : binding.serviceStateText;
-        binding.content.addView(servicePanel(context, state, binding.serviceDetailText), topMargin(matchWrap(), 10));
-
-        LinearLayoutCompat serviceRow = row(context);
-        MaterialButton detect = tonalAction(binding, context, R.string.remote_trust_detect_service);
-        MaterialButton save = primaryAction(binding, context, R.string.remote_trust_save_register);
-        detect.setOnClickListener(v -> detectService((FragmentActivity) context, binding));
-        save.setOnClickListener(v -> saveAndRegister((FragmentActivity) context, binding));
-        serviceRow.addView(detect, weight());
-        serviceRow.addView(save, leftWeight(context));
-        binding.content.addView(serviceRow, topMargin(matchWrap(), 10));
-
-        if (!TextUtils.isEmpty(binding.diagnostics)) {
-            MaterialButton copy = outlineAction(binding, context, R.string.remote_trust_copy_diagnostics);
-            copy.setOnClickListener(v -> copyText(context, context.getString(R.string.setting_remote_trust), binding.diagnostics, R.string.remote_trust_diagnostics_copied));
-            binding.content.addView(copy, topMargin(fixedHeight(context, 34), 8));
-        }
-
-        detach(binding.enabled);
-        detach(binding.keepOnline);
-        LinearLayoutCompat toggles = card(context);
-        toggles.addView(binding.enabled, compactWrap());
-        toggles.addView(binding.keepOnline, compactWrap());
-        binding.content.addView(toggles, topMargin(matchWrap(), 12));
+        binding.content.addView(servicePanel(context, binding, state, binding.serviceDetailText), topMargin(matchWrap(), 10));
 
         if (!Setting.hasFileAccess()) {
             MaterialButton permission = outlineAction(binding, context, R.string.remote_trust_file_permission);
@@ -307,16 +417,40 @@ public final class RemoteTrustDialog {
             binding.content.addView(permission, topMargin(fixedHeight(context, 34), 8));
         }
 
-        binding.content.addView(divider(context), topMargin(matchWrap(), 14));
-        MaterialButton clear = dangerAction(binding, context, R.string.remote_trust_clear);
-        clear.setOnClickListener(v -> confirmClear((FragmentActivity) context, binding));
-        binding.content.addView(clear, topMargin(fixedHeight(context, 36), 10));
+        MaterialButton advanced = outlineAction(binding, context, binding.advancedExpanded ? R.string.remote_trust_advanced_hide : R.string.remote_trust_advanced);
+        advanced.setOnClickListener(v -> {
+            binding.advancedExpanded = !binding.advancedExpanded;
+            render(context, binding);
+        });
+        binding.content.addView(advanced, topMargin(fixedHeight(context, 34), 14));
+        if (binding.advancedExpanded) {
+            MaterialButton clear = dangerAction(binding, context, R.string.remote_trust_reset_local);
+            clear.setOnClickListener(v -> confirmClear((FragmentActivity) context, binding));
+            binding.content.addView(clear, topMargin(fixedHeight(context, 36), 8));
+        }
     }
 
-    private static void saveAndRegister(FragmentActivity activity, Binding binding) {
+    private static void applyServerIfNeeded(FragmentActivity activity, Binding binding) {
+        if (binding.busy) return;
+        String serverUrl = textOf(binding.server);
+        if (TextUtils.isEmpty(serverUrl)) return;
+        String origin = RemoteTokens.normalizeOrigin(serverUrl);
+        if (TextUtils.isEmpty(origin)) {
+            Notify.show(R.string.remote_trust_server_required);
+            return;
+        }
+        RemoteProfile current = TextUtils.isEmpty(origin) ? null : RemoteStore.getProfileByOrigin(origin);
+        if (current != null && TextUtils.equals(serverUrl.trim(), current.serverUrl) && current.keepOnline && current.enabled == binding.enabled.isChecked()) {
+            if (!binding.autoDetected) detectService(activity, binding, true);
+            return;
+        }
+        applyServer(activity, binding);
+    }
+
+    private static void applyServer(FragmentActivity activity, Binding binding) {
         RemoteProfile profile;
         try {
-            profile = prepare(binding);
+            profile = prepare(binding, true);
         } catch (Throwable e) {
             Notify.show(e.getMessage());
             return;
@@ -329,6 +463,10 @@ public final class RemoteTrustDialog {
                 RemoteAgent.get().start();
                 App.post(() -> {
                     setBusy(binding, false);
+                    binding.autoDetected = false;
+                    binding.autoDetectStarted = false;
+                    binding.autoBindAttempted = false;
+                    binding.bindCode = "";
                     Notify.show(R.string.remote_trust_register_done);
                     render(activity, binding);
                 });
@@ -341,13 +479,14 @@ public final class RemoteTrustDialog {
         });
     }
 
-    private static void detectService(FragmentActivity activity, Binding binding) {
+    private static void detectService(FragmentActivity activity, Binding binding, boolean quiet) {
         String serverUrl = textOf(binding.server);
         String origin = RemoteTokens.normalizeOrigin(serverUrl);
         if (TextUtils.isEmpty(origin)) {
-            Notify.show(R.string.remote_trust_server_required);
+            if (!quiet) Notify.show(R.string.remote_trust_server_required);
             return;
         }
+        binding.autoDetectStarted = true;
         RemoteProfile probe = new RemoteProfile();
         probe.serverUrl = serverUrl.trim();
         probe.serverOrigin = origin;
@@ -362,6 +501,7 @@ public final class RemoteTrustDialog {
                     binding.serviceStateText = activity.getString(R.string.remote_trust_service_ok);
                     binding.serviceDetailText = detail;
                     binding.diagnostics = diagnostics;
+                    binding.autoDetected = true;
                     render(activity, binding);
                 });
             } catch (Throwable e) {
@@ -370,6 +510,7 @@ public final class RemoteTrustDialog {
                     binding.serviceStateText = activity.getString(R.string.remote_trust_service_error);
                     binding.serviceDetailText = activity.getString(R.string.remote_trust_service_failed_with_reason, conciseError(activity, e));
                     binding.diagnostics = origin + "/api/server/capabilities\n" + e.getMessage();
+                    binding.autoDetected = true;
                     render(activity, binding);
                 });
             }
@@ -403,13 +544,19 @@ public final class RemoteTrustDialog {
     }
 
     private static void createBindCode(FragmentActivity activity, Binding binding, boolean reopen) {
+        createBindCode(activity, binding, reopen, false);
+    }
+
+    private static void createBindCode(FragmentActivity activity, Binding binding, boolean reopen, boolean quiet) {
         RemoteProfile profile = currentProfile(binding);
         if (profile == null) {
             binding.page = PAGE_SETTINGS;
             render(activity, binding);
-            Notify.show(R.string.remote_trust_no_profile);
+            if (!quiet) Notify.show(R.string.remote_trust_no_profile);
             return;
         }
+        binding.autoBindAttempted = true;
+        binding.creatingBindCode = true;
         RemoteBindGrant grant = new RemoteBindGrant();
         grant.bindGrantToken = RemoteTokens.randomCapability("bgt");
         grant.grantId = RemoteTokens.bindGrantId(profile.serverOrigin, grant.bindGrantToken);
@@ -425,15 +572,18 @@ public final class RemoteTrustDialog {
                 RemoteAgent.get().start();
                 App.post(() -> {
                     setBusy(binding, false);
+                    binding.creatingBindCode = false;
                     binding.bindCode = response == null ? "" : response.code;
-                    Notify.show(R.string.remote_trust_bind_code_done);
+                    if (!quiet) Notify.show(R.string.remote_trust_bind_code_done);
                     render(activity, binding);
                     if (reopen) showBindCodeDialog(activity, binding);
                 });
             } catch (Throwable e) {
                 App.post(() -> {
                     setBusy(binding, false);
-                    Notify.show(e.getMessage());
+                    binding.creatingBindCode = false;
+                    if (!quiet) Notify.show(e.getMessage());
+                    else render(activity, binding);
                 });
             }
         });
@@ -497,7 +647,7 @@ public final class RemoteTrustDialog {
                         binding.selectedGroupId = response.groupId;
                         binding.selectedDeviceId = response.deviceId;
                     }
-                    binding.page = PAGE_DEVICES;
+                    binding.page = PAGE_DETAIL;
                     Notify.show(R.string.remote_trust_add_done);
                     render(activity, binding);
                 });
@@ -657,9 +807,9 @@ public final class RemoteTrustDialog {
         return builder.toString();
     }
 
-    private static RemoteProfile prepare(Binding binding) {
+    private static RemoteProfile prepare(Binding binding, boolean keepOnline) {
         String serverUrl = textOf(binding.server);
-        return RemoteStore.prepareProfile(serverUrl, binding.enabled.isChecked(), binding.keepOnline.isChecked());
+        return RemoteStore.prepareProfile(serverUrl, binding.enabled.isChecked(), keepOnline);
     }
 
     private static RemoteProfile currentProfile(Binding binding) {
@@ -678,7 +828,7 @@ public final class RemoteTrustDialog {
 
     private static void confirmClear(FragmentActivity activity, Binding binding) {
         new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.remote_trust_clear)
+                .setTitle(R.string.remote_trust_reset_local)
                 .setMessage(R.string.remote_trust_clear_message)
                 .setNegativeButton(R.string.dialog_cancel, null)
                 .setPositiveButton(R.string.dialog_confirm, (dialog, which) -> {
@@ -692,6 +842,12 @@ public final class RemoteTrustDialog {
                     binding.serviceStateText = "";
                     binding.serviceDetailText = "";
                     binding.diagnostics = "";
+                    binding.statusExpanded = false;
+                    binding.advancedExpanded = false;
+                    binding.autoBindAttempted = false;
+                    binding.autoDetectStarted = false;
+                    binding.autoDetected = false;
+                    binding.creatingBindCode = false;
                     binding.page = PAGE_DEVICES;
                     render(activity, binding);
                 })
@@ -844,8 +1000,10 @@ public final class RemoteTrustDialog {
 
     private static void setBusy(Binding binding, boolean busy) {
         binding.busy = busy;
-        binding.devicesTab.setEnabled(!busy);
-        binding.settingsTab.setEnabled(!busy);
+        binding.bindCodeButton.setEnabled(!busy && !TextUtils.isEmpty(binding.bindCode));
+        binding.enableToggle.setEnabled(!busy);
+        binding.statusButton.setEnabled(!busy);
+        binding.serviceButton.setEnabled(!busy);
         binding.server.setEnabled(!busy);
         binding.enabled.setEnabled(!busy);
         binding.keepOnline.setEnabled(!busy);
@@ -894,10 +1052,33 @@ public final class RemoteTrustDialog {
         return view;
     }
 
-    private static LinearLayoutCompat servicePanel(Context context, String state, String detail) {
+    private static LinearLayoutCompat statusDetailPanel(Context context, RemoteProfile profile, Binding binding) {
         LinearLayoutCompat card = card(context);
-        MaterialTextView title = text(context, state, 14, "#202124", true);
+        MaterialTextView title = text(context, context.getString(R.string.remote_trust_local_status), 14, "#202124", true);
         card.addView(title, matchWrap());
+        MaterialTextView detail = text(context, localStatus(context, profile) + serviceSuffix(binding), 12, "#5F6368", false);
+        detail.setPadding(0, dp(context, 4), 0, 0);
+        card.addView(detail, matchWrap());
+        return card;
+    }
+
+    private static String serviceSuffix(Binding binding) {
+        if (TextUtils.isEmpty(binding.serviceDetailText)) return "";
+        return "\n" + binding.serviceDetailText;
+    }
+
+    private static LinearLayoutCompat servicePanel(Context context, Binding binding, String state, String detail) {
+        LinearLayoutCompat card = card(context);
+        LinearLayoutCompat row = row(context);
+        MaterialTextView title = text(context, state, 14, "#202124", true);
+        row.addView(title, weight());
+        if (!TextUtils.isEmpty(binding.diagnostics)) {
+            MaterialButton copy = iconButton(context, R.drawable.ic_remote_copy, context.getString(R.string.remote_trust_copy_diagnostics));
+            copy.setOnClickListener(v -> copyText(context, context.getString(R.string.setting_remote_trust), binding.diagnostics, R.string.remote_trust_diagnostics_copied));
+            bindAction(binding, copy);
+            row.addView(copy, fixed(context, 36, 32));
+        }
+        card.addView(row, matchWrap());
         if (!TextUtils.isEmpty(detail)) {
             MaterialTextView text = text(context, detail, 12, "#5F6368", false);
             text.setPadding(0, dp(context, 4), 0, 0);
@@ -1055,6 +1236,39 @@ public final class RemoteTrustDialog {
         return button;
     }
 
+    private static MaterialButton compactButton(Context context, int resId) {
+        MaterialButton button = tonal(context, context.getString(resId));
+        button.setTextSize(12);
+        return button;
+    }
+
+    private static MaterialButton pillButton(Context context, String text) {
+        MaterialButton button = outline(context, text);
+        button.setTextSize(12);
+        button.setMaxLines(1);
+        button.setEllipsize(TextUtils.TruncateAt.END);
+        return button;
+    }
+
+    private static MaterialButton statusButton(Context context, String text) {
+        MaterialButton button = pillButton(context, text);
+        button.setStrokeWidth(dp(context, 1));
+        return button;
+    }
+
+    private static MaterialButton iconButton(Context context, int icon, String label) {
+        MaterialButton button = outline(context, "");
+        button.setContentDescription(label);
+        button.setIconResource(icon);
+        button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
+        button.setIconPadding(0);
+        button.setIconSize(dp(context, 18));
+        button.setIconTint(ContextCompat.getColorStateList(context, R.color.dialog_outlined_button_text));
+        button.setMinWidth(0);
+        button.setPadding(0, 0, 0, 0);
+        return button;
+    }
+
     private static MaterialButton listButton(Context context, String text) {
         MaterialButton button = outline(context, text);
         button.setTextAlignment(View.TEXT_ALIGNMENT_TEXT_START);
@@ -1189,8 +1403,10 @@ public final class RemoteTrustDialog {
         private LinearLayoutCompat content;
         private MaterialTextView summary;
         private MaterialButton close;
-        private MaterialButton devicesTab;
-        private MaterialButton settingsTab;
+        private MaterialButton bindCodeButton;
+        private MaterialButton enableToggle;
+        private MaterialButton statusButton;
+        private MaterialButton serviceButton;
         private TextInputEditText server;
         private TextInputLayout serverLayout;
         private com.google.android.material.checkbox.MaterialCheckBox enabled;
@@ -1198,6 +1414,12 @@ public final class RemoteTrustDialog {
         private final List<MaterialButton> actions = new ArrayList<>();
         private boolean initialized;
         private boolean busy;
+        private boolean statusExpanded;
+        private boolean advancedExpanded;
+        private boolean autoBindAttempted;
+        private boolean autoDetectStarted;
+        private boolean autoDetected;
+        private boolean creatingBindCode;
         private int page = PAGE_DEVICES;
         private String bindCode = "";
         private String selectedGroupId = "";

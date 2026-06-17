@@ -166,7 +166,7 @@
     <string name="remote_trust_device_offline">離線</string>
     <string name="remote_trust_selected_device">已選：%1$s</string>
     <string name="remote_trust_action_status">狀態</string>
-    <string name="remote_trust_action_search">搜尋</string>
+    <string name="remote_trust_action_search">搜尋播放</string>
     <string name="remote_trust_action_push">推送</string>
     <string name="remote_trust_action_log">日誌</string>
     <string name="remote_trust_search_keyword">搜尋關鍵詞</string>
@@ -190,8 +190,14 @@
     <string name="remote_trust_device_list">管理設備</string>
     <string name="remote_trust_bind_local">綁定本機</string>
     <string name="remote_trust_go_settings">去設定</string>
+    <string name="remote_trust_service_entry">服務</string>
+    <string name="remote_trust_done">完成</string>
+    <string name="remote_trust_bind_code_inline">碼 %1$s</string>
+    <string name="remote_trust_bind_code_empty">綁定碼 --</string>
+    <string name="remote_trust_bind_code_loading">產生中...</string>
+    <string name="remote_trust_bind_code_unavailable">未設定</string>
     <string name="remote_trust_command_result_title">執行結果</string>
-    <string name="remote_trust_settings_title">中轉服務設定</string>
+    <string name="remote_trust_settings_title">中轉服務</string>
     <string name="remote_trust_detect_service">檢測服務</string>
     <string name="remote_trust_copy_diagnostics">複製診斷資訊</string>
     <string name="remote_trust_diagnostics_copied">診斷資訊已複製</string>
@@ -217,6 +223,9 @@
     <string name="remote_trust_cap_sync">遠端同步</string>
     <string name="remote_trust_cap_push">推送</string>
     <string name="remote_trust_cap_log">最近日誌</string>
+    <string name="remote_trust_advanced">進階</string>
+    <string name="remote_trust_advanced_hide">收起進階</string>
+    <string name="remote_trust_reset_local">重置本機託管資料</string>
     <string name="setting_login_state">登入狀態學習</string>
     <string name="setting_site_health_sort">站點健康排序</string>
     <string name="setting_site_health_enable">啟用站點健康排序</string>
