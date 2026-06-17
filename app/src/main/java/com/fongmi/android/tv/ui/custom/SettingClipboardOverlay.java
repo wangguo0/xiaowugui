@@ -1,22 +1,26 @@
 package com.fongmi.android.tv.ui.custom;
 
+import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
-import android.view.Window;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
@@ -44,31 +48,50 @@ public class SettingClipboardOverlay {
     private static final int MAX_ITEMS = 100;
     private static final int MAX_DISPLAY = 260;
     private static final List<String> HISTORY = new ArrayList<>();
+    private static int savedTriggerLeft = -1;
+    private static int savedTriggerTop = -1;
 
     private final DialogFragment fragment;
     private final View root;
+    private final ViewGroup host;
     private final ClipboardManager clipboard;
     private final Set<String> selected = new LinkedHashSet<>();
+    private boolean expanded;
     private final ClipboardManager.OnPrimaryClipChangedListener clipListener = this::captureSystemClipboard;
     private final ViewTreeObserver.OnGlobalFocusChangeListener focusListener = (oldFocus, newFocus) -> {
         if (newFocus instanceof EditText) lastInput = (EditText) newFocus;
     };
-    private FrameLayout overlay;
+    private final ViewTreeObserver.OnGlobalLayoutListener layoutListener = () -> {
+        if (expanded) {
+            updatePanelSize();
+            updateDialogAvoidance();
+        }
+    };
+    private PopupWindow triggerPopup;
+    private PopupWindow panelPopup;
     private LinearLayoutCompat panel;
     private LinearLayoutCompat list;
+    private NestedScrollView scroll;
     private MaterialButton trigger;
     private EditText lastInput;
-    private boolean expanded;
+    private boolean dragging;
+    private float downRawX;
+    private float downRawY;
+    private int downLeft;
+    private int downTop;
 
-    private SettingClipboardOverlay(DialogFragment fragment, View root) {
+    private SettingClipboardOverlay(DialogFragment fragment, View root, ViewGroup host) {
         this.fragment = fragment;
         this.root = root;
+        this.host = host;
         this.clipboard = (ClipboardManager) root.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
     }
 
     public static SettingClipboardOverlay attach(DialogFragment fragment, View root) {
         if (!Util.isMobile()) return null;
-        SettingClipboardOverlay overlay = new SettingClipboardOverlay(fragment, root);
+        Activity activity = fragment.getActivity();
+        if (activity == null || !(activity.getWindow().getDecorView() instanceof ViewGroup)) return null;
+        SettingClipboardOverlay overlay = new SettingClipboardOverlay(fragment, root, (ViewGroup) activity.getWindow().getDecorView());
         overlay.attach();
         return overlay;
     }
@@ -89,27 +112,28 @@ public class SettingClipboardOverlay {
             root.getViewTreeObserver().removeOnGlobalFocusChangeListener(focusListener);
         } catch (Throwable ignored) {
         }
-        if (overlay != null && overlay.getParent() instanceof ViewGroup) ((ViewGroup) overlay.getParent()).removeView(overlay);
-        overlay = null;
+        try {
+            host.getViewTreeObserver().removeOnGlobalLayoutListener(layoutListener);
+        } catch (Throwable ignored) {
+        }
+        resetDialogAvoidance();
+        if (triggerPopup != null) triggerPopup.dismiss();
+        if (panelPopup != null) panelPopup.dismiss();
+        triggerPopup = null;
+        panelPopup = null;
         panel = null;
         list = null;
+        scroll = null;
         trigger = null;
         selected.clear();
     }
 
     private void attach() {
-        Window window = fragment.getDialog() == null ? null : fragment.getDialog().getWindow();
-        if (window == null || !(window.getDecorView() instanceof ViewGroup)) return;
-        ViewGroup decor = (ViewGroup) window.getDecorView();
-        if (overlay != null) return;
+        if (triggerPopup != null) return;
         captureSystemClipboard();
         root.getViewTreeObserver().addOnGlobalFocusChangeListener(focusListener);
+        host.getViewTreeObserver().addOnGlobalLayoutListener(layoutListener);
         if (clipboard != null) clipboard.addPrimaryClipChangedListener(clipListener);
-        overlay = new FrameLayout(root.getContext());
-        overlay.setClickable(false);
-        overlay.setClipChildren(false);
-        overlay.setClipToPadding(false);
-        decor.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         buildTrigger();
         buildPanel();
         render();
@@ -119,13 +143,17 @@ public class SettingClipboardOverlay {
         trigger = iconButton();
         trigger.setOnClickListener(view -> {
             expanded = !expanded;
+            if (expanded) hideKeyboard();
             captureSystemClipboard();
             render();
         });
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(40), dp(36), Gravity.TOP | Gravity.END);
-        params.topMargin = dp(8);
-        params.rightMargin = dp(10);
-        overlay.addView(trigger, params);
+        trigger.setFocusable(false);
+        trigger.setOnTouchListener(this::onTriggerTouch);
+        triggerPopup = popup(trigger, dp(42), dp(40));
+        host.post(() -> {
+            if (triggerPopup != null && !triggerPopup.isShowing()) triggerPopup.showAtLocation(popupParent(), Gravity.TOP | Gravity.START, 0, 0);
+            placeTrigger(false);
+        });
     }
 
     private void buildPanel() {
@@ -145,7 +173,7 @@ public class SettingClipboardOverlay {
         addAction(actions, "复制", view -> copy());
         panel.addView(actions, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
 
-        NestedScrollView scroll = new NestedScrollView(root.getContext());
+        scroll = new NestedScrollView(root.getContext());
         scroll.setFillViewport(false);
         list = new LinearLayoutCompat(root.getContext());
         list.setOrientation(LinearLayoutCompat.VERTICAL);
@@ -154,17 +182,27 @@ public class SettingClipboardOverlay {
         scrollParams.topMargin = dp(8);
         panel.addView(scroll, scrollParams);
 
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-        params.leftMargin = dp(10);
-        params.rightMargin = dp(10);
-        params.bottomMargin = dp(8);
-        overlay.addView(panel, params);
+        panelPopup = popup(panel, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        panelPopup.setInputMethodMode(PopupWindow.INPUT_METHOD_NOT_NEEDED);
+        panelPopup.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        host.post(this::updatePanelSize);
     }
 
     private void render() {
         if (trigger == null || panel == null || list == null) return;
         trigger.setChecked(expanded);
-        panel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        if (expanded) {
+            if (panelPopup != null && !panelPopup.isShowing()) {
+                panelPopup.showAtLocation(popupParent(), Gravity.BOTTOM | Gravity.START, 0, navigationBarHeight());
+            }
+            host.post(() -> {
+                updatePanelSize();
+                updateDialogAvoidance();
+            });
+        } else {
+            if (panelPopup != null) panelPopup.dismiss();
+            resetDialogAvoidance();
+        }
         list.removeAllViews();
         List<String> items = snapshot();
         if (items.isEmpty()) {
@@ -289,6 +327,148 @@ public class SettingClipboardOverlay {
         return lastInput;
     }
 
+    private boolean onTriggerTouch(View view, MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                dragging = false;
+                downRawX = event.getRawX();
+                downRawY = event.getRawY();
+                downLeft = savedTriggerLeft >= 0 ? savedTriggerLeft : 0;
+                downTop = savedTriggerTop >= 0 ? savedTriggerTop : statusBarHeight() + dp(8);
+                return false;
+            case MotionEvent.ACTION_MOVE:
+                int dx = Math.round(event.getRawX() - downRawX);
+                int dy = Math.round(event.getRawY() - downRawY);
+                if (!dragging && Math.abs(dx) < dp(4) && Math.abs(dy) < dp(4)) return false;
+                dragging = true;
+                moveTrigger(downLeft + dx, downTop + dy);
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (!dragging) return false;
+                dragging = false;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void placeTrigger(boolean forceDefault) {
+        if (triggerPopup == null || host.getWidth() == 0) return;
+        if (!forceDefault && savedTriggerLeft >= 0 && savedTriggerTop >= 0) {
+            moveTrigger(savedTriggerLeft, savedTriggerTop);
+            return;
+        }
+        int width = dp(42);
+        int height = dp(40);
+        int left = host.getWidth() - width - dp(12);
+        int top = statusBarHeight() + dp(8);
+        Rect rect = new Rect(left, top, left + width, top + height);
+        if (overlapsClickable(root, rect)) {
+            int candidateLeft = dp(12);
+            Rect candidate = new Rect(candidateLeft, top, candidateLeft + width, top + height);
+            if (!overlapsClickable(root, candidate)) left = candidateLeft;
+            else {
+                int maxTop = Math.max(statusBarHeight() + dp(8), host.getHeight() - height - navigationBarHeight() - dp(12));
+                while (top < maxTop && overlapsClickable(root, new Rect(left, top, left + width, top + height))) {
+                    top += height + dp(8);
+                }
+            }
+        }
+        moveTrigger(left, top);
+    }
+
+    private void moveTrigger(int left, int top) {
+        if (triggerPopup == null || host.getWidth() == 0 || host.getHeight() == 0) return;
+        int width = dp(42);
+        int height = dp(40);
+        int maxLeft = Math.max(dp(4), host.getWidth() - width - dp(4));
+        int maxTop = Math.max(statusBarHeight() + dp(4), host.getHeight() - height - navigationBarHeight() - dp(4));
+        int safeLeft = Math.max(dp(4), Math.min(left, maxLeft));
+        int safeTop = Math.max(statusBarHeight() + dp(4), Math.min(top, maxTop));
+        if (triggerPopup.isShowing()) triggerPopup.update(safeLeft, safeTop, width, height);
+        savedTriggerLeft = safeLeft;
+        savedTriggerTop = safeTop;
+    }
+
+    private boolean overlapsClickable(View view, Rect target) {
+        if (view == null || view.getVisibility() != View.VISIBLE) return false;
+        if (view != root && (view.isClickable() || view.isLongClickable())) {
+            Rect rect = new Rect();
+            if (view.getGlobalVisibleRect(rect) && Rect.intersects(rect, target)) return true;
+        }
+        if (!(view instanceof ViewGroup)) return false;
+        ViewGroup group = (ViewGroup) view;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            if (overlapsClickable(group.getChildAt(i), target)) return true;
+        }
+        return false;
+    }
+
+    private void updatePanelSize() {
+        if (panel == null || scroll == null || host.getHeight() == 0) return;
+        int target = Math.min(dp(320), Math.max(dp(220), host.getHeight() * 42 / 100));
+        ViewGroup.LayoutParams scrollParams = scroll.getLayoutParams();
+        int scrollHeight = Math.max(dp(150), target - dp(58));
+        if (scrollParams.height != scrollHeight) {
+            scrollParams.height = scrollHeight;
+            scroll.setLayoutParams(scrollParams);
+        }
+        if (panelPopup != null && panelPopup.isShowing()) {
+            panelPopup.update(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private void updateDialogAvoidance() {
+        if (!expanded || panel == null || fragment.getDialog() == null || fragment.getDialog().getWindow() == null) return;
+        View dialog = fragment.getDialog().getWindow().getDecorView();
+        Rect panelRect = new Rect();
+        if (!panel.getGlobalVisibleRect(panelRect)) return;
+        EditText input = activeInput();
+        Rect target = new Rect();
+        boolean hasInput = input != null && input.getGlobalVisibleRect(target);
+        if (!hasInput && !dialog.getGlobalVisibleRect(target)) return;
+        int overlap = target.bottom - panelRect.top + dp(14);
+        if (overlap <= 0) {
+            dialog.animate().translationY(0).setDuration(140).start();
+            return;
+        }
+        int safeTop = statusBarHeight() + dp(12);
+        int maxShift = hasInput ? Math.max(0, target.top - safeTop) : Math.max(0, target.top - safeTop);
+        int shift = Math.min(overlap, maxShift);
+        dialog.animate().translationY(-shift).setDuration(160).start();
+    }
+
+    private void resetDialogAvoidance() {
+        if (fragment.getDialog() == null || fragment.getDialog().getWindow() == null) return;
+        fragment.getDialog().getWindow().getDecorView().animate().translationY(0).setDuration(120).start();
+    }
+
+    private void hideKeyboard() {
+        try {
+            InputMethodManager imm = (InputMethodManager) root.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            View focus = activeInput();
+            if (imm != null && focus != null) imm.hideSoftInputFromWindow(focus.getWindowToken(), 0);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private PopupWindow popup(View content, int width, int height) {
+        PopupWindow popup = new PopupWindow(content, width, height, false);
+        popup.setTouchable(true);
+        popup.setOutsideTouchable(false);
+        popup.setClippingEnabled(false);
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        return popup;
+    }
+
+    private View popupParent() {
+        if (fragment.getDialog() != null && fragment.getDialog().getWindow() != null) {
+            return fragment.getDialog().getWindow().getDecorView();
+        }
+        return host;
+    }
+
     private String selectedText() {
         if (selected.isEmpty()) return "";
         return TextUtils.join("\n", new ArrayList<>(selected));
@@ -396,5 +576,15 @@ public class SettingClipboardOverlay {
 
     private int dp(int value) {
         return ResUtil.dp2px(value);
+    }
+
+    private int statusBarHeight() {
+        int id = root.getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? root.getResources().getDimensionPixelSize(id) : 0;
+    }
+
+    private int navigationBarHeight() {
+        int id = root.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        return id > 0 ? root.getResources().getDimensionPixelSize(id) : dp(8);
     }
 }
