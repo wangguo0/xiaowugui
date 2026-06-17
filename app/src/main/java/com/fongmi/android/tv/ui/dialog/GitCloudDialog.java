@@ -59,6 +59,7 @@ import com.fongmi.android.tv.gitcloud.drive.JGitDriveEngine;
 import com.fongmi.android.tv.gitcloud.provider.GitCloudProvider;
 import com.fongmi.android.tv.gitcloud.provider.GitCloudProviders;
 import com.fongmi.android.tv.gitcloud.secure.GitCloudTokenStore;
+import com.fongmi.android.tv.ui.custom.SettingClipboardOverlay;
 import com.fongmi.android.tv.utils.Formatters;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -129,6 +130,7 @@ public class GitCloudDialog extends BaseAlertDialog {
     private File downloadDirSelected;
     private LinearLayoutCompat downloadDirList;
     private MaterialTextView downloadDirPath;
+    private SettingClipboardOverlay clipboardOverlay;
     private final List<GitRepo> repos = new ArrayList<>();
     private final Map<String, List<GitFile>> fileTree = new HashMap<>();
     private final Map<String, GitFile> selectedFiles = new HashMap<>();
@@ -171,6 +173,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         window.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         window.setAttributes(params);
         window.setLayout(params.width, params.height);
+        if (clipboardOverlay == null) clipboardOverlay = SettingClipboardOverlay.attach(this, binding.getRoot());
     }
 
     @Override
@@ -225,6 +228,8 @@ public class GitCloudDialog extends BaseAlertDialog {
 
     @Override
     public void onDestroyView() {
+        if (clipboardOverlay != null) clipboardOverlay.detach();
+        clipboardOverlay = null;
         if (callback != null) callback.run();
         super.onDestroyView();
     }
@@ -1823,6 +1828,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         ClipboardManager manager = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
         if (manager == null || TextUtils.isEmpty(value)) return;
         manager.setPrimaryClip(ClipData.newPlainText("Git raw", value));
+        SettingClipboardOverlay.record(value);
         Notify.show("已复制");
     }
 
