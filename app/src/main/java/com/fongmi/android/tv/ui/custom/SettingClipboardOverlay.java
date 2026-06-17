@@ -384,7 +384,7 @@ public class SettingClipboardOverlay {
     }
 
     private int defaultTriggerTop() {
-        return statusBarHeight() + dp(42);
+        return statusBarHeight() + dp(8);
     }
 
     private void updatePanelSize() {
@@ -402,29 +402,27 @@ public class SettingClipboardOverlay {
 
     private void updateDialogAvoidance() {
         if (!expanded || panel == null || fragment.getDialog() == null || fragment.getDialog().getWindow() == null) return;
-        View dialog = fragment.getDialog().getWindow().getDecorView();
-        Rect dialogRect = new Rect();
-        if (!dialog.getGlobalVisibleRect(dialogRect)) return;
+        Rect rootRect = new Rect();
+        if (!root.getGlobalVisibleRect(rootRect)) return;
         int panelTop = panelTop();
         EditText input = activeInput();
         Rect inputRect = new Rect();
         boolean hasInput = input != null && input.getGlobalVisibleRect(inputRect);
-        int overlap = Math.max(0, dialogRect.bottom - panelTop + dp(14));
-        if (hasInput) overlap = Math.max(overlap, inputRect.bottom - panelTop + dp(18));
+        int overlap = hasInput ? inputRect.bottom - panelTop + dp(18) : rootRect.bottom - panelTop + dp(14);
         if (overlap <= 0) {
-            dialog.animate().translationY(0).setDuration(140).start();
+            root.animate().translationY(0).setDuration(140).start();
             return;
         }
         int safeTop = statusBarHeight() + dp(8);
-        int maxShift = Math.max(0, dialogRect.top - safeTop);
+        int maxShift = Math.max(0, rootRect.top - safeTop + dp(120));
         if (hasInput) maxShift = Math.max(maxShift, Math.max(0, inputRect.top - safeTop));
         int shift = Math.min(overlap, maxShift);
-        dialog.animate().translationY(-shift).setDuration(160).start();
+        root.animate().translationY(-shift).setDuration(160).start();
     }
 
     private void resetDialogAvoidance() {
         if (fragment.getDialog() == null || fragment.getDialog().getWindow() == null) return;
-        fragment.getDialog().getWindow().getDecorView().animate().translationY(0).setDuration(120).start();
+        root.animate().translationY(0).setDuration(120).start();
     }
 
     private void hideKeyboard() {
@@ -442,7 +440,7 @@ public class SettingClipboardOverlay {
         dialog.setContentView(content);
         dialog.setCanceledOnTouchOutside(false);
         Window window = dialog.getWindow();
-        if (window != null) prepareWindow(window, width, height);
+        if (window != null) prepareWindow(window, width, height, false);
         return dialog;
     }
 
@@ -456,7 +454,7 @@ public class SettingClipboardOverlay {
         if (dialog == null || !dialog.isShowing()) return;
         Window window = dialog.getWindow();
         if (window == null) return;
-        prepareWindow(window, width, height);
+        prepareWindow(window, width, height, dialog == triggerDialog);
         WindowManager.LayoutParams params = window.getAttributes();
         params.gravity = gravity;
         params.x = x;
@@ -467,10 +465,12 @@ public class SettingClipboardOverlay {
         window.setAttributes(params);
     }
 
-    private void prepareWindow(Window window, int width, int height) {
+    private void prepareWindow(Window window, int width, int height, boolean allowOutOfBounds) {
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        if (allowOutOfBounds) window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
         window.setLayout(width, height);
     }
@@ -599,6 +599,8 @@ public class SettingClipboardOverlay {
     }
 
     private int panelTop() {
+        Rect rect = new Rect();
+        if (panel.getGlobalVisibleRect(rect) && rect.height() > 0) return rect.top;
         int height = panelHeight > 0 ? panelHeight : Math.min(dp(320), Math.max(dp(220), host.getHeight() * 42 / 100));
         return Math.max(statusBarHeight() + dp(80), host.getHeight() - height - panelBottomOffset());
     }
