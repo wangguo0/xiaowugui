@@ -6,6 +6,10 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.bean.Device;
 import com.fongmi.android.tv.remote.RemoteModels.BindCodeResponse;
+import com.fongmi.android.tv.remote.RemoteModels.ClaimResponse;
+import com.fongmi.android.tv.remote.RemoteModels.CommandDetailResponse;
+import com.fongmi.android.tv.remote.RemoteModels.CommandResponse;
+import com.fongmi.android.tv.remote.RemoteModels.DevicesResponse;
 import com.fongmi.android.tv.remote.RemoteModels.PollResponse;
 import com.fongmi.android.tv.remote.RemoteModels.RegisterResponse;
 import com.fongmi.android.tv.remote.RemoteModels.RemoteBindGrant;
@@ -78,6 +82,34 @@ public final class RemoteClient {
         return App.gson().fromJson(requestJson("POST", "/api/device/bind-code", body), BindCodeResponse.class);
     }
 
+    public ClaimResponse claim(String code, String groupToken, String alias) throws IOException {
+        ensureDeviceIdentity(profile);
+        JsonObject body = new JsonObject();
+        body.addProperty("code", code == null ? "" : code.trim());
+        if (!TextUtils.isEmpty(groupToken)) body.addProperty("groupToken", groupToken);
+        if (!TextUtils.isEmpty(alias)) body.addProperty("alias", alias.trim());
+        return App.gson().fromJson(requestJson("POST", "/api/groups/claim", body), ClaimResponse.class);
+    }
+
+    public DevicesResponse listDevices(RemoteGroup group) throws IOException {
+        if (group == null || TextUtils.isEmpty(group.groupToken)) throw new IOException("Missing group token");
+        return App.gson().fromJson(requestJson("GET", "/api/devices", null, group.groupToken), DevicesResponse.class);
+    }
+
+    public CommandResponse createCommand(RemoteGroup group, String targetDeviceId, String type, JsonObject payload) throws IOException {
+        if (group == null || TextUtils.isEmpty(group.groupToken)) throw new IOException("Missing group token");
+        JsonObject body = new JsonObject();
+        body.addProperty("targetDeviceId", targetDeviceId);
+        body.addProperty("type", type);
+        body.add("payload", payload == null ? new JsonObject() : payload);
+        return App.gson().fromJson(requestJson("POST", "/api/commands", body, group.groupToken), CommandResponse.class);
+    }
+
+    public CommandDetailResponse getCommand(RemoteGroup group, String commandId) throws IOException {
+        if (group == null || TextUtils.isEmpty(group.groupToken)) throw new IOException("Missing group token");
+        return App.gson().fromJson(requestJson("GET", "/api/commands/" + commandId, null, group.groupToken), CommandDetailResponse.class);
+    }
+
     public PollResponse poll() throws IOException {
         ensureDeviceIdentity(profile);
         JsonObject body = baseDeviceBody();
@@ -115,9 +147,14 @@ public final class RemoteClient {
     }
 
     private JsonObject requestJson(String method, String path, JsonObject payload) throws IOException {
+        return requestJson(method, path, payload, "");
+    }
+
+    private JsonObject requestJson(String method, String path, JsonObject payload, String groupToken) throws IOException {
         Request.Builder builder = new Request.Builder().url(profile.serverOrigin + path);
         if (!TextUtils.isEmpty(profile.deviceId)) builder.header("x-device-id", profile.deviceId);
         if (!TextUtils.isEmpty(profile.deviceToken)) builder.header("x-device-token", profile.deviceToken);
+        if (!TextUtils.isEmpty(groupToken)) builder.header("x-group-token", groupToken);
         if ("POST".equals(method)) builder.post(RequestBody.create(payload == null ? "{}" : App.gson().toJson(payload), JSON));
         else builder.get();
         try (Response response = OkHttp.client(TIMEOUT).newCall(builder.build()).execute()) {

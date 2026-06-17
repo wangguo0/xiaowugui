@@ -10,6 +10,13 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/history"
+        android:icon="@drawable/ic_popup_history"
+        android:title="@string/app_history"
+        app:iconTint="@color/white"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/web_home_fullscreen"
         android:icon="@drawable/ic_control_fullscreen"
         android:title="@string/play_fullscreen"
@@ -34,11 +41,6 @@
                 android:id="@+id/keep"
                 android:icon="@drawable/ic_popup_keep"
                 android:title="@string/app_keep" />
-
-            <item
-                android:id="@+id/history"
-                android:icon="@drawable/ic_popup_history"
-                android:title="@string/app_history" />
 
             <item
                 android:id="@+id/sync"

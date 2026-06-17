@@ -71,11 +71,15 @@ public final class RemoteModels {
     public static class RemoteCommand {
         public String id = "";
         public String type = "";
+        public String status = "";
         public String groupId = "";
         public String groupTokenHash = "";
         public String targetDeviceId = "";
         public JsonObject payload = new JsonObject();
+        public RemoteCommandResult result;
         public long createdAt;
+        public long deliveredAt;
+        public long finishedAt;
     }
 
     public static class RemoteCommandResult {
@@ -120,6 +124,38 @@ public final class RemoteModels {
         public String code = "";
         public String grantId = "";
         public int expiresIn;
+        public JsonObject server;
+    }
+
+    public static class ClaimResponse {
+        public boolean ok;
+        public String deviceId = "";
+        public String groupId = "";
+        public String groupToken = "";
+        public String familyToken = "";
+        public String groupTokenHash = "";
+        public String grantId = "";
+        public String bindGrantToken = "";
+        public String commandId = "";
+        public RemoteDevice device;
+        public JsonObject server;
+    }
+
+    public static class DevicesResponse {
+        public boolean ok;
+        public List<RemoteDevice> devices = new ArrayList<>();
+        public JsonObject server;
+    }
+
+    public static class CommandResponse {
+        public boolean ok;
+        public String commandId = "";
+        public RemoteCommand command;
+    }
+
+    public static class CommandDetailResponse {
+        public boolean ok;
+        public RemoteCommand command;
         public JsonObject server;
     }
 

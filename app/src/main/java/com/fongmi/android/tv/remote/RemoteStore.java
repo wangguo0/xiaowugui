@@ -5,7 +5,9 @@ import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.remote.RemoteModels.ClaimResponse;
 import com.fongmi.android.tv.remote.RemoteModels.RemoteBindGrant;
+import com.fongmi.android.tv.remote.RemoteModels.RemoteDevice;
 import com.fongmi.android.tv.remote.RemoteModels.RemoteGroup;
 import com.fongmi.android.tv.remote.RemoteModels.RemoteProfile;
 import com.fongmi.android.tv.remote.RemoteModels.RemoteStoreFile;
@@ -17,7 +19,10 @@ import com.github.catvod.utils.Prefers;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 public final class RemoteStore {
 
@@ -151,6 +156,64 @@ public final class RemoteStore {
         upsertProfile(profile);
     }
 
+    public static synchronized RemoteGroup upsertClaimGroup(String serverOrigin, ClaimResponse response, String alias) {
+        if (response == null) return null;
+        String groupToken = TextUtils.isEmpty(response.groupToken) ? response.familyToken : response.groupToken;
+        if (TextUtils.isEmpty(groupToken)) return null;
+        RemoteProfile profile = getProfileByOrigin(serverOrigin);
+        if (profile == null) return null;
+        ensureProfile(profile);
+        String groupId = TextUtils.isEmpty(response.groupId) ? RemoteTokens.groupId(serverOrigin, groupToken) : response.groupId;
+        String groupTokenHash = TextUtils.isEmpty(response.groupTokenHash) ? RemoteTokens.groupTokenHash(serverOrigin, groupToken) : response.groupTokenHash;
+        RemoteGroup group = findGroup(profile, groupId);
+        if (group == null) {
+            group = new RemoteGroup();
+            group.groupId = groupId;
+            profile.groups.add(group);
+        }
+        group.groupToken = groupToken;
+        group.groupTokenHash = groupTokenHash;
+        if (TextUtils.isEmpty(group.name)) {
+            if (!TextUtils.isEmpty(alias)) group.name = alias.trim();
+            else if (response.device != null && !TextUtils.isEmpty(response.device.name)) group.name = response.device.name;
+            else group.name = "Remote group";
+        }
+        if (response.device != null) upsertDevice(group, response.device);
+        else if (!TextUtils.isEmpty(response.deviceId)) {
+            RemoteDevice device = new RemoteDevice();
+            device.deviceId = response.deviceId;
+            device.name = response.deviceId;
+            upsertDevice(group, device);
+        }
+        group.updatedAt = System.currentTimeMillis();
+        profile.updatedAt = group.updatedAt;
+        upsertProfile(profile);
+        return group;
+    }
+
+    public static synchronized void upsertDevices(String serverOrigin, String groupId, List<RemoteDevice> devices) {
+        RemoteProfile profile = getProfileByOrigin(serverOrigin);
+        if (profile == null || TextUtils.isEmpty(groupId)) return;
+        ensureProfile(profile);
+        RemoteGroup group = findGroup(profile, groupId);
+        if (group == null) return;
+        if (devices == null) devices = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (RemoteDevice device : devices) {
+            if (device == null || TextUtils.isEmpty(device.deviceId)) continue;
+            seen.add(device.deviceId);
+            upsertDevice(group, device);
+        }
+        if (group.devices != null) {
+            for (RemoteDevice device : group.devices) {
+                if (device != null && !seen.contains(device.deviceId)) device.online = false;
+            }
+        }
+        group.updatedAt = System.currentTimeMillis();
+        profile.updatedAt = group.updatedAt;
+        upsertProfile(profile);
+    }
+
     public static synchronized boolean hasGroupTokenHash(String serverOrigin, String groupTokenHash) {
         if (TextUtils.isEmpty(groupTokenHash)) return false;
         RemoteProfile profile = getProfileByOrigin(serverOrigin);
@@ -217,6 +280,28 @@ public final class RemoteStore {
             if (profile != null && TextUtils.equals(profile.serverOrigin, serverOrigin)) return profile;
         }
         return null;
+    }
+
+    private static RemoteGroup findGroup(RemoteProfile profile, String groupId) {
+        if (profile == null || TextUtils.isEmpty(groupId)) return null;
+        ensureProfile(profile);
+        for (RemoteGroup group : profile.groups) {
+            if (group != null && TextUtils.equals(group.groupId, groupId)) return group;
+        }
+        return null;
+    }
+
+    private static void upsertDevice(RemoteGroup group, RemoteDevice device) {
+        if (group == null || device == null || TextUtils.isEmpty(device.deviceId)) return;
+        if (group.devices == null) group.devices = new ArrayList<>();
+        for (int i = 0; i < group.devices.size(); i++) {
+            RemoteDevice current = group.devices.get(i);
+            if (current != null && TextUtils.equals(current.deviceId, device.deviceId)) {
+                group.devices.set(i, device);
+                return;
+            }
+        }
+        group.devices.add(device);
     }
 
     private static RemoteStoreFile parse(String json) {
