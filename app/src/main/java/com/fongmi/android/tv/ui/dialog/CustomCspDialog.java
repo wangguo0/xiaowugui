@@ -13,6 +13,7 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -141,6 +142,12 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.contentScroll.setMaxHeight(land ? 0 : (int) (screenHeight * 0.58f));
         binding.enabled.requestFocus();
         if (clipboardOverlay == null) clipboardOverlay = SettingClipboardOverlay.attach(this, binding.getRoot());
+        getDialog().setOnKeyListener((dialog, keyCode, event) -> {
+            if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) return false;
+            if (editMode) showList();
+            else closeAndSave(false);
+            return true;
+        });
     }
 
     @Override
@@ -255,10 +262,10 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private void updateModeVisibility() {
         binding.recycler.setVisibility(textMode ? View.GONE : View.VISIBLE);
-        binding.jsonLayout.setVisibility(textMode ? View.VISIBLE : View.GONE);
+        binding.jsonLayout.setVisibility(textMode && !editMode ? View.VISIBLE : View.GONE);
         binding.editPanel.setVisibility(editMode ? View.VISIBLE : View.GONE);
         binding.recycler.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
-        binding.jsonLayout.setVisibility(textMode ? View.VISIBLE : View.GONE);
+        binding.jsonLayout.setVisibility(textMode && !editMode ? View.VISIBLE : View.GONE);
         binding.add.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
         binding.recognize.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.enabled.setVisibility(editMode ? View.GONE : View.VISIBLE);

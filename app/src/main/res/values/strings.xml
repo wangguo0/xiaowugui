@@ -234,6 +234,10 @@
     <string name="remote_trust_cap_log">Recent log</string>
     <string name="remote_trust_advanced">Advanced</string>
     <string name="remote_trust_advanced_hide">Hide advanced</string>
+    <string name="remote_trust_added_devices">Added devices</string>
+    <string name="remote_trust_delete_device">Delete device</string>
+    <string name="remote_trust_delete_device_message">Delete local trust data for %1$s?</string>
+    <string name="remote_trust_delete_device_done">Device trust data deleted</string>
     <string name="remote_trust_reset_local">Reset local trust data</string>
     <string name="setting_login_state">Login state learning</string>
     <string name="setting_site_health_sort">Site health ranking</string>

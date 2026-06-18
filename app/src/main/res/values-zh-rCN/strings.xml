@@ -233,6 +233,10 @@
     <string name="remote_trust_cap_log">最近日志</string>
     <string name="remote_trust_advanced">高级</string>
     <string name="remote_trust_advanced_hide">收起高级</string>
+    <string name="remote_trust_added_devices">已添加设备</string>
+    <string name="remote_trust_delete_device">删除设备</string>
+    <string name="remote_trust_delete_device_message">删除 %1$s 的本机托管数据？</string>
+    <string name="remote_trust_delete_device_done">设备托管数据已删除</string>
     <string name="remote_trust_reset_local">重置本机托管数据</string>
     <string name="setting_login_state">登录态学习</string>
     <string name="setting_site_health_sort">站点健康排序</string>

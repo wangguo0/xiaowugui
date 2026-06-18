@@ -234,6 +234,33 @@ public final class RemoteStore {
         save(store);
     }
 
+    public static synchronized boolean removeDevice(String serverOrigin, String groupId, String deviceId) {
+        RemoteProfile profile = getProfileByOrigin(serverOrigin);
+        if (profile == null || TextUtils.isEmpty(groupId) || TextUtils.isEmpty(deviceId)) return false;
+        ensureProfile(profile);
+        boolean removed = false;
+        for (Iterator<RemoteGroup> groupIt = profile.groups.iterator(); groupIt.hasNext(); ) {
+            RemoteGroup group = groupIt.next();
+            if (group == null || !TextUtils.equals(group.groupId, groupId)) continue;
+            if (group.devices != null) {
+                for (Iterator<RemoteDevice> deviceIt = group.devices.iterator(); deviceIt.hasNext(); ) {
+                    RemoteDevice device = deviceIt.next();
+                    if (device != null && TextUtils.equals(device.deviceId, deviceId)) {
+                        deviceIt.remove();
+                        removed = true;
+                    }
+                }
+            }
+            if (group.devices == null || group.devices.isEmpty()) groupIt.remove();
+            break;
+        }
+        if (removed) {
+            profile.updatedAt = System.currentTimeMillis();
+            upsertProfile(profile);
+        }
+        return removed;
+    }
+
     public static synchronized void clear() {
         cache = new RemoteStoreFile();
         loaded = true;

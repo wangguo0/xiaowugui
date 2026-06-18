@@ -12,8 +12,10 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
@@ -189,6 +191,7 @@ public final class RemoteTrustDialog {
 
         binding.server = input(context, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
         binding.serverLayout = inputLayout(context, R.string.remote_trust_server_url, binding.server);
+        setupEditableText(binding.server, false);
         binding.enabled = check(context, R.string.remote_trust_enable);
         binding.enabled.setChecked(true);
         binding.keepOnline = check(context, R.string.remote_trust_keep_online);
@@ -348,6 +351,30 @@ public final class RemoteTrustDialog {
         if (manager != null && view != null) manager.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
+    private static void setupEditableText(TextInputEditText input, boolean multiline) {
+        input.setSelectAllOnFocus(false);
+        input.setHorizontallyScrolling(true);
+        input.setHorizontalScrollBarEnabled(true);
+        input.setVerticalScrollBarEnabled(multiline);
+        input.setOnTouchListener((view, event) -> {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                view.post(() -> disallowParentIntercept(view, false));
+            } else {
+                disallowParentIntercept(view, true);
+            }
+            return false;
+        });
+    }
+
+    private static void disallowParentIntercept(View view, boolean disallow) {
+        ViewParent parent = view.getParent();
+        while (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(disallow);
+            parent = parent.getParent();
+        }
+    }
+
     private static void renderDevices(Context context, Binding binding) {
         RemoteProfile profile = currentProfile(binding);
         if (binding.statusExpanded) binding.content.addView(statusDetailPanel(context, profile, binding), matchWrap());
@@ -453,9 +480,30 @@ public final class RemoteTrustDialog {
         });
         binding.content.addView(advanced, topMargin(fixedHeight(context, 34), 14));
         if (binding.advancedExpanded) {
+            renderDeviceCleanup(context, binding, profile);
             MaterialButton clear = dangerAction(binding, context, R.string.remote_trust_reset_local);
             clear.setOnClickListener(v -> confirmClear((FragmentActivity) context, binding));
-            binding.content.addView(clear, topMargin(fixedHeight(context, 36), 8));
+            binding.content.addView(clear, topMargin(fixedHeight(context, 36), 12));
+        }
+    }
+
+    private static void renderDeviceCleanup(Context context, Binding binding, RemoteProfile profile) {
+        List<DeviceRow> rows = deviceRows(profile);
+        if (rows.isEmpty()) return;
+        binding.content.addView(sectionTitle(context, R.string.remote_trust_added_devices), topMargin(matchWrap(), 12));
+        for (DeviceRow row : rows) {
+            LinearLayoutCompat item = card(context);
+            LinearLayoutCompat line = row(context);
+            MaterialTextView text = text(context, deviceText(context, profile, row.group, row.device), 12, "#3C4043", false);
+            text.setMaxLines(2);
+            text.setEllipsize(TextUtils.TruncateAt.END);
+            line.addView(text, weight());
+            MaterialButton delete = iconButton(context, R.drawable.ic_action_delete, context.getString(R.string.remote_trust_delete_device));
+            delete.setOnClickListener(v -> confirmDeleteDevice((FragmentActivity) context, binding, row));
+            bindAction(binding, delete);
+            line.addView(delete, fixed(context, 36, 32));
+            item.addView(line, matchWrap());
+            binding.content.addView(item, topMargin(matchWrap(), 8));
         }
     }
 
@@ -693,11 +741,9 @@ public final class RemoteTrustDialog {
                 RemoteAgent.get().start();
                 App.post(() -> {
                     setBusy(binding, false);
-                    if (response != null) {
-                        binding.selectedGroupId = response.groupId;
-                        binding.selectedDeviceId = response.deviceId;
-                    }
-                    binding.page = PAGE_DETAIL;
+                    binding.selectedGroupId = "";
+                    binding.selectedDeviceId = "";
+                    binding.page = PAGE_DEVICES;
                     Notify.show(R.string.remote_trust_add_done);
                     render(activity, binding);
                 });
@@ -921,6 +967,25 @@ public final class RemoteTrustDialog {
                     binding.creatingBindCode = false;
                     binding.page = PAGE_DEVICES;
                     render(activity, binding);
+                })
+                .show();
+    }
+
+    private static void confirmDeleteDevice(FragmentActivity activity, Binding binding, DeviceRow row) {
+        if (row == null || row.group == null || row.device == null) return;
+        new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.remote_trust_delete_device)
+                .setMessage(activity.getString(R.string.remote_trust_delete_device_message, deviceName(row.device)))
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.dialog_confirm, (dialog, which) -> {
+                    RemoteProfile profile = currentProfile(binding);
+                    if (profile == null) return;
+                    if (RemoteStore.removeDevice(profile.serverOrigin, row.group.groupId, row.device.deviceId)) {
+                        binding.selectedGroupId = "";
+                        binding.selectedDeviceId = "";
+                        Notify.show(R.string.remote_trust_delete_device_done);
+                        render(activity, binding);
+                    }
                 })
                 .show();
     }
@@ -1250,6 +1315,10 @@ public final class RemoteTrustDialog {
         input.setSingleLine(singleLine);
         input.setTextSize(14);
         input.setMinHeight(dp(context, 46));
+        input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        input.setSelectAllOnFocus(false);
+        input.setTextColor(Color.BLACK);
+        input.setHintTextColor(Color.parseColor("#666666"));
         return input;
     }
 
@@ -1257,6 +1326,9 @@ public final class RemoteTrustDialog {
         TextInputLayout layout = new TextInputLayout(context);
         layout.setHint(context.getString(hint));
         layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        layout.setBoxBackgroundColor(Color.WHITE);
+        layout.setBoxStrokeColor(ContextCompat.getColor(context, R.color.dialog_outlined_button_stroke));
+        layout.setHintTextColor(ColorStateList.valueOf(Color.parseColor("#5F6368")));
         layout.setBoxCornerRadii(dp(context, 8), dp(context, 8), dp(context, 8), dp(context, 8));
         layout.addView(input, matchWrap());
         return layout;
