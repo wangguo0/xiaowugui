@@ -152,7 +152,8 @@
     <string name="remote_trust_status_unbound">未绑定</string>
     <string name="remote_trust_status_enabled">已启用</string>
     <string name="remote_trust_status_online">在线</string>
-    <string name="remote_trust_status_summary">%1$s · 服务 %2$d · 组 %3$d</string>
+    <string name="remote_trust_status_summary">%1$s · 中转 %2$d · 组 %3$d</string>
+    <string name="remote_trust_current_status_summary">%1$s · 组 %2$d · 设备 %3$d</string>
     <string name="remote_trust_notification_title">远程托管在线</string>
     <string name="remote_trust_section_local">本机接入</string>
     <string name="remote_trust_section_local_hint">把当前 WebHTV 注册到中转服务。需要让其他设备管理本机时，在这里生成绑定码。</string>

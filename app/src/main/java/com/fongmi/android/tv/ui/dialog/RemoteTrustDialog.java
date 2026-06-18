@@ -282,7 +282,7 @@ public final class RemoteTrustDialog {
         initFields(binding);
         binding.actions.clear();
         binding.content.removeAllViews();
-        binding.summary.setText(RemoteStore.summary(context) + (Setting.hasFileAccess() ? "" : "\n" + context.getString(R.string.remote_trust_file_permission_hint)));
+        binding.summary.setText(currentSummary(context, binding) + (Setting.hasFileAccess() ? "" : "\n" + context.getString(R.string.remote_trust_file_permission_hint)));
         updateHeader(context, binding);
         if (binding.page == PAGE_SETTINGS) renderSettings(context, binding);
         else if (binding.page == PAGE_DETAIL) renderDeviceDetail(context, binding);
@@ -344,6 +344,12 @@ public final class RemoteTrustDialog {
         if (binding.detectingService) return context.getString(R.string.remote_trust_detect_service);
         if (!TextUtils.isEmpty(binding.serviceStateText)) return binding.serviceStateText;
         return context.getString(R.string.remote_trust_service_unchecked);
+    }
+
+    private static String currentSummary(Context context, Binding binding) {
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null) return context.getString(R.string.remote_trust_status_unbound);
+        return currentStatusSummary(context, profile);
     }
 
     private static void applyStatusStyle(Context context, MaterialButton button, RemoteProfile profile, String state) {
@@ -2334,8 +2340,15 @@ public final class RemoteTrustDialog {
         StringBuilder builder = new StringBuilder();
         builder.append(context.getString(R.string.remote_trust_server_url)).append(": ").append(displayOrigin(profile.serverOrigin));
         builder.append('\n').append(context.getString(R.string.remote_trust_device_id)).append(": ").append(shortId(profile.deviceId));
-        builder.append('\n').append(context.getString(R.string.remote_trust_status_summary, profile.keepOnline ? context.getString(R.string.remote_trust_status_online) : context.getString(R.string.remote_trust_status_enabled), 1, profile.groups == null ? 0 : profile.groups.size()));
+        builder.append('\n').append(currentStatusSummary(context, profile));
         return builder.toString();
+    }
+
+    private static String currentStatusSummary(Context context, RemoteProfile profile) {
+        String status = profile.keepOnline ? context.getString(R.string.remote_trust_status_online) : context.getString(profile.enabled ? R.string.remote_trust_status_enabled : R.string.setting_disable);
+        int groups = profile.groups == null ? 0 : profile.groups.size();
+        int devices = deviceRows(profile).size();
+        return context.getString(R.string.remote_trust_current_status_summary, status, groups, devices);
     }
 
     private static List<DeviceRow> deviceRows(RemoteProfile profile) {
