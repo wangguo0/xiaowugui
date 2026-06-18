@@ -5,6 +5,8 @@
 
 # Gson
 -keep class com.google.gson.** { *; }
+-keep class com.fongmi.android.tv.remote.** { *; }
+-keep class com.fongmi.android.tv.gitcloud.** { *; }
 
 # SimpleXML
 -keep interface org.simpleframework.xml.core.Label { public *; }
