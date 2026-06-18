@@ -1164,8 +1164,6 @@ public final class RemoteTrustDialog {
         state.formActionsRow.addView(state.addSave, weight());
         state.addBack = outline(activity, activity.getString(R.string.remote_trust_back_devices));
         state.formActionsRow.addView(state.addBack, leftWeight(activity, 6));
-        state.addCancel = outline(activity, activity.getString(R.string.dialog_cancel));
-        state.formActionsRow.addView(state.addCancel, leftWeight(activity, 6));
         state.formActionsRow.setVisibility(View.GONE);
         root.addView(state.formActionsRow, topMargin(matchWrap(), 8));
 
@@ -1225,9 +1223,6 @@ public final class RemoteTrustDialog {
         state.addBack.setOnClickListener(v -> {
             if (state.editing) exitConfigEdit(activity, binding, state);
             else exitConfigAdd(activity, binding, state);
-        });
-        state.addCancel.setOnClickListener(v -> {
-            if (state.dialog != null) state.dialog.dismiss();
         });
         dialog.setOnShowListener(v -> {
             configureConfigWindow(activity, dialog);
@@ -1472,7 +1467,6 @@ public final class RemoteTrustDialog {
         state.formActionsRow.setVisibility(form ? View.VISIBLE : View.GONE);
         state.addSave.setEnabled(!busy);
         state.addBack.setEnabled(!busy);
-        state.addCancel.setEnabled(!busy);
         setConfigDialogCancelVisible(state, !form);
     }
 
@@ -1625,10 +1619,14 @@ public final class RemoteTrustDialog {
         LinearLayoutCompat item = card(context);
         boolean selected = sameConfig(state.addSelected, payload);
         item.setBackground(configItemBackground(context, false, selected));
+        item.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
         item.setClickable(true);
         item.setFocusable(true);
         MaterialTextView url = text(context, safe(payload, "url"), 13, "#202124", selected);
-        url.setTextIsSelectable(true);
+        url.setTextIsSelectable(false);
+        url.setClickable(false);
+        url.setFocusable(false);
+        url.setLongClickable(false);
         url.setMaxLines(3);
         url.setEllipsize(TextUtils.TruncateAt.END);
         item.addView(url, matchWrap());
@@ -3368,7 +3366,6 @@ public final class RemoteTrustDialog {
         private MaterialButton refresh;
         private MaterialButton addSave;
         private MaterialButton addBack;
-        private MaterialButton addCancel;
         private MaterialButton home;
         private MaterialButton edit;
         private MaterialButton delete;
