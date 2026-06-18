@@ -285,6 +285,12 @@
     <string name="remote_trust_scan_server">掃碼</string>
     <string name="remote_trust_scan_unavailable">目前設備不支援掃碼</string>
     <string name="remote_trust_server_qr">中轉服務 QR Code</string>
+    <string name="remote_trust_scan_filled">已填入掃碼 URL，點擊完成後保存。</string>
+    <string name="remote_trust_send_server_title">發送中轉 URL</string>
+    <string name="remote_trust_send_server_hint">保存後會直接寫入剛才掃碼的那台設備。</string>
+    <string name="remote_trust_send_server_save">保存到對方</string>
+    <string name="remote_trust_send_server_done">已保存到對方設備</string>
+    <string name="remote_trust_send_server_failed">保存到對方設備失敗：%1$s</string>
     <string name="setting_login_state">登入狀態學習</string>
     <string name="setting_site_health_sort">站點健康排序</string>
     <string name="setting_site_health_enable">啟用站點健康排序</string>

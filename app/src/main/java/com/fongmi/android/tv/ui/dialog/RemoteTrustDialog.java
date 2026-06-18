@@ -60,6 +60,7 @@ import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.QRCode;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
+import com.github.catvod.net.OkHttp;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
@@ -69,6 +70,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -77,6 +79,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.lang.ref.WeakReference;
+
+import okhttp3.FormBody;
+import okhttp3.Request;
 
 public final class RemoteTrustDialog {
 
@@ -159,10 +164,16 @@ public final class RemoteTrustDialog {
         FragmentActivity activity = scanActivity == null ? null : scanActivity.get();
         Binding binding = scanBinding == null ? null : scanBinding.get();
         if (activity == null || binding == null || TextUtils.isEmpty(address)) return;
+        clearScanTarget(binding);
+        if (isRemoteTrustSetupUrl(address)) {
+            showSendServerUrlDialog(activity, binding, address);
+            return;
+        }
         binding.server.setText(address);
         binding.page = PAGE_SETTINGS;
         binding.serverEditing = true;
-        saveServerSettings(activity, binding);
+        render(activity, binding);
+        Notify.show(R.string.remote_trust_scan_filled);
     }
 
     private static Binding build(Context context) {
@@ -385,6 +396,70 @@ public final class RemoteTrustDialog {
             clearScanTarget(binding);
             Notify.show(R.string.remote_trust_scan_unavailable);
         }
+    }
+
+    private static boolean isRemoteTrustSetupUrl(String value) {
+        try {
+            URI uri = URI.create(value.trim());
+            return "/remote/trust/setup".equals(uri.getPath());
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private static void showSendServerUrlDialog(FragmentActivity activity, Binding binding, String setupUrl) {
+        TextInputEditText input = input(activity, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
+        input.setText(currentServerText(binding));
+        LinearLayoutCompat root = dialogRoot(activity);
+        root.addView(inputLayout(activity, R.string.remote_trust_server_url, input), matchWrap());
+        MaterialTextView hint = text(activity, activity.getString(R.string.remote_trust_send_server_hint), 12, "#5F6368", false);
+        hint.setPadding(0, dp(activity, 8), 0, 0);
+        root.addView(hint, matchWrap());
+        AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.remote_trust_send_server_title)
+                .setView(root)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.remote_trust_send_server_save, null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String serverUrl = textOf(input);
+            if (TextUtils.isEmpty(RemoteTokens.normalizeOrigin(serverUrl))) {
+                Notify.show(R.string.remote_trust_server_required);
+                return;
+            }
+            dialog.dismiss();
+            sendServerUrlToRemoteSetup(activity, setupUrl, serverUrl);
+        }));
+        dialog.show();
+    }
+
+    private static void sendServerUrlToRemoteSetup(FragmentActivity activity, String setupUrl, String serverUrl) {
+        setWindowBusy(activity, true);
+        Task.execute(() -> {
+            try {
+                FormBody body = new FormBody.Builder().add("serverUrl", serverUrl).build();
+                Request request = new Request.Builder().url(setupUrl).post(body).build();
+                try (okhttp3.Response response = OkHttp.client(5000).newCall(request).execute()) {
+                    if (!response.isSuccessful()) throw new IllegalStateException("HTTP " + response.code());
+                }
+                App.post(() -> {
+                    setWindowBusy(activity, false);
+                    Notify.show(R.string.remote_trust_send_server_done);
+                });
+            } catch (Throwable e) {
+                App.post(() -> {
+                    setWindowBusy(activity, false);
+                    Notify.show(activity.getString(R.string.remote_trust_send_server_failed, conciseError(activity, e)));
+                });
+            }
+        });
+    }
+
+    private static void setWindowBusy(FragmentActivity activity, boolean busy) {
+        Window window = activity == null ? null : activity.getWindow();
+        if (window == null) return;
+        if (busy) window.setFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE);
     }
 
     private static void clearScanTarget(Binding binding) {
@@ -2090,11 +2165,8 @@ public final class RemoteTrustDialog {
     }
 
     private static void showServerQr(FragmentActivity activity, Binding binding) {
-        String server = currentServerText(binding);
-        if (TextUtils.isEmpty(RemoteTokens.normalizeOrigin(server))) {
-            Server.get().start();
-            server = Server.get().getAddress(false);
-        }
+        Server.get().start();
+        String server = Server.get().getAddress(false) + "/remote/trust/setup";
         LinearLayoutCompat root = dialogRoot(activity);
         ImageView image = new ImageView(activity);
         image.setImageBitmap(QRCode.getLightBitmap(server, 220, 1));
