@@ -143,10 +143,13 @@ public class SettingEnhanceFragment extends BaseFragment {
     private void setWebHomeFullscreen(View view) {
         Setting.putWebHomeFullscreen(!Setting.isWebHomeFullscreen());
         mBinding.webHomeFullscreenText.setText(getSwitch(Setting.isWebHomeFullscreen()));
-        if (!Setting.isWebHomeFullscreen() && requireActivity() instanceof HomeActivity) {
-            JsonObject object = new JsonObject();
-            object.addProperty("mode", "normal");
-            ((HomeActivity) requireActivity()).setWebHomeChrome(object);
+        if (requireActivity() instanceof HomeActivity activity) {
+            if (!Setting.isWebHomeFullscreen()) {
+                JsonObject object = new JsonObject();
+                object.addProperty("mode", "normal");
+                activity.setWebHomeChrome(object);
+            }
+            activity.refreshWebHomeChromeState();
         }
     }
 

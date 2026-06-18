@@ -306,6 +306,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         if (mChrome != null) mChrome.setLegacyToolbar(visible);
     }
 
+    public void refreshWebHomeChromeState() {
+        onWebHomeChromeChanged(getWebHomeChromeMode());
+    }
+
     private JsonObject normalWebHomeChrome() {
         JsonObject object = new JsonObject();
         object.addProperty("mode", "normal");

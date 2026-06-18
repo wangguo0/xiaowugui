@@ -31,6 +31,8 @@ public final class RemoteCommandExecutor {
             if ("config.upsert".equals(command.type)) return RemoteConfigOps.upsert(command.payload);
             if ("config.use".equals(command.type)) return RemoteConfigOps.use(command.payload);
             if ("config.delete".equals(command.type)) return RemoteConfigOps.delete(command.payload);
+            if ("config.sites".equals(command.type)) return RemoteConfigOps.sites(command.payload);
+            if ("config.home".equals(command.type)) return RemoteConfigOps.home(command.payload);
             if ("remoteSync.export".equals(command.type)) return startSyncExport(profile, command);
             if ("remoteSync.restore".equals(command.type)) return startSyncRestore(profile, command);
             if ("action.search".equals(command.type)) return search(command.payload);
