@@ -561,6 +561,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.appBar.setExpanded(true, false);
         mBinding.appBar.setVisibility(hidden ? View.GONE : View.VISIBLE);
         setHomeWebTopMargin(hidden ? 0 : mHomeWebTopMargin);
+        updateToolbarMenu();
         if (hidden) {
             mBinding.type.setVisibility(View.GONE);
             mBinding.pager.setVisibility(View.GONE);
