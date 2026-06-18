@@ -60,6 +60,7 @@ public class SettingEnhanceFragment extends BaseFragment {
 
     @Override
     protected void initView() {
+        reorderItems();
         setText();
     }
 
@@ -98,6 +99,30 @@ public class SettingEnhanceFragment extends BaseFragment {
         }));
         mBinding.loginState.setOnClickListener(view -> LoginStateLearnDialog.show(this, this::setText));
         mBinding.oneKeySync.setOnClickListener(v -> OneKeySyncDialog.create().show(requireActivity()));
+    }
+
+    private void reorderItems() {
+        ViewGroup parent = (ViewGroup) mBinding.customCsp.getParent();
+        View[] order = {
+                mBinding.customCsp,
+                mBinding.webHomeExtension,
+                mBinding.gitCloud,
+                mBinding.oneKeySync,
+                mBinding.remoteTrust,
+                mBinding.loginState,
+                mBinding.playbackWebhook,
+                mBinding.shellProxy,
+                mBinding.shellProxyConfig,
+                mBinding.managePage,
+                mBinding.webHomeFullscreen,
+                mBinding.cspWarmup,
+                mBinding.playbackArtworkWall,
+                mBinding.driveCheck,
+                mBinding.siteHealthSort,
+                mBinding.debugLog
+        };
+        for (View view : order) parent.removeView(view);
+        for (View view : order) parent.addView(view);
     }
 
     private void setText() {

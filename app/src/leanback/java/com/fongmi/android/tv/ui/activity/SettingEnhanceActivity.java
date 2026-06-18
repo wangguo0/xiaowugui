@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.viewbinding.ViewBinding;
 
@@ -56,7 +57,8 @@ public class SettingEnhanceActivity extends BaseActivity {
 
     @Override
     protected void initView(Bundle savedInstanceState) {
-        mBinding.driveCheck.requestFocus();
+        reorderItems();
+        mBinding.customCsp.requestFocus();
         setText();
     }
 
@@ -86,6 +88,30 @@ public class SettingEnhanceActivity extends BaseActivity {
         }));
         mBinding.loginState.setOnClickListener(view -> LoginStateLearnDialog.show(this, this::setText));
         mBinding.oneKeySync.setOnClickListener(v -> OneKeySyncDialog.create().show(this));
+    }
+
+    private void reorderItems() {
+        ViewGroup parent = (ViewGroup) mBinding.customCsp.getParent();
+        View[] order = {
+                mBinding.customCsp,
+                mBinding.webHomeExtension,
+                mBinding.gitCloud,
+                mBinding.oneKeySync,
+                mBinding.remoteTrust,
+                mBinding.loginState,
+                mBinding.playbackWebhook,
+                mBinding.shellProxy,
+                mBinding.shellProxyConfig,
+                mBinding.managePage,
+                mBinding.webHomeFullscreen,
+                mBinding.cspWarmup,
+                mBinding.playbackArtworkWall,
+                mBinding.driveCheck,
+                mBinding.siteHealthSort,
+                mBinding.debugLog
+        };
+        for (View view : order) parent.removeView(view);
+        for (View view : order) parent.addView(view);
     }
 
     private void setText() {
