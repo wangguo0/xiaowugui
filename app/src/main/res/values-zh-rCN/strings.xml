@@ -250,8 +250,11 @@
     <string name="remote_trust_config_home">主页站点</string>
     <string name="remote_trust_config_delete">删除接口</string>
     <string name="remote_trust_config_upsert_short">保存</string>
-    <string name="remote_trust_config_use_short">切换</string>
+    <string name="remote_trust_config_use_short">使用</string>
+    <string name="remote_trust_config_current">当前</string>
     <string name="remote_trust_config_home_short">主页</string>
+    <string name="remote_trust_config_home_label">当前主页：%1$s</string>
+    <string name="remote_trust_config_home_loading">正在读取站点…</string>
     <string name="remote_trust_config_delete_short">删除</string>
     <string name="remote_trust_config_url_required">请输入接口 URL</string>
     <string name="remote_trust_config_delete_message">删除远端设备上的接口？\n%1$s</string>

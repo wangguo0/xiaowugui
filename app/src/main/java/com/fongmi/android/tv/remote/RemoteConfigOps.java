@@ -109,6 +109,7 @@ public final class RemoteConfigOps {
         item.addProperty("desc", config.getDesc());
         item.addProperty("time", config.getTime());
         item.addProperty("active", forceActive || isCurrent(config));
+        if (config.getType() == 0 && isCurrent(config) && VodConfig.get().getHome() != null) item.addProperty("homeName", VodConfig.get().getHome().getName());
         return item;
     }
 

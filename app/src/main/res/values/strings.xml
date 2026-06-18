@@ -251,8 +251,11 @@
     <string name="remote_trust_config_home">Home site</string>
     <string name="remote_trust_config_delete">Delete config</string>
     <string name="remote_trust_config_upsert_short">Save</string>
-    <string name="remote_trust_config_use_short">Switch</string>
+    <string name="remote_trust_config_use_short">Use</string>
+    <string name="remote_trust_config_current">Current</string>
     <string name="remote_trust_config_home_short">Home</string>
+    <string name="remote_trust_config_home_label">Home: %1$s</string>
+    <string name="remote_trust_config_home_loading">Loading sites…</string>
     <string name="remote_trust_config_delete_short">Delete</string>
     <string name="remote_trust_config_url_required">Enter config URL</string>
     <string name="remote_trust_config_delete_message">Delete this config on the remote device?\n%1$s</string>
