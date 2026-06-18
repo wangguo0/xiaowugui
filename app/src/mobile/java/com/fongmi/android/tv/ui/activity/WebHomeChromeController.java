@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.ActivityHomeBinding;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.WebHomeChrome;
 import com.fongmi.android.tv.web.WebHomeChromeOptions;
@@ -52,7 +53,11 @@ final class WebHomeChromeController {
         this.binding = binding;
         this.host = host;
         this.navigationBaseHeight = binding.navigation.getLayoutParams().height;
-        if (savedInstanceState == null && startupChrome != null) {
+        if (!Setting.isWebHomeFullscreen()) {
+            this.mode = WebHomeChrome.NORMAL;
+            this.previousMode = WebHomeChrome.NORMAL;
+            this.options = WebHomeChromeOptions.normal();
+        } else if (savedInstanceState == null && startupChrome != null) {
             this.options = WebHomeChromeOptions.from(startupChrome, WebHomeChrome.EDGE);
             this.mode = WebHomeChrome.normalize(options.mode, WebHomeChrome.EDGE);
             this.previousMode = WebHomeChrome.IMMERSIVE.equals(mode) ? WebHomeChrome.NORMAL : mode;
@@ -139,6 +144,7 @@ final class WebHomeChromeController {
     }
 
     private void apply(WebHomeChromeOptions next) {
+        if (!Setting.isWebHomeFullscreen()) next = WebHomeChromeOptions.normal();
         String nextMode = WebHomeChrome.normalize(next.mode, WebHomeChrome.NORMAL);
         if (WebHomeChrome.IMMERSIVE.equals(nextMode) && !WebHomeChrome.IMMERSIVE.equals(mode)) previousMode = mode;
         if (!WebHomeChrome.IMMERSIVE.equals(nextMode)) previousMode = nextMode;

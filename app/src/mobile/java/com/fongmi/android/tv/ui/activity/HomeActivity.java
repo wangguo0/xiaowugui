@@ -35,6 +35,7 @@ import com.fongmi.android.tv.player.Source;
 import com.fongmi.android.tv.receiver.ShortcutReceiver;
 import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
 import com.fongmi.android.tv.ui.fragment.SettingEnhanceFragment;
@@ -265,10 +266,18 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void applyWebHomeDefaultChrome(Site site) {
+        if (!Setting.isWebHomeFullscreen()) {
+            if (mChrome != null) mChrome.setChrome(normalWebHomeChrome());
+            return;
+        }
         if (mChrome != null) mChrome.applyDefault(WebHomeChromeStartup.resolve(VodConfig.get().getConfig(), site));
     }
 
     public void setWebHomeChrome(JsonObject payload) {
+        if (!Setting.isWebHomeFullscreen()) {
+            if (mChrome != null) mChrome.setChrome(normalWebHomeChrome());
+            return;
+        }
         if (isStartupChrome(payload)) WebHomeChromeStartup.remember(VodConfig.get().getConfig(), VodConfig.get().getHome(), payload);
         if (mChrome != null) mChrome.setChrome(payload);
     }
@@ -282,11 +291,25 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void restoreWebHomeChrome() {
+        if (!Setting.isWebHomeFullscreen()) {
+            if (mChrome != null) mChrome.setChrome(normalWebHomeChrome());
+            return;
+        }
         if (mChrome != null) mChrome.restore();
     }
 
     public void setWebHomeLegacyToolbar(boolean visible) {
+        if (!Setting.isWebHomeFullscreen()) {
+            if (mChrome != null) mChrome.setChrome(normalWebHomeChrome());
+            return;
+        }
         if (mChrome != null) mChrome.setLegacyToolbar(visible);
+    }
+
+    private JsonObject normalWebHomeChrome() {
+        JsonObject object = new JsonObject();
+        object.addProperty("mode", "normal");
+        return object;
     }
 
     public void openVod() {

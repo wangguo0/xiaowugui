@@ -51,6 +51,7 @@ import com.fongmi.android.tv.player.Source;
 import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.service.DLNARendererService;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.adapter.BaseDiffCallback;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
@@ -817,22 +818,39 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
 
     @Override
     public void setToolbar(boolean visible) {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyTvChrome(TV_NORMAL);
+            return;
+        }
         applyTvChrome(visible ? webDefaultChromeMode : TV_TOOLBAR_HIDDEN);
     }
 
     @Override
     public void applyDefaultChrome(Site site) {
+        if (!Setting.isWebHomeFullscreen()) {
+            webDefaultChromeMode = TV_NORMAL;
+            applyTvChrome(TV_NORMAL);
+            return;
+        }
         webDefaultChromeMode = tvDefaultMode(site == null ? "" : site.getChromeMode());
         applyTvChrome(webDefaultChromeMode);
     }
 
     @Override
     public void setChrome(JsonObject payload) {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyTvChrome(TV_NORMAL);
+            return;
+        }
         applyTvChrome(tvRuntimeMode(Json.safeString(payload, "mode")));
     }
 
     @Override
     public void restoreChrome() {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyTvChrome(TV_NORMAL);
+            return;
+        }
         applyTvChrome(webDefaultChromeMode);
     }
 

@@ -31,6 +31,7 @@ import com.github.catvod.crawler.SpiderDebug;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.server.Server;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.UrlUtil;
@@ -123,7 +124,8 @@ public class HomeWebController {
 
     public boolean load(Site site, boolean force) {
         if (!site.hasHomePage()) return false;
-        listener.applyDefaultChrome(site);
+        if (Setting.isWebHomeFullscreen()) listener.applyDefaultChrome(site);
+        else listener.setChrome(normalChrome());
         Server.get().start();
         String url = getHomePage(site);
         boolean reload = force || !url.equals(homePage);
@@ -306,15 +308,33 @@ public class HomeWebController {
     }
 
     public void setToolbar(boolean visible) {
+        if (!Setting.isWebHomeFullscreen()) {
+            listener.setChrome(normalChrome());
+            return;
+        }
         listener.setToolbar(visible);
     }
 
     public void setChrome(JsonObject payload) {
+        if (!Setting.isWebHomeFullscreen()) {
+            listener.setChrome(normalChrome());
+            return;
+        }
         listener.setChrome(payload);
     }
 
     public void restoreChrome() {
+        if (!Setting.isWebHomeFullscreen()) {
+            listener.setChrome(normalChrome());
+            return;
+        }
         listener.restoreChrome();
+    }
+
+    private JsonObject normalChrome() {
+        JsonObject object = new JsonObject();
+        object.addProperty("mode", WebHomeChrome.NORMAL);
+        return object;
     }
 
     public String getViewportJson() {

@@ -172,6 +172,14 @@ public class Setting {
         Prefers.put("web_home_extension", extension);
     }
 
+    public static boolean isWebHomeFullscreen() {
+        return Prefers.getBoolean("web_home_fullscreen", true);
+    }
+
+    public static void putWebHomeFullscreen(boolean fullscreen) {
+        Prefers.put("web_home_fullscreen", fullscreen);
+    }
+
     public static boolean isPlaybackArtworkWall() {
         return Prefers.getBoolean("playback_artwork_wall", true);
     }

@@ -3,6 +3,8 @@ package com.fongmi.android.tv.ui.dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -24,6 +26,8 @@ import android.view.inputmethod.InputMethodManager;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
@@ -31,6 +35,7 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.remote.RemoteAgent;
 import com.fongmi.android.tv.remote.RemoteAgentService;
 import com.fongmi.android.tv.remote.RemoteClient;
@@ -63,7 +68,6 @@ import com.google.android.material.textview.MaterialTextView;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.GsonBuilder;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -89,6 +93,15 @@ public final class RemoteTrustDialog {
 
     public static void show(FragmentActivity activity, Runnable callback) {
         Binding binding = build(activity);
+        binding.scanLauncher = activity.getActivityResultRegistry().register("remote_trust_scan_" + System.nanoTime(), activity, new ActivityResultContracts.StartActivityForResult(), result -> {
+            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
+            String address = result.getData().getStringExtra("address");
+            if (TextUtils.isEmpty(address)) return;
+            binding.server.setText(address);
+            binding.page = PAGE_SETTINGS;
+            binding.serverEditing = true;
+            saveServerSettings(activity, binding);
+        });
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setView(binding.root)
                 .create();
@@ -139,7 +152,10 @@ public final class RemoteTrustDialog {
             });
             bindServerInput(activity, binding);
         });
-        dialog.setOnDismissListener(d -> App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry));
+        dialog.setOnDismissListener(d -> {
+            App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry);
+            if (binding.scanLauncher != null) binding.scanLauncher.unregister();
+        });
         dialog.show();
     }
 
@@ -352,6 +368,15 @@ public final class RemoteTrustDialog {
         binding.server.setOnClickListener(v -> showKeyboard(activity, binding.server));
     }
 
+    private static void startScan(FragmentActivity activity, Binding binding) {
+        try {
+            Class<?> clazz = Class.forName("com.fongmi.android.tv.ui.activity.ScanActivity");
+            binding.scanLauncher.launch(new Intent(activity, clazz));
+        } catch (Throwable e) {
+            Notify.show(R.string.remote_trust_scan_unavailable);
+        }
+    }
+
     private static void hideKeyboard(Context context, View view) {
         InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         if (manager != null && view != null) manager.hideSoftInputFromWindow(view.getWindowToken(), 0);
@@ -432,13 +457,6 @@ public final class RemoteTrustDialog {
         });
         bindAction(binding, deviceStatus);
         top.addView(deviceStatus, weight());
-        MaterialButton log = smallOutlineAction(binding, context, R.string.remote_trust_action_log);
-        log.setOnClickListener(v -> {
-            JsonObject payload = new JsonObject();
-            payload.addProperty("limit", 200);
-            sendCommand((FragmentActivity) context, binding, "log.recent", payload);
-        });
-        top.addView(log, fixed(context, 56, 34));
         MaterialButton back = smallOutlineAction(binding, context, R.string.remote_trust_back_devices);
         back.setOnClickListener(v -> {
             binding.deviceStatusExpanded = false;
@@ -453,14 +471,11 @@ public final class RemoteTrustDialog {
         }
 
         LinearLayoutCompat row1 = row(context);
-        MaterialButton status = tonalAction(binding, context, R.string.remote_trust_action_status);
         MaterialButton search = primaryAction(binding, context, R.string.remote_trust_action_search);
         MaterialButton push = tonalAction(binding, context, R.string.remote_trust_action_push);
-        status.setOnClickListener(v -> sendCommand((FragmentActivity) context, binding, "device.status", new JsonObject()));
         search.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_search, R.string.remote_trust_search_keyword, "action.search", "word"));
         push.setOnClickListener(v -> showTextCommandDialog((FragmentActivity) context, binding, R.string.remote_trust_action_push, R.string.remote_trust_push_url, "action.push", "url"));
-        row1.addView(status, weight());
-        row1.addView(search, leftWeight(context));
+        row1.addView(search, weight());
         row1.addView(push, leftWeight(context));
         binding.content.addView(row1, topMargin(matchWrap(), 12));
 
@@ -488,9 +503,14 @@ public final class RemoteTrustDialog {
             binding.content.addView(sectionTitle(context, R.string.remote_trust_settings_title), topMargin(matchWrap(), binding.statusExpanded ? 12 : 0));
             detach(binding.serverLayout);
             binding.content.addView(binding.serverLayout, topMargin(matchWrap(), 8));
+            LinearLayoutCompat actions = row(context);
             MaterialButton save = primaryAction(binding, context, R.string.remote_trust_done);
             save.setOnClickListener(v -> saveServerSettings((FragmentActivity) context, binding));
-            binding.content.addView(save, topMargin(fixedHeight(context, 36), 8));
+            actions.addView(save, weight());
+            MaterialButton scan = tonalAction(binding, context, R.string.remote_trust_scan_server);
+            scan.setOnClickListener(v -> startScan((FragmentActivity) context, binding));
+            actions.addView(scan, leftWeight(context));
+            binding.content.addView(actions, topMargin(matchWrap(), 8));
         } else {
             binding.content.addView(serverInfoPanel(context, binding, profile), topMargin(matchWrap(), binding.statusExpanded ? 12 : 0));
         }
@@ -884,34 +904,98 @@ public final class RemoteTrustDialog {
 
     private static void showConfigDialog(FragmentActivity activity, Binding binding) {
         LinearLayoutCompat root = dialogRoot(activity);
-        TextInputEditText type = input(activity, InputType.TYPE_CLASS_NUMBER, true);
-        TextInputEditText url = input(activity, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
-        TextInputEditText name = input(activity, InputType.TYPE_CLASS_TEXT, true);
-        type.setText("0");
-        root.addView(caption(activity, R.string.remote_trust_config_hint), matchWrap());
-        root.addView(inputLayout(activity, R.string.remote_trust_config_type, type), topMargin(matchWrap(), 8));
-        root.addView(inputLayout(activity, R.string.remote_trust_config_url, url), topMargin(matchWrap(), 8));
-        root.addView(inputLayout(activity, R.string.remote_trust_config_name, name), topMargin(matchWrap(), 8));
+        int[] selectedType = {0};
+        boolean[] localMode = {true};
+        LinearLayoutCompat modeRow = row(activity);
+        MaterialButton local = tab(activity, R.string.remote_trust_config_mode_local);
+        MaterialButton manual = tab(activity, R.string.remote_trust_config_mode_manual);
+        local.setChecked(true);
+        modeRow.addView(local, weight());
+        modeRow.addView(manual, leftWeight(activity));
+        root.addView(modeRow, matchWrap());
+
+        LinearLayoutCompat typeRow = row(activity);
+        MaterialButton vod = tab(activity, R.string.remote_trust_config_type_vod);
+        MaterialButton live = tab(activity, R.string.remote_trust_config_type_live);
+        MaterialButton wall = tab(activity, R.string.remote_trust_config_type_wall);
+        vod.setChecked(true);
+        typeRow.addView(vod, weight());
+        typeRow.addView(live, leftWeight(activity, 6));
+        typeRow.addView(wall, leftWeight(activity, 6));
+        root.addView(typeRow, topMargin(matchWrap(), 8));
+
+        LinearLayoutCompat content = new LinearLayoutCompat(activity);
+        content.setOrientation(LinearLayoutCompat.VERTICAL);
+        root.addView(content, topMargin(matchWrap(), 10));
+
+        AlertDialog[] dialogRef = new AlertDialog[1];
+        Runnable[] render = new Runnable[1];
+        render[0] = () -> renderConfigContent(activity, binding, dialogRef, content, selectedType[0], localMode[0]);
+        local.setOnClickListener(v -> {
+            localMode[0] = true;
+            local.setChecked(true);
+            manual.setChecked(false);
+            render[0].run();
+        });
+        manual.setOnClickListener(v -> {
+            localMode[0] = false;
+            local.setChecked(false);
+            manual.setChecked(true);
+            render[0].run();
+        });
+        vod.setOnClickListener(v -> selectConfigType(selectedType, 0, vod, live, wall, render[0]));
+        live.setOnClickListener(v -> selectConfigType(selectedType, 1, vod, live, wall, render[0]));
+        wall.setOnClickListener(v -> selectConfigType(selectedType, 2, vod, live, wall, render[0]));
+        render[0].run();
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.remote_trust_action_config)
                 .setView(root)
                 .setNegativeButton(R.string.dialog_cancel, null)
-                .setNeutralButton(R.string.remote_trust_config_list, null)
-                .setPositiveButton(R.string.remote_trust_config_save, null)
                 .create();
-        dialog.setOnShowListener(d -> {
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
-                dialog.dismiss();
-                sendCommand(activity, binding, "config.list", new JsonObject());
-            });
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                JsonObject payload = configPayload(activity, type, url, name);
-                if (payload == null) return;
-                dialog.dismiss();
-                showConfigActionDialog(activity, binding, payload);
-            });
-        });
+        dialogRef[0] = dialog;
         dialog.show();
+    }
+
+    private static void selectConfigType(int[] selectedType, int type, MaterialButton vod, MaterialButton live, MaterialButton wall, Runnable render) {
+        selectedType[0] = type;
+        vod.setChecked(type == 0);
+        live.setChecked(type == 1);
+        wall.setChecked(type == 2);
+        render.run();
+    }
+
+    private static void renderConfigContent(FragmentActivity activity, Binding binding, AlertDialog[] dialogRef, LinearLayoutCompat content, int type, boolean localMode) {
+        content.removeAllViews();
+        if (localMode) {
+            List<Config> configs = Config.getAll(type);
+            if (configs.isEmpty()) {
+                content.addView(emptyPanel(activity, activity.getString(R.string.remote_trust_config_local_empty)), matchWrap());
+                return;
+            }
+            for (Config config : configs) {
+                MaterialButton item = listButton(activity, config.getDesc() + "\n" + config.getUrl());
+                item.setOnClickListener(v -> {
+                    if (dialogRef[0] != null) dialogRef[0].dismiss();
+                    showConfigActionDialog(activity, binding, configPayload(type, config.getUrl(), config.getName()));
+                });
+                bindAction(binding, item);
+                content.addView(item, topMargin(matchWrap(), 6));
+            }
+            return;
+        }
+        TextInputEditText url = input(activity, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
+        TextInputEditText name = input(activity, InputType.TYPE_CLASS_TEXT, true);
+        content.addView(inputLayout(activity, R.string.remote_trust_config_url, url), matchWrap());
+        content.addView(inputLayout(activity, R.string.remote_trust_config_name, name), topMargin(matchWrap(), 8));
+        MaterialButton next = primaryAction(binding, activity, R.string.remote_trust_config_save);
+        next.setOnClickListener(v -> {
+            JsonObject payload = configPayload(activity, type, url, name);
+            if (payload != null) {
+                if (dialogRef[0] != null) dialogRef[0].dismiss();
+                showConfigActionDialog(activity, binding, payload);
+            }
+        });
+        content.addView(next, topMargin(fixedHeight(activity, 36), 8));
     }
 
     private static void showConfigActionDialog(FragmentActivity activity, Binding binding, JsonObject payload) {
@@ -930,16 +1014,20 @@ public final class RemoteTrustDialog {
                 .show();
     }
 
-    private static JsonObject configPayload(FragmentActivity activity, TextInputEditText type, TextInputEditText url, TextInputEditText name) {
+    private static JsonObject configPayload(FragmentActivity activity, int type, TextInputEditText url, TextInputEditText name) {
         String value = textOf(url);
         if (TextUtils.isEmpty(value)) {
             Notify.show(R.string.remote_trust_config_url_required);
             return null;
         }
+        return configPayload(type, value, textOf(name));
+    }
+
+    private static JsonObject configPayload(int type, String url, String name) {
         JsonObject payload = new JsonObject();
-        payload.addProperty("type", Math.max(0, Math.min(2, parseInt(textOf(type), 0))));
-        payload.addProperty("url", value);
-        payload.addProperty("name", textOf(name));
+        payload.addProperty("type", Math.max(0, Math.min(2, type)));
+        payload.addProperty("url", url);
+        payload.addProperty("name", name);
         return payload;
     }
 
@@ -985,7 +1073,7 @@ public final class RemoteTrustDialog {
                 JsonObject response = client.createSync(selected.group, profile.deviceId, selected.device.deviceId, App.gson().toJsonTree(SyncOptions.defaults()).getAsJsonObject());
                 App.post(() -> {
                     setBusy(binding, false);
-                    binding.lastResult = activity.getString(R.string.remote_trust_sync_started) + "\n\n" + new GsonBuilder().setPrettyPrinting().create().toJson(response);
+                    binding.lastResult = activity.getString(R.string.remote_trust_sync_started) + "\n\n" + formatData(response);
                     render(activity, binding);
                 });
             } catch (Throwable e) {
@@ -997,14 +1085,6 @@ public final class RemoteTrustDialog {
                 });
             }
         });
-    }
-
-    private static int parseInt(String value, int fallback) {
-        try {
-            return Integer.parseInt(value);
-        } catch (Throwable e) {
-            return fallback;
-        }
     }
 
     private static void sendCommand(FragmentActivity activity, Binding binding, String type, JsonObject payload) {
@@ -1092,8 +1172,88 @@ public final class RemoteTrustDialog {
         if (data.isJsonObject()) {
             JsonObject object = data.getAsJsonObject();
             if (object.has("lines") && object.get("lines").isJsonArray()) return lines(object.getAsJsonArray("lines"));
+            if (object.has("items") && object.get("items").isJsonArray()) return configItems(object.getAsJsonArray("items"));
+            if (object.has("syncFiles") || object.has("loginStateFiles")) return syncSummary(object);
+            return keyValues(object);
         }
-        return new GsonBuilder().setPrettyPrinting().create().toJson(data);
+        if (data.isJsonArray()) return arrayValues(data.getAsJsonArray());
+        return data.getAsString();
+    }
+
+    private static String configItems(JsonArray array) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(App.get().getString(R.string.remote_trust_result_config_count, array.size()));
+        for (int i = 0; i < array.size(); i++) {
+            if (!array.get(i).isJsonObject()) continue;
+            JsonObject item = array.get(i).getAsJsonObject();
+            builder.append('\n').append(bool(item, "active") ? "* " : "- ");
+            builder.append(safe(item, "typeName")).append(" · ").append(safe(item, "desc"));
+            String url = safe(item, "url");
+            if (!TextUtils.isEmpty(url)) builder.append('\n').append("  ").append(url);
+        }
+        return builder.toString();
+    }
+
+    private static String syncSummary(JsonObject object) {
+        StringBuilder builder = new StringBuilder();
+        if (object.has("syncId")) builder.append("Sync ID: ").append(safe(object, "syncId")).append('\n');
+        builder.append("Files: ").append(safe(object, "syncFiles"));
+        builder.append('\n').append("Login files: ").append(safe(object, "loginStateFiles"));
+        return builder.toString();
+    }
+
+    private static String keyValues(JsonObject object) {
+        StringBuilder builder = new StringBuilder();
+        for (String key : object.keySet()) {
+            JsonElement value = object.get(key);
+            if (value == null || value.isJsonNull()) continue;
+            if (builder.length() > 0) builder.append('\n');
+            builder.append(label(key)).append(": ");
+            if (value.isJsonObject()) builder.append(keyValues(value.getAsJsonObject()).replace("\n", "\n  "));
+            else if (value.isJsonArray()) builder.append(arrayValues(value.getAsJsonArray()));
+            else builder.append(value.getAsString());
+        }
+        return builder.toString();
+    }
+
+    private static String arrayValues(JsonArray array) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < array.size(); i++) {
+            if (i > 0) builder.append('\n');
+            JsonElement value = array.get(i);
+            builder.append("- ");
+            if (value.isJsonObject()) builder.append(keyValues(value.getAsJsonObject()).replace("\n", "\n  "));
+            else builder.append(value.isJsonNull() ? "" : value.getAsString());
+        }
+        return builder.toString();
+    }
+
+    private static String label(String key) {
+        if (TextUtils.isEmpty(key)) return "";
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (i > 0 && Character.isUpperCase(c)) builder.append(' ');
+            builder.append(i == 0 ? Character.toUpperCase(c) : c);
+        }
+        return builder.toString();
+    }
+
+    private static String safe(JsonObject object, String key) {
+        if (object == null || !object.has(key) || object.get(key).isJsonNull()) return "";
+        try {
+            return object.get(key).getAsString();
+        } catch (Throwable e) {
+            return "";
+        }
+    }
+
+    private static boolean bool(JsonObject object, String key) {
+        try {
+            return object != null && object.has(key) && object.get(key).getAsBoolean();
+        } catch (Throwable e) {
+            return false;
+        }
     }
 
     private static String lines(JsonArray array) {
@@ -1440,18 +1600,22 @@ public final class RemoteTrustDialog {
     private static LinearLayoutCompat commandResultPanel(Context context, Binding binding) {
         LinearLayoutCompat card = card(context);
         LinearLayoutCompat top = row(context);
-        MaterialTextView title = text(context, context.getString(R.string.remote_trust_command_result_title), 14, "#202124", true);
+        MaterialTextView title = text(context, context.getString(R.string.remote_trust_command_log_title), 14, "#202124", true);
         top.addView(title, weight());
         MaterialButton copy = iconButton(context, R.drawable.ic_remote_copy, context.getString(R.string.remote_trust_copy));
-        copy.setOnClickListener(v -> copyText(context, context.getString(R.string.remote_trust_command_result_title), binding.lastResult, R.string.remote_trust_result_copied));
+        copy.setOnClickListener(v -> copyText(context, context.getString(R.string.remote_trust_command_log_title), binding.lastResult, R.string.remote_trust_result_copied));
         bindAction(binding, copy);
         top.addView(copy, fixed(context, 36, 32));
         card.addView(top, matchWrap());
+        NestedScrollView scroll = new NestedScrollView(context);
+        scroll.setFillViewport(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         MaterialTextView detail = text(context, binding.lastResult, 12, "#3C4043", false);
         detail.setTextIsSelectable(true);
         detail.setLineSpacing(0, 1.08f);
-        detail.setPadding(0, dp(context, 6), 0, 0);
-        card.addView(detail, matchWrap());
+        detail.setPadding(0, dp(context, 6), dp(context, 4), dp(context, 6));
+        scroll.addView(detail, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(scroll, topMargin(fixedHeight(context, 180), 4));
         return card;
     }
 
@@ -1807,6 +1971,7 @@ public final class RemoteTrustDialog {
         private NestedScrollView scroll;
         private LinearLayoutCompat toolbar;
         private AlertDialog dialog;
+        private ActivityResultLauncher<Intent> scanLauncher;
         private Runnable callback;
         private Runnable detectRetry;
         private Runnable deviceRefreshRetry;

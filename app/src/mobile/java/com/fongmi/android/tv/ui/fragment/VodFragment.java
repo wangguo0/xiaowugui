@@ -35,6 +35,7 @@ import com.fongmi.android.tv.impl.ConfigListener;
 import com.fongmi.android.tv.impl.FilterListener;
 import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.model.SiteViewModel;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.HomeActivity;
 import com.fongmi.android.tv.ui.activity.HistoryActivity;
 import com.fongmi.android.tv.ui.activity.KeepActivity;
@@ -255,6 +256,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void onWebHomeFullscreen() {
+        if (!Setting.isWebHomeFullscreen()) return;
         if (mWeb == null || !mWeb.isVisible()) return;
         JsonObject payload = new JsonObject();
         payload.addProperty("mode", WebHomeChrome.EDGE);
@@ -264,7 +266,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private void updateToolbarMenu() {
         Menu menu = mBinding.toolbar.getMenu();
         MenuItem fullscreen = menu.findItem(R.id.web_home_fullscreen);
-        if (fullscreen != null) fullscreen.setVisible(mWeb != null && mWeb.isVisible());
+        if (fullscreen != null) fullscreen.setVisible(Setting.isWebHomeFullscreen() && mWeb != null && mWeb.isVisible());
     }
 
     private void setSearchLongClick() {
@@ -476,6 +478,10 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     @Override
     public void setToolbar(boolean visible) {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyWebHomeChrome(WebHomeChrome.NORMAL);
+            return;
+        }
         HomeActivity activity = homeActivity();
         if (activity != null) activity.setWebHomeLegacyToolbar(visible);
         else applyWebHomeChrome(visible ? WebHomeChrome.NORMAL : WebHomeChrome.IMMERSIVE);
@@ -483,18 +489,30 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     @Override
     public void applyDefaultChrome(Site site) {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyWebHomeChrome(WebHomeChrome.NORMAL);
+            return;
+        }
         HomeActivity activity = homeActivity();
         if (activity != null) activity.applyWebHomeDefaultChrome(site);
     }
 
     @Override
     public void setChrome(JsonObject payload) {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyWebHomeChrome(WebHomeChrome.NORMAL);
+            return;
+        }
         HomeActivity activity = homeActivity();
         if (activity != null) activity.setWebHomeChrome(payload);
     }
 
     @Override
     public void restoreChrome() {
+        if (!Setting.isWebHomeFullscreen()) {
+            applyWebHomeChrome(WebHomeChrome.NORMAL);
+            return;
+        }
         HomeActivity activity = homeActivity();
         if (activity != null) activity.restoreWebHomeChrome();
     }

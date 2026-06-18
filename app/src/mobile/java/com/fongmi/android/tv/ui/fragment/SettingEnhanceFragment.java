@@ -80,6 +80,7 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.siteHealthSort.setOnLongClickListener(this::clearSiteHealth);
         mBinding.webHomeExtension.setOnClickListener(view -> WebHomeExtensionDialog.show(this, this::setText));
         mBinding.webHomeExtension.setOnLongClickListener(this::clearWebHomeExtension);
+        mBinding.webHomeFullscreen.setOnClickListener(this::setWebHomeFullscreen);
         mBinding.cspWarmup.setOnClickListener(this::setCspWarmup);
         mBinding.playbackArtworkWall.setOnClickListener(this::setPlaybackArtworkWall);
         mBinding.playbackWebhook.setOnClickListener(view -> ViewingRecordSyncDialog.show(this, this::setText));
@@ -103,6 +104,7 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.siteHealthSortText.setText(getSwitch(Setting.isSiteHealthSort()));
         WebHomeExtensionRegistry.Snapshot webHomeExtension = WebHomeExtensionRegistry.get().snapshot();
         mBinding.webHomeExtensionText.setText(getSwitch(Setting.isWebHomeExtension()) + " · " + webHomeExtension.readyCount + "/" + webHomeExtension.installedCount);
+        mBinding.webHomeFullscreenText.setText(getSwitch(Setting.isWebHomeFullscreen()));
         mBinding.cspWarmupText.setText(getSwitch(Setting.isCspWarmup()));
         mBinding.playbackArtworkWallText.setText(getSwitch(Setting.isPlaybackArtworkWall()));
         mBinding.playbackWebhookText.setText(ViewingRecordSyncStore.summary(requireContext()));
@@ -134,6 +136,11 @@ public class SettingEnhanceFragment extends BaseFragment {
     private void setPlaybackArtworkWall(View view) {
         Setting.putPlaybackArtworkWall(!Setting.isPlaybackArtworkWall());
         mBinding.playbackArtworkWallText.setText(getSwitch(Setting.isPlaybackArtworkWall()));
+    }
+
+    private void setWebHomeFullscreen(View view) {
+        Setting.putWebHomeFullscreen(!Setting.isWebHomeFullscreen());
+        mBinding.webHomeFullscreenText.setText(getSwitch(Setting.isWebHomeFullscreen()));
     }
 
     private void setCspWarmup(View view) {

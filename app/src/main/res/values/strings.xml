@@ -203,6 +203,7 @@
     <string name="remote_trust_bind_code_loading">Code ...</string>
     <string name="remote_trust_bind_code_unavailable">Not configured</string>
     <string name="remote_trust_command_result_title">Result</string>
+    <string name="remote_trust_command_log_title">Log</string>
     <string name="remote_trust_result_action">Action</string>
     <string name="remote_trust_result_status">Status</string>
     <string name="remote_trust_result_state">Result</string>
@@ -226,8 +227,13 @@
     <string name="remote_trust_back_devices">Back</string>
     <string name="remote_trust_send_search">Send search</string>
     <string name="remote_trust_send_push">Push playback</string>
-    <string name="remote_trust_config_hint">Type: 0 VOD, 1 live, 2 wallpaper. Listing does not require a URL.</string>
+    <string name="remote_trust_config_hint">Choose a local config or enter a URL manually.</string>
     <string name="remote_trust_config_type">Type</string>
+    <string name="remote_trust_config_type_vod">VOD</string>
+    <string name="remote_trust_config_type_live">Live</string>
+    <string name="remote_trust_config_type_wall">Wallpaper</string>
+    <string name="remote_trust_config_mode_local">Local configs</string>
+    <string name="remote_trust_config_mode_manual">Manual input</string>
     <string name="remote_trust_config_url">Config URL</string>
     <string name="remote_trust_config_name">Config name, optional</string>
     <string name="remote_trust_config_list">List configs</string>
@@ -237,6 +243,8 @@
     <string name="remote_trust_config_delete">Delete config</string>
     <string name="remote_trust_config_url_required">Enter config URL</string>
     <string name="remote_trust_config_delete_message">Delete this config on the remote device?\n%1$s</string>
+    <string name="remote_trust_config_local_empty">No local config of this type</string>
+    <string name="remote_trust_result_config_count">Configs: %1$d</string>
     <string name="remote_trust_sync_confirm">Send this device default sync data to %1$s and overwrite related target data?</string>
     <string name="remote_trust_sync_started">Sync task created. The source device uploads data first, then the target device restores it.</string>
     <string name="remote_trust_sync_self_forbidden">Cannot sync this device to itself</string>
@@ -256,12 +264,15 @@
     <string name="remote_trust_delete_device_message">Delete local trust data for %1$s?</string>
     <string name="remote_trust_delete_device_done">Device trust data deleted</string>
     <string name="remote_trust_reset_local">Reset local trust data</string>
+    <string name="remote_trust_scan_server">Scan</string>
+    <string name="remote_trust_scan_unavailable">QR scan is unavailable on this device</string>
     <string name="setting_login_state">Login state learning</string>
     <string name="setting_site_health_sort">Site health ranking</string>
     <string name="setting_site_health_enable">Enable site health ranking</string>
     <string name="setting_site_health_dialog_sort">Sort site dialog</string>
     <string name="site_health_clear_done">Site health data cleared</string>
     <string name="setting_web_home_extension">WebHome extensions</string>
+    <string name="setting_web_home_fullscreen">WebHome homepage fullscreen</string>
     <string name="setting_csp_warmup">CSP init warmup</string>
     <string name="setting_playback_artwork_wall">Playback stills</string>
     <string name="setting_viewing_record_sync">Viewing record sync</string>
@@ -578,6 +589,7 @@
     <string name="sync_item_history">Watch history</string>
     <string name="sync_item_keep">Favorites</string>
     <string name="sync_item_settings">App settings</string>
+    <string name="sync_item_remote_relay">Relay server config</string>
     <string name="sync_device_mobile">Phone</string>
     <string name="sync_device_tv">TV</string>
     <string name="sync_discovering">Discovering devices...</string>

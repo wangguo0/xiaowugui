@@ -17,6 +17,7 @@ import com.fongmi.android.tv.event.CastEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.event.ServerEvent;
 import com.fongmi.android.tv.impl.Callback;
+import com.fongmi.android.tv.remote.RemoteStore;
 import com.fongmi.android.tv.server.Nano;
 import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.server.impl.Process;
@@ -260,11 +261,13 @@ public class Action implements Process {
             FormBody.Builder body = new FormBody.Builder();
             body.add("options", options.toString());
             body.add("backup", Backup.create(options).toString());
+            if (options.isRemoteRelay()) body.add("remoteRelay", RemoteStore.exportRelayConfig());
             return body.build();
         }
         MultipartBody.Builder body = new MultipartBody.Builder().setType(MultipartBody.FORM);
         body.addFormDataPart("options", options.toString());
         body.addFormDataPart("backup", Backup.create(options).toString());
+        if (options.isRemoteRelay()) body.addFormDataPart("remoteRelay", RemoteStore.exportRelayConfig());
         if (archive != null) body.addFormDataPart(SyncFiles.PART_NAME, archive.getFile().getName(), new ProgressRequestBody(archive.getFile(), ZIP, null));
         if (loginArchive != null) body.addFormDataPart(LoginStateSync.PART_NAME, loginArchive.getFile().getName(), new ProgressRequestBody(loginArchive.getFile(), ZIP, null));
         return body.build();
@@ -294,6 +297,7 @@ public class Action implements Process {
             }
         }
         backup.restore(options, force);
+        if (options.isRemoteRelay()) RemoteStore.importRelayConfig(params.get("remoteRelay"));
         App.post(() -> Notify.show(R.string.sync_receive_success));
     }
 

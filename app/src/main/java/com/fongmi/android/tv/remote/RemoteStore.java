@@ -15,6 +15,8 @@ import com.fongmi.android.tv.setting.Setting;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Prefers;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -271,6 +273,47 @@ public final class RemoteStore {
         }
     }
 
+    public static synchronized String exportRelayConfig() {
+        JsonObject root = new JsonObject();
+        JsonArray profiles = new JsonArray();
+        for (RemoteProfile profile : get().profiles) {
+            if (profile == null || TextUtils.isEmpty(profile.serverOrigin)) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("serverUrl", TextUtils.isEmpty(profile.serverUrl) ? profile.serverOrigin : profile.serverUrl);
+            item.addProperty("serverOrigin", profile.serverOrigin);
+            item.addProperty("enabled", profile.enabled);
+            item.addProperty("keepOnline", true);
+            profiles.add(item);
+        }
+        root.add("profiles", profiles);
+        return App.gson().toJson(root);
+    }
+
+    public static synchronized int importRelayConfig(String json) {
+        if (TextUtils.isEmpty(json)) return 0;
+        JsonObject root;
+        try {
+            root = App.gson().fromJson(json, JsonObject.class);
+        } catch (Throwable e) {
+            return 0;
+        }
+        JsonArray profiles = root != null && root.has("profiles") && root.get("profiles").isJsonArray() ? root.getAsJsonArray("profiles") : new JsonArray();
+        int count = 0;
+        for (int i = 0; i < profiles.size(); i++) {
+            if (!profiles.get(i).isJsonObject()) continue;
+            JsonObject item = profiles.get(i).getAsJsonObject();
+            String serverUrl = string(item, "serverUrl");
+            if (TextUtils.isEmpty(serverUrl)) serverUrl = string(item, "serverOrigin");
+            String origin = RemoteTokens.normalizeOrigin(serverUrl);
+            if (TextUtils.isEmpty(origin)) continue;
+            boolean enabled = !item.has("enabled") || item.get("enabled").getAsBoolean();
+            prepareProfile(serverUrl, enabled, true);
+            count++;
+        }
+        if (count > 0) RemoteAgent.get().start();
+        return count;
+    }
+
     public static synchronized String summary(Context context) {
         RemoteStoreFile store = get();
         int profiles = 0;
@@ -338,6 +381,11 @@ public final class RemoteStore {
         } catch (Throwable e) {
             return null;
         }
+    }
+
+    private static String string(JsonObject object, String key) {
+        if (object == null || !object.has(key) || object.get(key).isJsonNull()) return "";
+        return object.get(key).getAsString().trim();
     }
 
     private static RemoteStoreFile ensure(RemoteStoreFile store) {

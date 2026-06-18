@@ -34,6 +34,7 @@ public final class RemoteSyncTransfer {
             try {
                 String backup = Backup.create(options).toString();
                 client.uploadSyncText(uploadBase, "backup", backup);
+                if (options.isRemoteRelay()) client.uploadSyncText(uploadBase, "remoteRelay", RemoteStore.exportRelayConfig());
                 if (options.isSpider()) {
                     archive = SyncFiles.createArchive(SyncFiles.getPaths(options.getPaths()));
                     if (archive != null) client.uploadSyncFile(uploadBase, "syncFiles", archive.getFile());
@@ -71,11 +72,13 @@ public final class RemoteSyncTransfer {
             RemoteClient client = new RemoteClient(profile);
             String backup = downloads.has("backup") ? client.downloadSyncText(downloads.get("backup").getAsString()) : "";
             if (TextUtils.isEmpty(backup)) throw new IllegalStateException("Missing sync backup");
+            String remoteRelay = downloads.has("remoteRelay") ? client.downloadSyncText(downloads.get("remoteRelay").getAsString()) : "";
             if (downloads.has("syncFiles")) syncFiles = client.downloadSyncFile(downloads.get("syncFiles").getAsString(), "webhtv-remote-sync-", ".zip");
             if (downloads.has("loginStateFiles")) loginStateFiles = client.downloadSyncFile(downloads.get("loginStateFiles").getAsString(), "webhtv-remote-login-", ".zip");
             int syncCount = syncFiles == null ? 0 : SyncFiles.restoreArchive(syncFiles);
             int loginCount = loginStateFiles == null ? 0 : LoginStateSync.restoreArchive(loginStateFiles);
             Backup.objectFrom(backup).restore(options, true);
+            if (options.isRemoteRelay()) RemoteStore.importRelayConfig(remoteRelay);
             JsonObject result = new JsonObject();
             result.addProperty("syncFiles", syncCount);
             result.addProperty("loginStateFiles", loginCount);
