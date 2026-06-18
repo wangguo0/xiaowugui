@@ -145,6 +145,35 @@ public final class RemoteClient {
         return App.gson().fromJson(requestJson("POST", "/api/device/poll", body), PollResponse.class);
     }
 
+    public Request webSocketRequest() {
+        ensureDeviceIdentity(profile);
+        return authedRequest(webSocketUrl()).build();
+    }
+
+    public String webSocketHello() {
+        ensureDeviceIdentity(profile);
+        Device device = Device.get();
+        JsonObject body = baseDeviceBody();
+        body.addProperty("messageType", "hello");
+        body.addProperty("name", device.getName());
+        body.addProperty("role", "app");
+        body.addProperty("type", device.getType());
+        body.addProperty("appVersion", BuildConfig.VERSION_NAME);
+        body.add("capabilities", App.gson().toJsonTree(appCapabilities()));
+        JsonArray groups = new JsonArray();
+        if (profile.groups != null) {
+            for (RemoteGroup group : profile.groups) {
+                if (group != null && !TextUtils.isEmpty(group.groupToken)) {
+                    JsonObject item = new JsonObject();
+                    item.addProperty("groupToken", group.groupToken);
+                    groups.add(item);
+                }
+            }
+        }
+        body.add("groups", groups);
+        return App.gson().toJson(body);
+    }
+
     public void commandResult(String commandId, RemoteCommandResult result) throws IOException {
         if (TextUtils.isEmpty(commandId)) return;
         ensureDeviceIdentity(profile);
@@ -240,6 +269,13 @@ public final class RemoteClient {
         return builder;
     }
 
+    private String webSocketUrl() {
+        String origin = profile.serverOrigin == null ? "" : profile.serverOrigin.trim();
+        if (origin.startsWith("https://")) return "wss://" + origin.substring(8) + "/api/device/ws";
+        if (origin.startsWith("http://")) return "ws://" + origin.substring(7) + "/api/device/ws";
+        return origin + "/api/device/ws";
+    }
+
     private JsonObject requestJson(String method, String path, JsonObject payload) throws IOException {
         return requestJson(method, path, payload, "");
     }
@@ -272,6 +308,7 @@ public final class RemoteClient {
         capabilities.remoteSync = true;
         capabilities.pushAction = true;
         capabilities.recentLog = true;
+        capabilities.webSocket = true;
         return capabilities;
     }
 }
