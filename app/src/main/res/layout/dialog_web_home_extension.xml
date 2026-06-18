@@ -58,7 +58,7 @@
             android:minWidth="0dp"
             android:paddingStart="4dp"
             android:paddingEnd="4dp"
-            android:text="@string/web_home_extension_clear_cache"
+            android:text="@string/web_home_extension_refresh"
             android:textColor="@color/dialog_outlined_button_text"
             app:backgroundTint="@color/dialog_outlined_button_bg"
             app:strokeColor="@color/dialog_outlined_button_stroke" />

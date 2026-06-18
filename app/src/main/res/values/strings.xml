@@ -472,7 +472,7 @@
     <string name="web_home_extension_local_code_default">Local extension %1$d</string>
     <string name="web_home_extension_delete_source_title">Delete source</string>
     <string name="web_home_extension_delete_source_message">Delete %1$s?</string>
-    <string name="web_home_extension_source_saved">Extension source saved and preview refresh requested</string>
+    <string name="web_home_extension_source_saved">Extension source saved</string>
     <string name="web_home_extension_source_empty">Source or code cannot be empty</string>
     <string name="web_home_extension_source_invalid">Invalid JSON source</string>
     <string name="web_home_extension_summary">Sources %1$d · Installed %2$d · Matched %3$d · Ready %4$d · Site %5$s</string>
@@ -500,7 +500,8 @@
     <string name="web_home_extension_inspect_element">Inspect</string>
     <string name="web_home_extension_inspect_hint">Click an element in the Web tab to inspect it</string>
     <string name="web_home_extension_clear_panel">Clear</string>
-    <string name="web_home_extension_save_preview">Save &amp; preview</string>
+    <string name="web_home_extension_select_script">Select script</string>
+    <string name="web_home_extension_save_preview">Save</string>
     <string name="web_home_extension_network_all">All</string>
     <string name="web_home_extension_network_web">Resources</string>
     <string name="web_home_extension_network_fetch">Fetch</string>

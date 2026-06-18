@@ -471,7 +471,7 @@
     <string name="web_home_extension_local_code_default">本地擴展 %1$d</string>
     <string name="web_home_extension_delete_source_title">刪除擴展源</string>
     <string name="web_home_extension_delete_source_message">刪除 %1$s？</string>
-    <string name="web_home_extension_source_saved">擴展源已儲存，並已請求重新整理預覽</string>
+    <string name="web_home_extension_source_saved">擴展源已儲存</string>
     <string name="web_home_extension_source_empty">擴展源或代碼不能為空</string>
     <string name="web_home_extension_source_invalid">擴展源 JSON 格式無效</string>
     <string name="web_home_extension_summary">訂閱 %1$d · 已安裝 %2$d · 已匹配 %3$d · 可注入 %4$d · 站點 %5$s</string>
@@ -499,7 +499,8 @@
     <string name="web_home_extension_inspect_element">檢查元素</string>
     <string name="web_home_extension_inspect_hint">點擊 Web 頁裡的元素進行檢查</string>
     <string name="web_home_extension_clear_panel">清空</string>
-    <string name="web_home_extension_save_preview">儲存並預覽</string>
+    <string name="web_home_extension_select_script">選擇腳本</string>
+    <string name="web_home_extension_save_preview">儲存</string>
     <string name="web_home_extension_network_all">全部</string>
     <string name="web_home_extension_network_web">頁面資源</string>
     <string name="web_home_extension_network_fetch">Fetch</string>
