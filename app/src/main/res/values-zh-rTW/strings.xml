@@ -245,6 +245,7 @@
     <string name="remote_trust_config_load_failed">接口讀取失敗</string>
     <string name="remote_trust_config_remote_empty">遠端設備暫無接口</string>
     <string name="remote_trust_config_manage_hint">遠端已有接口</string>
+    <string name="remote_trust_config_summary">%1$s · %2$d 個接口</string>
     <string name="remote_trust_config_save">繼續</string>
     <string name="remote_trust_config_save_remote">保存到遠端</string>
     <string name="remote_trust_config_upsert">保存接口</string>
@@ -253,7 +254,11 @@
     <string name="remote_trust_config_delete">刪除接口</string>
     <string name="remote_trust_config_upsert_short">保存</string>
     <string name="remote_trust_config_use_short">使用</string>
+    <string name="remote_trust_config_use_setting">設定中…</string>
     <string name="remote_trust_config_current">目前</string>
+    <string name="remote_trust_config_use_status_setting">接口切換中：%1$s</string>
+    <string name="remote_trust_config_use_status_success">接口已切換：%1$s</string>
+    <string name="remote_trust_config_use_status_failed">接口切換失敗：%1$s</string>
     <string name="remote_trust_config_home_short">主頁</string>
     <string name="remote_trust_config_home_label">目前主頁：%1$s</string>
     <string name="remote_trust_config_home_loading">正在讀取站點…</string>

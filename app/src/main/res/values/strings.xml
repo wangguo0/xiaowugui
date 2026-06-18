@@ -246,6 +246,7 @@
     <string name="remote_trust_config_load_failed">Failed to load configs</string>
     <string name="remote_trust_config_remote_empty">No configs on the remote device</string>
     <string name="remote_trust_config_manage_hint">Remote configs</string>
+    <string name="remote_trust_config_summary">%1$s · %2$d configs</string>
     <string name="remote_trust_config_save">Continue</string>
     <string name="remote_trust_config_save_remote">Save to remote</string>
     <string name="remote_trust_config_upsert">Save config</string>
@@ -254,7 +255,11 @@
     <string name="remote_trust_config_delete">Delete config</string>
     <string name="remote_trust_config_upsert_short">Save</string>
     <string name="remote_trust_config_use_short">Use</string>
+    <string name="remote_trust_config_use_setting">Setting…</string>
     <string name="remote_trust_config_current">Current</string>
+    <string name="remote_trust_config_use_status_setting">Switching: %1$s</string>
+    <string name="remote_trust_config_use_status_success">Switched: %1$s</string>
+    <string name="remote_trust_config_use_status_failed">Switch failed: %1$s</string>
     <string name="remote_trust_config_home_short">Home</string>
     <string name="remote_trust_config_home_label">Home: %1$s</string>
     <string name="remote_trust_config_home_loading">Loading sites…</string>

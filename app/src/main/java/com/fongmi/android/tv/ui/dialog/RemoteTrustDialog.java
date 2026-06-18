@@ -1178,7 +1178,7 @@ public final class RemoteTrustDialog {
         if (window == null) return;
         WindowManager.LayoutParams params = window.getAttributes();
         boolean land = ResUtil.isLand(context);
-        params.width = (int) (ResUtil.getScreenWidth(context) * (land ? 0.76f : 0.94f));
+        params.width = (int) (ResUtil.getScreenWidth(context) * (land ? 0.82f : 0.97f));
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
         window.setAttributes(params);
@@ -1186,8 +1186,9 @@ public final class RemoteTrustDialog {
     }
 
     private static int configContentHeight(Context context) {
-        int height = (int) (ResUtil.getScreenHeight(context) * (ResUtil.isLand(context) ? 0.48f : 0.52f));
-        return Math.max(dp(context, 260), Math.min(dp(context, 420), height));
+        boolean land = ResUtil.isLand(context);
+        int height = (int) (ResUtil.getScreenHeight(context) * (land ? 0.44f : 0.34f));
+        return Math.max(dp(context, land ? 220 : 190), Math.min(dp(context, land ? 360 : 300), height));
     }
 
     private static void selectConfigType(ConfigDialogState state, int type) {
@@ -1274,6 +1275,7 @@ public final class RemoteTrustDialog {
     private static LinearLayoutCompat remoteConfigItem(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject item) {
         boolean active = bool(item, "active");
         boolean selected = sameConfig(state.selected, item);
+        int useStatus = configUseStatusFor(state, item);
         LinearLayoutCompat card = card(activity);
         card.setBackground(configItemBackground(activity, active, selected));
         card.setClickable(true);
@@ -1283,21 +1285,58 @@ public final class RemoteTrustDialog {
             renderRemoteConfigList(activity, binding, state);
         });
         LinearLayoutCompat top = row(activity);
-        MaterialTextView url = text(activity, safe(item, "url"), 12, "#3C4043", false);
-        url.setTextIsSelectable(true);
-        url.setMaxLines(3);
-        url.setEllipsize(TextUtils.TruncateAt.END);
-        top.addView(url, weight());
-        MaterialButton use = active ? tonal(activity, activity.getString(R.string.remote_trust_config_current)) : primary(activity, activity.getString(R.string.remote_trust_config_use_short));
-        use.setEnabled(!active && state.homeStatus != HOME_STATUS_SETTING);
-        use.setOnClickListener(v -> runConfigCommand(activity, binding, state, "config.use", configPayload(item), () -> {
-            markActive(state.items, item);
-            renderRemoteConfigList(activity, binding, state);
-        }));
-        top.addView(use, fixed(activity, 62, 32));
+        LinearLayoutCompat textBox = new LinearLayoutCompat(activity);
+        textBox.setOrientation(LinearLayoutCompat.VERTICAL);
+        String title = configTitle(item);
+        String urlValue = safe(item, "url");
+        MaterialTextView name = text(activity, title, 13, "#202124", active);
+        name.setTextIsSelectable(true);
+        name.setMaxLines(TextUtils.equals(title, urlValue) ? 3 : 1);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        textBox.addView(name, matchWrap());
+        if (!TextUtils.equals(title, urlValue) && !TextUtils.isEmpty(urlValue)) {
+            MaterialTextView url = text(activity, urlValue, 12, "#5F6368", false);
+            url.setTextIsSelectable(true);
+            url.setMaxLines(2);
+            url.setEllipsize(TextUtils.TruncateAt.END);
+            url.setPadding(0, dp(activity, 3), 0, 0);
+            textBox.addView(url, matchWrap());
+        }
+        top.addView(textBox, weight());
+        MaterialButton use = configUseButton(activity, active, useStatus);
+        use.setEnabled(!active && useStatus != HOME_STATUS_SETTING && !configBusy(state));
+        use.setOnClickListener(v -> useRemoteConfig(activity, binding, state, item));
+        top.addView(use, fixed(activity, 76, 32));
         card.addView(top, matchWrap());
+        addConfigUseLine(activity, card, state, item);
         addConfigHomeLine(activity, card, state, item, active);
         return card;
+    }
+
+    private static MaterialButton configUseButton(Context context, boolean active, int status) {
+        if (status == HOME_STATUS_SETTING) return tonal(context, context.getString(R.string.remote_trust_config_use_setting));
+        if (active) return tonal(context, context.getString(R.string.remote_trust_config_current));
+        return primary(context, context.getString(R.string.remote_trust_config_use_short));
+    }
+
+    private static void addConfigUseLine(Context context, LinearLayoutCompat card, ConfigDialogState state, JsonObject item) {
+        int status = configUseStatusFor(state, item);
+        if (status == HOME_STATUS_NONE) return;
+        MaterialTextView view = text(context, configUseStatusText(context, state), 12, homeStatusColor(status), true);
+        view.setPadding(0, dp(context, 6), 0, 0);
+        card.addView(view, matchWrap());
+    }
+
+    private static int configUseStatusFor(ConfigDialogState state, JsonObject item) {
+        if (state == null || state.useStatus == HOME_STATUS_NONE) return HOME_STATUS_NONE;
+        return TextUtils.equals(state.useStatusKey, configKey(item)) ? state.useStatus : HOME_STATUS_NONE;
+    }
+
+    private static String configUseStatusText(Context context, ConfigDialogState state) {
+        String name = TextUtils.isEmpty(state.useStatusName) ? "-" : state.useStatusName;
+        if (state.useStatus == HOME_STATUS_SUCCESS) return context.getString(R.string.remote_trust_config_use_status_success, name);
+        if (state.useStatus == HOME_STATUS_FAILED) return context.getString(R.string.remote_trust_config_use_status_failed, name);
+        return context.getString(R.string.remote_trust_config_use_status_setting, name);
     }
 
     private static void addConfigHomeLine(Context context, LinearLayoutCompat card, ConfigDialogState state, JsonObject item, boolean active) {
@@ -1336,17 +1375,20 @@ public final class RemoteTrustDialog {
 
     private static void updateConfigActions(FragmentActivity activity, ConfigDialogState state) {
         boolean has = state.selected != null;
-        boolean busy = state.homeStatus == HOME_STATUS_SETTING;
-        state.summary.setText(has ? configActionSummary(activity, state.selected) : activity.getString(R.string.remote_trust_config_manage_hint));
+        boolean busy = configBusy(state);
+        state.summary.setText(configListSummary(activity, state));
         state.home.setEnabled(has && payloadType(state.selected) == 0 && !busy);
         state.edit.setEnabled(has && !busy);
         state.delete.setEnabled(has && !busy);
     }
 
-    private static String configActionSummary(Context context, JsonObject item) {
-        String prefix = bool(item, "active") ? context.getString(R.string.remote_trust_config_active) + " · " : "";
-        String title = configTitle(item);
-        return prefix + (TextUtils.isEmpty(title) ? safe(item, "typeName") : title);
+    private static boolean configBusy(ConfigDialogState state) {
+        return state != null && (state.homeStatus == HOME_STATUS_SETTING || state.useStatus == HOME_STATUS_SETTING);
+    }
+
+    private static String configListSummary(Context context, ConfigDialogState state) {
+        JsonArray items = filterConfigs(state.items == null ? new JsonArray() : state.items, state.type);
+        return context.getString(R.string.remote_trust_config_summary, typeName(state.type), items.size());
     }
 
     private static void renderConfigAddContent(FragmentActivity activity, Binding binding, ConfigDialogState state) {
@@ -1516,6 +1558,45 @@ public final class RemoteTrustDialog {
 
     private static JsonObject configPayload(JsonObject object) {
         return configPayload(payloadType(object), safe(object, "url"), safe(object, "name"));
+    }
+
+    private static void useRemoteConfig(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject item) {
+        if (item == null || configBusy(state)) return;
+        JsonObject payload = configPayload(item);
+        int type = payloadType(payload);
+        state.usePreviousKey = activeConfigKey(state.items, type);
+        state.useStatusKey = configKey(payload);
+        state.useStatusName = configTitle(payload);
+        state.useStatus = HOME_STATUS_SETTING;
+        markActive(state.items, payload);
+        state.selected = findConfig(state.items, payload);
+        binding.configCache.put(remoteCacheKey(binding), state.items);
+        renderRemoteConfigList(activity, binding, state);
+        sendCommand(activity, binding, "config.use", payload, false, command -> {
+            RemoteCommandResult result = command == null ? null : command.result;
+            if (result == null || !result.ok) {
+                failUseRemoteConfig(activity, binding, state, payload, result == null ? "" : result.message);
+                return;
+            }
+            updateConfigCacheFromResult(binding, state, result);
+            markActive(state.items, payload);
+            state.useStatus = HOME_STATUS_SUCCESS;
+            state.useStatusName = configTitle(payload);
+            state.selected = findConfig(state.items, payload);
+            binding.configCache.put(remoteCacheKey(binding), state.items);
+            renderRemoteConfigList(activity, binding, state);
+        }, e -> failUseRemoteConfig(activity, binding, state, payload, e == null ? "" : e.getMessage()));
+    }
+
+    private static void failUseRemoteConfig(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload, String message) {
+        state.useStatus = HOME_STATUS_FAILED;
+        state.useStatusName = configTitle(payload);
+        restoreActiveConfig(state.items, payloadType(payload), state.usePreviousKey);
+        state.selected = findConfig(state.items, payload);
+        binding.configCache.put(remoteCacheKey(binding), state.items);
+        if (TextUtils.isEmpty(message)) Notify.show(R.string.remote_trust_config_load_failed);
+        else Notify.show(message);
+        if (state.dialog != null && state.dialog.isShowing()) renderRemoteConfigList(activity, binding, state);
     }
 
     private static void runConfigCommand(FragmentActivity activity, Binding binding, ConfigDialogState state, String type, JsonObject payload, Runnable success) {
@@ -1787,6 +1868,25 @@ public final class RemoteTrustDialog {
             if (!element.isJsonObject()) continue;
             JsonObject item = element.getAsJsonObject();
             if (payloadType(item) == payloadType(payload)) item.addProperty("active", sameConfig(item, payload));
+        }
+    }
+
+    private static String activeConfigKey(JsonArray items, int type) {
+        if (items == null) return "";
+        for (JsonElement element : items) {
+            if (!element.isJsonObject()) continue;
+            JsonObject item = element.getAsJsonObject();
+            if (payloadType(item) == type && bool(item, "active")) return configKey(item);
+        }
+        return "";
+    }
+
+    private static void restoreActiveConfig(JsonArray items, int type, String key) {
+        if (items == null) return;
+        for (JsonElement element : items) {
+            if (!element.isJsonObject()) continue;
+            JsonObject item = element.getAsJsonObject();
+            if (payloadType(item) == type) item.addProperty("active", !TextUtils.isEmpty(key) && TextUtils.equals(configKey(item), key));
         }
     }
 
@@ -2868,6 +2968,10 @@ public final class RemoteTrustDialog {
         private String homeStatusKey = "";
         private String homeStatusName = "";
         private int homeStatus = HOME_STATUS_NONE;
+        private String usePreviousKey = "";
+        private String useStatusKey = "";
+        private String useStatusName = "";
+        private int useStatus = HOME_STATUS_NONE;
         private int type;
     }
 
