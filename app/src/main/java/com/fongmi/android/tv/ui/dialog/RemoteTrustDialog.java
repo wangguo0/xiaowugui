@@ -1110,11 +1110,9 @@ public final class RemoteTrustDialog {
         state.header = row(activity);
         state.summary = text(activity, activity.getString(R.string.remote_trust_config_manage_hint), 13, "#5F6368", false);
         state.header.addView(state.summary, weight());
-        state.add = primary(activity, activity.getString(R.string.remote_trust_config_add));
-        state.header.addView(state.add, fixed(activity, 64, 34));
         state.refresh = outline(activity, activity.getString(R.string.remote_trust_refresh_short));
         state.header.addView(state.refresh, fixed(activity, 72, 34));
-        state.close = outline(activity, activity.getString(R.string.dialog_cancel));
+        state.close = outline(activity, activity.getString(R.string.remote_trust_back_devices));
         state.header.addView(state.close, fixed(activity, 64, 34));
         root.addView(state.header, topMargin(matchWrap(), 8));
 
@@ -1128,11 +1126,17 @@ public final class RemoteTrustDialog {
 
         state.actionsRow = row(activity);
         state.home = tonal(activity, activity.getString(R.string.remote_trust_config_home_short));
+        state.add = primary(activity, activity.getString(R.string.remote_trust_config_add));
         state.edit = tonal(activity, activity.getString(R.string.remote_trust_config_edit));
         state.delete = outline(activity, activity.getString(R.string.remote_trust_config_delete_short));
+        state.home.setTextSize(12);
+        state.add.setTextSize(12);
+        state.edit.setTextSize(12);
+        state.delete.setTextSize(12);
         state.delete.setTextColor(Color.parseColor("#B3261E"));
         state.delete.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#F2B8B5")));
         state.actionsRow.addView(state.home, weight());
+        state.actionsRow.addView(state.add, leftWeight(activity, 6));
         state.actionsRow.addView(state.edit, leftWeight(activity, 6));
         state.actionsRow.addView(state.delete, leftWeight(activity, 6));
         root.addView(state.actionsRow, topMargin(matchWrap(), 8));
@@ -1403,6 +1407,7 @@ public final class RemoteTrustDialog {
         if (state.adding || state.editing) return;
         boolean has = state.selected != null;
         boolean busy = configBusy(state);
+        state.add.setEnabled(!busy);
         state.home.setEnabled(has && payloadType(state.selected) == 0 && !busy);
         state.edit.setEnabled(has && !busy);
         state.delete.setEnabled(has && !busy);

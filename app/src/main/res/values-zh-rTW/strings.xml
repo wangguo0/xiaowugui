@@ -261,7 +261,7 @@
     <string name="remote_trust_config_use_status_setting">接口切換中</string>
     <string name="remote_trust_config_use_status_success">接口已切換</string>
     <string name="remote_trust_config_use_status_failed">接口切換失敗</string>
-    <string name="remote_trust_config_home_short">主頁</string>
+    <string name="remote_trust_config_home_short">切換主頁</string>
     <string name="remote_trust_config_home_label">目前主頁：%1$s</string>
     <string name="remote_trust_config_home_loading">正在讀取站點…</string>
     <string name="remote_trust_config_home_setting">設定中…</string>
