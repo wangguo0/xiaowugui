@@ -3,7 +3,6 @@ package com.fongmi.android.tv.ui.dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.app.Activity;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -26,8 +25,6 @@ import android.view.inputmethod.InputMethodManager;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
 import androidx.fragment.app.Fragment;
@@ -74,6 +71,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.lang.ref.WeakReference;
 
 public final class RemoteTrustDialog {
 
@@ -83,6 +81,8 @@ public final class RemoteTrustDialog {
     private static final long DETECT_RETRY_MS = 5_000L;
     private static final long DEVICE_REFRESH_RETRY_MS = 3_000L;
     private static final int DEVICE_REFRESH_RETRY_MAX = 8;
+    private static WeakReference<FragmentActivity> scanActivity;
+    private static WeakReference<Binding> scanBinding;
 
     private RemoteTrustDialog() {
     }
@@ -93,15 +93,6 @@ public final class RemoteTrustDialog {
 
     public static void show(FragmentActivity activity, Runnable callback) {
         Binding binding = build(activity);
-        binding.scanLauncher = activity.getActivityResultRegistry().register("remote_trust_scan_" + System.nanoTime(), activity, new ActivityResultContracts.StartActivityForResult(), result -> {
-            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
-            String address = result.getData().getStringExtra("address");
-            if (TextUtils.isEmpty(address)) return;
-            binding.server.setText(address);
-            binding.page = PAGE_SETTINGS;
-            binding.serverEditing = true;
-            saveServerSettings(activity, binding);
-        });
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setView(binding.root)
                 .create();
@@ -154,9 +145,19 @@ public final class RemoteTrustDialog {
         });
         dialog.setOnDismissListener(d -> {
             App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry);
-            if (binding.scanLauncher != null) binding.scanLauncher.unregister();
+            clearScanTarget(binding);
         });
         dialog.show();
+    }
+
+    public static void onScanResult(String address) {
+        FragmentActivity activity = scanActivity == null ? null : scanActivity.get();
+        Binding binding = scanBinding == null ? null : scanBinding.get();
+        if (activity == null || binding == null || TextUtils.isEmpty(address)) return;
+        binding.server.setText(address);
+        binding.page = PAGE_SETTINGS;
+        binding.serverEditing = true;
+        saveServerSettings(activity, binding);
     }
 
     private static Binding build(Context context) {
@@ -371,10 +372,20 @@ public final class RemoteTrustDialog {
     private static void startScan(FragmentActivity activity, Binding binding) {
         try {
             Class<?> clazz = Class.forName("com.fongmi.android.tv.ui.activity.ScanActivity");
-            binding.scanLauncher.launch(new Intent(activity, clazz));
+            scanActivity = new WeakReference<>(activity);
+            scanBinding = new WeakReference<>(binding);
+            activity.startActivity(new Intent(activity, clazz));
         } catch (Throwable e) {
+            clearScanTarget(binding);
             Notify.show(R.string.remote_trust_scan_unavailable);
         }
+    }
+
+    private static void clearScanTarget(Binding binding) {
+        Binding current = scanBinding == null ? null : scanBinding.get();
+        if (current != null && current != binding) return;
+        scanActivity = null;
+        scanBinding = null;
     }
 
     private static void hideKeyboard(Context context, View view) {
@@ -1971,7 +1982,6 @@ public final class RemoteTrustDialog {
         private NestedScrollView scroll;
         private LinearLayoutCompat toolbar;
         private AlertDialog dialog;
-        private ActivityResultLauncher<Intent> scanLauncher;
         private Runnable callback;
         private Runnable detectRetry;
         private Runnable deviceRefreshRetry;

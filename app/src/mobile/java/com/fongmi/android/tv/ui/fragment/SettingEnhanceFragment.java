@@ -19,6 +19,7 @@ import com.fongmi.android.tv.databinding.FragmentSettingEnhanceBinding;
 import com.fongmi.android.tv.setting.CustomCspSetting;
 import com.fongmi.android.tv.setting.ProxySetting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
+import com.fongmi.android.tv.ui.activity.HomeActivity;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.CustomCspDialog;
 import com.fongmi.android.tv.ui.dialog.DebugLogDialog;
@@ -35,6 +36,7 @@ import com.fongmi.android.tv.utils.LoginStateSync;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
+import com.google.gson.JsonObject;
 
 public class SettingEnhanceFragment extends BaseFragment {
 
@@ -141,6 +143,11 @@ public class SettingEnhanceFragment extends BaseFragment {
     private void setWebHomeFullscreen(View view) {
         Setting.putWebHomeFullscreen(!Setting.isWebHomeFullscreen());
         mBinding.webHomeFullscreenText.setText(getSwitch(Setting.isWebHomeFullscreen()));
+        if (!Setting.isWebHomeFullscreen() && requireActivity() instanceof HomeActivity) {
+            JsonObject object = new JsonObject();
+            object.addProperty("mode", "normal");
+            ((HomeActivity) requireActivity()).setWebHomeChrome(object);
+        }
     }
 
     private void setCspWarmup(View view) {
