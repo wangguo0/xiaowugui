@@ -149,6 +149,7 @@
     <string name="remote_trust_register_done">Remote trust registered</string>
     <string name="remote_trust_bind_code_done">Binding code created</string>
     <string name="remote_trust_bind_code_copied">Binding code copied</string>
+    <string name="remote_trust_bind_code_expired">Binding code expired. Use the latest code from the target device.</string>
     <string name="remote_trust_status_unbound">Unbound</string>
     <string name="remote_trust_status_enabled">Enabled</string>
     <string name="remote_trust_status_online">Online</string>
@@ -256,6 +257,10 @@
     <string name="remote_trust_config_home_short">Home</string>
     <string name="remote_trust_config_home_label">Home: %1$s</string>
     <string name="remote_trust_config_home_loading">Loading sites…</string>
+    <string name="remote_trust_config_home_setting">Setting…</string>
+    <string name="remote_trust_config_home_status_setting">Setting home: %1$s</string>
+    <string name="remote_trust_config_home_status_success">Home set: %1$s</string>
+    <string name="remote_trust_config_home_status_failed">Home failed: %1$s</string>
     <string name="remote_trust_config_delete_short">Delete</string>
     <string name="remote_trust_config_url_required">Enter config URL</string>
     <string name="remote_trust_config_delete_message">Delete this config on the remote device?\n%1$s</string>

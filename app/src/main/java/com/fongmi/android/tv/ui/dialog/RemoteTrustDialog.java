@@ -91,6 +91,13 @@ public final class RemoteTrustDialog {
     private static final long DETECT_RETRY_MS = 5_000L;
     private static final long DEVICE_REFRESH_RETRY_MS = 3_000L;
     private static final int DEVICE_REFRESH_RETRY_MAX = 8;
+    private static final long BIND_CODE_FALLBACK_TTL_MS = 10 * 60 * 1000L;
+    private static final long BIND_CODE_REFRESH_SKEW_MS = 45 * 1000L;
+    private static final long BIND_CODE_REFRESH_MIN_MS = 15 * 1000L;
+    private static final int HOME_STATUS_NONE = 0;
+    private static final int HOME_STATUS_SETTING = 1;
+    private static final int HOME_STATUS_SUCCESS = 2;
+    private static final int HOME_STATUS_FAILED = 3;
     private static WeakReference<FragmentActivity> scanActivity;
     private static WeakReference<Binding> scanBinding;
 
@@ -120,6 +127,7 @@ public final class RemoteTrustDialog {
             detectService(activity, binding, true);
         };
         binding.deviceRefreshRetry = () -> retryRefreshDevices(activity, binding);
+        binding.bindCodeRefresh = () -> refreshBindCodeIfNeeded(activity, binding);
         render(activity, binding);
         dialog.setOnShowListener(d -> {
             configureWindow(activity, dialog);
@@ -154,7 +162,7 @@ public final class RemoteTrustDialog {
             bindServerInput(activity, binding);
         });
         dialog.setOnDismissListener(d -> {
-            App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry);
+            App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry, binding.bindCodeRefresh);
             clearScanTarget(binding);
         });
         dialog.show();
@@ -306,7 +314,7 @@ public final class RemoteTrustDialog {
     private static String bindCodeText(Context context, Binding binding, RemoteProfile profile) {
         if (profile == null) return context.getString(R.string.remote_trust_bind_code_unavailable);
         if (binding.creatingBindCode) return context.getString(R.string.remote_trust_bind_code_loading);
-        if (TextUtils.isEmpty(binding.bindCode)) return context.getString(R.string.remote_trust_bind_code_empty);
+        if (!hasFreshBindCode(binding)) return context.getString(R.string.remote_trust_bind_code_empty);
         return context.getString(R.string.remote_trust_bind_code_inline, binding.bindCode);
     }
 
@@ -344,11 +352,16 @@ public final class RemoteTrustDialog {
         if (activity == null || binding.busy) return;
         RemoteProfile profile = currentProfile(binding);
         if (profile == null || !profile.enabled) return;
+        if (!TextUtils.isEmpty(binding.bindCode) && !hasFreshBindCode(binding)) {
+            clearBindCode(binding);
+            binding.autoBindAttempted = false;
+        }
         if (TextUtils.isEmpty(binding.bindCode) && !binding.autoBindAttempted) {
             binding.creatingBindCode = true;
             createBindCode(activity, binding, false, true);
             return;
         }
+        scheduleBindCodeRefresh(binding);
         if (!binding.autoDetected && !binding.autoDetectStarted) detectService(activity, binding, true);
     }
 
@@ -696,7 +709,7 @@ public final class RemoteTrustDialog {
                     resetDetect(binding);
                     binding.serverEditing = false;
                     binding.autoBindAttempted = false;
-                    binding.bindCode = "";
+                    clearBindCode(binding);
                     Notify.show(R.string.remote_trust_register_done);
                     render(activity, binding);
                 });
@@ -759,7 +772,8 @@ public final class RemoteTrustDialog {
             Notify.show(R.string.remote_trust_no_profile);
             return;
         }
-        if (TextUtils.isEmpty(binding.bindCode)) {
+        if (!hasFreshBindCode(binding)) {
+            clearBindCode(binding);
             createBindCode(activity, binding, true);
             return;
         }
@@ -809,6 +823,8 @@ public final class RemoteTrustDialog {
                     setBusy(binding, false);
                     binding.creatingBindCode = false;
                     binding.bindCode = response == null ? "" : response.code;
+                    binding.bindCodeExpiresAt = bindCodeExpiresAt(response);
+                    scheduleBindCodeRefresh(binding);
                     if (!quiet) Notify.show(R.string.remote_trust_bind_code_done);
                     render(activity, binding);
                     if (reopen) showBindCodeDialog(activity, binding);
@@ -889,10 +905,58 @@ public final class RemoteTrustDialog {
             } catch (Throwable e) {
                 App.post(() -> {
                     setBusy(binding, false);
-                    Notify.show(e.getMessage());
+                    Notify.show(isBindCodeExpired(e) ? activity.getString(R.string.remote_trust_bind_code_expired) : e.getMessage());
                 });
             }
         });
+    }
+
+    private static boolean hasFreshBindCode(Binding binding) {
+        if (binding == null || TextUtils.isEmpty(binding.bindCode)) return false;
+        return binding.bindCodeExpiresAt <= 0 || binding.bindCodeExpiresAt > System.currentTimeMillis() + BIND_CODE_REFRESH_SKEW_MS;
+    }
+
+    private static void clearBindCode(Binding binding) {
+        if (binding == null) return;
+        binding.bindCode = "";
+        binding.bindCodeExpiresAt = 0;
+        if (binding.bindCodeRefresh != null) App.removeCallbacks(binding.bindCodeRefresh);
+    }
+
+    private static long bindCodeExpiresAt(BindCodeResponse response) {
+        int expiresIn = response == null ? 0 : response.expiresIn;
+        long ttl = expiresIn <= 0 ? BIND_CODE_FALLBACK_TTL_MS : Math.max(1, expiresIn) * 1000L;
+        return System.currentTimeMillis() + ttl;
+    }
+
+    private static void scheduleBindCodeRefresh(Binding binding) {
+        if (binding == null || binding.bindCodeRefresh == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        if (TextUtils.isEmpty(binding.bindCode) || binding.bindCodeExpiresAt <= 0) return;
+        long delay = binding.bindCodeExpiresAt - System.currentTimeMillis() - BIND_CODE_REFRESH_SKEW_MS;
+        App.post(binding.bindCodeRefresh, Math.max(BIND_CODE_REFRESH_MIN_MS, delay));
+    }
+
+    private static void refreshBindCodeIfNeeded(FragmentActivity activity, Binding binding) {
+        if (activity == null || binding == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null || !profile.enabled || binding.busy || binding.creatingBindCode) {
+            scheduleBindCodeRefresh(binding);
+            return;
+        }
+        if (!hasFreshBindCode(binding)) {
+            clearBindCode(binding);
+            binding.autoBindAttempted = false;
+            createBindCode(activity, binding, false, true);
+            return;
+        }
+        scheduleBindCodeRefresh(binding);
+    }
+
+    private static boolean isBindCodeExpired(Throwable e) {
+        String message = e == null ? "" : e.getMessage();
+        if (TextUtils.isEmpty(message)) return false;
+        String lower = message.toLowerCase(Locale.ROOT);
+        return lower.contains("bind code expired") || lower.contains("binding code expired") || lower.contains("expired") || message.contains("过期") || message.contains("失效");
     }
 
     private static void refreshDevices(FragmentActivity activity, Binding binding) {
@@ -1023,9 +1087,13 @@ public final class RemoteTrustDialog {
         actions.addView(state.delete, leftWeight(activity, 6));
         root.addView(actions, topMargin(matchWrap(), 8));
 
+        state.contentScroll = new NestedScrollView(activity);
+        state.contentScroll.setFillViewport(false);
+        state.contentScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         state.content = new LinearLayoutCompat(activity);
         state.content.setOrientation(LinearLayoutCompat.VERTICAL);
-        root.addView(state.content, topMargin(matchWrap(), 10));
+        state.contentScroll.addView(state.content, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(state.contentScroll, topMargin(new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, configContentHeight(activity)), 10));
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle(R.string.remote_trust_action_config)
@@ -1048,13 +1116,35 @@ public final class RemoteTrustDialog {
         });
         add.setOnClickListener(v -> renderConfigAddContent(activity, binding, state));
         refresh.setOnClickListener(v -> refreshRemoteConfigList(activity, binding, state, true));
-        dialog.setOnShowListener(v -> refreshRemoteConfigList(activity, binding, state, false));
+        dialog.setOnShowListener(v -> {
+            configureConfigWindow(activity, dialog);
+            refreshRemoteConfigList(activity, binding, state, false);
+        });
         dialog.show();
+    }
+
+    private static void configureConfigWindow(Context context, AlertDialog dialog) {
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        WindowManager.LayoutParams params = window.getAttributes();
+        boolean land = ResUtil.isLand(context);
+        params.width = (int) (ResUtil.getScreenWidth(context) * (land ? 0.76f : 0.94f));
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        params.gravity = Gravity.CENTER;
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.setAttributes(params);
+        window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
+    }
+
+    private static int configContentHeight(Context context) {
+        int height = (int) (ResUtil.getScreenHeight(context) * (ResUtil.isLand(context) ? 0.48f : 0.52f));
+        return Math.max(dp(context, 260), Math.min(dp(context, 420), height));
     }
 
     private static void selectConfigType(ConfigDialogState state, int type) {
         state.type = type;
         state.selected = null;
+        state.settingHomeKey = "";
         if (state.render != null) state.render.run();
     }
 
@@ -1150,27 +1240,58 @@ public final class RemoteTrustDialog {
         url.setEllipsize(TextUtils.TruncateAt.END);
         top.addView(url, weight());
         MaterialButton use = active ? tonal(activity, activity.getString(R.string.remote_trust_config_current)) : primary(activity, activity.getString(R.string.remote_trust_config_use_short));
-        use.setEnabled(!active);
+        use.setEnabled(!active && state.homeStatus != HOME_STATUS_SETTING);
         use.setOnClickListener(v -> runConfigCommand(activity, binding, state, "config.use", configPayload(item), () -> {
             markActive(state.items, item);
             renderRemoteConfigList(activity, binding, state);
         }));
         top.addView(use, fixed(activity, 62, 32));
         card.addView(top, matchWrap());
-        if (active && payloadType(item) == 0 && !TextUtils.isEmpty(safe(item, "homeName"))) {
-            MaterialTextView home = text(activity, activity.getString(R.string.remote_trust_config_home_label, safe(item, "homeName")), 12, "#137333", false);
-            home.setPadding(0, dp(activity, 5), 0, 0);
+        addConfigHomeLine(activity, card, state, item, active);
+        return card;
+    }
+
+    private static void addConfigHomeLine(Context context, LinearLayoutCompat card, ConfigDialogState state, JsonObject item, boolean active) {
+        if (payloadType(item) != 0) return;
+        int status = homeStatusFor(state, item);
+        if (status != HOME_STATUS_NONE) {
+            MaterialTextView home = text(context, homeStatusText(context, state), 12, homeStatusColor(status), true);
+            home.setPadding(0, dp(context, 6), 0, 0);
+            card.addView(home, matchWrap());
+            return;
+        }
+        if (active && !TextUtils.isEmpty(safe(item, "homeName"))) {
+            MaterialTextView home = text(context, context.getString(R.string.remote_trust_config_home_label, safe(item, "homeName")), 12, "#137333", false);
+            home.setPadding(0, dp(context, 5), 0, 0);
             card.addView(home, matchWrap());
         }
-        return card;
+    }
+
+    private static int homeStatusFor(ConfigDialogState state, JsonObject item) {
+        if (state == null || state.homeStatus == HOME_STATUS_NONE) return HOME_STATUS_NONE;
+        return TextUtils.equals(state.homeStatusKey, configKey(item)) ? state.homeStatus : HOME_STATUS_NONE;
+    }
+
+    private static String homeStatusText(Context context, ConfigDialogState state) {
+        String name = TextUtils.isEmpty(state.homeStatusName) ? "-" : state.homeStatusName;
+        if (state.homeStatus == HOME_STATUS_SUCCESS) return context.getString(R.string.remote_trust_config_home_status_success, name);
+        if (state.homeStatus == HOME_STATUS_FAILED) return context.getString(R.string.remote_trust_config_home_status_failed, name);
+        return context.getString(R.string.remote_trust_config_home_status_setting, name);
+    }
+
+    private static String homeStatusColor(int status) {
+        if (status == HOME_STATUS_SUCCESS) return "#137333";
+        if (status == HOME_STATUS_FAILED) return "#B3261E";
+        return "#174EA6";
     }
 
     private static void updateConfigActions(FragmentActivity activity, ConfigDialogState state) {
         boolean has = state.selected != null;
+        boolean busy = state.homeStatus == HOME_STATUS_SETTING;
         state.summary.setText(has ? configActionSummary(activity, state.selected) : activity.getString(R.string.remote_trust_config_manage_hint));
-        state.home.setEnabled(has && payloadType(state.selected) == 0);
-        state.edit.setEnabled(has);
-        state.delete.setEnabled(has);
+        state.home.setEnabled(has && payloadType(state.selected) == 0 && !busy);
+        state.edit.setEnabled(has && !busy);
+        state.delete.setEnabled(has && !busy);
     }
 
     private static String configActionSummary(Context context, JsonObject item) {
@@ -1364,6 +1485,7 @@ public final class RemoteTrustDialog {
 
     private static void showRemoteHomeDialog(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload) {
         if (payload == null) return;
+        state.settingHomeKey = "";
         JsonArray cached = binding.siteCache.get(siteCacheKey(binding, payload));
         if (cached != null) {
             showHomeSitePicker(activity, binding, state, payload, cached);
@@ -1373,6 +1495,12 @@ public final class RemoteTrustDialog {
         state.content.addView(emptyPanel(activity, activity.getString(R.string.remote_trust_config_home_loading)), matchWrap());
         sendCommand(activity, binding, "config.sites", payload, false, command -> {
             RemoteCommandResult result = command == null ? null : command.result;
+            if (result == null || !result.ok) {
+                if (result == null || TextUtils.isEmpty(result.message)) Notify.show(R.string.remote_trust_config_load_failed);
+                else Notify.show(result.message);
+                renderRemoteConfigList(activity, binding, state);
+                return;
+            }
             JsonObject data = result == null || result.data == null || !result.data.isJsonObject() ? new JsonObject() : result.data.getAsJsonObject();
             JsonArray sites = data.has("sites") && data.get("sites").isJsonArray() ? data.getAsJsonArray("sites") : new JsonArray();
             if (sites.size() == 0) {
@@ -1388,39 +1516,96 @@ public final class RemoteTrustDialog {
 
     private static void showHomeSitePicker(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload, JsonArray sites) {
         state.content.removeAllViews();
+        LinearLayoutCompat header = row(activity);
         MaterialTextView title = sectionTitle(activity, R.string.remote_trust_config_home);
-        state.content.addView(title, matchWrap());
+        header.addView(title, weight());
+        MaterialButton back = outline(activity, activity.getString(R.string.remote_trust_back_devices));
+        back.setOnClickListener(v -> {
+            state.settingHomeKey = "";
+            renderRemoteConfigList(activity, binding, state);
+        });
+        header.addView(back, fixed(activity, 58, 32));
+        state.content.addView(header, matchWrap());
         for (JsonElement element : sites) {
             if (!element.isJsonObject()) continue;
             JsonObject site = element.getAsJsonObject();
+            String keyValue = safe(site, "key");
+            boolean setting = TextUtils.equals(state.settingHomeKey, keyValue);
             LinearLayoutCompat item = card(activity);
             item.setBackground(configItemBackground(activity, bool(site, "selected"), false));
-            item.setClickable(true);
-            item.setFocusable(true);
-            MaterialTextView name = text(activity, (bool(site, "selected") ? activity.getString(R.string.remote_trust_config_current) + " · " : "") + safe(site, "name"), 14, "#202124", true);
+            item.setAlpha(TextUtils.isEmpty(state.settingHomeKey) || setting ? 1.0f : 0.55f);
+            item.setClickable(TextUtils.isEmpty(state.settingHomeKey));
+            item.setFocusable(TextUtils.isEmpty(state.settingHomeKey));
+            LinearLayoutCompat top = row(activity);
+            MaterialTextView name = text(activity, safe(site, "name"), 14, "#202124", true);
             name.setMaxLines(2);
             name.setEllipsize(TextUtils.TruncateAt.END);
-            item.addView(name, matchWrap());
+            top.addView(name, weight());
+            if (setting) top.addView(siteStateLabel(activity, R.string.remote_trust_config_home_setting, "#174EA6"), fixed(activity, 74, 28));
+            else if (bool(site, "selected")) top.addView(siteStateLabel(activity, R.string.remote_trust_config_current, "#137333"), fixed(activity, 58, 28));
+            item.addView(top, matchWrap());
             MaterialTextView key = text(activity, safe(site, "key"), 12, "#5F6368", false);
             key.setPadding(0, dp(activity, 4), 0, 0);
             key.setMaxLines(1);
             key.setEllipsize(TextUtils.TruncateAt.END);
             item.addView(key, matchWrap());
-            item.setOnClickListener(v -> {
-                JsonObject next = payload.deepCopy();
-                next.addProperty("key", safe(site, "key"));
-                runConfigCommand(activity, binding, state, "config.home", next, () -> {
-                    markSelectedSite(sites, site);
-                    binding.siteCache.put(siteCacheKey(binding, payload), sites);
-                    setHomeName(state.items, payload, safe(site, "name"));
-                    renderRemoteConfigList(activity, binding, state);
-                });
-            });
+            item.setOnClickListener(v -> setRemoteHomeSite(activity, binding, state, payload, sites, site));
             state.content.addView(item, topMargin(matchWrap(), 8));
         }
-        MaterialButton back = outline(activity, activity.getString(R.string.remote_trust_back_devices));
-        back.setOnClickListener(v -> renderRemoteConfigList(activity, binding, state));
-        state.content.addView(back, topMargin(fixedHeight(activity, 34), 10));
+        if (state.contentScroll != null && TextUtils.isEmpty(state.settingHomeKey)) state.contentScroll.post(() -> state.contentScroll.scrollTo(0, 0));
+    }
+
+    private static MaterialTextView siteStateLabel(Context context, int resId, String color) {
+        MaterialTextView view = text(context, context.getString(resId), 12, color, true);
+        view.setGravity(Gravity.CENTER);
+        view.setMaxLines(1);
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        return view;
+    }
+
+    private static void setRemoteHomeSite(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload, JsonArray sites, JsonObject site) {
+        String siteKey = safe(site, "key");
+        if (TextUtils.isEmpty(siteKey) || state.homeStatus == HOME_STATUS_SETTING) return;
+        state.settingHomeKey = "";
+        state.homeStatusKey = configKey(payload);
+        state.homeStatusName = safe(site, "name");
+        state.homeStatus = HOME_STATUS_SETTING;
+        state.selected = findConfig(state.items, payload);
+        renderRemoteConfigList(activity, binding, state);
+        JsonObject next = payload.deepCopy();
+        next.addProperty("key", siteKey);
+        sendCommand(activity, binding, "config.home", next, false, command -> {
+            RemoteCommandResult result = command == null ? null : command.result;
+            if (result == null || !result.ok) {
+                state.homeStatus = HOME_STATUS_FAILED;
+                if (result == null || TextUtils.isEmpty(result.message)) Notify.show(R.string.remote_trust_config_load_failed);
+                else Notify.show(result.message);
+                renderRemoteConfigList(activity, binding, state);
+                return;
+            }
+            JsonArray latest = resultSites(result, sites);
+            markSelectedSite(latest, site);
+            binding.siteCache.put(siteCacheKey(binding, payload), latest);
+            markActive(state.items, payload);
+            applyHomeNameFromSites(state.items, payload, latest);
+            if (TextUtils.isEmpty(safe(findConfig(state.items, payload), "homeName"))) setHomeName(state.items, payload, safe(site, "name"));
+            state.homeStatus = HOME_STATUS_SUCCESS;
+            state.homeStatusName = safe(site, "name");
+            state.selected = findConfig(state.items, payload);
+            binding.configCache.put(remoteCacheKey(binding), state.items);
+            renderRemoteConfigList(activity, binding, state);
+        }, e -> {
+            state.homeStatus = HOME_STATUS_FAILED;
+            if (state.dialog != null && state.dialog.isShowing()) renderRemoteConfigList(activity, binding, state);
+        });
+    }
+
+    private static JsonArray resultSites(RemoteCommandResult result, JsonArray fallback) {
+        if (result != null && result.data != null && result.data.isJsonObject()) {
+            JsonObject data = result.data.getAsJsonObject();
+            if (data.has("sites") && data.get("sites").isJsonArray()) return data.getAsJsonArray("sites");
+        }
+        return fallback == null ? new JsonArray() : fallback;
     }
 
     private static void confirmConfigDelete(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload) {
@@ -1488,6 +1673,10 @@ public final class RemoteTrustDialog {
 
     private static String siteCacheKey(Binding binding, JsonObject payload) {
         return remoteCacheKey(binding) + "|site|" + payloadType(payload) + "|" + safe(payload, "url");
+    }
+
+    private static String configKey(JsonObject payload) {
+        return payloadType(payload) + "|" + safe(payload, "url");
     }
 
     private static void clearRemoteCache(Binding binding) {
@@ -1642,6 +1831,10 @@ public final class RemoteTrustDialog {
     }
 
     private static void sendCommand(FragmentActivity activity, Binding binding, String type, JsonObject payload, boolean renderResult, CommandHandler handler) {
+        sendCommand(activity, binding, type, payload, renderResult, handler, null);
+    }
+
+    private static void sendCommand(FragmentActivity activity, Binding binding, String type, JsonObject payload, boolean renderResult, CommandHandler handler, CommandErrorHandler errorHandler) {
         RemoteProfile profile = currentProfile(binding);
         DeviceRow selected = selectedRow(profile, binding);
         if (profile == null || selected == null) {
@@ -1673,6 +1866,7 @@ public final class RemoteTrustDialog {
                     binding.lastResult = e.getMessage();
                     Notify.show(e.getMessage());
                     if (renderResult) render(activity, binding);
+                    if (errorHandler != null) errorHandler.handle(e);
                 });
             }
         });
@@ -1876,7 +2070,7 @@ public final class RemoteTrustDialog {
                     RemoteAgent.get().stop();
                     RemoteAgentService.stop(activity);
                     binding.initialized = false;
-                    binding.bindCode = "";
+                    clearBindCode(binding);
                     binding.selectedGroupId = "";
                     binding.selectedDeviceId = "";
                     binding.serviceStateText = "";
@@ -2067,7 +2261,7 @@ public final class RemoteTrustDialog {
 
     private static void setBusy(Binding binding, boolean busy) {
         binding.busy = busy;
-        binding.bindCodeButton.setEnabled(!busy && !TextUtils.isEmpty(binding.bindCode));
+        binding.bindCodeButton.setEnabled(!busy && hasFreshBindCode(binding));
         binding.enableToggle.setEnabled(!busy);
         binding.statusButton.setEnabled(!busy);
         binding.serviceButton.setEnabled(!busy);
@@ -2594,8 +2788,13 @@ public final class RemoteTrustDialog {
         void handle(RemoteCommand command);
     }
 
+    private interface CommandErrorHandler {
+        void handle(Throwable e);
+    }
+
     private static final class ConfigDialogState {
         private AlertDialog dialog;
+        private NestedScrollView contentScroll;
         private LinearLayoutCompat content;
         private MaterialTextView summary;
         private MaterialButton vod;
@@ -2607,6 +2806,10 @@ public final class RemoteTrustDialog {
         private Runnable render;
         private JsonArray items = new JsonArray();
         private JsonObject selected;
+        private String settingHomeKey = "";
+        private String homeStatusKey = "";
+        private String homeStatusName = "";
+        private int homeStatus = HOME_STATUS_NONE;
         private int type;
     }
 
@@ -2618,6 +2821,7 @@ public final class RemoteTrustDialog {
         private Runnable callback;
         private Runnable detectRetry;
         private Runnable deviceRefreshRetry;
+        private Runnable bindCodeRefresh;
         private LinearLayoutCompat content;
         private MaterialTextView summary;
         private MaterialButton close;
@@ -2645,6 +2849,7 @@ public final class RemoteTrustDialog {
         private boolean creatingBindCode;
         private int page = PAGE_DEVICES;
         private int pendingDeviceRefreshes;
+        private long bindCodeExpiresAt;
         private String bindCode = "";
         private String selectedGroupId = "";
         private String selectedDeviceId = "";
