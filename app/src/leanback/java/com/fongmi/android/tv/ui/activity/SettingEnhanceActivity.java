@@ -96,10 +96,9 @@ public class SettingEnhanceActivity extends BaseActivity {
                 mBinding.customCsp,
                 mBinding.webHomeExtension,
                 mBinding.gitCloud,
-                mBinding.oneKeySync,
                 mBinding.remoteTrust,
+                mBinding.oneKeySync,
                 mBinding.loginState,
-                mBinding.playbackWebhook,
                 mBinding.shellProxy,
                 mBinding.shellProxyConfig,
                 mBinding.managePage,
@@ -108,7 +107,8 @@ public class SettingEnhanceActivity extends BaseActivity {
                 mBinding.playbackArtworkWall,
                 mBinding.driveCheck,
                 mBinding.siteHealthSort,
-                mBinding.debugLog
+                mBinding.debugLog,
+                mBinding.playbackWebhook
         };
         for (View view : order) parent.removeView(view);
         for (View view : order) parent.addView(view);
