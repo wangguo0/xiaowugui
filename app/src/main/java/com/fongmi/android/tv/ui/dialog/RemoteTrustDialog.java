@@ -1111,8 +1111,20 @@ public final class RemoteTrustDialog {
     }
 
     private static void showConfigDialog(FragmentActivity activity, Binding binding) {
-        LinearLayoutCompat root = dialogRoot(activity);
+        LinearLayoutCompat root = panelDialogRoot(activity);
         ConfigDialogState state = new ConfigDialogState();
+
+        state.titleRow = row(activity);
+        state.title = text(activity, activity.getString(R.string.remote_trust_action_config), 18, "#202124", true);
+        state.titleRow.addView(state.title, weight());
+        state.homeBack = outline(activity, activity.getString(R.string.remote_trust_back_devices));
+        state.homeBack.setTextSize(12);
+        state.homeBack.setVisibility(View.GONE);
+        state.titleRow.addView(state.homeBack, fixed(activity, 58, 34));
+        state.close = outline(activity, activity.getString(R.string.dialog_cancel));
+        state.close.setTextSize(12);
+        state.titleRow.addView(state.close, fixed(activity, 58, 34));
+        root.addView(state.titleRow, matchWrap());
 
         state.typeRow = new MaterialButtonToggleGroup(activity);
         state.typeRow.setSingleSelection(true);
@@ -1127,7 +1139,7 @@ public final class RemoteTrustDialog {
         state.typeRow.addView(state.vod, weight());
         state.typeRow.addView(state.live, weight());
         state.typeRow.addView(state.wall, weight());
-        root.addView(state.typeRow, matchWrap());
+        root.addView(state.typeRow, topMargin(matchWrap(), 10));
 
         state.header = row(activity);
         state.summary = text(activity, activity.getString(R.string.remote_trust_config_manage_hint), 13, "#5F6368", false);
@@ -1168,9 +1180,7 @@ public final class RemoteTrustDialog {
         root.addView(state.contentScroll, topMargin(new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, configContentHeight(activity)), 10));
 
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.remote_trust_action_config)
                 .setView(root)
-                .setNegativeButton(R.string.dialog_cancel, null)
                 .create();
         state.dialog = dialog;
         state.render = () -> {
@@ -1189,6 +1199,13 @@ public final class RemoteTrustDialog {
         });
         state.delete.setOnClickListener(v -> {
             if (state.selected != null) confirmConfigDelete(activity, binding, state, configPayload(state.selected));
+        });
+        state.homeBack.setOnClickListener(v -> {
+            state.settingHomeKey = "";
+            renderRemoteConfigList(activity, binding, state);
+        });
+        state.close.setOnClickListener(v -> {
+            if (state.dialog != null) state.dialog.dismiss();
         });
         state.add.setOnClickListener(v -> enterConfigAdd(activity, binding, state));
         state.refresh.setOnClickListener(v -> refreshRemoteConfigList(activity, binding, state, true));
@@ -1216,9 +1233,11 @@ public final class RemoteTrustDialog {
         WindowManager.LayoutParams params = window.getAttributes();
         boolean land = ResUtil.isLand(context);
         int screen = ResUtil.getScreenWidth(context);
-        params.width = land ? (int) (screen * 0.84f) : Math.min(screen - dp(context, 8), (int) (screen * 0.985f));
+        params.width = land ? (int) (screen * 0.84f) : Math.min(screen - dp(context, 16), (int) (screen * 0.96f));
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }
@@ -1432,6 +1451,9 @@ public final class RemoteTrustDialog {
         boolean homePicking = state.homePicking;
         boolean form = adding || editing;
         boolean busy = configBusy(state);
+        state.title.setText(homePicking ? activity.getString(R.string.remote_trust_config_home) : activity.getString(R.string.remote_trust_action_config));
+        state.homeBack.setVisibility(homePicking ? View.VISIBLE : View.GONE);
+        state.close.setVisibility(form ? View.GONE : View.VISIBLE);
         state.summary.setText(homePicking ? activity.getString(R.string.remote_trust_config_home) : editing ? editConfigSummary(activity, state) : adding ? addConfigSummary(activity, state) : configListSummary(activity, state));
         state.typeRow.setVisibility(editing || homePicking ? View.GONE : View.VISIBLE);
         state.header.setVisibility(homePicking ? View.GONE : View.VISIBLE);
@@ -1751,16 +1773,6 @@ public final class RemoteTrustDialog {
         state.homePicking = true;
         updateConfigActions(activity, state);
         state.content.removeAllViews();
-        LinearLayoutCompat header = row(activity);
-        MaterialTextView title = sectionTitle(activity, R.string.remote_trust_config_home);
-        header.addView(title, weight());
-        MaterialButton back = outline(activity, activity.getString(R.string.remote_trust_back_devices));
-        back.setOnClickListener(v -> {
-            state.settingHomeKey = "";
-            renderRemoteConfigList(activity, binding, state);
-        });
-        header.addView(back, fixed(activity, 58, 32));
-        state.content.addView(header, matchWrap());
         for (JsonElement element : sites) {
             if (!element.isJsonObject()) continue;
             JsonObject site = element.getAsJsonObject();
@@ -2665,6 +2677,14 @@ public final class RemoteTrustDialog {
         return root;
     }
 
+    private static LinearLayoutCompat panelDialogRoot(Context context) {
+        LinearLayoutCompat root = new LinearLayoutCompat(context);
+        root.setOrientation(LinearLayoutCompat.VERTICAL);
+        root.setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14));
+        root.setBackground(background(context, "#FFFFFF", Color.TRANSPARENT, 16));
+        return root;
+    }
+
     private static LinearLayoutCompat row(Context context) {
         LinearLayoutCompat row = new LinearLayoutCompat(context);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -3168,14 +3188,18 @@ public final class RemoteTrustDialog {
         private AlertDialog dialog;
         private NestedScrollView contentScroll;
         private LinearLayoutCompat content;
+        private LinearLayoutCompat titleRow;
         private LinearLayoutCompat header;
         private LinearLayoutCompat actionsRow;
         private LinearLayoutCompat formActionsRow;
         private MaterialButtonToggleGroup typeRow;
+        private MaterialTextView title;
         private MaterialTextView summary;
         private MaterialButton vod;
         private MaterialButton live;
         private MaterialButton wall;
+        private MaterialButton homeBack;
+        private MaterialButton close;
         private MaterialButton add;
         private MaterialButton refresh;
         private MaterialButton addSave;
