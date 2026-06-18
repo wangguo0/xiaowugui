@@ -52,12 +52,12 @@ public final class LocalProxyDebug {
         while (System.currentTimeMillis() <= deadline) {
             attempt++;
             if (canConnect(host, port)) {
-                SpiderDebug.log(TAG, "ready url=%s host=%s port=%d attempt=%d elapsed=%dms", url, host, port, attempt, System.currentTimeMillis() - start);
+                SpiderDebug.log(TAG, "ready host=%s port=%d urlLen=%d attempt=%d elapsed=%dms", host, port, url.length(), attempt, System.currentTimeMillis() - start);
                 return true;
             }
             sleep(CONNECT_INTERVAL_MS);
         }
-        SpiderDebug.log(TAG, "ready timeout url=%s host=%s port=%d attempts=%d elapsed=%dms", url, host, port, attempt, System.currentTimeMillis() - start);
+        SpiderDebug.log(TAG, "ready timeout host=%s port=%d urlLen=%d attempts=%d elapsed=%dms", host, port, url.length(), attempt, System.currentTimeMillis() - start);
         return false;
     }
 
@@ -113,7 +113,7 @@ public final class LocalProxyDebug {
     }
 
     private static void dump(String url, Throwable error) {
-        SpiderDebug.log(TAG, "diagnose start url=%s error=%s", url, error == null ? "" : error.getMessage());
+        SpiderDebug.log(TAG, "diagnose start host=%s port=%d urlLen=%d error=%s", getHost(url), getPort(url), url == null ? 0 : url.length(), error == null ? "" : error.getMessage());
         dumpDir(Path.files());
         dumpLog(new File(Path.files(), "goProxy.log"));
         dumpLog(new File(Path.cache(), "goProxy.log"));

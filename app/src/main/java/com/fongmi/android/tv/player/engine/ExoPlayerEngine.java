@@ -82,7 +82,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     @Override
     public void start(PlaySpec spec) {
         this.spec = spec;
-        SpiderDebug.log("player-engine", "start decode=%d url=%s format=%s headers=%s", decode, spec.getUrl(), spec.getFormat(), spec.getHeaders());
+        SpiderDebug.log("player-engine", "start decode=%d format=%s headers=%s urlLen=%d", decode, spec.getFormat(), spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
         startInternal();
     }
 
@@ -145,7 +145,7 @@ public class ExoPlayerEngine implements PlayerEngine {
             case PlaybackException.ERROR_CODE_IO_UNSPECIFIED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED, PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED, PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED, PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> retryFormat(e.errorCode);
             default -> ErrorAction.FATAL;
         };
-        SpiderDebug.log("player-engine", "handleError code=%d action=%s decode=%d url=%s format=%s", e.errorCode, action, decode, spec == null ? null : spec.getUrl(), spec == null ? null : spec.getFormat());
+        SpiderDebug.log("player-engine", "handleError code=%d action=%s decode=%d format=%s", e.errorCode, action, decode, spec == null ? null : spec.getFormat());
         return action;
     }
 
@@ -154,7 +154,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     }
 
     private void startInternal(long position) {
-        SpiderDebug.log("player-engine", "prepare position=%d decode=%d url=%s format=%s", position, decode, spec.getUrl(), spec.getFormat());
+        SpiderDebug.log("player-engine", "prepare position=%d decode=%d format=%s", position, decode, spec.getFormat());
         player.setMediaItem(ExoUtil.getMediaItem(spec, decode), position);
         player.prepare();
         player.play();

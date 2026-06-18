@@ -395,7 +395,7 @@ public class PlayerManager implements ParseCallback {
     private void awaitLocalProxyAndSetMediaItem(int seq, long timeout) {
         PlaySpec target = spec;
         String url = target.getUrl();
-        SpiderDebug.log("player", "local proxy await start seq=%d timeout=%d spec=%s", seq, timeout, debugSpec());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await start seq=%d timeout=%d spec=%s", seq, timeout, debugSpec());
         setDanmakus(target.getDanmakus());
         callback.onPrepare();
         initTrack = false;
@@ -406,7 +406,7 @@ public class PlayerManager implements ParseCallback {
                     SpiderDebug.log("player", "local proxy await skip seq=%d current=%d ready=%s", seq, prepareSeq, ready);
                     return;
                 }
-                SpiderDebug.log("player", "local proxy await done seq=%d ready=%s spec=%s", seq, ready, debugSpec());
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await done seq=%d ready=%s spec=%s", seq, ready, debugSpec());
                 setMediaItemNow(timeout, false);
             });
         });
@@ -414,7 +414,7 @@ public class PlayerManager implements ParseCallback {
 
     private void setMediaItemNow(long timeout, boolean notifyPrepare) {
         if (spec == null || spec.getUrl() == null || engine == null) return;
-        SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
         setDanmakus(spec.getDanmakus());
         engine.start(spec.checkUa());
         App.post(runnable, timeout);
@@ -441,7 +441,7 @@ public class PlayerManager implements ParseCallback {
     @Override
     public void onParseSuccess(Map<String, String> headers, String url, String from) {
         if (!TextUtils.isEmpty(from)) Notify.show(ResUtil.getString(R.string.parse_from, from));
-        SpiderDebug.log("player", "parseSuccess from=%s url=%s headers=%s", from, url, headers);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "parseSuccess from=%s url=%s headers=%s", from, summarizeUrl(url), headers == null ? 0 : headers.size());
         if (headers != null) headers.remove(HttpHeaders.RANGE);
         if (spec != null) spec.setHeaders(headers);
         if (spec != null) spec.setUrl(url);
@@ -456,11 +456,26 @@ public class PlayerManager implements ParseCallback {
     private String debugSpec() {
         if (spec == null) return "null";
         return "key=" + spec.getKey() +
-                ", url=" + spec.getUrl() +
+                ", url=" + summarizeUrl(spec.getUrl()) +
                 ", format=" + spec.getFormat() +
-                ", headers=" + spec.getHeaders() +
+                ", headers=" + (spec.getHeaders() == null ? 0 : spec.getHeaders().size()) +
                 ", subs=" + (spec.getSubs() == null ? 0 : spec.getSubs().size()) +
                 ", danmakus=" + (spec.getDanmakus() == null ? 0 : spec.getDanmakus().size());
+    }
+
+    private static String summarizeUrl(String url) {
+        if (TextUtils.isEmpty(url)) return "";
+        Uri uri = Uri.parse(url);
+        String host = uri.getHost();
+        int port = uri.getPort();
+        String path = uri.getPath();
+        StringBuilder builder = new StringBuilder();
+        builder.append(uri.getScheme()).append("://");
+        builder.append(TextUtils.isEmpty(host) ? "unknown" : host);
+        if (port > 0) builder.append(':').append(port);
+        if (!TextUtils.isEmpty(path)) builder.append(path.length() > 48 ? path.substring(0, 48) + "..." : path);
+        builder.append(" len=").append(url.length());
+        return builder.toString();
     }
 
     private static String stateName(int state) {
@@ -505,7 +520,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlaybackStateChanged(int state) {
             if (state != Player.STATE_IDLE) App.removeCallbacks(runnable);
-            SpiderDebug.log("player", "state=%s spec=%s", stateName(state), debugSpec());
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "state=%s spec=%s", stateName(state), debugSpec());
         }
 
         @Override
@@ -529,7 +544,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             PlayerEngine.ErrorAction action = engine.handleError(e);
-            SpiderDebug.log("player", "error code=%d message=%s action=%s retry=%d spec=%s cause=%s", e.errorCode, e.getMessage(), action, retry, debugSpec(), causeChain(e));
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "error code=%d message=%s action=%s retry=%d spec=%s cause=%s", e.errorCode, e.getMessage(), action, retry, debugSpec(), causeChain(e));
             LocalProxyDebug.dumpIfLocalFailure(spec == null ? null : spec.getUrl(), e);
             if (action == PlayerEngine.ErrorAction.FATAL && retryLocalProxy(e)) return;
             if (action == PlayerEngine.ErrorAction.RECOVERED) {
@@ -551,11 +566,11 @@ public class PlayerManager implements ParseCallback {
         if (!LocalProxyDebug.isConnectionRefused(e)) return false;
         if (++localProxyRetry > LOCAL_PROXY_MAX_RETRY) return false;
         int attempt = localProxyRetry;
-        SpiderDebug.log("player", "local proxy retry schedule attempt=%d delay=%d spec=%s", attempt, LOCAL_PROXY_RETRY_DELAY_MS, debugSpec());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy retry schedule attempt=%d delay=%d spec=%s", attempt, LOCAL_PROXY_RETRY_DELAY_MS, debugSpec());
         App.removeCallbacks(runnable);
         App.post(() -> {
             if (spec == null || attempt != localProxyRetry) return;
-            SpiderDebug.log("player", "local proxy retry start attempt=%d spec=%s", attempt, debugSpec());
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy retry start attempt=%d spec=%s", attempt, debugSpec());
             setMediaItem();
         }, LOCAL_PROXY_RETRY_DELAY_MS);
         return true;

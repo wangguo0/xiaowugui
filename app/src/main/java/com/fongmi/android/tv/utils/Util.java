@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 public class Util {
 
     private static final Pattern EPISODE = Pattern.compile("(?i)(?:ep|第|e|[\\-\\.\\s])\\s?(\\d{1,4})");
+    private static volatile String serial;
 
     public static void toggleFullscreen(Activity activity, boolean fullscreen) {
         if (fullscreen) hideSystemUI(activity);
@@ -131,7 +132,11 @@ public class Util {
     }
 
     public static String getSerial() {
-        return Shell.exec("getprop ro.serialno").replace("\n", "");
+        if (serial != null) return serial;
+        synchronized (Util.class) {
+            if (serial == null) serial = Shell.exec("getprop ro.serialno").replace("\n", "");
+            return serial;
+        }
     }
 
     public static String getMac(String name) {

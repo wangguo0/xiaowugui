@@ -25,11 +25,8 @@ import androidx.media3.extractor.ExtractorsFactory;
 import androidx.media3.extractor.ts.TsExtractor;
 
 import com.fongmi.android.tv.App;
-import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
-
-import java.util.Map;
 
 public class MediaSourceFactory implements MediaSource.Factory {
 
@@ -64,11 +61,8 @@ public class MediaSourceFactory implements MediaSource.Factory {
     @NonNull
     @Override
     public MediaSource createMediaSource(@NonNull MediaItem mediaItem) {
-        Map<String, String> headers = ExoUtil.extractHeaders(mediaItem);
-        getHttpDataSourceFactory().setDefaultRequestProperties(headers);
+        getHttpDataSourceFactory().setDefaultRequestProperties(ExoUtil.extractHeaders(mediaItem));
         String url = mediaItem.requestMetadata.mediaUri != null ? mediaItem.requestMetadata.mediaUri.toString() : "";
-        String mimeType = mediaItem.localConfiguration == null ? null : mediaItem.localConfiguration.mimeType;
-        SpiderDebug.log("exo-source", "create mediaId=%s url=%s mime=%s headers=%s", mediaItem.mediaId, url, mimeType, headers);
         if (url.contains("***") && url.contains("|||")) return createConcatenatingMediaSource(mediaItem, url);
         else return defaultMediaSourceFactory.createMediaSource(mediaItem);
     }
