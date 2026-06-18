@@ -76,6 +76,8 @@ public final class RemoteTrustDialog {
     private static final int PAGE_DETAIL = 1;
     private static final int PAGE_SETTINGS = 2;
     private static final long DETECT_RETRY_MS = 5_000L;
+    private static final long DEVICE_REFRESH_RETRY_MS = 3_000L;
+    private static final int DEVICE_REFRESH_RETRY_MAX = 8;
 
     private RemoteTrustDialog() {
     }
@@ -102,6 +104,7 @@ public final class RemoteTrustDialog {
             binding.autoDetectStarted = false;
             detectService(activity, binding, true);
         };
+        binding.deviceRefreshRetry = () -> retryRefreshDevices(activity, binding);
         render(activity, binding);
         dialog.setOnShowListener(d -> {
             configureWindow(activity, dialog);
@@ -135,7 +138,7 @@ public final class RemoteTrustDialog {
             });
             bindServerInput(activity, binding);
         });
-        dialog.setOnDismissListener(d -> App.removeCallbacks(binding.detectRetry));
+        dialog.setOnDismissListener(d -> App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry));
         dialog.show();
     }
 
@@ -179,7 +182,7 @@ public final class RemoteTrustDialog {
         binding.settingsBackButton = outline(context, context.getString(R.string.remote_trust_back_devices));
         binding.settingsBackButton.setTextSize(12);
         binding.settingsBackButton.setVisibility(View.GONE);
-        binding.toolbar.addView(binding.settingsBackButton, fixed(context, 78, 34));
+        binding.toolbar.addView(binding.settingsBackButton, fixed(context, 58, 34));
         binding.root.addView(binding.toolbar, topMargin(matchWrap(), 6));
 
         binding.scroll = new NestedScrollView(context);
@@ -208,7 +211,7 @@ public final class RemoteTrustDialog {
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE | WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }
@@ -345,11 +348,21 @@ public final class RemoteTrustDialog {
             saveServerSettings(activity, binding);
             return true;
         });
+        binding.server.setOnClickListener(v -> showKeyboard(activity, binding.server));
     }
 
     private static void hideKeyboard(Context context, View view) {
         InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
         if (manager != null && view != null) manager.hideSoftInputFromWindow(view.getWindowToken(), 0);
+    }
+
+    private static void showKeyboard(Context context, TextInputEditText input) {
+        if (input == null) return;
+        input.requestFocusFromTouch();
+        input.postDelayed(() -> {
+            InputMethodManager manager = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (manager != null) manager.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT);
+        }, 80);
     }
 
     private static void setupEditableText(TextInputEditText input, boolean multiline) {
@@ -361,6 +374,7 @@ public final class RemoteTrustDialog {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 view.post(() -> disallowParentIntercept(view, false));
+                if (action == MotionEvent.ACTION_UP) showKeyboard(view.getContext(), input);
             } else {
                 disallowParentIntercept(view, true);
             }
@@ -383,7 +397,7 @@ public final class RemoteTrustDialog {
 
         List<DeviceRow> rows = deviceRows(profile);
         if (rows.isEmpty()) {
-            binding.content.addView(emptyPanel(context, context.getString(R.string.remote_trust_no_devices)), topMargin(matchWrap(), 8));
+            binding.content.addView(emptyPanel(context, context.getString(hasGroups(profile) ? R.string.remote_trust_wait_devices : R.string.remote_trust_no_devices)), topMargin(matchWrap(), 8));
             return;
         }
         for (DeviceRow row : rows) {
@@ -430,7 +444,7 @@ public final class RemoteTrustDialog {
             binding.page = PAGE_DEVICES;
             render(context, binding);
         });
-        top.addView(back, fixed(context, 78, 34));
+        top.addView(back, fixed(context, 58, 34));
         binding.content.addView(top, matchWrap());
 
         if (binding.deviceStatusExpanded) {
@@ -747,8 +761,10 @@ public final class RemoteTrustDialog {
                     binding.selectedGroupId = "";
                     binding.selectedDeviceId = "";
                     binding.page = PAGE_DEVICES;
+                    binding.pendingDeviceRefreshes = DEVICE_REFRESH_RETRY_MAX;
                     Notify.show(R.string.remote_trust_add_done);
                     render(activity, binding);
+                    scheduleDeviceRefresh(binding);
                 });
             } catch (Throwable e) {
                 App.post(() -> {
@@ -799,6 +815,34 @@ public final class RemoteTrustDialog {
         List<RemoteDevice> devices = response == null ? new ArrayList<>() : response.devices;
         RemoteStore.upsertDevices(serverOrigin, group.groupId, devices);
         return devices == null ? 0 : devices.size();
+    }
+
+    private static void scheduleDeviceRefresh(Binding binding) {
+        if (binding.deviceRefreshRetry == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        App.post(binding.deviceRefreshRetry, DEVICE_REFRESH_RETRY_MS);
+    }
+
+    private static void retryRefreshDevices(FragmentActivity activity, Binding binding) {
+        if (activity == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null || profile.groups == null || profile.groups.isEmpty()) return;
+        if (!deviceRows(profile).isEmpty()) return;
+        if (binding.pendingDeviceRefreshes-- <= 0) return;
+        Task.execute(() -> {
+            try {
+                RemoteProfile latest = currentProfile(binding);
+                if (latest == null || latest.groups == null || latest.groups.isEmpty()) return;
+                RemoteClient client = new RemoteClient(latest);
+                client.register();
+                for (RemoteGroup group : new ArrayList<>(latest.groups)) refreshGroup(client, latest.serverOrigin, group);
+                App.post(() -> {
+                    render(activity, binding);
+                    if (deviceRows(currentProfile(binding)).isEmpty()) scheduleDeviceRefresh(binding);
+                });
+            } catch (Throwable ignored) {
+                App.post(() -> scheduleDeviceRefresh(binding));
+            }
+        });
     }
 
     private static void showTextCommandDialog(FragmentActivity activity, Binding binding, int title, int hint, String type, String payloadKey) {
@@ -1024,6 +1068,10 @@ public final class RemoteTrustDialog {
             }
         }
         return rows;
+    }
+
+    private static boolean hasGroups(RemoteProfile profile) {
+        return profile != null && profile.groups != null && !profile.groups.isEmpty();
     }
 
     private static DeviceRow selectedRow(RemoteProfile profile, Binding binding) {
@@ -1618,6 +1666,7 @@ public final class RemoteTrustDialog {
         private AlertDialog dialog;
         private Runnable callback;
         private Runnable detectRetry;
+        private Runnable deviceRefreshRetry;
         private LinearLayoutCompat content;
         private MaterialTextView summary;
         private MaterialButton close;
@@ -1644,6 +1693,7 @@ public final class RemoteTrustDialog {
         private boolean autoDetected;
         private boolean creatingBindCode;
         private int page = PAGE_DEVICES;
+        private int pendingDeviceRefreshes;
         private String bindCode = "";
         private String selectedGroupId = "";
         private String selectedDeviceId = "";

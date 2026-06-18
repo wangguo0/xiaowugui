@@ -163,6 +163,7 @@
     <string name="remote_trust_add_short">加入</string>
     <string name="remote_trust_refresh_devices">刷新設備</string>
     <string name="remote_trust_no_devices">暫無管理設備。請先在目標設備產生綁定碼，再在這裡加入。</string>
+    <string name="remote_trust_wait_devices">設備組已加入，正在等待目標設備同步並上線。</string>
     <string name="remote_trust_device_online">在線</string>
     <string name="remote_trust_device_offline">離線</string>
     <string name="remote_trust_selected_device">已選：%1$s</string>
@@ -219,7 +220,7 @@
     <string name="remote_trust_refresh_bind_code">刷新</string>
     <string name="remote_trust_copy">複製</string>
     <string name="remote_trust_add_device_title">加入設備</string>
-    <string name="remote_trust_back_devices">返回設備</string>
+    <string name="remote_trust_back_devices">返回</string>
     <string name="remote_trust_send_search">發送搜尋</string>
     <string name="remote_trust_send_push">推送播放</string>
     <string name="remote_trust_device_id">設備</string>

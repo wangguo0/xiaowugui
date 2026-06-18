@@ -163,6 +163,7 @@
     <string name="remote_trust_add_short">添加</string>
     <string name="remote_trust_refresh_devices">刷新设备</string>
     <string name="remote_trust_no_devices">暂无管理设备。请先在目标设备生成绑定码，再在这里添加。</string>
+    <string name="remote_trust_wait_devices">设备组已添加，正在等待目标设备同步并上线。</string>
     <string name="remote_trust_device_online">在线</string>
     <string name="remote_trust_device_offline">离线</string>
     <string name="remote_trust_selected_device">已选：%1$s</string>
@@ -219,7 +220,7 @@
     <string name="remote_trust_refresh_bind_code">刷新</string>
     <string name="remote_trust_copy">复制</string>
     <string name="remote_trust_add_device_title">添加设备</string>
-    <string name="remote_trust_back_devices">返回设备</string>
+    <string name="remote_trust_back_devices">返回</string>
     <string name="remote_trust_send_search">发送搜索</string>
     <string name="remote_trust_send_push">推送播放</string>
     <string name="remote_trust_device_id">设备</string>

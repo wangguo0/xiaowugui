@@ -164,6 +164,7 @@
     <string name="remote_trust_add_short">Add</string>
     <string name="remote_trust_refresh_devices">Refresh devices</string>
     <string name="remote_trust_no_devices">No managed devices. Generate a code on the target device and add it here.</string>
+    <string name="remote_trust_wait_devices">Device group added. Waiting for the target device to sync and come online.</string>
     <string name="remote_trust_device_online">Online</string>
     <string name="remote_trust_device_offline">Offline</string>
     <string name="remote_trust_selected_device">Selected: %1$s</string>
@@ -220,7 +221,7 @@
     <string name="remote_trust_refresh_bind_code">Refresh</string>
     <string name="remote_trust_copy">Copy</string>
     <string name="remote_trust_add_device_title">Add device</string>
-    <string name="remote_trust_back_devices">Back to devices</string>
+    <string name="remote_trust_back_devices">Back</string>
     <string name="remote_trust_send_search">Send search</string>
     <string name="remote_trust_send_push">Push playback</string>
     <string name="remote_trust_device_id">Device</string>
