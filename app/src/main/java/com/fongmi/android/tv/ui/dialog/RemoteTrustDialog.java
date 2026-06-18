@@ -53,6 +53,7 @@ import com.fongmi.android.tv.remote.RemoteModels.ServerCapabilities;
 import com.fongmi.android.tv.remote.RemoteStore;
 import com.fongmi.android.tv.remote.RemoteTokens;
 import com.fongmi.android.tv.bean.SyncOptions;
+import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
@@ -2091,8 +2092,8 @@ public final class RemoteTrustDialog {
     private static void showServerQr(FragmentActivity activity, Binding binding) {
         String server = currentServerText(binding);
         if (TextUtils.isEmpty(RemoteTokens.normalizeOrigin(server))) {
-            startScan(activity, binding);
-            return;
+            Server.get().start();
+            server = Server.get().getAddress(false);
         }
         LinearLayoutCompat root = dialogRoot(activity);
         ImageView image = new ImageView(activity);
