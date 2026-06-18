@@ -12,6 +12,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.view.KeyEvent;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -189,8 +190,8 @@ public final class RemoteTrustDialog {
         binding.scroll.addView(binding.content, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         binding.root.addView(binding.scroll, topMargin(matchWrap(), 10));
 
-        binding.server = input(context, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
-        binding.serverLayout = inputLayout(context, R.string.remote_trust_server_url, binding.server);
+        binding.serverLayout = (TextInputLayout) LayoutInflater.from(context).inflate(R.layout.view_remote_trust_server_input, binding.content, false);
+        binding.server = binding.serverLayout.findViewById(R.id.server);
         setupEditableText(binding.server, false);
         binding.enabled = check(context, R.string.remote_trust_enable);
         binding.enabled.setChecked(true);
@@ -517,6 +518,7 @@ public final class RemoteTrustDialog {
         RemoteProfile current = RemoteStore.getProfileByOrigin(origin);
         if (current != null && TextUtils.equals(serverUrl.trim(), current.serverUrl) && current.keepOnline && current.enabled == binding.enabled.isChecked()) {
             binding.serverEditing = false;
+            if (TextUtils.isEmpty(binding.bindCode)) binding.autoBindAttempted = false;
             if (!binding.autoDetected) detectService(activity, binding, true);
             render(activity, binding);
             return;
@@ -597,6 +599,7 @@ public final class RemoteTrustDialog {
                     binding.diagnostics = diagnostics;
                     binding.autoDetected = true;
                     binding.autoDetectStarted = false;
+                    if (TextUtils.isEmpty(binding.bindCode)) binding.autoBindAttempted = false;
                     App.removeCallbacks(binding.detectRetry);
                     render(activity, binding);
                 });
