@@ -200,7 +200,13 @@
     <string name="remote_trust_bind_code_loading">Code ...</string>
     <string name="remote_trust_bind_code_unavailable">Not configured</string>
     <string name="remote_trust_command_result_title">Result</string>
+    <string name="remote_trust_result_action">Action</string>
+    <string name="remote_trust_result_status">Status</string>
+    <string name="remote_trust_result_state">Result</string>
+    <string name="remote_trust_result_log_lines">Recent logs: %1$d lines</string>
+    <string name="remote_trust_result_copied">Result copied</string>
     <string name="remote_trust_settings_title">Relay service</string>
+    <string name="remote_trust_edit_server">Edit relay URL</string>
     <string name="remote_trust_detect_service">Check service</string>
     <string name="remote_trust_copy_diagnostics">Copy diagnostics</string>
     <string name="remote_trust_diagnostics_copied">Diagnostics copied</string>

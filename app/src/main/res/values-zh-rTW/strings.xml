@@ -199,7 +199,13 @@
     <string name="remote_trust_bind_code_loading">產生中...</string>
     <string name="remote_trust_bind_code_unavailable">未設定</string>
     <string name="remote_trust_command_result_title">執行結果</string>
+    <string name="remote_trust_result_action">操作</string>
+    <string name="remote_trust_result_status">狀態</string>
+    <string name="remote_trust_result_state">結果</string>
+    <string name="remote_trust_result_log_lines">最近日誌：%1$d 行</string>
+    <string name="remote_trust_result_copied">結果已複製</string>
     <string name="remote_trust_settings_title">中轉服務</string>
+    <string name="remote_trust_edit_server">編輯中轉地址</string>
     <string name="remote_trust_detect_service">檢測服務</string>
     <string name="remote_trust_copy_diagnostics">複製診斷資訊</string>
     <string name="remote_trust_diagnostics_copied">診斷資訊已複製</string>
