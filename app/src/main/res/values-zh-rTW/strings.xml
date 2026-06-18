@@ -615,6 +615,8 @@
     <string name="setting_delete">刪除</string>
     <string name="setting_disable">禁用</string>
     <string name="setting_enable">啟用</string>
+    <string name="setting_order_normal">正序</string>
+    <string name="setting_order_reverse">倒序</string>
     <string name="setting_off">關</string>
     <string name="setting_on">開</string>
 

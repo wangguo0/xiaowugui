@@ -88,6 +88,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     private boolean textMode;
     private boolean editMode;
     private boolean recognizeMode;
+    private boolean reverseOrder;
     private boolean saved;
     private long lastAddTime;
     private SettingClipboardOverlay clipboardOverlay;
@@ -156,6 +157,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         adapter = new CspAdapter(new ArrayList<>(registry.getItems()));
         enabled = registry.isEnabled();
         updateEnabledText();
+        updateReverseText();
         setInsertIndex(registry.getInsertIndex());
         binding.recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recycler.setItemAnimator(null);
@@ -171,6 +173,11 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.enabled.setOnClickListener(view -> {
             enabled = !enabled;
             updateEnabledText();
+        });
+        binding.reverse.setOnClickListener(view -> {
+            reverseOrder = !reverseOrder;
+            updateReverseText();
+            adapter.setReverseOrder(reverseOrder);
         });
         binding.insertMinus.setOnClickListener(view -> changeInsertIndex(-1));
         binding.insertPlus.setOnClickListener(view -> changeInsertIndex(1));
@@ -206,6 +213,10 @@ public class CustomCspDialog extends BaseAlertDialog {
     private void updateEnabledText() {
         binding.enabled.setText(enabled ? R.string.setting_enable : R.string.setting_disable);
         binding.enabled.setAlpha(enabled ? 1.0f : 0.65f);
+    }
+
+    private void updateReverseText() {
+        binding.reverse.setText(reverseOrder ? R.string.setting_order_normal : R.string.setting_order_reverse);
     }
 
     private void setupScrollableText(EditText input) {
@@ -269,6 +280,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.add.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
         binding.recognize.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.enabled.setVisibility(editMode ? View.GONE : View.VISIBLE);
+        binding.reverse.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.globalPanel.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.modeGroup.setVisibility(editMode ? View.GONE : View.VISIBLE);
     }
@@ -359,9 +371,15 @@ public class CustomCspDialog extends BaseAlertDialog {
             Notify.show(R.string.setting_custom_csp_extensions_invalid);
             return false;
         }
-        if (editingPosition >= 0) adapter.replace(editingPosition, editingItem);
-        else adapter.add(editingItem);
+        int target;
+        if (editingPosition >= 0) {
+            adapter.replace(editingPosition, editingItem);
+            target = adapter.displayPosition(editingPosition);
+        } else {
+            target = adapter.add(editingItem);
+        }
         showList();
+        scrollToItem(target);
         return true;
     }
 
@@ -505,11 +523,27 @@ public class CustomCspDialog extends BaseAlertDialog {
         if (textMode && !syncFormFromJson(true)) return false;
         else if (!textMode) syncAllVisibleRows();
         List<CustomCspSetting.Item> next = new ArrayList<>(adapter.getItems());
+        int firstAdded = next.size();
         next.addAll(items);
         adapter.setItems(next);
         if (textMode) syncJsonFromForm(false);
+        scrollToItem(adapter.displayPosition(reverseOrder ? next.size() - 1 : firstAdded));
         Notify.show(getString(R.string.setting_custom_csp_recognize_done, items.size()));
         return true;
+    }
+
+    private void scrollToItem(int position) {
+        if (position < 0) return;
+        binding.recycler.post(() -> {
+            binding.recycler.scrollToPosition(position);
+            binding.recycler.post(() -> {
+                RecyclerView.ViewHolder holder = binding.recycler.findViewHolderForAdapterPosition(position);
+                if (holder != null) {
+                    binding.contentScroll.smoothScrollTo(0, binding.recycler.getTop() + holder.itemView.getTop());
+                    holder.itemView.requestFocus();
+                }
+            });
+        });
     }
 
     private List<CustomCspSetting.Item> recognizedItems(String text) throws Exception {
@@ -846,6 +880,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     private class CspAdapter extends RecyclerView.Adapter<CspAdapter.ViewHolder> {
 
         private final List<CustomCspSetting.Item> items;
+        private boolean reverseOrder;
 
         CspAdapter(List<CustomCspSetting.Item> items) {
             this.items = items;
@@ -855,17 +890,18 @@ public class CustomCspDialog extends BaseAlertDialog {
             return items;
         }
 
-        void add(CustomCspSetting.Item item) {
+        int add(CustomCspSetting.Item item) {
             items.add(item);
-            notifyItemInserted(items.size() - 1);
-            binding.recycler.scrollToPosition(items.size() - 1);
+            int position = displayPosition(items.size() - 1);
+            notifyItemInserted(position);
+            return position;
         }
 
         void replace(int position, CustomCspSetting.Item item) {
             if (position < 0 || position >= items.size()) return;
             CustomCspSetting.Item old = items.set(position, item);
             if (!old.isLive() && old.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey(item.isLive() ? "" : item.site().getKey());
-            notifyItemChanged(position);
+            notifyItemChanged(displayPosition(position));
         }
 
         void setItems(List<CustomCspSetting.Item> items) {
@@ -874,23 +910,42 @@ public class CustomCspDialog extends BaseAlertDialog {
             notifyDataSetChanged();
         }
 
+        void setReverseOrder(boolean reverseOrder) {
+            if (this.reverseOrder == reverseOrder) return;
+            this.reverseOrder = reverseOrder;
+            notifyDataSetChanged();
+        }
+
         boolean hasInvalidExtensions() {
             for (CustomCspSetting.Item item : items) if (item.hasInvalidExtensions()) return true;
             return false;
         }
 
-        void move(int from, int to) {
-            if (from < 0 || to < 0 || from >= items.size() || to >= items.size()) return;
+        void move(int fromPosition, int toPosition) {
+            if (fromPosition < 0 || toPosition < 0 || fromPosition >= items.size() || toPosition >= items.size()) return;
+            int from = itemIndex(fromPosition);
+            int to = itemIndex(toPosition);
             Collections.swap(items, from, to);
-            notifyItemMoved(from, to);
+            notifyItemMoved(fromPosition, toPosition);
+            notifyItemRangeChanged(Math.min(fromPosition, toPosition), Math.abs(fromPosition - toPosition) + 1);
         }
 
         void remove(int position, View removed) {
             if (position < 0 || position >= items.size()) return;
+            int index = itemIndex(position);
             focusBeforeRemove(removed);
-            CustomCspSetting.Item item = items.remove(position);
+            CustomCspSetting.Item item = items.remove(index);
             if (!item.isLive() && item.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey("");
-            notifyItemRemoved(position);
+            notifyDataSetChanged();
+        }
+
+        int itemIndex(int position) {
+            return reverseOrder ? items.size() - 1 - position : position;
+        }
+
+        int displayPosition(int index) {
+            if (index < 0 || index >= items.size()) return -1;
+            return reverseOrder ? items.size() - 1 - index : index;
         }
 
         void setHome(CustomCspSetting.Item item) {
@@ -919,7 +974,8 @@ public class CustomCspDialog extends BaseAlertDialog {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            holder.bind(items.get(position));
+            int index = itemIndex(position);
+            holder.bind(items.get(index), index);
         }
 
         private class ViewHolder extends RecyclerView.ViewHolder {
@@ -932,7 +988,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 this.root = root;
             }
 
-            void bind(CustomCspSetting.Item item) {
+            void bind(CustomCspSetting.Item item, int position) {
                 this.item = item;
                 root.removeAllViews();
                 root.setBackground(rowBackground(item));
@@ -945,7 +1001,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 header.setOrientation(LinearLayoutCompat.HORIZONTAL);
                 root.addView(header, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-                MaterialTextView title = text(item.getName(), 15, Color.BLACK, true);
+                MaterialTextView title = text((position + 1) + ". " + item.getName(), 15, Color.BLACK, true);
                 header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
                 header.addView(badge(kindName(item), statusColor(item)));
                 header.addView(iconButton(R.drawable.ic_subtitle_up, R.string.setting_custom_csp_up, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1)), iconLayout(8));
@@ -964,10 +1020,10 @@ public class CustomCspDialog extends BaseAlertDialog {
 
                 MaterialButton toggle = actionButton(item.isEnabled() ? R.string.setting_disable : R.string.setting_enable, !item.isEnabled(), false);
                 toggle.setOnClickListener(view -> {
-                    int position = getBindingAdapterPosition();
-                    if (position == RecyclerView.NO_POSITION) return;
+                    int adapterPosition = getBindingAdapterPosition();
+                    if (adapterPosition == RecyclerView.NO_POSITION) return;
                     item.setEnabled(!item.isEnabled());
-                    notifyItemChanged(position);
+                    notifyItemChanged(adapterPosition);
                 });
                 actions.addView(toggle, actionLayout(0));
 
@@ -990,7 +1046,8 @@ public class CustomCspDialog extends BaseAlertDialog {
             private void editCurrent() {
                 int position = getBindingAdapterPosition();
                 if (position == RecyclerView.NO_POSITION) return;
-                showEdit(items.get(position), position);
+                int index = itemIndex(position);
+                showEdit(items.get(index), index);
             }
 
             void sync() {

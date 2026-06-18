@@ -67,12 +67,14 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     private boolean enabled;
     private boolean textMode;
     private boolean editMode;
+    private boolean reverseOrder;
     private WebHomeExtensionSourceStore.Entry editingSource;
     private SourceEditor editingEditor;
     private WebHomeExtensionSourceStore.Entry pendingFileEdit;
     private SourceEditor pendingFileEditor;
     private final List<SourceEditor> editors = new ArrayList<>();
     private SettingClipboardOverlay clipboardOverlay;
+    private String pendingScrollSourceId;
 
     public static void show(Fragment fragment, Runnable callback) {
         WebHomeExtensionDialog dialog = new WebHomeExtensionDialog();
@@ -136,6 +138,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         editingEditor = null;
         pendingFileEdit = null;
         pendingFileEditor = null;
+        pendingScrollSourceId = null;
         super.onDestroyView();
     }
 
@@ -143,6 +146,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     protected void initView() {
         enabled = Setting.isWebHomeExtension();
         updateEnabledText();
+        updateReverseText();
         binding.modeGroup.check(R.id.uiMode);
         setupScrollableText(binding.jsonText);
         showTextMode(false);
@@ -156,6 +160,11 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         binding.enabled.setOnClickListener(view -> {
             enabled = !enabled;
             updateEnabledText();
+        });
+        binding.reverse.setOnClickListener(view -> {
+            reverseOrder = !reverseOrder;
+            updateReverseText();
+            render();
         });
         binding.add.setOnClickListener(view -> addDefaultSource());
         binding.debug.setOnClickListener(view -> WebHomeExtensionDebugDialog.show(requireActivity(), callback));
@@ -181,6 +190,10 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     private void updateEnabledText() {
         binding.enabled.setText(enabled ? R.string.setting_enable : R.string.setting_disable);
         binding.enabled.setAlpha(enabled ? 1.0f : 0.65f);
+    }
+
+    private void updateReverseText() {
+        binding.reverse.setText(reverseOrder ? R.string.setting_order_normal : R.string.setting_order_reverse);
     }
 
     private void refresh(boolean manual) {
@@ -227,6 +240,7 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         binding.debug.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.clear.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.enabled.setVisibility(editMode ? View.GONE : View.VISIBLE);
+        binding.reverse.setVisibility(editMode ? View.GONE : View.VISIBLE);
         binding.modeGroup.setVisibility(editMode ? View.GONE : View.VISIBLE);
     }
 
@@ -268,7 +282,22 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         trimRows();
         editors.clear();
         binding.empty.setVisibility(rows.isEmpty() ? View.VISIBLE : View.GONE);
-        for (RowModel row : rows) binding.list.addView(row(row));
+        View target = null;
+        for (int i = 0; i < rows.size(); i++) {
+            int index = reverseOrder ? rows.size() - 1 - i : i;
+            RowModel row = rows.get(index);
+            View view = row(row, index);
+            binding.list.addView(view);
+            if (!TextUtils.isEmpty(pendingScrollSourceId) && row.source != null && TextUtils.equals(row.source.getId(), pendingScrollSourceId)) target = view;
+        }
+        if (target != null) {
+            View focusTarget = target;
+            pendingScrollSourceId = null;
+            binding.contentScroll.post(() -> {
+                binding.contentScroll.smoothScrollTo(0, focusTarget.getTop());
+                focusTarget.requestFocus();
+            });
+        }
     }
 
     private void showList() {
@@ -353,18 +382,20 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
         while (binding.list.getChildCount() > 1) binding.list.removeViewAt(1);
     }
 
-    private View row(RowModel model) {
+    private View row(RowModel model, int position) {
         WebHomeExtensionSourceStore.Entry source = model.source;
         WebHomeExtensionRegistry.Item item = model.item;
         LinearLayoutCompat root = new LinearLayoutCompat(requireContext());
         root.setOrientation(LinearLayoutCompat.VERTICAL);
         root.setPadding(dp(10), dp(8), dp(10), dp(8));
         root.setBackground(rowBackground());
+        root.setFocusable(true);
+        root.setFocusableInTouchMode(true);
         LinearLayoutCompat.LayoutParams rootParams = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         rootParams.topMargin = dp(8);
         root.setLayoutParams(rootParams);
 
-        MaterialTextView title = text(model.name(), 15, Color.BLACK, true);
+        MaterialTextView title = text((position + 1) + ". " + model.name(), 15, Color.BLACK, true);
         root.addView(title);
         MaterialTextView status = text(model.status(), 12, statusColor(model.statusKey()), false);
         root.addView(status);
@@ -540,7 +571,10 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
     private boolean saveEditingSource(boolean notify) {
         try {
             if (editingEditor == null) return false;
+            List<String> before = sourceIds();
+            String id = editingSource == null ? "" : editingSource.getId();
             saveFormEditor(editingEditor);
+            pendingScrollSourceId = TextUtils.isEmpty(id) ? findNewSourceId(before) : id;
             onSourceSaved(false);
             if (notify) Notify.show(R.string.web_home_extension_source_saved);
             showList();
@@ -868,11 +902,26 @@ public class WebHomeExtensionDialog extends BaseAlertDialog {
             pendingFileEdit = null;
             return;
         }
+        List<String> before = sourceIds();
         WebHomeExtensionSourceStore.saveCodeMeta(source == null ? "" : source.getId(), inputText(editor == null ? null : editor.name, name), runAt(editor == null ? null : editor.runAtGroup, editor == null ? 0 : editor.startId, editor == null ? 0 : editor.idleId), matchValue(editor), fileCode(name, code), source == null || source.isEnabled(), "", WebHomeExtensionSourceStore.SOURCE_TYPE_FILE);
+        pendingScrollSourceId = source == null || TextUtils.isEmpty(source.getId()) ? findNewSourceId(before) : source.getId();
         pendingFileEditor = null;
         pendingFileEdit = null;
         onSourceSaved();
     });
+
+    private List<String> sourceIds() {
+        List<String> ids = new ArrayList<>();
+        for (WebHomeExtensionSourceStore.Entry entry : WebHomeExtensionSourceStore.list()) ids.add(entry.getId());
+        return ids;
+    }
+
+    private String findNewSourceId(List<String> before) {
+        for (WebHomeExtensionSourceStore.Entry entry : WebHomeExtensionSourceStore.list()) {
+            if (!before.contains(entry.getId())) return entry.getId();
+        }
+        return "";
+    }
 
     private String fileCode(String name, String code) {
         String lower = name == null ? "" : name.toLowerCase();

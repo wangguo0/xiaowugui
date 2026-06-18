@@ -439,7 +439,7 @@
     <string name="web_home_extension_add_source">Add</string>
     <string name="web_home_extension_debug">Debug</string>
     <string name="web_home_extension_refresh">Refresh</string>
-    <string name="web_home_extension_clear_cache">Clear cache</string>
+    <string name="web_home_extension_clear_cache">Clear</string>
     <string name="web_home_extension_user_sources">User sources</string>
     <string name="web_home_extension_loaded_extensions">Loaded extensions</string>
     <string name="web_home_extension_user_source_status">User source · %1$s</string>
@@ -621,6 +621,8 @@
     <string name="setting_delete">Delete</string>
     <string name="setting_disable">Disable</string>
     <string name="setting_enable">Enable</string>
+    <string name="setting_order_normal">Normal</string>
+    <string name="setting_order_reverse">Reverse</string>
     <string name="setting_off">Off</string>
     <string name="setting_on">On</string>
 
