@@ -318,17 +318,21 @@ public final class RemoteStore {
         RemoteStoreFile store = get();
         int profiles = 0;
         int groups = 0;
+        int devices = 0;
         boolean keepOnline = false;
         for (RemoteProfile profile : store.profiles) {
             if (profile == null) continue;
             profiles++;
             ensureProfile(profile);
             groups += profile.groups.size();
+            for (RemoteGroup group : profile.groups) {
+                if (group != null && group.devices != null) devices += group.devices.size();
+            }
             keepOnline |= profile.keepOnline;
         }
         if (profiles == 0) return context.getString(R.string.remote_trust_status_unbound);
         String status = keepOnline ? context.getString(R.string.remote_trust_status_online) : context.getString(R.string.remote_trust_status_enabled);
-        return context.getString(R.string.remote_trust_status_summary, status, profiles, groups);
+        return context.getString(R.string.remote_trust_current_status_summary, status, groups, devices);
     }
 
     static boolean shouldStart(RemoteProfile profile) {

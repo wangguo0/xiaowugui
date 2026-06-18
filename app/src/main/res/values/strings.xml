@@ -153,7 +153,6 @@
     <string name="remote_trust_status_unbound">Unbound</string>
     <string name="remote_trust_status_enabled">Enabled</string>
     <string name="remote_trust_status_online">Online</string>
-    <string name="remote_trust_status_summary">%1$s · Relays %2$d · Groups %3$d</string>
     <string name="remote_trust_current_status_summary">%1$s · Groups %2$d · Devices %3$d</string>
     <string name="remote_trust_notification_title">Remote trust online</string>
     <string name="remote_trust_section_local">This device</string>
