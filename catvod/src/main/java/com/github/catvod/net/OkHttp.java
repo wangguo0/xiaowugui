@@ -104,7 +104,7 @@ public class OkHttp {
 
     public static synchronized OkHttpClient player() {
         if (get().player != null) return get().player;
-        return get().player = getBuilder().eventListenerFactory(call -> new DebugEventListener()).build();
+        return get().player = getBuilder().eventListenerFactory(call -> SpiderDebug.isEnabled() ? new DebugEventListener() : EventListener.NONE).build();
     }
 
     public static OkHttpClient client(long timeout) {
@@ -255,41 +255,49 @@ public class OkHttp {
 
         @Override
         public void callStart(@NonNull Call call) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "start", "method=" + call.request().method() + ", headers=" + call.request().headers());
         }
 
         @Override
         public void connectStart(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "connectStart", "address=" + inetSocketAddress + ", proxy=" + proxy);
         }
 
         @Override
         public void connectEnd(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy, @Nullable Protocol protocol) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "connectEnd", "address=" + inetSocketAddress + ", proxy=" + proxy + ", protocol=" + protocol);
         }
 
         @Override
         public void connectFailed(@NonNull Call call, @NonNull InetSocketAddress inetSocketAddress, @NonNull java.net.Proxy proxy, @Nullable Protocol protocol, @NonNull IOException ioe) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "connectFailed", "address=" + inetSocketAddress + ", proxy=" + proxy + ", protocol=" + protocol + ", error=" + error(ioe));
         }
 
         @Override
         public void connectionAcquired(@NonNull Call call, @NonNull Connection connection) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "connectionAcquired", "route=" + connection.route());
         }
 
         @Override
         public void responseHeadersEnd(@NonNull Call call, @NonNull Response response) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "response", "code=" + response.code() + ", message=" + response.message() + ", contentLength=" + response.header("Content-Length") + ", contentType=" + response.header("Content-Type") + ", contentRange=" + response.header("Content-Range"));
         }
 
         @Override
         public void callEnd(@NonNull Call call) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "end", "elapsedMs=" + elapsedMs());
         }
 
         @Override
         public void callFailed(@NonNull Call call, @NonNull IOException ioe) {
+            if (!SpiderDebug.isEnabled()) return;
             log(call, "failed", "elapsedMs=" + elapsedMs() + ", error=" + error(ioe));
         }
 
