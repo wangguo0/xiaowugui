@@ -259,9 +259,9 @@
     <string name="remote_trust_config_use_short">Use</string>
     <string name="remote_trust_config_use_setting">Setting…</string>
     <string name="remote_trust_config_current">Current</string>
-    <string name="remote_trust_config_use_status_setting">Switching: %1$s</string>
-    <string name="remote_trust_config_use_status_success">Switched: %1$s</string>
-    <string name="remote_trust_config_use_status_failed">Switch failed: %1$s</string>
+    <string name="remote_trust_config_use_status_setting">Switching</string>
+    <string name="remote_trust_config_use_status_success">Switched</string>
+    <string name="remote_trust_config_use_status_failed">Switch failed</string>
     <string name="remote_trust_config_home_short">Home</string>
     <string name="remote_trust_config_home_label">Home: %1$s</string>
     <string name="remote_trust_config_home_loading">Loading sites…</string>

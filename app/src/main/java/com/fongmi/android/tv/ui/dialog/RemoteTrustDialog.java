@@ -1358,10 +1358,9 @@ public final class RemoteTrustDialog {
     }
 
     private static String configUseStatusText(Context context, ConfigDialogState state) {
-        String name = TextUtils.isEmpty(state.useStatusName) ? "-" : state.useStatusName;
-        if (state.useStatus == HOME_STATUS_SUCCESS) return context.getString(R.string.remote_trust_config_use_status_success, name);
-        if (state.useStatus == HOME_STATUS_FAILED) return context.getString(R.string.remote_trust_config_use_status_failed, name);
-        return context.getString(R.string.remote_trust_config_use_status_setting, name);
+        if (state.useStatus == HOME_STATUS_SUCCESS) return context.getString(R.string.remote_trust_config_use_status_success);
+        if (state.useStatus == HOME_STATUS_FAILED) return context.getString(R.string.remote_trust_config_use_status_failed);
+        return context.getString(R.string.remote_trust_config_use_status_setting);
     }
 
     private static void addConfigHomeLine(Context context, LinearLayoutCompat card, ConfigDialogState state, JsonObject item, boolean active) {
@@ -1631,7 +1630,6 @@ public final class RemoteTrustDialog {
         int type = payloadType(payload);
         state.usePreviousKey = activeConfigKey(state.items, type);
         state.useStatusKey = configKey(payload);
-        state.useStatusName = configTitle(payload);
         state.useStatus = HOME_STATUS_SETTING;
         markActive(state.items, payload);
         state.selected = findConfig(state.items, payload);
@@ -1646,7 +1644,6 @@ public final class RemoteTrustDialog {
             updateConfigCacheFromResult(binding, state, result);
             markActive(state.items, payload);
             state.useStatus = HOME_STATUS_SUCCESS;
-            state.useStatusName = configTitle(payload);
             state.selected = findConfig(state.items, payload);
             binding.configCache.put(remoteCacheKey(binding), state.items);
             renderRemoteConfigList(activity, binding, state);
@@ -1655,7 +1652,6 @@ public final class RemoteTrustDialog {
 
     private static void failUseRemoteConfig(FragmentActivity activity, Binding binding, ConfigDialogState state, JsonObject payload, String message) {
         state.useStatus = HOME_STATUS_FAILED;
-        state.useStatusName = configTitle(payload);
         restoreActiveConfig(state.items, payloadType(payload), state.usePreviousKey);
         state.selected = findConfig(state.items, payload);
         binding.configCache.put(remoteCacheKey(binding), state.items);
@@ -3041,7 +3037,6 @@ public final class RemoteTrustDialog {
         private int homeStatus = HOME_STATUS_NONE;
         private String usePreviousKey = "";
         private String useStatusKey = "";
-        private String useStatusName = "";
         private int useStatus = HOME_STATUS_NONE;
         private int type;
         private boolean adding;

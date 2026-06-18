@@ -258,9 +258,9 @@
     <string name="remote_trust_config_use_short">使用</string>
     <string name="remote_trust_config_use_setting">设置中…</string>
     <string name="remote_trust_config_current">当前</string>
-    <string name="remote_trust_config_use_status_setting">接口切换中：%1$s</string>
-    <string name="remote_trust_config_use_status_success">接口已切换：%1$s</string>
-    <string name="remote_trust_config_use_status_failed">接口切换失败：%1$s</string>
+    <string name="remote_trust_config_use_status_setting">接口切换中</string>
+    <string name="remote_trust_config_use_status_success">接口已切换</string>
+    <string name="remote_trust_config_use_status_failed">接口切换失败</string>
     <string name="remote_trust_config_home_short">主页</string>
     <string name="remote_trust_config_home_label">当前主页：%1$s</string>
     <string name="remote_trust_config_home_loading">正在读取站点…</string>
