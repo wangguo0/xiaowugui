@@ -119,7 +119,7 @@ public final class RemoteTrustDialog {
             if (binding.dialog == null || !binding.dialog.isShowing()) return;
             RemoteProfile profile = currentProfile(binding);
             if (profile == null || !profile.enabled) return;
-            if (binding.busy) {
+            if (binding.busy || binding.detectingService) {
                 scheduleDetectRetry(binding);
                 return;
             }
@@ -308,7 +308,7 @@ public final class RemoteTrustDialog {
         binding.settingsBackButton.setEnabled(!binding.busy);
         String status = statusText(context, binding, profile);
         binding.statusButton.setText(status);
-        applyStatusStyle(context, binding.statusButton, profile, binding.serviceStateText);
+        applyStatusStyle(context, binding.statusButton, profile, status);
     }
 
     private static String bindCodeText(Context context, Binding binding, RemoteProfile profile) {
@@ -321,7 +321,7 @@ public final class RemoteTrustDialog {
     private static String statusText(Context context, Binding binding, RemoteProfile profile) {
         if (profile == null) return context.getString(R.string.remote_trust_status_unbound);
         if (!profile.enabled) return context.getString(R.string.setting_disable);
-        if (binding.busy && TextUtils.isEmpty(binding.serviceStateText)) return context.getString(R.string.remote_trust_detect_service);
+        if (binding.detectingService) return context.getString(R.string.remote_trust_detect_service);
         if (!TextUtils.isEmpty(binding.serviceStateText)) return binding.serviceStateText;
         return context.getString(R.string.remote_trust_service_unchecked);
     }
@@ -599,7 +599,7 @@ public final class RemoteTrustDialog {
     }
 
     private static void renderSettings(Context context, Binding binding) {
-        String state = TextUtils.isEmpty(binding.serviceStateText) ? context.getString(R.string.remote_trust_service_unchecked) : binding.serviceStateText;
+        String state = statusText(context, binding, currentProfile(binding));
         if (binding.statusExpanded) binding.content.addView(servicePanel(context, binding, state, binding.serviceDetailText), matchWrap());
 
         RemoteProfile profile = currentProfile(binding);
@@ -730,17 +730,18 @@ public final class RemoteTrustDialog {
             return;
         }
         binding.autoDetectStarted = true;
+        binding.detectingService = true;
+        updateHeader(activity, binding);
         RemoteProfile probe = new RemoteProfile();
         probe.serverUrl = serverUrl.trim();
         probe.serverOrigin = origin;
-        setBusy(binding, true);
         Task.execute(() -> {
             try {
                 ServerCapabilities capabilities = new RemoteClient(probe).capabilities();
                 String detail = formatCapabilities(activity, capabilities);
                 String diagnostics = origin + "/api/server/capabilities\n" + App.gson().toJson(capabilities);
                 App.post(() -> {
-                    setBusy(binding, false);
+                    binding.detectingService = false;
                     binding.serviceStateText = activity.getString(R.string.remote_trust_service_ok);
                     binding.serviceDetailText = detail;
                     binding.diagnostics = diagnostics;
@@ -752,7 +753,7 @@ public final class RemoteTrustDialog {
                 });
             } catch (Throwable e) {
                 App.post(() -> {
-                    setBusy(binding, false);
+                    binding.detectingService = false;
                     binding.serviceStateText = activity.getString(R.string.remote_trust_service_error);
                     binding.serviceDetailText = activity.getString(R.string.remote_trust_service_failed_with_reason, conciseError(activity, e));
                     binding.diagnostics = origin + "/api/server/capabilities\n" + e.getMessage();
@@ -2277,6 +2278,7 @@ public final class RemoteTrustDialog {
     private static void resetDetect(Binding binding) {
         binding.autoDetected = false;
         binding.autoDetectStarted = false;
+        binding.detectingService = false;
         App.removeCallbacks(binding.detectRetry);
     }
 
@@ -2846,6 +2848,7 @@ public final class RemoteTrustDialog {
         private boolean autoBindAttempted;
         private boolean autoDetectStarted;
         private boolean autoDetected;
+        private boolean detectingService;
         private boolean creatingBindCode;
         private int page = PAGE_DEVICES;
         private int pendingDeviceRefreshes;
