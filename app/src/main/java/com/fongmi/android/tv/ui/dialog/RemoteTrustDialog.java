@@ -18,7 +18,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.LinearLayoutCompat;
@@ -188,8 +187,8 @@ public final class RemoteTrustDialog {
         binding.scroll.addView(binding.content, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         binding.root.addView(binding.scroll, topMargin(matchWrap(), 10));
 
-        binding.server = nativeInput(context, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
-        binding.server.setHint(R.string.remote_trust_server_url);
+        binding.server = input(context, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI, true);
+        binding.serverLayout = inputLayout(context, R.string.remote_trust_server_url, binding.server);
         binding.enabled = check(context, R.string.remote_trust_enable);
         binding.enabled.setChecked(true);
         binding.keepOnline = check(context, R.string.remote_trust_keep_online);
@@ -430,21 +429,15 @@ public final class RemoteTrustDialog {
 
         RemoteProfile profile = currentProfile(binding);
         if (profile == null) binding.serverEditing = true;
-        binding.content.addView(sectionTitle(context, R.string.remote_trust_settings_title), topMargin(matchWrap(), binding.statusExpanded ? 12 : 0));
         if (binding.serverEditing) {
-            detach(binding.server);
-            binding.content.addView(binding.server, topMargin(matchWrap(), 8));
+            binding.content.addView(sectionTitle(context, R.string.remote_trust_settings_title), topMargin(matchWrap(), binding.statusExpanded ? 12 : 0));
+            detach(binding.serverLayout);
+            binding.content.addView(binding.serverLayout, topMargin(matchWrap(), 8));
             MaterialButton save = primaryAction(binding, context, R.string.remote_trust_done);
             save.setOnClickListener(v -> saveServerSettings((FragmentActivity) context, binding));
             binding.content.addView(save, topMargin(fixedHeight(context, 36), 8));
         } else {
-            binding.content.addView(serverInfoPanel(context, profile), topMargin(matchWrap(), 8));
-            MaterialButton edit = outlineAction(binding, context, R.string.remote_trust_edit_server);
-            edit.setOnClickListener(v -> {
-                binding.serverEditing = true;
-                render(context, binding);
-            });
-            binding.content.addView(edit, topMargin(fixedHeight(context, 34), 8));
+            binding.content.addView(serverInfoPanel(context, binding, profile), topMargin(matchWrap(), binding.statusExpanded ? 12 : 0));
         }
 
         if (!Setting.hasFileAccess()) {
@@ -1080,10 +1073,6 @@ public final class RemoteTrustDialog {
         return input == null || input.getText() == null ? "" : input.getText().toString().trim();
     }
 
-    private static String textOf(EditText input) {
-        return input == null || input.getText() == null ? "" : input.getText().toString().trim();
-    }
-
     private static void setBusy(Binding binding, boolean busy) {
         binding.busy = busy;
         binding.bindCodeButton.setEnabled(!busy && !TextUtils.isEmpty(binding.bindCode));
@@ -1167,16 +1156,24 @@ public final class RemoteTrustDialog {
         return "\n" + binding.serviceDetailText;
     }
 
-    private static LinearLayoutCompat serverInfoPanel(Context context, RemoteProfile profile) {
+    private static LinearLayoutCompat serverInfoPanel(Context context, Binding binding, RemoteProfile profile) {
         LinearLayoutCompat card = card(context);
-        StringBuilder builder = new StringBuilder();
-        builder.append(context.getString(R.string.remote_trust_server_url)).append(": ").append(profile == null ? "-" : displayOrigin(profile.serverOrigin));
-        if (profile != null) {
-            builder.append('\n').append(context.getString(R.string.remote_trust_device_id)).append(": ").append(shortId(profile.deviceId));
-            builder.append('\n').append(context.getString(R.string.remote_trust_status_online)).append(": ").append(profile.enabled ? context.getString(R.string.setting_enable) : context.getString(R.string.setting_disable));
-        }
-        MaterialTextView text = text(context, builder.toString(), 13, "#3C4043", false);
+        LinearLayoutCompat top = row(context);
+        MaterialTextView title = text(context, context.getString(R.string.remote_trust_settings_title), 14, "#202124", true);
+        top.addView(title, weight());
+        MaterialButton edit = iconButton(context, R.drawable.ic_git_cloud_edit, context.getString(R.string.remote_trust_edit_server));
+        edit.setOnClickListener(v -> {
+            binding.serverEditing = true;
+            render(context, binding);
+        });
+        bindAction(binding, edit);
+        top.addView(edit, fixed(context, 36, 32));
+        card.addView(top, matchWrap());
+        String server = profile == null ? "-" : (TextUtils.isEmpty(profile.serverUrl) ? profile.serverOrigin : profile.serverUrl);
+        MaterialTextView text = text(context, server, 13, "#3C4043", false);
+        text.setTextIsSelectable(true);
         text.setLineSpacing(0, 1.08f);
+        text.setPadding(0, dp(context, 6), 0, 0);
         card.addView(text, matchWrap());
         return card;
     }
@@ -1253,17 +1250,6 @@ public final class RemoteTrustDialog {
         input.setSingleLine(singleLine);
         input.setTextSize(14);
         input.setMinHeight(dp(context, 46));
-        return input;
-    }
-
-    private static EditText nativeInput(Context context, int inputType, boolean singleLine) {
-        EditText input = new EditText(context);
-        input.setInputType(inputType);
-        input.setSingleLine(singleLine);
-        input.setTextSize(14);
-        input.setMinHeight(dp(context, 46));
-        input.setPadding(dp(context, 8), 0, dp(context, 8), 0);
-        input.setSelectAllOnFocus(false);
         return input;
     }
 
@@ -1567,7 +1553,8 @@ public final class RemoteTrustDialog {
         private MaterialButton settingsBackButton;
         private MaterialButton addDeviceButton;
         private MaterialButton refreshButton;
-        private EditText server;
+        private TextInputEditText server;
+        private TextInputLayout serverLayout;
         private com.google.android.material.checkbox.MaterialCheckBox enabled;
         private com.google.android.material.checkbox.MaterialCheckBox keepOnline;
         private final List<MaterialButton> actions = new ArrayList<>();
