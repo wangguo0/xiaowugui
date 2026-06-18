@@ -162,7 +162,6 @@
     <string name="remote_trust_device_alias">設備備註</string>
     <string name="remote_trust_add_device">加入設備</string>
     <string name="remote_trust_add_short">加入</string>
-    <string name="remote_trust_refresh_devices">刷新設備</string>
     <string name="remote_trust_no_devices">暫無管理設備。請先在目標設備產生綁定碼，再在這裡加入。</string>
     <string name="remote_trust_wait_devices">設備組已加入，正在等待目標設備同步並上線。</string>
     <string name="remote_trust_device_online">在線</string>
@@ -177,7 +176,6 @@
     <string name="remote_trust_search_keyword">搜尋關鍵詞</string>
     <string name="remote_trust_push_url">推送播放地址</string>
     <string name="remote_trust_add_done">設備已加入</string>
-    <string name="remote_trust_devices_refreshed">設備已刷新：%1$d</string>
     <string name="remote_trust_no_profile">請先儲存/註冊中轉服務</string>
     <string name="remote_trust_no_group">暫無可信設備組</string>
     <string name="remote_trust_no_device_selected">請先選擇設備</string>
@@ -223,6 +221,7 @@
     <string name="remote_trust_service_memory_warning">目前是記憶體中轉模式，跨設備綁定碼可能失效。正式使用前請更新 Cloudflare Worker Durable Object 配置。</string>
     <string name="remote_trust_bind_local_title">本機綁定碼</string>
     <string name="remote_trust_refresh_bind_code">刷新</string>
+    <string name="remote_trust_refresh_short">刷新</string>
     <string name="remote_trust_copy">複製</string>
     <string name="remote_trust_add_device_title">加入設備</string>
     <string name="remote_trust_back_devices">返回</string>

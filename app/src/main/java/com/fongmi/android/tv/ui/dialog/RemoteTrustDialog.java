@@ -155,7 +155,6 @@ public final class RemoteTrustDialog {
                 }
                 showAddDeviceDialog(activity, binding);
             });
-            binding.refreshButton.setOnClickListener(v -> refreshDevices(activity, binding));
             binding.serviceButton.setOnClickListener(v -> {
                 binding.serverEditing = currentProfile(binding) == null;
                 binding.page = binding.page == PAGE_SETTINGS ? PAGE_DEVICES : PAGE_SETTINGS;
@@ -235,8 +234,6 @@ public final class RemoteTrustDialog {
         binding.toolbar.addView(binding.statusButton, weight());
         binding.addDeviceButton = outline(context, context.getString(R.string.remote_trust_add_short));
         binding.toolbar.addView(binding.addDeviceButton, fixed(context, 54, 34));
-        binding.refreshButton = iconButton(context, R.drawable.ic_setting_refresh, context.getString(R.string.remote_trust_refresh_devices));
-        binding.toolbar.addView(binding.refreshButton, fixed(context, 38, 34));
         binding.serviceButton = iconButton(context, R.drawable.ic_remote_settings, context.getString(R.string.remote_trust_service_entry));
         binding.toolbar.addView(binding.serviceButton, fixed(context, 38, 34));
         binding.settingsBackButton = outline(context, context.getString(R.string.remote_trust_back_devices));
@@ -323,11 +320,9 @@ public final class RemoteTrustDialog {
         binding.toolbar.setVisibility(binding.page == PAGE_DETAIL ? View.GONE : View.VISIBLE);
         boolean settings = binding.page == PAGE_SETTINGS;
         binding.addDeviceButton.setVisibility(settings ? View.GONE : View.VISIBLE);
-        binding.refreshButton.setVisibility(settings ? View.GONE : View.VISIBLE);
         binding.serviceButton.setVisibility(settings ? View.GONE : View.VISIBLE);
         binding.settingsBackButton.setVisibility(settings ? View.VISIBLE : View.GONE);
         binding.addDeviceButton.setEnabled(!binding.busy && profile != null);
-        binding.refreshButton.setEnabled(!binding.busy && profile != null);
         binding.serviceButton.setEnabled(!binding.busy);
         binding.settingsBackButton.setEnabled(!binding.busy);
         String status = statusText(context, binding, profile);
@@ -1025,41 +1020,6 @@ public final class RemoteTrustDialog {
         return lower.contains("bind code expired") || lower.contains("binding code expired") || lower.contains("expired") || message.contains("过期") || message.contains("失效");
     }
 
-    private static void refreshDevices(FragmentActivity activity, Binding binding) {
-        RemoteProfile profile = currentProfile(binding);
-        if (profile == null) {
-            binding.page = PAGE_SETTINGS;
-            render(activity, binding);
-            Notify.show(R.string.remote_trust_no_profile);
-            return;
-        }
-        if (profile.groups == null || profile.groups.isEmpty()) {
-            Notify.show(R.string.remote_trust_no_group);
-            return;
-        }
-        setBusy(binding, true);
-        Task.execute(() -> {
-            try {
-                RemoteClient client = new RemoteClient(profile);
-                client.register();
-                int count = 0;
-                for (RemoteGroup group : new ArrayList<>(profile.groups)) count += refreshGroup(client, profile.serverOrigin, group);
-                RemoteAgent.get().start();
-                int refreshed = count;
-                App.post(() -> {
-                    setBusy(binding, false);
-                    Notify.show(activity.getString(R.string.remote_trust_devices_refreshed, refreshed));
-                    render(activity, binding);
-                });
-            } catch (Throwable e) {
-                App.post(() -> {
-                    setBusy(binding, false);
-                    Notify.show(e.getMessage());
-                });
-            }
-        });
-    }
-
     private static int refreshGroup(RemoteClient client, String serverOrigin, RemoteGroup group) throws Exception {
         DevicesResponse response = client.listDevices(group);
         List<RemoteDevice> devices = response == null ? new ArrayList<>() : response.devices;
@@ -1130,9 +1090,6 @@ public final class RemoteTrustDialog {
         state.homeBack.setTextSize(12);
         state.homeBack.setVisibility(View.GONE);
         state.titleRow.addView(state.homeBack, fixed(activity, 58, 34));
-        state.close = outline(activity, activity.getString(R.string.dialog_cancel));
-        state.close.setTextSize(12);
-        state.titleRow.addView(state.close, fixed(activity, 58, 34));
         root.addView(state.titleRow, matchWrap());
 
         state.typeRow = new MaterialButtonToggleGroup(activity);
@@ -1155,8 +1112,10 @@ public final class RemoteTrustDialog {
         state.header.addView(state.summary, weight());
         state.add = primary(activity, activity.getString(R.string.remote_trust_config_add));
         state.header.addView(state.add, fixed(activity, 64, 34));
-        state.refresh = iconButton(activity, R.drawable.ic_setting_refresh, activity.getString(R.string.remote_trust_refresh_devices));
-        state.header.addView(state.refresh, fixed(activity, 38, 34));
+        state.refresh = outline(activity, activity.getString(R.string.remote_trust_refresh_short));
+        state.header.addView(state.refresh, fixed(activity, 72, 34));
+        state.close = outline(activity, activity.getString(R.string.dialog_cancel));
+        state.header.addView(state.close, fixed(activity, 64, 34));
         root.addView(state.header, topMargin(matchWrap(), 8));
 
         state.formActionsRow = row(activity);
@@ -2795,7 +2754,6 @@ public final class RemoteTrustDialog {
         binding.statusButton.setEnabled(!busy);
         binding.serviceButton.setEnabled(!busy);
         if (binding.addDeviceButton != null) binding.addDeviceButton.setEnabled(!busy && currentProfile(binding) != null);
-        if (binding.refreshButton != null) binding.refreshButton.setEnabled(!busy && currentProfile(binding) != null);
         if (binding.settingsBackButton != null) binding.settingsBackButton.setEnabled(!busy);
         binding.server.setEnabled(!busy);
         binding.enabled.setEnabled(!busy);
@@ -3412,7 +3370,6 @@ public final class RemoteTrustDialog {
         private MaterialButton serviceButton;
         private MaterialButton settingsBackButton;
         private MaterialButton addDeviceButton;
-        private MaterialButton refreshButton;
         private TextInputEditText server;
         private TextInputLayout serverLayout;
         private com.google.android.material.checkbox.MaterialCheckBox enabled;

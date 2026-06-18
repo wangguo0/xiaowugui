@@ -163,7 +163,6 @@
     <string name="remote_trust_device_alias">Device alias</string>
     <string name="remote_trust_add_device">Add device</string>
     <string name="remote_trust_add_short">Add</string>
-    <string name="remote_trust_refresh_devices">Refresh devices</string>
     <string name="remote_trust_no_devices">No managed devices. Generate a code on the target device and add it here.</string>
     <string name="remote_trust_wait_devices">Device group added. Waiting for the target device to sync and come online.</string>
     <string name="remote_trust_device_online">Online</string>
@@ -178,7 +177,6 @@
     <string name="remote_trust_search_keyword">Search keyword</string>
     <string name="remote_trust_push_url">Push URL</string>
     <string name="remote_trust_add_done">Device added</string>
-    <string name="remote_trust_devices_refreshed">Devices refreshed: %1$d</string>
     <string name="remote_trust_no_profile">Save/register the relay first</string>
     <string name="remote_trust_no_group">No trusted group yet</string>
     <string name="remote_trust_no_device_selected">Select a device first</string>
@@ -224,6 +222,7 @@
     <string name="remote_trust_service_memory_warning">Memory relay mode may lose bind codes across devices. Update the Cloudflare Worker Durable Object config before production use.</string>
     <string name="remote_trust_bind_local_title">This device binding code</string>
     <string name="remote_trust_refresh_bind_code">Refresh</string>
+    <string name="remote_trust_refresh_short">Refresh</string>
     <string name="remote_trust_copy">Copy</string>
     <string name="remote_trust_add_device_title">Add device</string>
     <string name="remote_trust_back_devices">Back</string>
