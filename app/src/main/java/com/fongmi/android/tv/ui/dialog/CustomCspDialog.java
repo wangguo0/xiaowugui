@@ -92,7 +92,9 @@ public class CustomCspDialog extends BaseAlertDialog {
     private boolean recognizeMode;
     private boolean reverseOrder;
     private boolean saved;
+    private boolean jsonDirty = true;
     private long lastAddTime;
+    private String cachedJsonText;
     private SettingClipboardOverlay clipboardOverlay;
 
     public static void show(Fragment fragment, Runnable callback) {
@@ -174,6 +176,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     protected void initEvent() {
         binding.enabled.setOnClickListener(view -> {
             enabled = !enabled;
+            markJsonDirty();
             updateEnabledText();
         });
         binding.reverse.setOnClickListener(view -> {
@@ -250,7 +253,9 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private void changeInsertIndex(int delta) {
-        setInsertIndex(getInsertIndex() + delta);
+        int before = getInsertIndex();
+        setInsertIndex(before + delta);
+        if (getInsertIndex() != before) markJsonDirty();
     }
 
     private void setInsertIndex(int index) {
@@ -448,7 +453,11 @@ public class CustomCspDialog extends BaseAlertDialog {
         registry.setEnabled(enabled);
         registry.setInsertIndex(getInsertIndex());
         registry.setItems(new ArrayList<>(adapter.getItems()));
-        binding.jsonText.setText(new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(registry.normalize()));
+        if (jsonDirty || cachedJsonText == null) {
+            cachedJsonText = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(registry.normalize());
+            jsonDirty = false;
+        }
+        setText(binding.jsonText, cachedJsonText);
         return true;
     }
 
@@ -532,6 +541,10 @@ public class CustomCspDialog extends BaseAlertDialog {
         scrollToItem(adapter.displayPosition(reverseOrder ? next.size() - 1 : firstAdded));
         Notify.show(getString(R.string.setting_custom_csp_recognize_done, items.size()));
         return true;
+    }
+
+    private void markJsonDirty() {
+        jsonDirty = true;
     }
 
     private void scrollToItem(int position) {
@@ -647,6 +660,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 .setView(createInputPanel(R.string.setting_custom_csp_link, input))
                 .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
                     item.setHomePage(input.getText().toString().trim());
+                    markJsonDirty();
                     if (editMode && editor != null && item == editingItem) editor.updateHomePage();
                     else adapter.notifyDataSetChanged();
                 })
@@ -690,6 +704,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         try {
             CustomCspSetting.writePage(item.getId(), code);
             item.setHomePage(CustomCspSetting.localUrl(item.getId(), "index.html"));
+            markJsonDirty();
             if (editMode && editor != null && item == editingItem) editor.updateHomePage();
             else adapter.notifyDataSetChanged();
         } catch (Exception e) {
@@ -710,6 +725,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             }
             CustomCspSetting.copyPage(Path.local(path), pendingImport.getId());
             pendingImport.setHomePage(CustomCspSetting.localUrl(pendingImport.getId(), "index.html"));
+            markJsonDirty();
             boolean editingImport = editMode && editor != null && pendingImport == editingItem;
             pendingImport = null;
             pendingExtensionImport = false;
@@ -727,6 +743,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         String text = extensionArrayText(item, path, content);
         item.setExtensionsExpanded(true);
         item.setExtensionsText(text);
+        markJsonDirty();
         boolean editingImport = editMode && editor != null && item == editingItem;
         if (editingImport) editor.updateExtensions();
         else adapter.notifyDataSetChanged();
@@ -907,6 +924,7 @@ public class CustomCspDialog extends BaseAlertDialog {
 
         int add(CustomCspSetting.Item item) {
             items.add(item);
+            markJsonDirty();
             int position = displayPosition(items.size() - 1);
             notifyItemInserted(position);
             return position;
@@ -916,12 +934,14 @@ public class CustomCspDialog extends BaseAlertDialog {
             if (position < 0 || position >= items.size()) return;
             CustomCspSetting.Item old = items.set(position, item);
             if (!old.isLive() && old.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey(item.isLive() ? "" : item.site().getKey());
+            markJsonDirty();
             notifyItemChanged(displayPosition(position));
         }
 
         void setItems(List<CustomCspSetting.Item> items) {
             this.items.clear();
             this.items.addAll(items);
+            markJsonDirty();
             notifyDataSetChanged();
         }
 
@@ -941,6 +961,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             int from = itemIndex(fromPosition);
             int to = itemIndex(toPosition);
             Collections.swap(items, from, to);
+            markJsonDirty();
             notifyItemMoved(fromPosition, toPosition);
             notifyItemRangeChanged(Math.min(fromPosition, toPosition), Math.abs(fromPosition - toPosition) + 1);
         }
@@ -951,6 +972,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             focusBeforeRemove(removed);
             CustomCspSetting.Item item = items.remove(index);
             if (!item.isLive() && item.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey("");
+            markJsonDirty();
             notifyDataSetChanged();
         }
 
@@ -967,6 +989,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             if (item.isLive()) return;
             String key = item.site().getKey();
             registry.setHomeKey(key.equals(registry.getHomeKey()) ? "" : key);
+            markJsonDirty();
             notifyDataSetChanged();
         }
 
