@@ -132,8 +132,8 @@ public final class PlaybackWebhookSender {
             builder.header("Idempotency-Key", delivery.eventId);
         }
         if (!TextUtils.isEmpty(delivery.dedupeKey)) builder.header("X-WebHTV-Dedupe-Key", delivery.dedupeKey);
-        if (!TextUtils.isEmpty(delivery.configKey)) builder.header("X-WebHTV-Config-Key", delivery.configKey);
-        if (!TextUtils.isEmpty(delivery.configName)) builder.header("X-WebHTV-Config-Name", delivery.configName);
+        PlaybackHttpHeaders.header(builder, "X-WebHTV-Config-Key", delivery.configKey);
+        PlaybackHttpHeaders.header(builder, "X-WebHTV-Config-Name", delivery.configName);
         try (Response response = OkHttp.client(TIMEOUT_MS).newCall(builder.build()).execute()) {
             if (!response.isSuccessful()) throw new IllegalStateException("HTTP " + response.code());
         }

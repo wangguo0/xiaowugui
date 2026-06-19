@@ -80,8 +80,8 @@ public final class PlaybackRemoteSyncer {
     private static String fetch(RemoteSyncConfig config) throws Exception {
         Request.Builder builder = new Request.Builder().url(config.url).get();
         builder.header("Accept", "application/json");
-        if (!TextUtils.isEmpty(PlaybackConfigIdentity.currentKey())) builder.header("X-WebHTV-Config-Key", PlaybackConfigIdentity.currentKey());
-        if (!TextUtils.isEmpty(PlaybackConfigIdentity.currentName())) builder.header("X-WebHTV-Config-Name", PlaybackConfigIdentity.currentName());
+        PlaybackHttpHeaders.header(builder, "X-WebHTV-Config-Key", PlaybackConfigIdentity.currentKey());
+        PlaybackHttpHeaders.header(builder, "X-WebHTV-Config-Name", PlaybackConfigIdentity.currentName());
         if (!TextUtils.isEmpty(config.token)) builder.header("X-WebHTV-Token", config.token);
         try (Response response = OkHttp.client(TIMEOUT_MS).newCall(builder.build()).execute()) {
             if (!response.isSuccessful()) throw new IllegalStateException("HTTP " + response.code());
