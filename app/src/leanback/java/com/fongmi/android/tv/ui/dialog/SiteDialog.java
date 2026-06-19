@@ -6,6 +6,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
 
@@ -28,6 +29,7 @@ import com.fongmi.android.tv.ui.adapter.SiteAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickListener {
@@ -67,6 +69,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         this.activity = activity;
         if (activity instanceof SiteListener) listener = (SiteListener) activity;
         if (activity.isFinishing() || activity.isDestroyed()) return;
+        log("click received action=%s type=%s", action, type);
         showDirect(activity);
     }
 
@@ -100,13 +103,21 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     }
 
     private void showDirect(FragmentActivity activity) {
+        long start = System.currentTimeMillis();
+        log("inflate start");
         binding = DialogSiteBinding.inflate(activity.getLayoutInflater());
+        log("inflate end cost=%sms", cost(start));
+        long dialogStart = System.currentTimeMillis();
         directDialog = new Dialog(activity);
         directDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         directDialog.setContentView(binding.getRoot());
+        log("dialog content ready cost=%sms total=%sms", cost(dialogStart), cost());
+        long initStart = System.currentTimeMillis();
         initView();
         initEvent();
+        log("init end cost=%sms total=%sms items=%s", cost(initStart), cost(), adapter == null ? -1 : adapter.getItemCount());
         if (adapter.getItemCount() == 0) {
+            log("dismiss empty total=%sms", cost());
             directDialog = null;
             return;
         }
@@ -115,13 +126,21 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
             binding = null;
             this.activity = null;
         });
+        logFirstPreDraw();
+        long showDialogStart = System.currentTimeMillis();
+        log("show call start total=%sms", cost());
         directDialog.show();
+        log("show call end cost=%sms total=%sms", cost(showDialogStart), cost());
         applyWindow(directDialog.getWindow());
+        log("window applied total=%sms", cost());
     }
 
     @Override
     protected void initView() {
+        long start = System.currentTimeMillis();
         adapter = new SiteAdapter(this);
+        log("adapter created cost=%sms items=%s action=%s", cost(start), adapter.getItemCount(), action);
+        long layoutStart = System.currentTimeMillis();
         setRootWidth();
         setRecyclerHeight();
         binding.keyword.setVisibility(View.GONE);
@@ -134,6 +153,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         setType(type);
         setRecyclerView();
         setMode();
+        log("view configured cost=%sms total=%sms", cost(layoutStart), cost());
     }
 
     @Override
@@ -165,6 +185,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         binding.recycler.setItemAnimator(null);
         if (decoration == null) binding.recycler.addItemDecoration(decoration = new SpaceItemDecoration(getCount(), 16));
         if (binding.recycler.getLayoutManager() == null) binding.recycler.setLayoutManager(new GridLayoutManager(getDialogActivity(), getCount()));
+        log("recycler ready adapter=%s layout=%s total=%sms", binding.recycler.getAdapter() != null, binding.recycler.getLayoutManager() != null, cost());
     }
 
     private void setRecyclerHeight() {
@@ -244,6 +265,33 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         params.width = (int) (ResUtil.getScreenWidth() * getWidth());
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(params);
+    }
+
+    private void logFirstPreDraw() {
+        if (!SpiderDebug.isEnabled()) return;
+        View root = binding == null ? null : binding.getRoot();
+        if (root == null) return;
+        root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                if (root.getViewTreeObserver().isAlive()) root.getViewTreeObserver().removeOnPreDrawListener(this);
+                log("first preDraw total=%sms items=%s", cost(), adapter == null ? -1 : adapter.getItemCount());
+                return true;
+            }
+        });
+    }
+
+    private long cost() {
+        return cost(showStart);
+    }
+
+    private long cost(long start) {
+        return System.currentTimeMillis() - start;
+    }
+
+    private void log(String msg, Object... args) {
+        if (!SpiderDebug.isEnabled()) return;
+        SpiderDebug.log(TAG, msg, args);
     }
 
     @Override

@@ -25,14 +25,17 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
     private final OnClickListener listener;
     private final List<Site> allItems;
     private final List<Site> mItems;
+    private final long adapterStart;
     private boolean firstBindLogged;
     private int type;
 
     public SiteAdapter(OnClickListener listener) {
+        this.adapterStart = System.currentTimeMillis();
         this.listener = listener;
         this.allItems = new ArrayList<>();
         this.mItems = new ArrayList<>();
         this.addAll();
+        log("created total=%sms items=%s", cost(), mItems.size());
     }
 
     public interface OnClickListener {
@@ -61,8 +64,14 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
     }
 
     private void addAll() {
+        long collectStart = System.currentTimeMillis();
         for (Site site : VodConfig.get().getSites()) if (!site.isHide()) allItems.add(site);
-        if (Setting.isSiteHealthDialogSort()) SiteHealthStore.sortSites(allItems);
+        log("collect sites cost=%sms visible=%s", cost(collectStart), allItems.size());
+        if (Setting.isSiteHealthDialogSort()) {
+            long sortStart = System.currentTimeMillis();
+            SiteHealthStore.sortSites(allItems);
+            log("health sort cost=%sms visible=%s", cost(sortStart), allItems.size());
+        }
         mItems.addAll(allItems);
     }
 
@@ -86,7 +95,7 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         Site item = mItems.get(position);
         if (!firstBindLogged) {
             firstBindLogged = true;
-            SpiderDebug.log("site-dialog", "first bind position=%s name=%s", position, item.getName());
+            log("first bind position=%s name=%s total=%sms", position, item.getName(), cost());
         }
         holder.binding.text.setText(item.getName());
         holder.binding.health.setBackgroundTintList(ColorStateList.valueOf(SiteHealthStore.getColor(item)));
@@ -123,6 +132,19 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         if (type == 1) for (Site site : mItems) site.setSearchable(enable).save();
         if (type == 2) for (Site site : mItems) site.setChangeable(enable).save();
         notifyItemRangeChanged(0, getItemCount());
+    }
+
+    private long cost() {
+        return cost(adapterStart);
+    }
+
+    private long cost(long start) {
+        return System.currentTimeMillis() - start;
+    }
+
+    private void log(String msg, Object... args) {
+        if (!SpiderDebug.isEnabled()) return;
+        SpiderDebug.log("site-dialog", msg, args);
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {
