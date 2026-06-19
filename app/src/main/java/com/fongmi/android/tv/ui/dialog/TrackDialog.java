@@ -125,6 +125,7 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
     private List<Track> getTrack() {
         List<Track> items = new ArrayList<>();
         addTrack(items);
+        addDisableTrack(items);
         return items;
     }
 
@@ -141,6 +142,13 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
                 items.add(item);
             }
         }
+    }
+
+    private void addDisableTrack(List<Track> items) {
+        if (type != C.TRACK_TYPE_TEXT || items.isEmpty()) return;
+        Track item = Track.disabled(type, getString(R.string.play_track_disable_subtitle));
+        item.setSelected(items.stream().noneMatch(Track::isSelected));
+        items.add(0, item);
     }
 
     @Override

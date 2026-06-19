@@ -6,6 +6,7 @@ import androidx.media3.common.TrackGroup;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
+import androidx.media3.common.C;
 
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlayerHelper;
@@ -21,7 +22,7 @@ public class TrackUtil {
     }
 
     public static void reset(Player player) {
-        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().clearOverrides().build());
+        player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().clearOverrides().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build());
     }
 
     private static TrackInfo find(Player player, Track track) {
@@ -43,6 +44,10 @@ public class TrackUtil {
         Map<Integer, TrackGroup> mediaGroupMapByType = new HashMap<>();
         Map<Integer, Integer> selectedIndexMapByType = new HashMap<>();
         for (Track track : tracks) {
+            if (track.isDisabled()) {
+                mediaGroupMapByType.put(track.getType(), null);
+                continue;
+            }
             TrackInfo info = find(player, track);
             if (info == null) continue;
             int type = info.trackGroup.getType();
@@ -51,6 +56,8 @@ public class TrackUtil {
         }
         TrackSelectionParameters.Builder builder = player.getTrackSelectionParameters().buildUpon();
         mediaGroupMapByType.forEach((type, mediaGroup) -> {
+            builder.setTrackTypeDisabled(type, mediaGroup == null);
+            if (mediaGroup == null) return;
             Integer selectedIndex = selectedIndexMapByType.get(type);
             List<Integer> indices = selectedIndex != null ? List.of(selectedIndex) : List.of();
             builder.setOverrideForType(new TrackSelectionOverride(mediaGroup, indices));

@@ -14,6 +14,8 @@ import java.util.List;
 @Entity(indices = @Index(value = {"key", "type"}, unique = true))
 public class Track {
 
+    private static final String DISABLED = "__disabled__";
+
     @PrimaryKey(autoGenerate = true)
     private int id;
     private int type;
@@ -26,6 +28,12 @@ public class Track {
         this.type = type;
         this.name = name;
         this.format = format;
+    }
+
+    public static Track disabled(int type, String name) {
+        Track track = new Track(type, name, DISABLED);
+        track.setSelected(true);
+        return track;
     }
 
     public static List<Track> find(String key) {
@@ -88,6 +96,10 @@ public class Track {
     public Track key(String key) {
         setKey(key);
         return this;
+    }
+
+    public boolean isDisabled() {
+        return DISABLED.equals(getFormat());
     }
 
     public Track toggle() {
