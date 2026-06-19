@@ -396,9 +396,6 @@ public class PlayerManager implements ParseCallback {
         PlaySpec target = spec;
         String url = target.getUrl();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await start seq=%d timeout=%d spec=%s", seq, timeout, debugSpec());
-        setDanmakus(target.getDanmakus());
-        callback.onPrepare();
-        initTrack = false;
         Task.execute(() -> {
             boolean ready = LocalProxyDebug.awaitReady(url, LOCAL_PROXY_READY_TIMEOUT_MS);
             App.post(() -> {
@@ -407,7 +404,7 @@ public class PlayerManager implements ParseCallback {
                     return;
                 }
                 if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await done seq=%d ready=%s spec=%s", seq, ready, debugSpec());
-                setMediaItemNow(timeout, false);
+                setMediaItemNow(timeout, true);
             });
         });
     }
