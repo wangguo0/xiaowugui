@@ -320,6 +320,7 @@ public final class RemoteStore {
         int profiles = 0;
         int groups = 0;
         int devices = 0;
+        boolean enabled = false;
         boolean keepOnline = false;
         for (RemoteProfile profile : store.profiles) {
             if (profile == null) continue;
@@ -329,9 +330,11 @@ public final class RemoteStore {
             for (RemoteGroup group : profile.groups) {
                 if (group != null && group.devices != null) devices += group.devices.size();
             }
-            keepOnline |= profile.keepOnline;
+            enabled |= profile.enabled;
+            keepOnline |= profile.enabled && profile.keepOnline;
         }
         if (profiles == 0) return context.getString(R.string.remote_trust_status_unbound);
+        if (!enabled) return context.getString(R.string.setting_disable);
         String status = keepOnline ? context.getString(R.string.remote_trust_status_online) : context.getString(R.string.remote_trust_status_enabled);
         return context.getString(R.string.remote_trust_current_status_summary, status, groups, devices);
     }
