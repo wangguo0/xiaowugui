@@ -7,7 +7,9 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
@@ -792,11 +794,20 @@ public class CustomCspDialog extends BaseAlertDialog {
         return item.isValid() && !item.hasInvalidExtensions() ? Color.parseColor("#137333") : Color.parseColor("#B3261E");
     }
 
-    private GradientDrawable rowBackground(CustomCspSetting.Item item) {
+    private Drawable rowBackground(CustomCspSetting.Item item) {
+        StateListDrawable drawable = new StateListDrawable();
+        drawable.addState(new int[]{android.R.attr.state_focused}, rowShape("#E8F0FE", "#1A73E8", 2, 8));
+        drawable.addState(new int[]{android.R.attr.state_pressed}, rowShape("#E8F0FE", "#1A73E8", 2, 8));
+        drawable.addState(new int[]{android.R.attr.state_activated}, rowShape("#E8F0FE", "#1A73E8", 2, 8));
+        drawable.addState(new int[]{}, rowShape(item.isValid() ? "#F5F6F7" : "#FFF7F7", item.isValid() ? "#DADCE0" : "#F1C9C6", 1, 6));
+        return drawable;
+    }
+
+    private GradientDrawable rowShape(String color, String stroke, int strokeDp, int radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(Color.parseColor(item.isValid() ? "#F5F6F7" : "#FFF7F7"));
-        drawable.setStroke(dp(1), Color.parseColor(item.isValid() ? "#DADCE0" : "#F1C9C6"));
-        drawable.setCornerRadius(dp(6));
+        drawable.setColor(Color.parseColor(color));
+        drawable.setStroke(dp(strokeDp), Color.parseColor(stroke));
+        drawable.setCornerRadius(dp(radiusDp));
         return drawable;
     }
 
@@ -871,6 +882,10 @@ public class CustomCspDialog extends BaseAlertDialog {
         LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(dp(40), dp(40));
         params.leftMargin = dp(marginStart);
         return params;
+    }
+
+    private void linkCardFocus(View card, View child) {
+        child.setOnFocusChangeListener((view, hasFocus) -> card.setActivated(hasFocus || card.hasFocus()));
     }
 
     private int dp(int value) {
@@ -994,6 +1009,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 root.setBackground(rowBackground(item));
                 root.setFocusable(true);
                 root.setClickable(true);
+                root.setOnFocusChangeListener((view, hasFocus) -> view.setActivated(hasFocus));
                 root.setOnClickListener(view -> editCurrent());
 
                 LinearLayoutCompat header = new LinearLayoutCompat(requireContext());
@@ -1004,8 +1020,12 @@ public class CustomCspDialog extends BaseAlertDialog {
                 MaterialTextView title = text((position + 1) + ". " + item.getName(), 15, Color.BLACK, true);
                 header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
                 header.addView(badge(kindName(item), statusColor(item)));
-                header.addView(iconButton(R.drawable.ic_subtitle_up, R.string.setting_custom_csp_up, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1)), iconLayout(8));
-                header.addView(iconButton(R.drawable.ic_subtitle_down, R.string.setting_custom_csp_down, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1)), iconLayout(4));
+                AppCompatImageButton up = iconButton(R.drawable.ic_subtitle_up, R.string.setting_custom_csp_up, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1));
+                AppCompatImageButton down = iconButton(R.drawable.ic_subtitle_down, R.string.setting_custom_csp_down, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1));
+                linkCardFocus(root, up);
+                linkCardFocus(root, down);
+                header.addView(up, iconLayout(8));
+                header.addView(down, iconLayout(4));
 
                 addDetail(root, primaryDetail(item));
                 if (!item.isLive()) addDetail(root, getString(R.string.setting_custom_csp_key) + ": " + item.getKey());
@@ -1019,6 +1039,7 @@ public class CustomCspDialog extends BaseAlertDialog {
                 root.addView(actions, actionParams);
 
                 MaterialButton toggle = actionButton(item.isEnabled() ? R.string.setting_disable : R.string.setting_enable, !item.isEnabled(), false);
+                linkCardFocus(root, toggle);
                 toggle.setOnClickListener(view -> {
                     int adapterPosition = getBindingAdapterPosition();
                     if (adapterPosition == RecyclerView.NO_POSITION) return;
@@ -1028,17 +1049,20 @@ public class CustomCspDialog extends BaseAlertDialog {
                 actions.addView(toggle, actionLayout(0));
 
                 MaterialButton edit = actionButton(R.string.dialog_edit, false, false);
+                linkCardFocus(root, edit);
                 edit.setOnClickListener(view -> editCurrent());
                 actions.addView(edit, actionLayout(8));
 
                 if (!item.isLive()) {
                     boolean home = item.site().getKey().equals(registry.getHomeKey());
                     MaterialButton homeButton = actionButton(R.string.setting_custom_csp_home, home, false);
+                    linkCardFocus(root, homeButton);
                     homeButton.setOnClickListener(view -> setHome(item));
                     actions.addView(homeButton, actionLayout(8));
                 }
 
                 MaterialButton delete = actionButton(R.string.setting_delete, false, true);
+                linkCardFocus(root, delete);
                 delete.setOnClickListener(view -> remove(getBindingAdapterPosition(), itemView));
                 actions.addView(delete, actionLayout(8));
             }
