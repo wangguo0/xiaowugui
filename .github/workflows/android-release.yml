@@ -121,6 +121,8 @@ jobs:
           echo "Release signing configured"
 
       - name: Build four release APKs
+        env:
+          WEBHTV_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
         run: |
           chmod +x ./gradlew
           ./gradlew \
