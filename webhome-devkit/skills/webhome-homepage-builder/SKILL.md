@@ -99,6 +99,10 @@ Transparent WebView:
 - Provide a non-App fallback background via `html:not(.fm-native)`.
 - Put text on semi-transparent panels, buttons, chips, cards, or detail surfaces. Do not place body text directly on wallpaper.
 - For transparent full-screen overlays, hide the underlying WebHome layer while the overlay is active to avoid stacked content.
+- For mobile/detail artwork blending, keep the main still image sharp; feather only the bottom seam with `mask-image` and `-webkit-mask-image`.
+- Put liquid/blur effects on a separate lower strip or background layer, not over the full still image; full-cover `backdrop-filter` can make the entire still look soft.
+- Keep the feather strip narrow after tuning, and disable these masks in translucent/card detail modes where the artwork is already framed.
+- Synopsis text should use the available width; do not leave permanent right padding for a "more" button after the button moves below the paragraph.
 
 Safe area and chrome:
 
@@ -115,6 +119,8 @@ TV remote:
 - Trap directional keys inside active local domains such as search suggestions, settings/status panels, PanSou results, image viewers, and detail sheets.
 - Make text fields `readonly` by default on TV; OK/touch enters edit mode, blur/back exits edit mode.
 - Prefer deterministic grid/list navigation by index and cached column count. Use geometry search only as a fallback.
+- In search results, make the close/clear control part of the focus chain: result card Up -> close/clear; close/clear Down -> originating card; close/clear Up -> category tab; category tab Down -> remembered result card.
+- Keep search-result focus rules in both fast-path navigation and fallback geometry search, and store the originating result key/index when leaving a result card.
 - Focus style must not change layout dimensions. Use outline, existing border, background, or light transform.
 
 ## Performance Rules
@@ -178,4 +184,6 @@ Also verify:
 - App requests use `fm.req`/`fm.res`; SDK promises catch failures.
 - No WAF/challenge bypass logic, stealth automation patching, CAPTCHA solving, clearance-cookie harvesting, account cookie embedding, or per-account token leakage.
 - TV can move focus, activate controls, edit text intentionally, and return from each local panel.
+- Search-result focus validates card Up, close/clear Down, close/clear Up, and category-tab Down paths.
+- Mobile detail keeps the upper still sharp, feathers only the bottom seam, and synopsis text has no unexplained right gutter or "more" overlap.
 - Debug logs show no `SyntaxError`, WebView render crash, or SDK call failures.
