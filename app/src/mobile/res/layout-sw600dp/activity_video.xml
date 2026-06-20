@@ -175,15 +175,44 @@
                     android:orientation="vertical"
                     android:paddingBottom="8dp">
 
-                    <com.google.android.material.textview.MaterialTextView
-                        style="@style/Video.ContextText"
-                        android:layout_width="wrap_content"
+                    <androidx.appcompat.widget.LinearLayoutCompat
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginEnd="16dp"
-                        android:text="@string/detail_flag"
-                        android:textColor="@color/white"
-                        android:textSize="16sp" />
+                        android:layout_marginEnd="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            style="@style/Video.ContextText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/detail_flag"
+                            android:textColor="@color/white"
+                            android:textSize="16sp" />
+
+                        <View
+                            android:layout_width="0dp"
+                            android:layout_height="0dp"
+                            android:layout_weight="1" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/search"
+                            style="@style/Video.ContextText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:drawablePadding="4dp"
+                            android:gravity="center"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp"
+                            android:text="@string/play_search"
+                            android:textColor="@color/white"
+                            android:textSize="14sp"
+                            app:drawableStartCompat="@drawable/ic_action_search"
+                            app:drawableTint="@color/white" />
+
+                    </androidx.appcompat.widget.LinearLayoutCompat>
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/flag"

@@ -38,7 +38,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private String getJson() {
-        return Github.getJson(BuildConfig.FLAVOR_mode);
+        return Github.getJson(BuildConfig.FLAVOR_mode + "-" + BuildConfig.FLAVOR_abi);
     }
 
     private String getApk() {

@@ -62,6 +62,66 @@ public class PlayerSetting {
         Prefers.put("buffer", buffer);
     }
 
+    public static int getBufferBytesOption() {
+        return Math.min(Math.max(Prefers.getInt("buffer_bytes"), 0), 3);
+    }
+
+    public static void putBufferBytesOption(int option) {
+        Prefers.put("buffer_bytes", Math.min(Math.max(option, 0), 3));
+    }
+
+    public static int getBufferBytes() {
+        return switch (getBufferBytesOption()) {
+            case 1 -> 64 * 1024 * 1024;
+            case 2 -> 128 * 1024 * 1024;
+            case 3 -> 256 * 1024 * 1024;
+            default -> 0;
+        };
+    }
+
+    public static int getBackBufferOption() {
+        return Math.min(Math.max(Prefers.getInt("back_buffer"), 0), 3);
+    }
+
+    public static void putBackBufferOption(int option) {
+        Prefers.put("back_buffer", Math.min(Math.max(option, 0), 3));
+    }
+
+    public static int getBackBufferMs() {
+        return switch (getBackBufferOption()) {
+            case 1 -> 15_000;
+            case 2 -> 30_000;
+            case 3 -> 60_000;
+            default -> 0;
+        };
+    }
+
+    public static int getPlayCacheOption() {
+        return Math.min(Math.max(Prefers.getInt("play_cache"), 0), 4);
+    }
+
+    public static void putPlayCacheOption(int option) {
+        Prefers.put("play_cache", Math.min(Math.max(option, 0), 4));
+    }
+
+    public static long getPlayCacheSize() {
+        return switch (getPlayCacheOption()) {
+            case 1 -> 100L * 1024 * 1024;
+            case 2 -> 500L * 1024 * 1024;
+            case 3 -> 1024L * 1024 * 1024;
+            case 4 -> 2L * 1024 * 1024 * 1024;
+            default -> 0L;
+        };
+    }
+
+    public static boolean isAutoChange() {
+        return Prefers.getBoolean("player_auto_change", true);
+    }
+
+    public static void putAutoChange(boolean autoChange) {
+        Prefers.put("player_auto_change", autoChange);
+    }
+
     public static int getBackground() {
         return Prefers.getInt("background", 2);
     }

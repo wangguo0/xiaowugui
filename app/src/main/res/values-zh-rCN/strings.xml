@@ -44,6 +44,7 @@
     <string name="play_scale">原始</string>
     <string name="play_config">配置</string>
     <string name="play_change">换源</string>
+    <string name="play_search">搜索</string>
     <string name="play_fullscreen">全屏</string>
     <string name="play_exit_fullscreen">退出全屏</string>
     <string name="play_invert">反转</string>
@@ -756,6 +757,10 @@
     <string name="player_adblock">智能去广</string>
     <string name="player_tunnel">隧道模式</string>
     <string name="player_buffer">缓冲时间</string>
+    <string name="player_buffer_bytes">缓冲容量</string>
+    <string name="player_back_buffer">回退缓冲</string>
+    <string name="player_cache">播放缓存</string>
+    <string name="player_auto_change">自动换源</string>
     <string name="player_speed">长按倍速</string>
     <string name="player_ua">User-Agent</string>
     <string name="player_osd">屏显设置</string>
@@ -851,6 +856,25 @@
     <string-array name="select_player_kernel">
         <item>EXO</item>
         <item>IJK</item>
+    </string-array>
+    <string-array name="select_buffer_bytes">
+        <item>自动</item>
+        <item>64MB</item>
+        <item>128MB</item>
+        <item>256MB</item>
+    </string-array>
+    <string-array name="select_back_buffer">
+        <item>关闭</item>
+        <item>15秒</item>
+        <item>30秒</item>
+        <item>60秒</item>
+    </string-array>
+    <string-array name="select_play_cache">
+        <item>关闭</item>
+        <item>100MB</item>
+        <item>500MB</item>
+        <item>1GB</item>
+        <item>2GB</item>
     </string-array>
 
     <string-array name="select_size">

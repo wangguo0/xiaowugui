@@ -31,8 +31,11 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     private FragmentSettingPlayerBinding mBinding;
     private DecimalFormat format;
     private String[] background;
+    private String[] backBuffer;
+    private String[] bufferBytes;
     private String[] caption;
     private String[] kernel;
+    private String[] playCache;
     private String[] render;
     private String[] scale;
     private String[] osd;
@@ -59,6 +62,10 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.adblockText.setText(getSwitch(Setting.isAdblock()));
         mBinding.speedText.setText(format.format(PlayerSetting.getSpeed()));
         mBinding.bufferText.setText(String.valueOf(PlayerSetting.getBuffer()));
+        mBinding.bufferBytesText.setText((bufferBytes = ResUtil.getStringArray(R.array.select_buffer_bytes))[PlayerSetting.getBufferBytesOption()]);
+        mBinding.backBufferText.setText((backBuffer = ResUtil.getStringArray(R.array.select_back_buffer))[PlayerSetting.getBackBufferOption()]);
+        mBinding.playCacheText.setText((playCache = ResUtil.getStringArray(R.array.select_play_cache))[PlayerSetting.getPlayCacheOption()]);
+        mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
         mBinding.caption.setVisibility(PlayerSetting.hasCaption() ? View.VISIBLE : View.GONE);
@@ -79,6 +86,10 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.osd.setOnClickListener(this::onOsd);
         mBinding.speed.setOnClickListener(this::onSpeed);
         mBinding.buffer.setOnClickListener(this::onBuffer);
+        mBinding.bufferBytes.setOnClickListener(this::onBufferBytes);
+        mBinding.backBuffer.setOnClickListener(this::onBackBuffer);
+        mBinding.playCache.setOnClickListener(this::onPlayCache);
+        mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.render.setOnClickListener(this::setRender);
         mBinding.tunnel.setOnClickListener(this::setTunnel);
         mBinding.caption.setOnClickListener(this::setCaption);
@@ -169,6 +180,35 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     public void setBuffer(int times) {
         mBinding.bufferText.setText(String.valueOf(times));
         PlayerSetting.putBuffer(times);
+    }
+
+    private void onBufferBytes(View view) {
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_buffer_bytes).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(bufferBytes, PlayerSetting.getBufferBytesOption(), (dialog, which) -> {
+            mBinding.bufferBytesText.setText(bufferBytes[which]);
+            PlayerSetting.putBufferBytesOption(which);
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void onBackBuffer(View view) {
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_back_buffer).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(backBuffer, PlayerSetting.getBackBufferOption(), (dialog, which) -> {
+            mBinding.backBufferText.setText(backBuffer[which]);
+            PlayerSetting.putBackBufferOption(which);
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void onPlayCache(View view) {
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_cache).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(playCache, PlayerSetting.getPlayCacheOption(), (dialog, which) -> {
+            mBinding.playCacheText.setText(playCache[which]);
+            PlayerSetting.putPlayCacheOption(which);
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void setAutoChange(View view) {
+        PlayerSetting.putAutoChange(!PlayerSetting.isAutoChange());
+        mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
     }
 
     private void setRender(View view) {

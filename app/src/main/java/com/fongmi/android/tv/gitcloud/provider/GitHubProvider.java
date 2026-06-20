@@ -150,6 +150,19 @@ public class GitHubProvider extends BaseGitProvider {
     }
 
     @Override
+    public void deleteFile(GitAccount account, String token, GitRepo repo, String branch, GitFile file, String message) throws GitCloudException {
+        if (file == null || TextUtils.isEmpty(file.path)) throw new GitCloudException("删除文件路径为空");
+        String sha = file.sha;
+        if (TextUtils.isEmpty(sha)) sha = readFile(account, token, repo, branch, file.path).file.sha;
+        if (TextUtils.isEmpty(sha)) throw new GitCloudException("删除文件缺少 sha：" + file.path);
+        JsonObject payload = new JsonObject();
+        payload.addProperty("message", TextUtils.isEmpty(message) ? "delete: " + file.path : message);
+        payload.addProperty("sha", sha);
+        if (!TextUtils.isEmpty(branch)) payload.addProperty("branch", branch);
+        request("DELETE", API + "/repos/" + encPath(repo.fullName) + "/contents/" + encPath(file.path), token, payload);
+    }
+
+    @Override
     public String rawUrl(GitAccount account, GitRepo repo, String ref, String path) {
         String branch = TextUtils.isEmpty(ref) ? repo.defaultBranch : ref;
         return GitRawUrlResolver.github(repo.owner, repo.name, branch, path);

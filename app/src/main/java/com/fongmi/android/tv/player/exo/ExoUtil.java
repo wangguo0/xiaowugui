@@ -101,7 +101,12 @@ public class ExoUtil {
     }
 
     private static LoadControl buildLoadControl() {
-        return new DefaultLoadControl.Builder().setBufferDurationsMs(DefaultLoadControl.DEFAULT_MIN_BUFFER_MS * PlayerSetting.getBuffer(), DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * PlayerSetting.getBuffer(), DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS).build();
+        DefaultLoadControl.Builder builder = new DefaultLoadControl.Builder().setBufferDurationsMs(DefaultLoadControl.DEFAULT_MIN_BUFFER_MS * PlayerSetting.getBuffer(), DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * PlayerSetting.getBuffer(), DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS);
+        int bufferBytes = PlayerSetting.getBufferBytes();
+        int backBufferMs = PlayerSetting.getBackBufferMs();
+        if (bufferBytes > 0) builder.setTargetBufferBytes(bufferBytes);
+        if (backBufferMs > 0) builder.setBackBuffer(backBufferMs, true);
+        return builder.build();
     }
 
     private static TrackSelector buildTrackSelector() {

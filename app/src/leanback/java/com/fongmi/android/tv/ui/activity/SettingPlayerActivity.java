@@ -28,8 +28,11 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
 
     private ActivitySettingPlayerBinding mBinding;
     private DecimalFormat format;
+    private String[] backBuffer;
+    private String[] bufferBytes;
     private String[] caption;
     private String[] kernel;
+    private String[] playCache;
     private String[] render;
     private String[] scale;
     private String[] osd;
@@ -58,6 +61,10 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.adblockText.setText(getSwitch(Setting.isAdblock()));
         mBinding.speedText.setText(format.format(PlayerSetting.getSpeed()));
         mBinding.bufferText.setText(String.valueOf(PlayerSetting.getBuffer()));
+        mBinding.bufferBytesText.setText((bufferBytes = ResUtil.getStringArray(R.array.select_buffer_bytes))[PlayerSetting.getBufferBytesOption()]);
+        mBinding.backBufferText.setText((backBuffer = ResUtil.getStringArray(R.array.select_back_buffer))[PlayerSetting.getBackBufferOption()]);
+        mBinding.playCacheText.setText((playCache = ResUtil.getStringArray(R.array.select_play_cache))[PlayerSetting.getPlayCacheOption()]);
+        mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
         mBinding.backgroundText.setText(getSwitch(PlayerSetting.isBackgroundOn()));
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
@@ -77,6 +84,10 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.osd.setOnClickListener(this::onOsd);
         mBinding.speed.setOnClickListener(this::onSpeed);
         mBinding.buffer.setOnClickListener(this::onBuffer);
+        mBinding.bufferBytes.setOnClickListener(this::setBufferBytes);
+        mBinding.backBuffer.setOnClickListener(this::setBackBuffer);
+        mBinding.playCache.setOnClickListener(this::setPlayCache);
+        mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.render.setOnClickListener(this::setRender);
         mBinding.tunnel.setOnClickListener(this::setTunnel);
         mBinding.caption.setOnClickListener(this::setCaption);
@@ -168,6 +179,29 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
     public void setBuffer(int times) {
         mBinding.bufferText.setText(String.valueOf(times));
         PlayerSetting.putBuffer(times);
+    }
+
+    private void setBufferBytes(View view) {
+        int index = (PlayerSetting.getBufferBytesOption() + 1) % bufferBytes.length;
+        mBinding.bufferBytesText.setText(bufferBytes[index]);
+        PlayerSetting.putBufferBytesOption(index);
+    }
+
+    private void setBackBuffer(View view) {
+        int index = (PlayerSetting.getBackBufferOption() + 1) % backBuffer.length;
+        mBinding.backBufferText.setText(backBuffer[index]);
+        PlayerSetting.putBackBufferOption(index);
+    }
+
+    private void setPlayCache(View view) {
+        int index = (PlayerSetting.getPlayCacheOption() + 1) % playCache.length;
+        mBinding.playCacheText.setText(playCache[index]);
+        PlayerSetting.putPlayCacheOption(index);
+    }
+
+    private void setAutoChange(View view) {
+        PlayerSetting.putAutoChange(!PlayerSetting.isAutoChange());
+        mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
     }
 
     private void setRender(View view) {

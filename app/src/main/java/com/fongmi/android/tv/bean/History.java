@@ -33,6 +33,8 @@ public class History implements Diffable<History> {
     private String key;
     @SerializedName("vodPic")
     private String vodPic;
+    @SerializedName("wallPic")
+    private String wallPic;
     @SerializedName("vodName")
     private String vodName;
     @SerializedName("vodFlag")
@@ -77,6 +79,7 @@ public class History implements Diffable<History> {
         History item = new History();
         item.key = key;
         item.vodPic = vodPic;
+        item.wallPic = wallPic;
         item.vodName = vodName;
         item.vodFlag = vodFlag;
         item.vodRemarks = vodRemarks;
@@ -156,6 +159,14 @@ public class History implements Diffable<History> {
 
     public void setVodPic(String vodPic) {
         this.vodPic = vodPic;
+    }
+
+    public String getWallPic() {
+        return wallPic == null ? "" : wallPic;
+    }
+
+    public void setWallPic(String wallPic) {
+        this.wallPic = wallPic;
     }
 
     public String getVodName() {
@@ -410,6 +421,6 @@ public class History implements Diffable<History> {
 
     @Override
     public boolean isSameContent(History other) {
-        return getVodName().equals(other.getVodName()) && getVodPic().equals(other.getVodPic()) && getCreateTime() == other.getCreateTime();
+        return getVodName().equals(other.getVodName()) && getVodPic().equals(other.getVodPic()) && getWallPic().equals(other.getWallPic()) && getCreateTime() == other.getCreateTime();
     }
 }

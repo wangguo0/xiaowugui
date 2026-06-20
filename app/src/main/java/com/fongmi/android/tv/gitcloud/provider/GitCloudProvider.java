@@ -38,6 +38,10 @@ public interface GitCloudProvider {
 
     SaveResult saveSmallFile(GitAccount account, String token, GitRepo repo, String branch, String path, byte[] data, SaveOptions options) throws GitCloudException;
 
+    default void deleteFile(GitAccount account, String token, GitRepo repo, String branch, GitFile file, String message) throws GitCloudException {
+        throw new GitCloudException("当前平台不支持直接删除文件");
+    }
+
     String rawUrl(GitAccount account, GitRepo repo, String ref, String path);
 
     DownloadRef archiveUrl(GitAccount account, String token, GitRepo repo, String ref, String path);

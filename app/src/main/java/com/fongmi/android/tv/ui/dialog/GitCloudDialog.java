@@ -1108,21 +1108,74 @@ public class GitCloudDialog extends BaseAlertDialog {
     private void deleteSelectedSync() {
         List<GitFile> targets = new ArrayList<>(selectedFiles.values());
         run("删除文件中", () -> {
-            List<FileChange> changes = new ArrayList<>();
-            Set<String> seen = new HashSet<>();
-            for (GitFile file : targets) collectDeleteChanges(file, changes, seen);
-            if (changes.isEmpty()) throw new IllegalStateException("没有可删除的文件");
-            updateProgress("提交删除 " + changes.size() + " 个文件", 80, true);
-            driveEngine.commitAndPush(driveConfig(), changes);
+            List<String> refreshPaths = deleteRefreshPaths(targets);
+            if (provider().capabilities().contentsWrite) deleteByContentsApi(targets);
+            else deleteByGitEngine(targets);
             App.post(() -> {
-                currentPath = "";
                 selectedFiles.clear();
-                fileTree.clear();
-                expandedPaths.clear();
-                expandedPaths.add("");
+                removeDeletedTreeState(targets);
+                renderFileTree();
             });
-            refreshAfterWriteSync("");
+            refreshDeletePathsSync(refreshPaths, targets);
         });
+    }
+
+    private List<String> deleteRefreshPaths(List<GitFile> targets) {
+        Set<String> paths = new HashSet<>();
+        if (!isPathDeleted(currentPath, targets)) paths.add(currentPath == null ? "" : currentPath);
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            paths.add(parent(file.path));
+        }
+        return new ArrayList<>(paths);
+    }
+
+    private void removeDeletedTreeState(List<GitFile> targets) {
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            fileTree.remove(file.path);
+            selectedFiles.remove(file.path);
+            removePathPrefix(fileTree.keySet(), file.path);
+            removePathPrefix(expandedPaths, file.path);
+            removePathPrefix(selectedFiles.keySet(), file.path);
+            removeDeletedFromCachedLists(file.path);
+        }
+    }
+
+    private void removePathPrefix(Set<String> paths, String path) {
+        if (paths == null || TextUtils.isEmpty(path)) return;
+        List<String> remove = new ArrayList<>();
+        for (String value : paths) if (TextUtils.equals(value, path) || value.startsWith(path + "/")) remove.add(value);
+        for (String value : remove) paths.remove(value);
+    }
+
+    private void removeDeletedFromCachedLists(String path) {
+        for (List<GitFile> files : fileTree.values()) {
+            if (files == null) continue;
+            files.removeIf(file -> file != null && (TextUtils.equals(file.path, path) || file.path.startsWith(path + "/")));
+        }
+    }
+
+    private void deleteByContentsApi(List<GitFile> targets) throws Exception {
+        List<GitFile> files = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (GitFile file : targets) collectDeleteFiles(file, files, seen);
+        if (files.isEmpty()) throw new IllegalStateException("没有可删除的文件");
+        for (int i = 0; i < files.size(); i++) {
+            GitFile file = files.get(i);
+            updateProgress("删除 " + (i + 1) + "/" + files.size() + " · " + file.path, percent(i, files.size()), false);
+            provider().deleteFile(account, token(), repo, repo.defaultBranch, file, "delete: " + file.path);
+            updateProgress("已删除 " + (i + 1) + "/" + files.size(), percent(i + 1, files.size()), false);
+        }
+    }
+
+    private void deleteByGitEngine(List<GitFile> targets) throws Exception {
+        List<FileChange> changes = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (GitFile file : targets) collectDeleteChanges(file, changes, seen);
+        if (changes.isEmpty()) throw new IllegalStateException("没有可删除的文件");
+        updateProgress("提交删除 " + changes.size() + " 个文件", 80, true);
+        driveEngine.commitAndPush(driveConfig(), changes);
     }
 
     private void collectDeleteChanges(GitFile file, List<FileChange> changes, Set<String> seen) throws Exception {
@@ -1134,6 +1187,17 @@ public class GitCloudDialog extends BaseAlertDialog {
         updateProgress("扫描目录 " + file.path, 0, true);
         List<GitFile> children = provider().listFiles(account, token(), repo, repo.defaultBranch, file.path);
         for (GitFile child : children) collectDeleteChanges(child, changes, seen);
+    }
+
+    private void collectDeleteFiles(GitFile file, List<GitFile> files, Set<String> seen) throws Exception {
+        if (file == null || TextUtils.isEmpty(file.path)) return;
+        if (!file.directory) {
+            if (seen.add(file.path)) files.add(file);
+            return;
+        }
+        updateProgress("扫描目录 " + file.path, 0, true);
+        List<GitFile> children = provider().listFiles(account, token(), repo, repo.defaultBranch, file.path);
+        for (GitFile child : children) collectDeleteFiles(child, files, seen);
     }
 
     private void addDeleteChange(String path, List<FileChange> changes, Set<String> seen) {
@@ -1217,7 +1281,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         if (changes == null || changes.isEmpty()) return;
         run(status, () -> {
             uploadChangesSync(changes);
-            refreshAfterWriteSync(currentPath);
+            refreshAfterWriteSync(currentPath, files -> containsUploadedChildren(currentPath, changes, files));
         });
     }
 
@@ -1240,16 +1304,114 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void refreshAfterWriteSync(String path) throws Exception {
+        refreshAfterWriteSync(path, null);
+    }
+
+    private void refreshAfterWriteSync(String path, RefreshVerifier verifier) throws Exception {
         String target = path == null ? "" : path;
         updateProgress("刷新目录", 100, true);
-        List<GitFile> files = provider().listFiles(account, token(), repo, repo.defaultBranch, target);
+        List<GitFile> files = listFilesFresh(target, verifier);
         App.post(() -> {
-            invalidateTree(target);
             expandedPaths.add(target);
             currentPath = target;
-            showFiles(target, files);
+            fileTree.put(target, files);
+            renderFileTree();
             render();
         });
+    }
+
+    private void refreshDeletePathsSync(List<String> paths, List<GitFile> targets) throws Exception {
+        if (paths == null || paths.isEmpty()) {
+            refreshAfterWriteSync("");
+            return;
+        }
+        updateProgress("刷新目录", 100, true);
+        Map<String, List<GitFile>> fresh = new HashMap<>();
+        for (String path : paths) {
+            String target = path == null ? "" : path;
+            fresh.put(target, listFilesFresh(target, files -> !containsDeletedChildren(target, targets, files)));
+        }
+        App.post(() -> {
+            for (String path : sortedPaths(fresh.keySet())) {
+                expandedPaths.add(path);
+                fileTree.put(path, fresh.get(path));
+            }
+            if (isPathDeleted(currentPath, targets)) currentPath = firstPath(paths);
+            renderFileTree();
+            render();
+        });
+    }
+
+    private List<String> sortedPaths(Set<String> paths) {
+        List<String> result = new ArrayList<>(paths);
+        result.sort((a, b) -> Integer.compare(pathDepth(a), pathDepth(b)));
+        return result;
+    }
+
+    private int pathDepth(String path) {
+        if (TextUtils.isEmpty(path)) return 0;
+        int depth = 1;
+        for (int i = 0; i < path.length(); i++) if (path.charAt(i) == '/') depth++;
+        return depth;
+    }
+
+    private List<GitFile> listFilesFresh(String path, RefreshVerifier verifier) throws Exception {
+        List<GitFile> files = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            files = provider().listFiles(account, token(), repo, repo.defaultBranch, path);
+            if (verifier == null || verifier.isFresh(files)) return files;
+            Thread.sleep(400L * (attempt + 1));
+        }
+        return files == null ? new ArrayList<>() : files;
+    }
+
+    private boolean containsUploadedChildren(String path, List<FileChange> changes, List<GitFile> files) {
+        for (FileChange change : changes) {
+            String name = directChildName(path, change.path);
+            if (TextUtils.isEmpty(name)) continue;
+            if (!containsChild(files, name)) return false;
+        }
+        return true;
+    }
+
+    private boolean containsDeletedChildren(String path, List<GitFile> targets, List<GitFile> files) {
+        for (GitFile target : targets) {
+            String name = directChildName(path, target == null ? "" : target.path);
+            if (!TextUtils.isEmpty(name) && containsChild(files, name)) return true;
+        }
+        return false;
+    }
+
+    private boolean containsChild(List<GitFile> files, String name) {
+        if (files == null || TextUtils.isEmpty(name)) return false;
+        for (GitFile file : files) if (TextUtils.equals(file.name, name)) return true;
+        return false;
+    }
+
+    private String directChildName(String parent, String path) {
+        if (TextUtils.isEmpty(path)) return "";
+        String dir = parent == null ? "" : parent;
+        String value = path;
+        if (!TextUtils.isEmpty(dir)) {
+            if (!value.startsWith(dir + "/")) return "";
+            value = value.substring(dir.length() + 1);
+        }
+        int slash = value.indexOf('/');
+        return slash >= 0 ? value.substring(0, slash) : value;
+    }
+
+    private boolean isPathDeleted(String path, List<GitFile> targets) {
+        if (TextUtils.isEmpty(path)) return false;
+        for (GitFile file : targets) {
+            if (file == null || TextUtils.isEmpty(file.path)) continue;
+            if (file.directory && (TextUtils.equals(path, file.path) || path.startsWith(file.path + "/"))) return true;
+            if (!file.directory && TextUtils.equals(path, file.path)) return true;
+        }
+        return false;
+    }
+
+    private String firstPath(List<String> paths) {
+        return paths == null || paths.isEmpty() ? "" : (paths.get(0) == null ? "" : paths.get(0));
     }
 
     private void invalidateTree(String path) {
@@ -2074,6 +2236,10 @@ public class GitCloudDialog extends BaseAlertDialog {
 
     private interface CheckedRunnable {
         void run() throws Exception;
+    }
+
+    private interface RefreshVerifier {
+        boolean isFresh(List<GitFile> files);
     }
 
     private static class TextInput {

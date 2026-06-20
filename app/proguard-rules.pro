@@ -30,6 +30,9 @@
 # JGit
 -dontwarn java.lang.ProcessHandle
 -dontwarn java.lang.management.ManagementFactory
+-dontwarn org.eclipse.jgit.**
+-keep class org.eclipse.jgit.** { *; }
+-keep class org.slf4j.** { *; }
 
 # CatVod
 -keep class com.github.catvod.Proxy { *; }

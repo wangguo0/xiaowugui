@@ -44,6 +44,7 @@
     <string name="play_scale">Default</string>
     <string name="play_config">Config</string>
     <string name="play_change">Change</string>
+    <string name="play_search">Search</string>
     <string name="play_fullscreen">Fullscreen</string>
     <string name="play_exit_fullscreen">Exit full</string>
     <string name="play_invert">Invert</string>
@@ -757,6 +758,10 @@
     <string name="player_adblock">Remove ads</string>
     <string name="player_tunnel">Tunnel mode</string>
     <string name="player_buffer">Buffer time</string>
+    <string name="player_buffer_bytes">Buffer size</string>
+    <string name="player_back_buffer">Back buffer</string>
+    <string name="player_cache">Playback cache</string>
+    <string name="player_auto_change">Auto source change</string>
     <string name="player_speed">Press speed</string>
     <string name="player_ua">User-Agent</string>
     <string name="player_osd">On-screen display</string>
@@ -857,6 +862,25 @@
     <string-array name="select_player_kernel">
         <item>EXO</item>
         <item>IJK</item>
+    </string-array>
+    <string-array name="select_buffer_bytes">
+        <item>Auto</item>
+        <item>64MB</item>
+        <item>128MB</item>
+        <item>256MB</item>
+    </string-array>
+    <string-array name="select_back_buffer">
+        <item>Off</item>
+        <item>15s</item>
+        <item>30s</item>
+        <item>60s</item>
+    </string-array>
+    <string-array name="select_play_cache">
+        <item>Off</item>
+        <item>100MB</item>
+        <item>500MB</item>
+        <item>1GB</item>
+        <item>2GB</item>
     </string-array>
 
     <string-array name="select_size">

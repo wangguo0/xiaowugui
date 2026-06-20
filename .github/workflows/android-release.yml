@@ -1,0 +1,220 @@
+name: Android Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag, blank = v<versionName>-sdk28-yyyyMMddHHmm"
+        required: false
+        type: string
+      release_notes:
+        description: "Release notes"
+        required: false
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        default: false
+        type: boolean
+      sync_cnb:
+        description: "Sync APK and JSON manifests to CNB"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  TZ: Asia/Shanghai
+  CNB_REPO_URL: ${{ vars.CNB_REPO_URL || 'https://cnb.cool/fish2018/webhtv.git' }}
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-28" "platforms;android-37" "build-tools;36.0.0"
+
+      - name: Resolve release tag
+        id: meta
+        run: |
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -1)"
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -1)"
+          TAG="${{ inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="v${VERSION_NAME}-sdk28-$(date +%Y%m%d%H%M)"
+          fi
+          if ! printf '%s' "$TAG" | grep -Eq "^v${VERSION_NAME}-sdk28-[0-9]{12}$"; then
+            echo "::error title=Invalid release tag::Expected v${VERSION_NAME}-sdk28-yyyyMMddHHmm, got: $TAG"
+            exit 1
+          fi
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error title=Release tag exists::$TAG already exists"
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version_name=$VERSION_NAME"
+            echo "version_code=$VERSION_CODE"
+            echo "short_sha=$(git rev-parse --short=7 HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure release signing
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          KS_BASE64="${RELEASE_KEYSTORE_BASE64:-$KEYSTORE_BASE64}"
+          STORE_PASSWORD="${RELEASE_STORE_PASSWORD:-$KEY_PASSWORD}"
+          ALIAS="${RELEASE_KEY_ALIAS:-$KEY_ALIAS}"
+          if [ -z "$KS_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$ALIAS" ]; then
+            echo "::warning title=Release signing not configured::APK will be signed with the debug key and cannot update an existing release install."
+            exit 0
+          fi
+          mkdir -p app/signing
+          printf '%s' "$KS_BASE64" | base64 --decode > app/signing/release.jks
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/app/signing/release.jks"
+            echo "keyAlias=$ALIAS"
+            echo "storePassword=$STORE_PASSWORD"
+          } > local.properties
+          echo "Release signing configured"
+
+      - name: Build four release APKs
+        run: |
+          chmod +x ./gradlew
+          ./gradlew \
+            :app:assembleMobileArm64_v8aRelease \
+            :app:assembleMobileArmeabi_v7aRelease \
+            :app:assembleLeanbackArm64_v8aRelease \
+            :app:assembleLeanbackArmeabi_v7aRelease \
+            --no-daemon
+
+      - name: Collect artifacts
+        run: |
+          rm -rf dist
+          mkdir -p dist
+          cp Release/apk/*.apk dist/
+          ls -lh dist/
+
+      - name: Generate update manifests
+        run: |
+          for apk in dist/*.apk; do
+            base="$(basename "$apk" .apk)"
+            size="$(wc -c < "$apk" | tr -d ' ')"
+            sha256="$(sha256sum "$apk" | awk '{print $1}')"
+            cat > "dist/${base}.json" << JSON
+          {
+            "name": "${{ steps.meta.outputs.tag }}",
+            "desc": "${{ steps.meta.outputs.tag }} - ${{ steps.meta.outputs.short_sha }}",
+            "code": ${{ steps.meta.outputs.version_code }},
+            "apk": "${base}.apk",
+            "size": $size,
+            "sha256": "$sha256"
+          }
+          JSON
+          done
+          ls -lh dist/
+
+      - name: Write release notes
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          {
+            echo "## ${{ steps.meta.outputs.tag }}"
+            echo
+            if [ -n "$RELEASE_NOTES" ]; then
+              printf '%s\n' "$RELEASE_NOTES"
+            else
+              echo "手动触发 GitHub Actions 构建发布。"
+            fi
+            echo
+            echo "### APK"
+            echo
+            echo "- mobile-arm64_v8a.apk"
+            echo "- mobile-armeabi_v7a.apk"
+            echo "- leanback-arm64_v8a.apk"
+            echo "- leanback-armeabi_v7a.apk"
+            echo
+            echo "### 更新清单"
+            echo
+            echo "- mobile-arm64_v8a.json"
+            echo "- mobile-armeabi_v7a.json"
+            echo "- leanback-arm64_v8a.json"
+            echo "- leanback-armeabi_v7a.json"
+          } > dist/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.meta.outputs.tag }}" \
+            --notes-file dist/release-notes.md \
+            $PRERELEASE_FLAG \
+            dist/*.apk dist/*.json
+
+      - name: Sync to CNB
+        if: ${{ inputs.sync_cnb }}
+        continue-on-error: true
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: |
+          if [ -z "$CNB_TOKEN" ]; then
+            echo "::warning title=CNB sync skipped::CNB_TOKEN secret is not configured."
+            exit 0
+          fi
+          AUTH_REPO="$(printf '%s' "$CNB_REPO_URL" | sed "s#^https://#https://cnb:${CNB_TOKEN}@#")"
+          rm -rf cnb-mirror
+          git clone --depth 1 "$AUTH_REPO" cnb-mirror
+          mkdir -p cnb-mirror/apk
+          cp dist/*.apk dist/*.json cnb-mirror/apk/
+          cd cnb-mirror
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add apk/
+          git diff --cached --quiet && exit 0
+          git commit -m "${{ steps.meta.outputs.tag }}"
+          git push origin HEAD:main
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: webhtv-${{ steps.meta.outputs.tag }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

@@ -12,7 +12,8 @@ import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.cache.CacheDataSource;
-import androidx.media3.datasource.cache.NoOpCacheEvictor;
+import androidx.media3.datasource.cache.CacheDataSink;
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider;
@@ -25,6 +26,7 @@ import androidx.media3.extractor.ExtractorsFactory;
 import androidx.media3.extractor.ts.TsExtractor;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
@@ -36,6 +38,7 @@ public class MediaSourceFactory implements MediaSource.Factory {
     private DataSource.Factory dataSourceFactory;
     private ExtractorsFactory extractorsFactory;
     private static SimpleCache cache;
+    private static long cacheSize;
 
     public MediaSourceFactory() {
         defaultMediaSourceFactory = new DefaultMediaSourceFactory(getDataSourceFactory(), getExtractorsFactory());
@@ -84,7 +87,10 @@ public class MediaSourceFactory implements MediaSource.Factory {
     }
 
     private DataSource.Factory getDataSourceFactory() {
-        if (dataSourceFactory == null) dataSourceFactory = getCacheDataSource(new DefaultDataSource.Factory(App.get(), getHttpDataSourceFactory()));
+        if (dataSourceFactory == null) {
+            DataSource.Factory upstreamFactory = new DefaultDataSource.Factory(App.get(), getHttpDataSourceFactory());
+            dataSourceFactory = PlayerSetting.getPlayCacheSize() > 0 ? getCacheDataSource(upstreamFactory) : upstreamFactory;
+        }
         return dataSourceFactory;
     }
 
@@ -93,8 +99,10 @@ public class MediaSourceFactory implements MediaSource.Factory {
         return directMediaSourceFactory;
     }
 
-    private CacheDataSource.Factory getCacheDataSource(DataSource.Factory upstreamFactory) {
-        return new CacheDataSource.Factory().setCache(getCache()).setUpstreamDataSourceFactory(upstreamFactory).setCacheWriteDataSinkFactory(null).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+    private DataSource.Factory getCacheDataSource(DataSource.Factory upstreamFactory) {
+        SimpleCache cache = getCache();
+        if (cache == null) return upstreamFactory;
+        return new CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(upstreamFactory).setCacheWriteDataSinkFactory(new CacheDataSink.Factory().setCache(cache)).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
     }
 
     private HttpDataSource.Factory getHttpDataSourceFactory() {
@@ -107,7 +115,21 @@ public class MediaSourceFactory implements MediaSource.Factory {
     }
 
     private static SimpleCache getCache() {
-        if (cache == null) cache = new SimpleCache(Path.exo(), new NoOpCacheEvictor(), new StandaloneDatabaseProvider(App.get()));
+        long size = PlayerSetting.getPlayCacheSize();
+        if (size <= 0) return null;
+        if (cache != null && cacheSize != size) {
+            cache.release();
+            cache = null;
+        }
+        if (cache == null) {
+            try {
+                cache = new SimpleCache(Path.exo(), new LeastRecentlyUsedCacheEvictor(size), new StandaloneDatabaseProvider(App.get()));
+                cacheSize = size;
+            } catch (Throwable ignored) {
+                cache = null;
+                cacheSize = 0;
+            }
+        }
         return cache;
     }
 }
