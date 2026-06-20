@@ -80,7 +80,7 @@ Use these WebHome SDK APIs instead of browser-only assumptions:
 - `fm.vod(siteKey, vodId, title, pic, options)` for native CSP detail/playback. Pass `options.wallPic` when the homepage knows a backdrop.
 - `fm.vodInline(payload)` for temporary multi-episode native playback. Include `vod_pic`/`pic` and `wallPic` in the payload.
 - `fm.preloadArtwork(pic, wallPic)` after detail artwork is known, so Native can prewarm the player images. Do not block the user click waiting for this preload.
-- `fm.pan.play({ type, url, password, title, pic, wallPic })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback.
+- `fm.pan.play({ type, url, password, title, pic, wallPic })` for pan shares, magnet, ed2k, thunder, jianpian, and push-style playback. When the homepage renders its own recent history, cache push URL artwork with `fm.cache` before playback and restore `wallPic` after `fm.history()`, because native push history may not carry backdrops.
 - `fm.config()` before `fm.pan.check()`. If `driveCheck` is false, do not call detection.
 - `fm.history()` and `fm.stat()` to compensate watch progress after native playback.
 - `fm.ui.setChrome()`, `fm.ui.restoreChrome()`, and `fm.ui.getViewport()` for homepage chrome and safe-area integration.
@@ -138,7 +138,7 @@ For PanSou-like resource search:
 - Rank health states as playable first: `ok`, `locked`, pending/idle, unsupported/uncertain, then `bad`.
 - Before `fm.pan.play()`, save detail scroll, result scroll, active type, focus key, and selected result so native-playback return can restore context.
 - Before `fm.search()` from a detail page, pass `{ direct: true, pic, wallPic }` so native search-result playback can still use the WebHome backdrop.
-- Before `fm.play()`, `fm.vod()`, `fm.vodInline()`, or `fm.pan.play()`, pass the best known `pic` and `wallPic`. Use poster art for `pic` and landscape/backdrop/still art for `wallPic`; do not rely on `pic` as a playback background fallback.
+- Before `fm.play()`, `fm.vod()`, `fm.vodInline()`, or `fm.pan.play()`, pass the best known `pic` and `wallPic`. Use poster art for `pic` and landscape/backdrop/still art for `wallPic`; do not rely on `pic` as a playback background fallback. For `fm.pan.play()` entries that should reappear in WebHome recent history, persist a small URL-to-artwork cache so `push_agent` records can restore `wallPic` on replay.
 
 For watch preference or recommendation systems:
 

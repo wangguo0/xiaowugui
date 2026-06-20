@@ -187,10 +187,17 @@ Detection:
 Playback:
 
 ```js
-await fm.pan.play({ type: item.diskType, url: item.url, password: item.password, title: item.title });
+await fm.pan.play({
+  type: item.diskType,
+  url: item.url,
+  password: item.password,
+  title: item.title,
+  pic: detail.poster,
+  wallPic: detail.backdrop
+});
 ```
 
-Save playback return context before calling native playback.
+Save playback return context before calling native playback. If the homepage renders its own recent history, persist a small URL-to-artwork cache before `fm.pan.play()` and restore it after `fm.history()` for `push_agent` records; native history may not retain `wallPic`.
 
 ## Performance
 

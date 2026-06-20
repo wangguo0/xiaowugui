@@ -138,6 +138,7 @@ The demo separates poster/default artwork from playback background:
 - `vodPlaybackOptions(item)` returns `{ wallPic }` for `fm.vod()` when a backdrop exists.
 - Detail search playback calls `fm.search(title, { direct: true, pic, wallPic })` so native search-result playback can retain the WebHome backdrop.
 - `buildPanPlayPayload(item)` passes `pic` and `wallPic` to `fm.pan.play()` so pan/push playback uses the same native artwork.
+- Before `fm.pan.play()`, the demo caches push URL artwork in `fm.cache`; when `fm.history()` returns `push_agent` records, it restores `pic/wallPic` from that cache so WebHome recent playback still opens native player with a backdrop.
 - `preloadPlaybackArtwork(item)` calls `fm.preloadArtwork(pic, wallPic)` once per media/artwork pair and ignores preload failure.
 - Native playback backgrounds are not derived from `pic`; if `wallPic` is missing, the player uses the App default background/wallpaper.
 
