@@ -745,6 +745,7 @@
     <!-- Player -->
     <string name="player">播放核心</string>
     <string name="player_render">渲染方式</string>
+    <string name="player_kernel">播放器内核</string>
     <string name="player_scale">缩放比例</string>
     <string name="player_libass">字幕渲染</string>
     <string name="player_caption">字幕样式</string>
@@ -845,6 +846,11 @@
     <string-array name="select_decode">
         <item>软解</item>
         <item>硬解</item>
+    </string-array>
+
+    <string-array name="select_player_kernel">
+        <item>EXO</item>
+        <item>IJK</item>
     </string-array>
 
     <string-array name="select_size">

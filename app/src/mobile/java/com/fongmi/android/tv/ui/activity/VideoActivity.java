@@ -307,6 +307,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     protected void onServiceConnected() {
         player().setDanmakuController(mBinding.exo.getDanmakuController());
         player().setDanmakuEnabled(DanmakuSetting.isShow());
+        setPlayerKernel();
+        setDecode();
         checkLand();
         checkId();
     }
@@ -393,7 +395,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
-        mBinding.control.action.player.setOnClickListener(view -> onChoose());
+        mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
+        mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.ending.setOnClickListener(view -> onEnding());
         mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
@@ -464,6 +467,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setDecode() {
         mBinding.control.action.decode.setText(player().getDecodeText());
+    }
+
+    private void setPlayerKernel() {
+        mBinding.control.action.player.setText(player().getPlayerText());
     }
 
     private void setScale(int scale) {
@@ -952,6 +959,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void onChoose() {
         PlayerHelper.choose(this, player().getUrl(), player().getHeaders(), player().isVod(), player().getPosition(), mBinding.control.title.getText());
         setRedirect(true);
+    }
+
+    private boolean onChooseLong() {
+        onChoose();
+        return true;
+    }
+
+    private void onPlayerKernel() {
+        mClock.setCallback(null);
+        player().togglePlayer();
+        setPlayerKernel();
+        setDecode();
+        setR1Callback();
     }
 
     private boolean onTextLong() {

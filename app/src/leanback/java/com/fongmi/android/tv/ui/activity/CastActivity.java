@@ -88,7 +88,8 @@ public class CastActivity extends PlaybackActivity implements CustomKeyDownVod.L
     @Override
     protected void onServiceConnected() {
         player().setDanmakuController(mBinding.exo.getDanmakuController());
-        mBinding.control.action.decode.setText(player().getDecodeText());
+        setPlayerKernel();
+        setDecode();
         mBinding.control.action.speed.setText(player().getSpeedText());
         setAction(getIntent());
     }
@@ -127,7 +128,8 @@ public class CastActivity extends PlaybackActivity implements CustomKeyDownVod.L
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
-        mBinding.control.action.player.setOnClickListener(view -> onChoose());
+        mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
+        mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
@@ -172,6 +174,10 @@ public class CastActivity extends PlaybackActivity implements CustomKeyDownVod.L
         mBinding.control.action.decode.setText(player().getDecodeText());
     }
 
+    private void setPlayerKernel() {
+        mBinding.control.action.player.setText(player().getPlayerText());
+    }
+
     private void setScale(int scale) {
         mBinding.exo.setResizeMode(scale);
         mBinding.control.action.scale.setText(ResUtil.getStringArray(R.array.select_scale)[scale]);
@@ -209,6 +215,19 @@ public class CastActivity extends PlaybackActivity implements CustomKeyDownVod.L
     private void onChoose() {
         PlayerHelper.choose(this, player().getUrl(), player().getHeaders(), player().isVod(), player().getPosition(), mBinding.widget.title.getText());
         setRedirect(true);
+    }
+
+    private boolean onChooseLong() {
+        onChoose();
+        return true;
+    }
+
+    private void onPlayerKernel() {
+        if (player().isEmpty()) return;
+        position = player().getPosition();
+        player().togglePlayer();
+        setPlayerKernel();
+        setDecode();
     }
 
     private void onDecode() {

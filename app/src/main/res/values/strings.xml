@@ -746,6 +746,7 @@
     <!-- Player -->
     <string name="player">Player</string>
     <string name="player_render">Render</string>
+    <string name="player_kernel">Player engine</string>
     <string name="player_scale">Scale</string>
     <string name="player_libass">libass</string>
     <string name="player_caption">Caption style</string>
@@ -851,6 +852,11 @@
     <string-array name="select_render">
         <item>Surface</item>
         <item>Texture</item>
+    </string-array>
+
+    <string-array name="select_player_kernel">
+        <item>EXO</item>
+        <item>IJK</item>
     </string-array>
 
     <string-array name="select_size">

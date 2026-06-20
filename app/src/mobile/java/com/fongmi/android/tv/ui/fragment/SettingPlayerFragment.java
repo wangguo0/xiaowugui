@@ -32,6 +32,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     private DecimalFormat format;
     private String[] background;
     private String[] caption;
+    private String[] kernel;
     private String[] render;
     private String[] scale;
     private String[] osd;
@@ -62,6 +63,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
         mBinding.caption.setVisibility(PlayerSetting.hasCaption() ? View.VISIBLE : View.GONE);
         mBinding.osdText.setText(getOsdText(osd = ResUtil.getStringArray(R.array.select_player_osd)));
+        mBinding.kernelText.setText((kernel = ResUtil.getStringArray(R.array.select_player_kernel))[PlayerSetting.getPlayer()]);
         mBinding.scaleText.setText((scale = ResUtil.getStringArray(R.array.select_scale))[PlayerSetting.getScale()]);
         mBinding.renderText.setText((render = ResUtil.getStringArray(R.array.select_render))[PlayerSetting.getRender()]);
         mBinding.captionText.setText((caption = ResUtil.getStringArray(R.array.select_caption))[PlayerSetting.isCaption() ? 1 : 0]);
@@ -72,6 +74,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     protected void initEvent() {
         mBinding.ua.setOnClickListener(this::onUa);
         mBinding.aac.setOnClickListener(this::setAAC);
+        mBinding.kernel.setOnClickListener(this::onKernel);
         mBinding.scale.setOnClickListener(this::onScale);
         mBinding.osd.setOnClickListener(this::onOsd);
         mBinding.speed.setOnClickListener(this::onSpeed);
@@ -99,6 +102,14 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     private void setAAC(View view) {
         PlayerSetting.putPreferAAC(!PlayerSetting.isPreferAAC());
         mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
+    }
+
+    private void onKernel(View view) {
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_kernel).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(kernel, PlayerSetting.getPlayer(), (dialog, which) -> {
+            mBinding.kernelText.setText(kernel[which]);
+            PlayerSetting.putPlayer(which);
+            dialog.dismiss();
+        }).show();
     }
 
     private void onScale(View view) {

@@ -8,6 +8,28 @@ import com.github.catvod.utils.Prefers;
 
 public class PlayerSetting {
 
+    public static final int EXO = 0;
+    public static final int IJK = 1;
+
+    public static int getPlayer() {
+        int player = Prefers.getInt("player", EXO);
+        if (isPlayer(player)) return player;
+        putPlayer(EXO);
+        return EXO;
+    }
+
+    public static void putPlayer(int player) {
+        Prefers.put("player", sanitizePlayer(player));
+    }
+
+    public static boolean isPlayer(int player) {
+        return player == EXO || player == IJK;
+    }
+
+    public static int sanitizePlayer(int player) {
+        return player == IJK ? IJK : EXO;
+    }
+
     public static int getRender() {
         return Prefers.getInt("render", 0);
     }

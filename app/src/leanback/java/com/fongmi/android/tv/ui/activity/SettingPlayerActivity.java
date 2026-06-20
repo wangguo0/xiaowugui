@@ -29,6 +29,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
     private ActivitySettingPlayerBinding mBinding;
     private DecimalFormat format;
     private String[] caption;
+    private String[] kernel;
     private String[] render;
     private String[] scale;
     private String[] osd;
@@ -61,6 +62,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
         mBinding.osdText.setText(getOsdText(osd = ResUtil.getStringArray(R.array.select_player_osd)));
+        mBinding.kernelText.setText((kernel = ResUtil.getStringArray(R.array.select_player_kernel))[PlayerSetting.getPlayer()]);
         mBinding.scaleText.setText((scale = ResUtil.getStringArray(R.array.select_scale))[PlayerSetting.getScale()]);
         mBinding.renderText.setText((render = ResUtil.getStringArray(R.array.select_render))[PlayerSetting.getRender()]);
         mBinding.captionText.setText((caption = ResUtil.getStringArray(R.array.select_caption))[PlayerSetting.isCaption() ? 1 : 0]);
@@ -70,6 +72,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
     protected void initEvent() {
         mBinding.ua.setOnClickListener(this::onUa);
         mBinding.aac.setOnClickListener(this::setAAC);
+        mBinding.kernel.setOnClickListener(this::setKernel);
         mBinding.scale.setOnClickListener(this::setScale);
         mBinding.osd.setOnClickListener(this::onOsd);
         mBinding.speed.setOnClickListener(this::onSpeed);
@@ -102,6 +105,12 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
     private void setAAC(View view) {
         PlayerSetting.putPreferAAC(!PlayerSetting.isPreferAAC());
         mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
+    }
+
+    private void setKernel(View view) {
+        int index = PlayerSetting.getPlayer() == PlayerSetting.EXO ? PlayerSetting.IJK : PlayerSetting.EXO;
+        mBinding.kernelText.setText(kernel[index]);
+        PlayerSetting.putPlayer(index);
     }
 
     private void setScale(View view) {

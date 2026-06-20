@@ -23,6 +23,7 @@ import com.fongmi.android.tv.bean.Sub;
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.impl.ParseCallback;
 import com.fongmi.android.tv.player.engine.ExoPlayerEngine;
+import com.fongmi.android.tv.player.engine.IjkPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.setting.DanmakuSetting;
@@ -57,13 +58,15 @@ public class PlayerManager implements ParseCallback {
     private Player player;
 
     private boolean initTrack;
+    private int playerType;
     private int retry;
     private int localProxyRetry;
     private int prepareSeq;
 
     public PlayerManager(Callback callback) {
         this.runnable = () -> callback.onError(ResUtil.getString(R.string.error_play_timeout));
-        this.engine = new ExoPlayerEngine(PlayerEngine.HARD, listener);
+        this.playerType = PlayerSetting.getPlayer();
+        this.engine = buildEngine(playerType, PlayerEngine.HARD);
         this.player = engine.getPlayer();
         this.callback = callback;
     }
@@ -192,6 +195,14 @@ public class PlayerManager implements ParseCallback {
 
     public String getDecodeText() {
         return engine.getDecodeText();
+    }
+
+    public String getPlayerText() {
+        return ResUtil.getStringArray(R.array.select_player_kernel)[playerType];
+    }
+
+    public boolean isIjk() {
+        return playerType == PlayerSetting.IJK;
     }
 
     public String getPositionTime(long delta) {
@@ -348,9 +359,38 @@ public class PlayerManager implements ParseCallback {
         setMediaItem();
     }
 
+    public void togglePlayer() {
+        switchPlayer(playerType == PlayerSetting.EXO ? PlayerSetting.IJK : PlayerSetting.EXO);
+    }
+
+    public void switchPlayer(int type) {
+        if (engine == null || player == null) return;
+        type = PlayerSetting.sanitizePlayer(type);
+        if (type == playerType) return;
+        long position = getPosition();
+        float speed = getSpeed();
+        boolean repeat = isRepeatOne();
+        int decode = engine.getDecode();
+        engine.release();
+        playerType = type;
+        PlayerSetting.putPlayer(type);
+        engine = buildEngine(playerType, decode);
+        player = engine.getPlayer();
+        callback.onPlayerRebuild(player);
+        if (spec == null || spec.getUrl() == null) return;
+        setMediaItem();
+        if (position > 0) seekTo(position);
+        if (speed != 1f) setSpeed(speed);
+        setRepeatOne(repeat);
+    }
+
     private void rebuildPlayer() {
         player = engine.rebuild(listener);
         callback.onPlayerRebuild(player);
+    }
+
+    private PlayerEngine buildEngine(int type, int decode) {
+        return type == PlayerSetting.IJK ? new IjkPlayerEngine(decode, listener) : new ExoPlayerEngine(decode, listener);
     }
 
     public void browse(PlaySpec spec) {

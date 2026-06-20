@@ -147,7 +147,8 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
     @Override
     protected void onServiceConnected() {
         player().setDanmakuController(mBinding.exo.getDanmakuController());
-        mBinding.control.action.decode.setText(player().getDecodeText());
+        setPlayerKernel();
+        setDecode();
         mBinding.control.action.speed.setText(player().getSpeedText());
         checkLive();
     }
@@ -192,7 +193,8 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.control.action.invert.setOnClickListener(view -> onInvert());
         mBinding.control.action.across.setOnClickListener(view -> onAcross());
         mBinding.control.action.change.setOnClickListener(view -> onChange());
-        mBinding.control.action.player.setOnClickListener(view -> onChoose());
+        mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
+        mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
@@ -223,6 +225,10 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
 
     private void setDecode() {
         mBinding.control.action.decode.setText(player().getDecodeText());
+    }
+
+    private void setPlayerKernel() {
+        mBinding.control.action.player.setText(player().getPlayerText());
     }
 
     private void setScale(int scale) {
@@ -423,6 +429,18 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
     private void onChoose() {
         PlayerHelper.choose(this, player().getUrl(), player().getHeaders(), player().isVod(), player().getPosition(), mBinding.widget.title.getText());
         setRedirect(true);
+    }
+
+    private boolean onChooseLong() {
+        onChoose();
+        return true;
+    }
+
+    private void onPlayerKernel() {
+        player().togglePlayer();
+        setPlayerKernel();
+        setDecode();
+        setR1Callback();
     }
 
     private void onDecode() {
