@@ -17,6 +17,7 @@ permissions:
 
 env:
   TZ: Asia/Shanghai
+  GH_REPO: ${{ github.repository }}
   CNB_REPO_URL: ${{ inputs.cnb_repo_url || vars.CNB_REPO_URL || 'https://cnb.cool/fish2018/webhtv.git' }}
 
 jobs:
