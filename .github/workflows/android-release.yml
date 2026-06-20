@@ -58,7 +58,8 @@ jobs:
 
       - name: Install Android packages
         run: |
-          sdkmanager "platform-tools" "platforms;android-28" "platforms;android-37" "build-tools;36.0.0"
+          COMPILE_SDK="$(sed -n 's/^compileSdk[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' gradle/libs.versions.toml | head -1)"
+          sdkmanager "platform-tools" "platforms;android-28" "platforms;android-${COMPILE_SDK}" "build-tools;36.0.0"
 
       - name: Resolve release tag
         id: meta
