@@ -621,7 +621,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setUseParse(result.shouldUseParse());
         setQualityVisible(result.getUrl().isMulti());
         result.getUrl().set(mQualityAdapter.getPosition());
-        if (result.hasArtwork()) setArtwork(result.getArtwork());
+        if (result.hasArtwork() && !shouldKeepPushArtwork()) setArtwork(result.getArtwork());
         if (result.hasDesc()) mBinding.content.setTag(result.getDesc());
         if (result.hasPosition()) mHistory.setPosition(result.getPosition());
         mBinding.control.parse.setVisibility(isUseParse() ? View.VISIBLE : View.GONE);
@@ -1279,9 +1279,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.speed.setText(player().setSpeed(mHistory.getSpeed()));
         mHistory.setVodName(item.getName());
         PlaybackEventCollector.get().updateHistory(mHistory);
-        setArtwork(item.getPic());
+        setArtwork(getInitialArtwork(item));
         setScale(getScale());
         setPartAdapter();
+    }
+
+    private boolean shouldKeepPushArtwork() {
+        return SiteApi.PUSH.equals(getKey()) && !TextUtils.isEmpty(getPic());
+    }
+
+    private String getInitialArtwork(Vod item) {
+        return shouldKeepPushArtwork() ? getPic() : item.getPic();
     }
 
     private boolean hasInitialPreview() {

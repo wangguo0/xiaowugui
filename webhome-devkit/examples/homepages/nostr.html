@@ -6557,7 +6557,7 @@
       return {
         key,
         siteKey: history && history.siteKey || parts[0] || "",
-        vodId: history && history.vodId || parts.slice(1).join("@@@") || ""
+        vodId: history && history.vodId || parts[1] || ""
       };
     }
 
@@ -6569,8 +6569,9 @@
     function isRestorableHistory(history) {
       const parts = historyKeyParts(history);
       const title = String(history && (history.vodName || history.title || history.name) || "").trim();
+      const pic = String(history && (history.vodPic || history.pic || "") || "").trim();
       if (!parts.siteKey || !parts.vodId || !title) return false;
-      if (parts.siteKey === "push_agent") return false;
+      if (parts.siteKey === "push_agent") return !!pic && !isExpiredPosterSource(pic, parts);
       if (/^(push|https?|file|magnet|ed2k|thunder|video):/i.test(parts.siteKey)) return false;
       return true;
     }
@@ -6625,6 +6626,8 @@
       const parts = historyKeyParts(history);
       const title = String(history && (history.vodName || history.title || history.name) || "最近观看").trim();
       const pic = history && (history.vodPic || history.pic || "") || "";
+      const matched = findMediaByContent({ title, vodId: parts.vodId }) || null;
+      const wallPic = playbackWallPic(Object.assign({}, matched || {}, { title, pic }));
       const badge = String(history && history.vodRemarks || "").trim();
       const progressText = historyProgressText(history);
       return {
@@ -6636,6 +6639,8 @@
         title,
         pic,
         image: pic,
+        landscape: wallPic || matched && matched.landscape || "",
+        wallPic,
         remark: progressText || (badge ? "继续观看" : ""),
         badge,
         progress: historyProgressPercent(history),
@@ -8540,7 +8545,7 @@
       }
       try {
         rememberWatchIntent(item, "view");
-        await sdk().vod(item.siteKey, item.vodId, item.title, item.pic, vodPlaybackOptions(item));
+        await sdk().vod(item.siteKey, item.vodId, item.title, playbackPosterPic(item), vodPlaybackOptions(item));
         startWatchTracking(item);
       } catch (e) {
         toast("打开最近观看失败：" + (e.message || "unknown"));
@@ -8561,9 +8566,10 @@
         startWatchTracking(state.selected);
         const playbackItem = Object.assign({}, state.selected || {}, history || {}, {
           title: history.title || state.selected.title,
-          pic: state.selected.pic || history.pic || ""
+          pic: state.selected.pic || history.pic || "",
+          wallPic: history.wallPic || state.selected.wallPic || state.selected.landscape || ""
         });
-        await sdk().vod(history.siteKey, history.vodId, playbackItem.title, playbackItem.pic, vodPlaybackOptions(playbackItem));
+        await sdk().vod(history.siteKey, history.vodId, playbackItem.title, playbackPosterPic(playbackItem), vodPlaybackOptions(playbackItem));
       } catch (e) {
         stopWatchTracking(false);
         toast("继续观看失败：" + (e.message || "unknown"));
@@ -8590,7 +8596,7 @@
     function preloadPlaybackArtwork(item) {
       const api = sdk();
       if (!api || !api.preloadArtwork) return;
-      const pic = item && item.pic || "";
+      const pic = playbackPosterPic(item);
       const wallPic = playbackWallPic(item);
       if (!pic && !wallPic) return;
       const key = [mediaDomKey(item), pic, wallPic].join("\n");
@@ -8600,6 +8606,20 @@
         const result = api.preloadArtwork(pic, wallPic);
         if (result && result.catch) result.catch(() => {});
       } catch (e) {}
+    }
+
+    function playbackPosterPic(item) {
+      const source = item || {};
+      const matched = findMediaByContent(source) || null;
+      const selected = state.selected || null;
+      const selectedMatches = selected && (samePlaybackMedia(source, selected) || samePlaybackMedia(matched, selected));
+      return playbackImage(firstPlaybackWallPic([
+        source.pic,
+        source.poster,
+        source.vodPic,
+        selectedMatches && selected.pic,
+        matched && matched.pic
+      ]));
     }
 
     function playbackWallPic(item) {
@@ -11101,13 +11121,14 @@ nsec: ${state.identity.nsec}` : "身份未就绪";
       let url = String(item && (item.normalizedUrl || item.normalized_url || item.url) || "").trim();
       if (!url) return null;
       if (/^push:\/\//i.test(url)) url = url.replace(/^push:\/\//i, "");
-      const artworkSource = state.selected || item || {};
+      const artworkSource = Object.assign({}, item || {}, state.selected || {});
+      const title = artworkSource.title || state.pan.keyword || item && item.title || item && item.url || url;
       return {
         type: normalizePanDiskType(item && item.diskType),
         url,
         password: item && item.password || "",
-        title: item && (item.title || state.pan.keyword || item.url) || "",
-        pic: artworkSource && artworkSource.pic || "",
+        title,
+        pic: playbackPosterPic(artworkSource),
         wallPic: playbackWallPic(artworkSource)
       };
     }
