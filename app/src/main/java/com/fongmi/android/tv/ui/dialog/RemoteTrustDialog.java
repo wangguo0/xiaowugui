@@ -61,6 +61,7 @@ import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.QRCode;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.button.MaterialButtonToggleGroup;
@@ -93,6 +94,8 @@ public final class RemoteTrustDialog {
     private static final long DETECT_RETRY_MS = 5_000L;
     private static final long DEVICE_REFRESH_RETRY_MS = 3_000L;
     private static final int DEVICE_REFRESH_RETRY_MAX = 8;
+    private static final long DEVICE_STATUS_REFRESH_MS = 15_000L;
+    private static final long DEVICE_ONLINE_STALE_MS = 60_000L;
     private static final long BIND_CODE_FALLBACK_TTL_MS = 10 * 60 * 1000L;
     private static final long BIND_CODE_REFRESH_SKEW_MS = 45 * 1000L;
     private static final long BIND_CODE_REFRESH_MIN_MS = 15 * 1000L;
@@ -136,6 +139,7 @@ public final class RemoteTrustDialog {
             detectService(activity, binding, true);
         };
         binding.deviceRefreshRetry = () -> retryRefreshDevices(activity, binding);
+        binding.deviceStatusRefresh = () -> refreshDeviceStatus(activity, binding);
         binding.bindCodeRefresh = () -> refreshBindCodeIfNeeded(activity, binding);
         render(activity, binding);
         dialog.setOnShowListener(d -> {
@@ -168,10 +172,11 @@ public final class RemoteTrustDialog {
                 render(activity, binding);
             });
             bindServerInput(activity, binding);
+            ensureDeviceStatusRefresh(activity, binding);
         });
         dialog.setOnDismissListener(d -> {
             if (binding.serverQrDialog != null && binding.serverQrDialog.isShowing()) binding.serverQrDialog.dismiss();
-            App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry, binding.bindCodeRefresh);
+            App.removeCallbacks(binding.detectRetry, binding.deviceRefreshRetry, binding.deviceStatusRefresh, binding.bindCodeRefresh);
             clearScanTarget(binding);
             clearActive(binding);
         });
@@ -290,6 +295,7 @@ public final class RemoteTrustDialog {
         else renderDevices(context, binding);
         setBusy(binding, binding.busy);
         ensureAuto(activityOf(context), binding);
+        ensureDeviceStatusRefresh(activityOf(context), binding);
         if (binding.callback != null) binding.callback.run();
     }
 
@@ -611,7 +617,7 @@ public final class RemoteTrustDialog {
         if (!TextUtils.isEmpty(syncResult)) binding.lastResult = syncResult;
         LinearLayoutCompat top = row(context);
         MaterialButton deviceStatus = statusButton(context, deviceName(row.device) + " · " + deviceState(context, row.device) + " · " + deviceRole(context, profile, row.device));
-        applyDeviceStyle(context, deviceStatus, row.device.online);
+        applyDeviceStyle(context, deviceStatus, isDeviceOnline(row.device));
         deviceStatus.setOnClickListener(v -> {
             binding.deviceStatusExpanded = !binding.deviceStatusExpanded;
             render(context, binding);
@@ -1039,6 +1045,50 @@ public final class RemoteTrustDialog {
         List<RemoteDevice> devices = response == null ? new ArrayList<>() : response.devices;
         RemoteStore.upsertDevices(serverOrigin, group.groupId, devices);
         return devices == null ? 0 : devices.size();
+    }
+
+    private static void ensureDeviceStatusRefresh(FragmentActivity activity, Binding binding) {
+        if (activity == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        if (binding.page == PAGE_SETTINGS || binding.deviceStatusRefresh == null) return;
+        if (binding.deviceStatusRefreshScheduled || binding.deviceStatusRefreshing) return;
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null || profile.groups == null || profile.groups.isEmpty()) return;
+        if (!profile.enabled) return;
+        long elapsed = System.currentTimeMillis() - binding.lastDeviceStatusRefreshAt;
+        long delay = binding.lastDeviceStatusRefreshAt <= 0 || elapsed >= DEVICE_STATUS_REFRESH_MS ? 0 : DEVICE_STATUS_REFRESH_MS - elapsed;
+        binding.deviceStatusRefreshScheduled = true;
+        App.post(binding.deviceStatusRefresh, delay);
+    }
+
+    private static void refreshDeviceStatus(FragmentActivity activity, Binding binding) {
+        binding.deviceStatusRefreshScheduled = false;
+        if (activity == null || binding.dialog == null || !binding.dialog.isShowing()) return;
+        if (binding.page == PAGE_SETTINGS) return;
+        RemoteProfile profile = currentProfile(binding);
+        if (profile == null || profile.groups == null || profile.groups.isEmpty()) return;
+        if (!profile.enabled) return;
+        if (binding.deviceStatusRefreshing) {
+            ensureDeviceStatusRefresh(activity, binding);
+            return;
+        }
+        binding.deviceStatusRefreshing = true;
+        Task.execute(() -> {
+            try {
+                RemoteProfile latest = currentProfile(binding);
+                if (latest != null && latest.groups != null && !latest.groups.isEmpty()) {
+                    RemoteClient client = new RemoteClient(latest);
+                    for (RemoteGroup group : new ArrayList<>(latest.groups)) refreshGroup(client, latest.serverOrigin, group);
+                }
+            } catch (Throwable e) {
+                SpiderDebug.log("remote", "device status refresh failed error=%s", e.getMessage());
+            } finally {
+                App.post(() -> {
+                    binding.deviceStatusRefreshing = false;
+                    binding.lastDeviceStatusRefreshAt = System.currentTimeMillis();
+                    if (binding.dialog != null && binding.dialog.isShowing() && binding.page != PAGE_SETTINGS) render(activity, binding);
+                });
+            }
+        });
     }
 
     private static void scheduleDeviceRefresh(Binding binding) {
@@ -2677,7 +2727,12 @@ public final class RemoteTrustDialog {
     }
 
     private static String deviceState(Context context, RemoteDevice device) {
-        return device.online ? context.getString(R.string.remote_trust_device_online) : context.getString(R.string.remote_trust_device_offline);
+        return isDeviceOnline(device) ? context.getString(R.string.remote_trust_device_online) : context.getString(R.string.remote_trust_device_offline);
+    }
+
+    private static boolean isDeviceOnline(RemoteDevice device) {
+        if (device == null || !device.online || device.lastSeen <= 0) return false;
+        return System.currentTimeMillis() - device.lastSeen < DEVICE_ONLINE_STALE_MS;
     }
 
     private static String deviceTypeText(Context context, RemoteDevice device) {
@@ -3184,12 +3239,13 @@ public final class RemoteTrustDialog {
 
     private static MaterialButton deviceButton(Context context, String text, RemoteDevice device) {
         MaterialButton button = listButton(context, text);
-        applyDeviceStyle(context, button, device.online);
+        boolean online = isDeviceOnline(device);
+        applyDeviceStyle(context, button, online);
         button.setIconResource(deviceTypeIcon(device));
         button.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
         button.setIconPadding(dp(context, 8));
         button.setIconSize(dp(context, 18));
-        button.setIconTint(ColorStateList.valueOf(Color.parseColor(device.online ? "#137333" : "#B3261E")));
+        button.setIconTint(ColorStateList.valueOf(Color.parseColor(online ? "#137333" : "#B3261E")));
         return button;
     }
 
@@ -3392,6 +3448,7 @@ public final class RemoteTrustDialog {
         private Runnable callback;
         private Runnable detectRetry;
         private Runnable deviceRefreshRetry;
+        private Runnable deviceStatusRefresh;
         private Runnable bindCodeRefresh;
         private LinearLayoutCompat content;
         private MaterialTextView summary;
@@ -3418,8 +3475,11 @@ public final class RemoteTrustDialog {
         private boolean autoDetected;
         private boolean detectingService;
         private boolean creatingBindCode;
+        private boolean deviceStatusRefreshScheduled;
+        private boolean deviceStatusRefreshing;
         private int page = PAGE_DEVICES;
         private int pendingDeviceRefreshes;
+        private long lastDeviceStatusRefreshAt;
         private long bindCodeExpiresAt;
         private String bindCode = "";
         private String selectedGroupId = "";
