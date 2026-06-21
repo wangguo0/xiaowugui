@@ -8,9 +8,12 @@ import android.text.TextUtils;
 import android.util.Base64;
 
 import com.fongmi.android.tv.App;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.util.Map;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -42,6 +45,35 @@ public final class GitCloudTokenStore {
     public static void remove(String key) {
         if (TextUtils.isEmpty(key)) return;
         prefs().edit().remove(key).apply();
+    }
+
+    public static JsonObject exportTokens() {
+        JsonObject object = new JsonObject();
+        for (Map.Entry<String, ?> entry : prefs().getAll().entrySet()) {
+            if (TextUtils.isEmpty(entry.getKey()) || !(entry.getValue() instanceof String)) continue;
+            try {
+                String token = decrypt((String) entry.getValue());
+                if (!TextUtils.isEmpty(token)) object.addProperty(entry.getKey(), token);
+            } catch (Throwable ignored) {
+            }
+        }
+        return object;
+    }
+
+    public static int importTokens(JsonObject object) {
+        if (object == null || object.size() == 0) return 0;
+        int count = 0;
+        for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+            if (TextUtils.isEmpty(entry.getKey()) || entry.getValue() == null || entry.getValue().isJsonNull()) continue;
+            try {
+                String token = entry.getValue().getAsString();
+                if (TextUtils.isEmpty(token)) continue;
+                put(entry.getKey(), token);
+                count++;
+            } catch (Throwable ignored) {
+            }
+        }
+        return count;
     }
 
     private static SharedPreferences prefs() {

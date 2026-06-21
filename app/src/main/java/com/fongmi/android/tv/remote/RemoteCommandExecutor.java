@@ -76,6 +76,7 @@ public final class RemoteCommandExecutor {
         data.addProperty("appVersion", BuildConfig.VERSION_NAME);
         data.addProperty("serverOrigin", profile.serverOrigin);
         data.addProperty("groupCount", profile.groups == null ? 0 : profile.groups.size());
+        data.addProperty("appForeground", App.activity() != null);
         data.addProperty("debugLog", DebugLogStore.isEnabled());
         data.addProperty("debugLogLines", DebugLogStore.size());
         return RemoteCommandResult.success("", data);
@@ -92,6 +93,7 @@ public final class RemoteCommandExecutor {
     }
 
     private static RemoteCommandResult search(JsonObject payload) {
+        if (App.activity() == null) return RemoteCommandResult.failure("App is not open");
         String word = first(payload, "word", "keyword", "text", "q");
         if (TextUtils.isEmpty(word)) return RemoteCommandResult.failure("Missing search keyword");
         App.post(() -> ServerEvent.search(word));
@@ -99,6 +101,7 @@ public final class RemoteCommandExecutor {
     }
 
     private static RemoteCommandResult push(JsonObject payload) {
+        if (App.activity() == null) return RemoteCommandResult.failure("App is not open");
         String url = first(payload, "url", "text");
         if (TextUtils.isEmpty(url)) return RemoteCommandResult.failure("Missing push URL");
         App.post(() -> ServerEvent.push(url));

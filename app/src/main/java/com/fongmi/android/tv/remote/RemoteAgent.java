@@ -133,6 +133,11 @@ public final class RemoteAgent {
             try {
                 RemoteProfile profile = RemoteStore.getProfileByOrigin(serverOrigin);
                 if (!RemoteStore.shouldStart(profile)) return;
+                if (App.activity() == null) {
+                    closeWebSocket();
+                    lastRegister = 0;
+                    return;
+                }
                 RemoteClient client = new RemoteClient(profile);
                 long now = System.currentTimeMillis();
                 if (lastRegister <= 0 || now - lastRegister > REGISTER_INTERVAL_MS) {
@@ -184,6 +189,10 @@ public final class RemoteAgent {
         private void executeCommand(RemoteProfile profile, RemoteCommand command) {
             if (profile == null || command == null || TextUtils.isEmpty(command.id)) return;
             try {
+                if (App.activity() == null) {
+                    new RemoteClient(profile).commandResult(command.id, RemoteCommandResult.failure("App is not open"));
+                    return;
+                }
                 RemoteCommandResult result = RemoteCommandExecutor.execute(profile, command);
                 new RemoteClient(profile).commandResult(command.id, result);
             } catch (Throwable e) {

@@ -6703,7 +6703,7 @@
       const artwork = parts.siteKey === "push_agent" ? pushArtworkFor(parts.vodId, title) : null;
       const pic = parts.siteKey === "push_agent" ? (artwork && artwork.pic || history && (history.vodPic || history.pic || "") || "") : (history && (history.vodPic || history.pic || "") || "");
       const matched = findMediaByContent({ title, vodId: parts.vodId }) || null;
-      const wallPic = history && history.wallPic || artwork && artwork.wallPic || playbackWallPic(Object.assign({}, matched || {}, { title, pic }));
+      const wallPic = artwork && artwork.wallPic || playbackWallPic(Object.assign({}, matched || {}, { title, pic }));
       const badge = String(history && history.vodRemarks || "").trim();
       const progressText = historyProgressText(history);
       return {
