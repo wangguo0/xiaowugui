@@ -60,6 +60,7 @@ public class PlayerManager implements ParseCallback {
     private Player player;
 
     private boolean initTrack;
+    private boolean exoFallbackTried;
     private int playerType;
     private int retry;
     private int localProxyRetry;
@@ -369,6 +370,10 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void switchPlayer(int type) {
+        switchPlayer(type, true);
+    }
+
+    private void switchPlayer(int type, boolean persist) {
         if (engine == null || player == null) return;
         type = PlayerSetting.sanitizePlayer(type);
         if (type == playerType) return;
@@ -378,7 +383,11 @@ public class PlayerManager implements ParseCallback {
         int decode = engine.getDecode();
         engine.release();
         playerType = type;
-        PlayerSetting.putPlayer(type);
+        if (persist) {
+            exoFallbackTried = false;
+            PlayerSetting.putPlayer(type);
+        }
+        SpiderDebug.log("player", "switch player type=%d persist=%s position=%d spec=%s", type, persist, position, debugSpec());
         engine = buildEngine(playerType, decode);
         player = engine.getPlayer();
         callback.onPlayerRebuild(player);
@@ -407,6 +416,8 @@ public class PlayerManager implements ParseCallback {
 
     public void start(PlaySpec spec, long timeout) {
         this.spec = spec;
+        retry = 0;
+        exoFallbackTried = false;
         localProxyRetry = 0;
         setMediaItem(timeout);
     }
@@ -414,6 +425,8 @@ public class PlayerManager implements ParseCallback {
     public void parse(String key, Result result, boolean useParse, MediaMetadata metadata) {
         stopParse();
         spec = PlaySpec.fromParse(result, key, metadata);
+        retry = 0;
+        exoFallbackTried = false;
         localProxyRetry = 0;
         parseJob = ParseJob.create(this).start(result, useParse);
     }
@@ -589,6 +602,7 @@ public class PlayerManager implements ParseCallback {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "error code=%d message=%s action=%s retry=%d spec=%s cause=%s", e.errorCode, e.getMessage(), action, retry, debugSpec(), causeChain(e));
             LocalProxyDebug.dumpIfLocalFailure(spec == null ? null : spec.getUrl(), e);
             if (action == PlayerEngine.ErrorAction.FATAL && retryLocalProxy(e)) return;
+            if (action == PlayerEngine.ErrorAction.FATAL && retryExoFallback(e)) return;
             if (action == PlayerEngine.ErrorAction.RECOVERED) {
                 if (spec != null) setDanmakus(spec.getDanmakus());
                 return;
@@ -615,6 +629,16 @@ public class PlayerManager implements ParseCallback {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy retry start attempt=%d spec=%s", attempt, debugSpec());
             setMediaItem();
         }, LOCAL_PROXY_RETRY_DELAY_MS);
+        return true;
+    }
+
+    private boolean retryExoFallback(PlaybackException e) {
+        if (playerType != PlayerSetting.IJK) return false;
+        if (exoFallbackTried || spec == null || TextUtils.isEmpty(spec.getUrl())) return false;
+        exoFallbackTried = true;
+        App.removeCallbacks(runnable);
+        SpiderDebug.log("player", "ijk fatal fallback to exo code=%d message=%s spec=%s cause=%s", e.errorCode, e.getMessage(), debugSpec(), causeChain(e));
+        switchPlayer(PlayerSetting.EXO, false);
         return true;
     }
 }

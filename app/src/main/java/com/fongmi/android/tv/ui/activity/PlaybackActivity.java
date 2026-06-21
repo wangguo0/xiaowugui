@@ -321,6 +321,28 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         mService = null;
     }
 
+    private String lifecycleState() {
+        String playerKey = null;
+        boolean released = true;
+        if (mService != null && mService.player() != null) {
+            released = mService.player().isReleased();
+            if (!released) playerKey = mService.player().getKey();
+        }
+        return "activity=" + getClass().getSimpleName() +
+                " key=" + getPlaybackKey() +
+                " playerKey=" + playerKey +
+                " owner=" + isOwner() +
+                " bound=" + bound +
+                " service=" + (mService != null) +
+                " controller=" + (mController != null) +
+                " released=" + released +
+                " redirect=" + redirect +
+                " stop=" + stop +
+                " finishing=" + isFinishing() +
+                " destroyed=" + isDestroyed() +
+                " keepScreen=" + ((getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0);
+    }
+
     private final PlaybackService.PlayerCallback mPlayerCallback = new PlaybackService.PlayerCallback() {
 
         @Override
@@ -364,11 +386,13 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         if (!isOwner()) return;
         if (isPlaying) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         else if (!isBuffering()) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        SpiderDebug.log("playback-lifecycle", "playing changed isPlaying=%s state=%d %s", isPlaying, mController == null ? -1 : mController.getPlaybackState(), lifecycleState());
         onPlayingChanged(isPlaying);
     }
 
     @Override
     public void onPlaybackStateChanged(int state) {
+        SpiderDebug.log("playback-lifecycle", "state changed state=%d %s", state, lifecycleState());
         if (isOwner()) onStateChanged(state);
     }
 
@@ -386,17 +410,20 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         mService.setNavigationCallback(getNavigationCallback(), getPlaybackKey());
         mService.addPlayerCallback(mPlayerCallback);
         SpiderDebug.log("playback-flow", "service connected cost=%dms key=%s", System.currentTimeMillis() - start, getPlaybackKey());
+        SpiderDebug.log("playback-lifecycle", "service connected %s", lifecycleState());
         onServiceConnected();
     }
 
     @Override
     public void onServiceDisconnected(ComponentName name) {
+        SpiderDebug.log("playback-lifecycle", "service disconnected name=%s %s", name, lifecycleState());
         mService = null;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        SpiderDebug.log("playback-lifecycle", "activity resume %s", lifecycleState());
         setRedirect(false);
         if (shouldReclaim()) {
             detachSurface();
@@ -406,19 +433,29 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
     @Override
     protected void onPause() {
+        SpiderDebug.log("playback-lifecycle", "activity pause %s", lifecycleState());
         super.onPause();
         if (isRedirect() && mController != null) mController.pause();
     }
 
     @Override
     protected void onStop() {
+        SpiderDebug.log("playback-lifecycle", "activity stop backgroundOff=%s %s", PlayerSetting.isBackgroundOff(), lifecycleState());
         super.onStop();
         if (isOwner() && PlayerSetting.isBackgroundOff() && mController != null) mController.pause();
     }
 
     @Override
+    public void onTrimMemory(int level) {
+        SpiderDebug.log("playback-lifecycle", "activity trimMemory level=%d %s", level, lifecycleState());
+        super.onTrimMemory(level);
+    }
+
+    @Override
     protected void onDestroy() {
+        SpiderDebug.log("playback-lifecycle", "activity destroy beforeRelease %s", lifecycleState());
         super.onDestroy();
         releasePlaybackService();
+        SpiderDebug.log("playback-lifecycle", "activity destroy afterRelease activity=%s key=%s", getClass().getSimpleName(), getPlaybackKey());
     }
 }

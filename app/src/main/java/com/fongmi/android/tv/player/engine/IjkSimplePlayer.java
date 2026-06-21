@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.engine;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -257,6 +258,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         playbackState = Player.STATE_IDLE;
         loading = false;
         playerError = new PlaybackException("IJK error: " + what + ", " + extra, null, errorCode(what));
+        SpiderDebug.log("ijk", "error what=%d extra=%d mapped=%d decode=%d state=%d loading=%s uri=%s", what, extra, playerError.errorCode, decode, playbackState, loading, summarizeUri());
         invalidateState();
         return true;
     }
@@ -312,6 +314,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             invalidateState();
         } catch (Throwable e) {
             playerError = new PlaybackException(e.getMessage(), e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
+            SpiderDebug.log("ijk", "open failed uri=%s error=%s", summarizeUri(), e.getMessage());
             playbackState = Player.STATE_IDLE;
             loading = false;
             invalidateState();
@@ -491,5 +494,19 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             case IMediaPlayer.MEDIA_ERROR_TIMED_OUT -> PlaybackException.ERROR_CODE_TIMEOUT;
             default -> PlaybackException.ERROR_CODE_UNSPECIFIED;
         };
+    }
+
+    private String summarizeUri() {
+        if (mediaItem == null || mediaItem.localConfiguration == null) return "";
+        Uri uri = mediaItem.localConfiguration.uri;
+        String host = uri.getHost();
+        String path = uri.getPath();
+        StringBuilder builder = new StringBuilder();
+        builder.append(uri.getScheme()).append("://");
+        builder.append(TextUtils.isEmpty(host) ? "unknown" : host);
+        if (uri.getPort() > 0) builder.append(':').append(uri.getPort());
+        if (!TextUtils.isEmpty(path)) builder.append(path.length() > 48 ? path.substring(0, 48) + "..." : path);
+        builder.append(" len=").append(uri.toString().length());
+        return builder.toString();
     }
 }
