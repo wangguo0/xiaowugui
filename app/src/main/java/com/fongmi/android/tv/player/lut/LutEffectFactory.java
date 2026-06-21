@@ -18,7 +18,7 @@ import java.util.List;
 
 public class LutEffectFactory {
 
-    private static final int MAX_BITMAP_LUT_SIZE = 64;
+    private static final int MAX_BITMAP_LUT_SIZE = 65;
     private static final LruCache<String, Object> SOURCE_CACHE = new LruCache<>(8);
 
     public static List<Effect> create(LutPreset preset, int strength) throws IOException {

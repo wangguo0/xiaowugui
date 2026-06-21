@@ -12,7 +12,7 @@ import java.util.Locale;
 
 public class LutCubeParser {
 
-    private static final int MAX_SIZE = 64;
+    private static final int MAX_SIZE = 65;
     private static final float EPSILON = 0.0001f;
 
     public static int[][][] parse(InputStream stream) throws IOException {
