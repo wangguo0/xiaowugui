@@ -6,9 +6,8 @@
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
-    <style name="Theme.Splash" parent="Theme.SplashScreen">
-        <item name="postSplashScreenTheme">@style/Theme.App</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    <style name="Theme.Splash" parent="Theme.Base">
+        <item name="android:windowBackground">@drawable/mobile_startup_window_background</item>
     </style>
 
     <style name="Theme.App" parent="Theme.Base" />
