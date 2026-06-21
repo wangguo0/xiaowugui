@@ -50,9 +50,9 @@ public class LutCubeParser {
             if (!isDefaultDomain(domainMin, domainMax)) throw new IOException("Non-default DOMAIN_MIN/MAX is not supported");
             if (count >= expected) throw new IOException("Too many LUT data rows");
             float[] color = parseData(line, lineNo);
-            int b = count % size;
+            int r = count % size;
             int g = (count / size) % size;
-            int r = count / (size * size);
+            int b = count / (size * size);
             cube[r][g][b] = toColor(color[0], color[1], color[2]);
             count++;
         }
