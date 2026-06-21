@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.dialog;
 
-import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -53,12 +52,6 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     public void show(FragmentActivity activity) {
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof LutPanelDialog) return;
         show(activity.getSupportFragmentManager(), null);
-    }
-
-    @Override
-    public void onDismiss(@NonNull DialogInterface dialog) {
-        super.onDismiss(dialog);
-        restartPreview();
     }
 
     @Override
@@ -170,10 +163,6 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         int next = current < 2 ? 2 : current < 3 ? 3 : current < 5 ? 5 : current < 8 ? 8 : 1;
         LutSetting.putPreviewSeconds(next);
         delay.setText(ResUtil.getString(R.string.lut_preview_delay_value, next));
-        if (LutSetting.isEnabled() && player != null) player.applyLutPreview(false);
-    }
-
-    private void restartPreview() {
         if (LutSetting.isEnabled() && player != null) player.applyLutPreview(false);
     }
 

@@ -97,7 +97,6 @@ public class LutQuickPanel extends FrameLayout {
         panel.animate().translationX(panel.getWidth()).setDuration(160).withEndAction(() -> {
             setVisibility(GONE);
             panel.setTranslationX(0);
-            restartPreview();
         }).start();
     }
 
@@ -183,10 +182,6 @@ public class LutQuickPanel extends FrameLayout {
         int next = current < 2 ? 2 : current < 3 ? 3 : current < 5 ? 5 : current < 8 ? 8 : 1;
         LutSetting.putPreviewSeconds(next);
         delay.setText(ResUtil.getString(R.string.lut_preview_delay_value, next));
-    }
-
-    private void restartPreview() {
-        if (LutSetting.isEnabled() && player != null) player.applyLutPreview(false);
     }
 
     private MaterialTextView chip() {
