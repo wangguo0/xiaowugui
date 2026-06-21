@@ -784,6 +784,7 @@
     <!-- Danmaku -->
     <string name="danmaku_load">彈幕載入</string>
     <string name="danmaku_api">搜尋接口</string>
+    <string name="danmaku_api_invalid">彈幕接口地址無效</string>
     <string name="danmaku_auto_load">自動搜尋</string>
     <string name="danmaku_spider_first">爬蟲優先</string>
 

@@ -169,7 +169,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 LutPreset preset = LutStore.importFile(path);
                 App.post(() -> {
                     Notify.show(R.string.lut_imported);
-                    if (isFullscreen()) mBinding.lutQuick.selectImported(preset, player(), mBinding.exo, this::setLut);
+                    if (isFullscreen() && hasLutQuick()) mBinding.lutQuick.selectImported(preset, player(), mBinding.exo, this::setLut);
                     else onLutSelected(preset);
                 });
             } catch (Exception e) {
@@ -917,14 +917,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onLut() {
-        mBinding.lutQuick.toggle(player(), mBinding.exo, this::setLut, this::onLutImport);
+        if (hasLutQuick()) mBinding.lutQuick.toggle(player(), mBinding.exo, this::setLut, this::onLutImport);
+        else LutPanelDialog.create().player(player()).show(this);
         setR1Callback();
     }
 
     @Override
     public void onLutPanel() {
-        if (isFullscreen()) onLut();
+        if (isFullscreen() && hasLutQuick()) onLut();
         else LutPanelDialog.create().player(player()).show(this);
+    }
+
+    private boolean hasLutQuick() {
+        return mBinding.lutQuick != null;
     }
 
     @Override
@@ -1997,7 +2002,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onBackInvoked() {
-        if (mBinding.lutQuick.hideIfVisible()) {
+        if (hasLutQuick() && mBinding.lutQuick.hideIfVisible()) {
             return;
         } else if (isVisible(mBinding.control.getRoot())) {
             hideControl();
