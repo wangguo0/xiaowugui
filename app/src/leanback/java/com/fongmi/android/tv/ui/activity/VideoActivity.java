@@ -1412,7 +1412,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void saveHistory(boolean exit) {
         if (mHistory == null || Setting.isIncognito()) return;
-        if (exit && isOwner()) updatePlaybackHistoryPosition();
+        if (exit && isOwner()) {
+            updatePlaybackHistoryPosition();
+            mHistory.setCreateTime(System.currentTimeMillis());
+        }
         if (exit && service() != null) PlaybackEventCollector.get().onStop(player());
         if (!mHistory.canSave()) return;
         History history = mHistory.copy();
