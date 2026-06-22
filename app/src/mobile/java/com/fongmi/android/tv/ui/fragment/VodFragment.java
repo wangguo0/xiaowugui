@@ -4,6 +4,7 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
@@ -48,6 +49,7 @@ import com.fongmi.android.tv.ui.dialog.LinkDialog;
 import com.fongmi.android.tv.ui.dialog.OneKeySyncDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
+import com.fongmi.android.tv.ui.dialog.TypeDialog;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -117,6 +119,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.link.setOnClickListener(this::onLink);
         mBinding.title.setOnClickListener(this::onSite);
         mBinding.title.setOnLongClickListener(this::reloadConfig);
+        mBinding.typeMore.setOnTouchListener(this::onTypeMoreTouch);
+        mBinding.typeMore.setOnClickListener(this::onTypeMore);
         mBinding.filter.setOnClickListener(this::onFilter);
         mBinding.filter.setOnLongClickListener(this::onLink);
         mBinding.toolbar.setOnMenuItemClickListener(this::onMenuItemClick);
@@ -159,9 +163,21 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mAdapter.addAll(mResult = result);
         notifyPagerAdapter();
         setFabVisible(0);
+        mBinding.typeMore.setVisibility(View.GONE);
+        mBinding.type.post(this::updateTypeMoreVisible);
         updateToolbarMenu();
         hideProgress();
         showContent();
+    }
+
+    private void updateTypeMoreVisible() {
+        if (mBinding.type.getWidth() == 0 || mBinding.typeBar.getWidth() == 0) {
+            mBinding.type.post(this::updateTypeMoreVisible);
+            return;
+        }
+        int typeWidth = mBinding.typeBar.getWidth() - mBinding.typeBar.getPaddingStart() - mBinding.typeBar.getPaddingEnd();
+        boolean visible = mAdapter.getItemCount() > 0 && mBinding.type.computeHorizontalScrollRange() > typeWidth;
+        mBinding.typeMore.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     private void setFabVisible(int position) {
@@ -202,6 +218,21 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private boolean onLink(View view) {
         LinkDialog.show(this);
         return true;
+    }
+
+    private void onTypeMore(View view) {
+        if (mAdapter.getItemCount() > 0) TypeDialog.create().items(mAdapter.getItems()).show(this);
+    }
+
+    private boolean onTypeMoreTouch(View view, MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            view.animate().cancel();
+            view.animate().scaleX(1.06f).scaleY(1.06f).setDuration(80).start();
+        } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+            view.animate().cancel();
+            view.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start();
+        }
+        return false;
     }
 
     private void onLogo(View view) {
@@ -288,11 +319,13 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     private void hideContent() {
         mBinding.type.setVisibility(View.INVISIBLE);
+        mBinding.typeMore.setVisibility(View.INVISIBLE);
         mBinding.pager.setVisibility(View.INVISIBLE);
     }
 
     private void showContent() {
         mBinding.type.setVisibility(View.VISIBLE);
+        updateTypeMoreVisible();
         mBinding.pager.setVisibility(View.VISIBLE);
     }
 
@@ -324,6 +357,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     private void clearPagerTypes() {
         mAdapter.clear();
+        mBinding.typeMore.setVisibility(View.GONE);
         notifyPagerAdapter();
     }
 
@@ -540,6 +574,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.appBar.setVisibility(hidden ? View.GONE : View.VISIBLE);
         setHomeWebTopMargin(hidden ? 0 : mHomeWebTopMargin);
         mBinding.type.setVisibility(View.GONE);
+        mBinding.typeMore.setVisibility(View.GONE);
         mBinding.pager.setVisibility(View.GONE);
         mBinding.filter.setVisibility(View.GONE);
         mBinding.link.setVisibility(View.GONE);
@@ -550,6 +585,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private void showNativeContent() {
         requestNormalChrome();
         mBinding.type.setVisibility(View.VISIBLE);
+        updateTypeMoreVisible();
         mBinding.pager.setVisibility(View.VISIBLE);
         mBinding.homeWeb.setVisibility(View.GONE);
         updateToolbarMenu();
@@ -564,6 +600,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         updateToolbarMenu();
         if (hidden) {
             mBinding.type.setVisibility(View.GONE);
+            mBinding.typeMore.setVisibility(View.GONE);
             mBinding.pager.setVisibility(View.GONE);
             mBinding.filter.setVisibility(View.GONE);
             mBinding.link.setVisibility(View.GONE);

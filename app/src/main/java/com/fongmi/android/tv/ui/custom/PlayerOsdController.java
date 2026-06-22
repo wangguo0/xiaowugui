@@ -55,6 +55,10 @@ public class PlayerOsdController {
     }
 
     public void start() {
+        if (!PlayerSetting.isOsdEnabled()) {
+            root.setVisibility(View.GONE);
+            return;
+        }
         resetSpeed();
         App.post(update, 0);
     }

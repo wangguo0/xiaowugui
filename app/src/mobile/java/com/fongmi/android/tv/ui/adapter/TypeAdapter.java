@@ -59,6 +59,10 @@ public class TypeAdapter extends RecyclerView.Adapter<TypeAdapter.ViewHolder> {
         return mItems.get(position);
     }
 
+    public List<Class> getItems() {
+        return mItems;
+    }
+
     @Override
     public int getItemCount() {
         return mItems.size();

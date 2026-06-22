@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.activity;
 
-import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
@@ -16,7 +15,6 @@ import android.text.style.ClickableSpan;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -123,6 +121,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private ActivityVideoBinding mBinding;
     private ViewGroup.LayoutParams mFrameParams;
+    private int mFrameHeight;
     private Observer<Result> mObserveDetail;
     private Observer<Result> mObservePlayer;
     private Observer<Result> mObserveSearch;
@@ -133,7 +132,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private SiteViewModel mViewModel;
     private FlagAdapter mFlagAdapter;
     private PlayerOsdController mOsd;
-    private ValueAnimator mAnimator;
     private CustomKeyDown mKeyDown;
     private List<String> mBroken;
     private History mHistory;
@@ -362,6 +360,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         ViewCompat.setOnApplyWindowInsetsListener(mBinding.getRoot(), (v, insets) -> setStatusBar(insets));
         mKeyDown = CustomKeyDown.create(this, mBinding.exo);
         mFrameParams = mBinding.video.getLayoutParams();
+        mFrameHeight = mFrameParams.height;
         mBinding.swipeLayout.setEnabled(false);
         mObserveDetail = this::setDetail;
         mObservePlayer = this::setPlayer;
@@ -391,7 +390,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (hasInitialPreview()) showInitialPreview();
         else mBinding.progressLayout.showProgress();
         showProgress();
-        setAnimator();
     }
 
     @Override
@@ -487,16 +485,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         } else {
             mBinding.video.setLayoutParams(mFrameParams);
         }
-    }
-
-    private void setAnimator() {
-        mAnimator = new ValueAnimator();
-        mAnimator.setInterpolator(new DecelerateInterpolator());
-        mAnimator.addUpdateListener(animation -> {
-            if (isLand() || isFullscreen() || isInPictureInPictureMode()) return;
-            mFrameParams.height = (int) animation.getAnimatedValue();
-            mBinding.video.setLayoutParams(mFrameParams);
-        });
     }
 
     private void setDecode() {
@@ -1569,7 +1557,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     protected void onSizeChanged(VideoSize size) {
         setSizeText();
-        changeHeight();
+        updateVideoHeight();
         applyResizeMode(getScale());
         checkOrientation();
     }
@@ -1637,21 +1625,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
-    private void changeHeight() {
+    private void updateVideoHeight() {
         if (isLand() || isFullscreen() || isInPictureInPictureMode()) return;
         int videoWidth = player().getVideoWidth();
         int videoHeight = player().getVideoHeight();
-        if (videoWidth == 0 || videoHeight == 0) return;
-        int viewWidth = ResUtil.getScreenWidth();
-        int minHeight = ResUtil.dp2px(150);
-        int maxHeight = ResUtil.getScreenHeight() / 2;
-        int calculated = (int) (viewWidth * ((float) videoHeight / videoWidth));
-        int finalHeight = Math.max(minHeight, Math.min(maxHeight, calculated));
-        if (finalHeight == mBinding.video.getHeight()) return;
-        if (mAnimator.isRunning()) mAnimator.cancel();
-        mAnimator.setIntValues(mBinding.video.getHeight(), finalHeight);
-        mAnimator.setDuration(300);
-        mAnimator.start();
+        int targetHeight = mFrameHeight;
+        if (videoWidth > 0 && videoHeight > videoWidth) {
+            int calculated = (int) (ResUtil.getScreenWidth() * ((float) videoHeight / videoWidth));
+            targetHeight = Math.min(ResUtil.getScreenHeight() / 2, Math.max(mFrameHeight, calculated));
+        }
+        if (targetHeight <= 0 || mFrameParams.height == targetHeight) return;
+        mFrameParams.height = targetHeight;
+        mBinding.video.setLayoutParams(mFrameParams);
     }
 
     private void checkEnded(boolean notify) {

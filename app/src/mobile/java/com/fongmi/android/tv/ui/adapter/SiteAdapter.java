@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.content.res.ColorStateList;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,16 +18,21 @@ import com.fongmi.android.tv.setting.SiteHealthStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
 
     private final OnClickListener listener;
+    private final List<Site> mAllItems;
     private final List<Site> mItems;
+    private String group;
     private boolean search;
     private boolean change;
+    private int column = 1;
 
     public SiteAdapter(OnClickListener listener) {
         this.listener = listener;
+        this.mAllItems = new ArrayList<>();
         this.mItems = new ArrayList<>();
         this.addAll();
     }
@@ -54,13 +60,46 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         return this;
     }
 
+    public void column(int column) {
+        int value = Math.max(1, column);
+        if (this.column == value) return;
+        this.column = value;
+        notifyDataSetChanged();
+    }
+
     private void addAll() {
-        for (Site site : VodConfig.get().getSites()) if (!site.isHide()) mItems.add(site);
-        if (Setting.isSiteHealthDialogSort()) SiteHealthStore.sortSites(mItems);
+        for (Site site : VodConfig.get().getSites()) if (!site.isHide()) mAllItems.add(site);
+        if (Setting.isSiteHealthDialogSort()) SiteHealthStore.sortSites(mAllItems);
+        filter("");
     }
 
     public List<Site> getItems() {
         return mItems;
+    }
+
+    public int getSelectedPosition() {
+        for (int i = 0; i < mItems.size(); i++) if (mItems.get(i).isSelected()) return i;
+        return 0;
+    }
+
+    public void filter(String keyword) {
+        filter(group, keyword);
+    }
+
+    public void filter(String group, String keyword) {
+        this.group = group;
+        String text = keyword == null ? "" : keyword.trim().toLowerCase(Locale.ROOT);
+        mItems.clear();
+        for (Site site : mAllItems) {
+            String name = site.getName();
+            String key = site.getKey();
+            boolean matchGroup = TextUtils.isEmpty(group) || name.contains(group.trim());
+            boolean matchName = !TextUtils.isEmpty(name) && name.toLowerCase(Locale.ROOT).contains(text);
+            boolean matchKey = !TextUtils.isEmpty(key) && key.toLowerCase(Locale.ROOT).contains(text);
+            boolean matchKeyword = TextUtils.isEmpty(text) || matchName || matchKey;
+            if (matchGroup && matchKeyword) mItems.add(site);
+        }
+        notifyDataSetChanged();
     }
 
     @Override
@@ -78,6 +117,7 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Site item = mItems.get(position);
         boolean on = !search || change;
+        boolean singleColumn = column == 1;
         holder.binding.text.setText(item.getName());
         holder.binding.health.setBackgroundTintList(ColorStateList.valueOf(SiteHealthStore.getColor(item)));
         holder.binding.text.setEnabled(on);
@@ -85,8 +125,8 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         holder.binding.text.setSelected(on && item.isSelected());
         holder.binding.search.setImageResource(getSearchIcon(item));
         holder.binding.change.setImageResource(getChangeIcon(item));
-        holder.binding.search.setVisibility(search ? View.VISIBLE : View.GONE);
-        holder.binding.change.setVisibility(change ? View.VISIBLE : View.GONE);
+        holder.binding.search.setVisibility(search && singleColumn ? View.VISIBLE : View.GONE);
+        holder.binding.change.setVisibility(change && singleColumn ? View.VISIBLE : View.GONE);
         holder.binding.text.setOnClickListener(v -> listener.onTextClick(item));
         holder.binding.search.setOnClickListener(v -> listener.onSearchClick(position, item));
         holder.binding.change.setOnClickListener(v -> listener.onChangeClick(position, item));

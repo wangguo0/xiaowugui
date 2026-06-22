@@ -84,6 +84,14 @@ public class Setting {
         Prefers.put("site_mode", mode);
     }
 
+    public static int getSiteColumn() {
+        return Prefers.getInt("site_column", 1);
+    }
+
+    public static void putSiteColumn(int column) {
+        Prefers.put("site_column", column);
+    }
+
     public static int getSyncMode() {
         return Prefers.getInt("sync_mode");
     }

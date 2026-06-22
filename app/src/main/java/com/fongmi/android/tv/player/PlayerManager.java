@@ -442,7 +442,7 @@ public class PlayerManager implements ParseCallback {
             exoFallbackTried = false;
             PlayerSetting.putPlayer(type);
         }
-        SpiderDebug.log("player", "switch player type=%d persist=%s position=%d spec=%s", type, persist, position, debugSpec());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player type=%d persist=%s position=%d spec=%s", type, persist, position, debugSpec());
         engine = buildEngine(playerType, decode);
         player = engine.getPlayer();
         callback.onPlayerRebuild(player);
@@ -521,7 +521,7 @@ public class PlayerManager implements ParseCallback {
             boolean ready = LocalProxyDebug.awaitReady(url, LOCAL_PROXY_READY_TIMEOUT_MS);
             App.post(() -> {
                 if (seq != prepareSeq || spec != target || engine == null) {
-                    SpiderDebug.log("player", "local proxy await skip seq=%d current=%d ready=%s", seq, prepareSeq, ready);
+                    if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await skip seq=%d current=%d ready=%s", seq, prepareSeq, ready);
                     return;
                 }
                 if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "local proxy await done seq=%d ready=%s spec=%s", seq, ready, debugSpec());
@@ -675,6 +675,7 @@ public class PlayerManager implements ParseCallback {
     private void applyLutForCurrentItem() {
         if (engine == null) return;
         if (!LutSetting.isEnabled()) {
+            if (lutAppliedForItem && !videoEffectsActive && !waitingLutBeforePlay) return;
             lutAppliedForItem = true;
             lutApplyInProgress = false;
             pendingLutPreview = false;
@@ -1004,7 +1005,7 @@ public class PlayerManager implements ParseCallback {
         if (exoFallbackTried || spec == null || TextUtils.isEmpty(spec.getUrl())) return false;
         exoFallbackTried = true;
         App.removeCallbacks(runnable);
-        SpiderDebug.log("player", "ijk fatal fallback to exo code=%d message=%s spec=%s cause=%s", e.errorCode, e.getMessage(), debugSpec(), causeChain(e));
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "ijk fatal fallback to exo code=%d message=%s spec=%s cause=%s", e.errorCode, e.getMessage(), debugSpec(), causeChain(e));
         switchPlayer(PlayerSetting.EXO, false);
         return true;
     }
