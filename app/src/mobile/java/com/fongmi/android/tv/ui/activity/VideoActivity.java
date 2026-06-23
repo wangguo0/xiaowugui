@@ -450,10 +450,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private WindowInsetsCompat setStatusBar(WindowInsetsCompat insets) {
         int top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+        int bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
         ViewGroup.LayoutParams lp = mBinding.statusBar.getLayoutParams();
         lp.height = top;
         mBinding.statusBar.setLayoutParams(lp);
+        setEpisodeBottomInset(bottom);
         return insets;
+    }
+
+    private void setEpisodeBottomInset(int bottom) {
+        int padding = Math.max(bottom, ResUtil.dp2px(56)) + ResUtil.dp2px(8);
+        mBinding.episode.setPaddingRelative(mBinding.episode.getPaddingStart(), mBinding.episode.getPaddingTop(), mBinding.episode.getPaddingEnd(), padding);
     }
 
     private void setRecyclerView() {
