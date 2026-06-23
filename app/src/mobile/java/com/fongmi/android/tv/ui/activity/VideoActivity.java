@@ -463,7 +463,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.flag.setAdapter(mFlagAdapter = new FlagAdapter(this));
         mBinding.quick.setAdapter(mQuickAdapter = new QuickAdapter(this));
         int episodeSpanCount = getEpisodeSpanCount();
-        mBinding.episode.setNestedScrollingEnabled(false);
+        mBinding.episode.setNestedScrollingEnabled(true);
         mBinding.episode.setHasFixedSize(false);
         mBinding.episode.setItemAnimator(null);
         mBinding.episode.setLayoutManager(new GridLayoutManager(this, episodeSpanCount));
@@ -742,7 +742,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.prev.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         mBinding.reverse.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         mBinding.episode.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
-        mBinding.more.setVisibility(items.size() < 10 ? View.GONE : View.VISIBLE);
+        mBinding.more.setVisibility(View.GONE);
         mEpisodeAdapter.addAll(items);
     }
 

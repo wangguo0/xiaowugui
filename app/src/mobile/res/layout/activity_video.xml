@@ -325,7 +325,7 @@
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
-                    <androidx.recyclerview.widget.RecyclerView
+                    <com.fongmi.android.tv.ui.custom.CustomRecyclerView
                         android:id="@+id/episode"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -333,10 +333,12 @@
                         android:layout_marginBottom="8dp"
                         android:clipChildren="false"
                         android:clipToPadding="false"
-                        android:nestedScrollingEnabled="false"
+                        android:nestedScrollingEnabled="true"
+                        android:overScrollMode="never"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
                         app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                        app:maxHeight="280dp"
                         app:spanCount="4"
                         tools:itemCount="28"
                         tools:listitem="@layout/adapter_episode_grid" />
