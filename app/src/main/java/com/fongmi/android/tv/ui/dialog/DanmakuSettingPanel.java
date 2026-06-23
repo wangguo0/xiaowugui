@@ -129,15 +129,15 @@ final class DanmakuSettingPanel {
     }
 
     private void tintTab(MaterialButton tab) {
-        tab.setTextColor(stateList(0xFF202124, ResUtil.getColor(R.color.white_90)));
-        tab.setBackgroundTintList(stateList(ResUtil.getColor(R.color.white_90), ResUtil.getColor(R.color.transparent)));
-        tab.setStrokeColor(stateList(ResUtil.getColor(R.color.white_90), ResUtil.getColor(R.color.white_30)));
+        tab.setTextColor(stateList(ResUtil.getColor(R.color.white), ResUtil.getColor(R.color.white_90)));
+        tab.setBackgroundTintList(stateList(0x61FFFFFF, 0x1FFFFFFF));
+        tab.setStrokeColor(stateList(0x33FFFFFF, 0x14FFFFFF));
     }
 
     private void tintChip(Chip chip) {
-        chip.setTextColor(stateList(0xFF202124, ResUtil.getColor(R.color.white_90)));
-        chip.setChipBackgroundColor(stateList(ResUtil.getColor(R.color.white_90), ResUtil.getColor(R.color.transparent)));
-        chip.setChipStrokeColor(stateList(ResUtil.getColor(R.color.white_90), ResUtil.getColor(R.color.white_30)));
+        chip.setTextColor(stateList(ResUtil.getColor(R.color.white), ResUtil.getColor(R.color.white_90)));
+        chip.setChipBackgroundColor(stateList(0x61FFFFFF, 0x1FFFFFFF));
+        chip.setChipStrokeColor(stateList(0x33FFFFFF, 0x14FFFFFF));
         chip.setChipStrokeWidth(ResUtil.dp2px(1));
     }
 

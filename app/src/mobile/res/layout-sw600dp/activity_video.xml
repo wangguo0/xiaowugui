@@ -355,6 +355,22 @@
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/episodeGroup"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:orientation="horizontal"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:visibility="gone"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        tools:itemCount="4"
+                        tools:listitem="@layout/adapter_episode_group"
+                        tools:visibility="visible" />
+
                     <com.fongmi.android.tv.ui.custom.CustomRecyclerView
                         android:id="@+id/episode"
                         android:layout_width="match_parent"
