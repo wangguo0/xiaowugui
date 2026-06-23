@@ -753,6 +753,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mFlagAdapter.setSelected(item);
         scrollToPosition(mBinding.flag, mFlagAdapter.getPosition());
         setEpisodeAdapter(item.getEpisodes());
+        scrollToPosition(mBinding.episode, mEpisodeAdapter.getPosition());
         setQualityVisible(false);
         seamless(item);
     }
@@ -851,6 +852,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return 0;
     }
 
+    private void syncSelectedEpisode(Flag flag) {
+        if (flag == null || mHistory == null) return;
+        Episode episode = flag.find(mHistory.getVodRemarks(), false);
+        if (episode != null) flag.toggle(true, episode);
+    }
+
     private int getEpisodeCount() {
         return mFlagAdapter == null || mFlagAdapter.isEmpty() ? mEpisodeAdapter.getItemCount() : getFlag().getEpisodes().size();
     }
@@ -886,6 +893,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onMore() {
+        syncSelectedEpisode(getFlag());
         EpisodeGridDialog.create().reverse(mHistory.isRevSort()).episodes(getFlag().getEpisodes()).show(this);
     }
 
@@ -1182,6 +1190,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onEpisodes() {
+        syncSelectedEpisode(getFlag());
         EpisodeListDialog.create().flags(mFlagAdapter.getItems()).reverse(mHistory.isRevSort()).show(this);
     }
 

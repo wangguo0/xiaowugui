@@ -40,7 +40,7 @@ import pl.droidsonroids.gif.GifDrawable;
 
 public class CustomWallView extends FrameLayout implements DefaultLifecycleObserver {
 
-    private static final int DEFAULT_WALL_COLOR = 0xFF0F1115;
+    private static final int DEFAULT_WALL_COLOR = Setting.getBuiltInWallColor(Setting.WALL_CINEMA);
     private static final int GREEN_WALL_COLOR = 0xFF40C090;
     private static final int TYPE_RES = 0;
     private static final int TYPE_GIF = 1;
@@ -121,7 +121,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
     private void load() {
         int wall = Setting.getWall();
         int type = Setting.getWallType();
-        if (isGraphite(wall, type)) loadColor(DEFAULT_WALL_COLOR);
+        if (isBuiltInColor(wall, type)) loadColor(Setting.getBuiltInWallColor(wall));
         else if (isGreen(wall, type)) loadRes(R.drawable.wallpaper_1);
         else if (motionEnabled && type == TYPE_VIDEO) loadVideo(FileUtil.getWall(wall));
         else if (motionEnabled && type == TYPE_GIF) loadGif(FileUtil.getWall(wall));
@@ -158,7 +158,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         int wall = Setting.getWall();
         int type = Setting.getWallType();
         Drawable cache = cache();
-        if (isGraphite(wall, type)) binding.image.setImageDrawable(new ColorDrawable(DEFAULT_WALL_COLOR));
+        if (isBuiltInColor(wall, type)) binding.image.setImageDrawable(new ColorDrawable(Setting.getBuiltInWallColor(wall)));
         else if (isGreen(wall, type)) binding.image.setImageResource(R.drawable.wallpaper_1);
         else if (cache != null) binding.image.setImageDrawable(cache);
         else binding.image.setImageDrawable(new ColorDrawable(DEFAULT_WALL_COLOR));
@@ -216,7 +216,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
     private int getWallColor() {
         int wall = Setting.getWall();
         int type = Setting.getWallType();
-        if (isGraphite(wall, type)) return DEFAULT_WALL_COLOR;
+        if (isBuiltInColor(wall, type)) return Setting.getBuiltInWallColor(wall);
         if (isGreen(wall, type)) return GREEN_WALL_COLOR;
         File file = FileUtil.getWallCache();
         return file.exists() ? paletteColor(file) : DEFAULT_WALL_COLOR;
@@ -242,8 +242,8 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         return swatch != null ? swatch.getRgb() : DEFAULT_WALL_COLOR;
     }
 
-    private boolean isGraphite(int wall, int type) {
-        return type == TYPE_RES && wall == Setting.WALL_GRAPHITE;
+    private boolean isBuiltInColor(int wall, int type) {
+        return type == TYPE_RES && Setting.isBuiltInColorWall(wall);
     }
 
     private boolean isGreen(int wall, int type) {
