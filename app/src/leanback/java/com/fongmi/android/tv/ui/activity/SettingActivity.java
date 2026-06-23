@@ -243,7 +243,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
     private void setWallDefault(View view) {
-        Setting.putWall(Setting.getWall() == 4 ? 1 : Setting.getWall() + 1);
+        Setting.putWall(Setting.getWall() == 4 ? 0 : Setting.getWall() + 1);
         Setting.putWallType(0);
         ConfigEvent.wall();
     }

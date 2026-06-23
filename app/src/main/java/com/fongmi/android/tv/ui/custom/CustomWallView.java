@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.custom;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.util.AttributeSet;
@@ -40,7 +41,8 @@ import pl.droidsonroids.gif.GifDrawable;
 public class CustomWallView extends FrameLayout implements DefaultLifecycleObserver {
 
     private static final int[] WALL_PAPERS = {0, R.drawable.wallpaper_1, R.drawable.wallpaper_2, R.drawable.wallpaper_3, R.drawable.wallpaper_4};
-    private static final int[] WALL_COLORS = {0, 0xFF40C090, 0xFF4870E0, 0xFF48B0C0, 0xFF404040};
+    private static final int DEFAULT_WALL_COLOR = 0xFF0F1115;
+    private static final int[] WALL_COLORS = {DEFAULT_WALL_COLOR, 0xFF40C090, 0xFF4870E0, 0xFF48B0C0, 0xFF404040};
     private static final int TYPE_RES = 0;
     private static final int TYPE_GIF = 1;
     private static final int TYPE_VIDEO = 2;
@@ -153,7 +155,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         Drawable cache = cache();
         if (!isBuiltIn(wall, type) && cache != null) binding.image.setImageDrawable(cache);
         else if (isBuiltIn(wall, type)) binding.image.setImageResource(WALL_PAPERS[wall]);
-        else binding.image.setImageResource(R.drawable.wallpaper_1);
+        else binding.image.setImageDrawable(new ColorDrawable(DEFAULT_WALL_COLOR));
     }
 
     private void loadVideo(File file) {
@@ -210,12 +212,12 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         int type = Setting.getWallType();
         if (isBuiltIn(wall, type)) return WALL_COLORS[wall];
         File file = FileUtil.getWallCache();
-        return file.exists() ? paletteColor(file) : WALL_COLORS[1];
+        return file.exists() ? paletteColor(file) : WALL_COLORS[0];
     }
 
     private int paletteColor(File file) {
         Bitmap bitmap = decodeBitmap(file);
-        if (bitmap == null) return WALL_COLORS[1];
+        if (bitmap == null) return WALL_COLORS[0];
         Palette palette = Palette.from(bitmap).maximumColorCount(8).generate();
         bitmap.recycle();
         return swatchColor(palette);
@@ -230,7 +232,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
     private int swatchColor(Palette palette) {
         Palette.Swatch swatch = palette.getVibrantSwatch();
         if (swatch == null) swatch = palette.getDominantSwatch();
-        return swatch != null ? swatch.getRgb() : WALL_COLORS[1];
+        return swatch != null ? swatch.getRgb() : WALL_COLORS[0];
     }
 
     private boolean isBuiltIn(int wall, int type) {
