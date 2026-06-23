@@ -24,6 +24,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
@@ -354,6 +355,20 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setLut();
         checkLand();
         checkId();
+    }
+
+    @Override
+    protected void onPlayerRebuilt() {
+        setPlayerKernel();
+        setDecode();
+        setLut();
+        refreshControlDialog();
+    }
+
+    private void refreshControlDialog() {
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof ControlDialog dialog) dialog.setPlayer();
+        }
     }
 
     @Override

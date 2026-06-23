@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.C;
@@ -178,6 +179,19 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         setDecode();
         mBinding.control.action.speed.setText(player().getSpeedText());
         checkLive();
+    }
+
+    @Override
+    protected void onPlayerRebuilt() {
+        setPlayerKernel();
+        setDecode();
+        refreshControlDialog();
+    }
+
+    private void refreshControlDialog() {
+        for (Fragment fragment : getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof LiveControlDialog dialog) dialog.setPlayer();
+        }
     }
 
     @Override

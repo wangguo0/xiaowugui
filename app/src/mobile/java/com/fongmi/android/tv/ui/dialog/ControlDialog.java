@@ -118,7 +118,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     protected void initView() {
         setSheetBackground();
         binding.decode.setText(parent.control.action.decode.getText());
-        binding.lut.setText(parent.control.action.lut.getText());
+        setLut();
         binding.ending.setText(parent.control.action.ending.getText());
         binding.opening.setText(parent.control.action.opening.getText());
         binding.repeat.setSelected(parent.control.action.repeat.isSelected());
@@ -236,13 +236,20 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     }
 
     public void setPlayer() {
+        if (binding == null || parent == null) return;
         binding.speed.setValue(Math.max(player.getSpeed(), 0.5f));
         setSpeedPresets();
         binding.player.setText(parent.control.action.player.getText());
         binding.reset.setText(parent.control.action.reset.getText());
+        setLut();
         binding.decode.setVisibility(parent.control.action.decode.getVisibility());
         binding.danmaku.setVisibility(parent.control.action.danmaku.getVisibility());
         setTrackVisible();
+    }
+
+    public void setLut() {
+        if (binding == null || parent == null) return;
+        binding.lut.setText(parent.control.action.lut.getText());
     }
 
     public void setParseVisible(boolean visible) {
