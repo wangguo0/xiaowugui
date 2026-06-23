@@ -115,6 +115,27 @@ public class PlayerManager implements ParseCallback {
         waitingLutBeforePlay = false;
     }
 
+    private void resetLutRuntimeState(String reason, boolean clearEngineEffects) {
+        lutApplySeq++;
+        if (clearEngineEffects && engine != null && videoEffectsActive) {
+            try {
+                engine.setVideoEffects(Collections.emptyList());
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "clear effects before reset reason=%s", reason);
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "clear effects before reset failed reason=%s error=%s", reason, causeChain(e));
+            }
+        }
+        dynamicLutEffect.clear();
+        videoEffectsActive = false;
+        videoEffectsDirty = false;
+        lutAppliedForItem = false;
+        lutApplyInProgress = false;
+        lutPipelineReadyForItem = false;
+        lutPipelinePrepareInProgress = false;
+        pendingLutPreview = false;
+        waitingLutBeforePlay = false;
+    }
+
     public Player getPlayer() {
         return player;
     }
@@ -428,15 +449,9 @@ public class PlayerManager implements ParseCallback {
         float speed = getSpeed();
         boolean repeat = isRepeatOne();
         int decode = engine.getDecode();
+        prepareSeq++;
+        resetLutRuntimeState("switch_player", true);
         engine.release();
-        videoEffectsActive = false;
-        videoEffectsDirty = false;
-        lutAppliedForItem = false;
-        lutApplyInProgress = false;
-        lutPipelineReadyForItem = false;
-        lutPipelinePrepareInProgress = false;
-        pendingLutPreview = false;
-        waitingLutBeforePlay = false;
         playerType = type;
         if (persist) {
             exoFallbackTried = false;
@@ -543,6 +558,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void prepareLutPipeline() {
+        lutApplySeq++;
         lutAppliedForItem = false;
         lutApplyInProgress = false;
         lutPipelineReadyForItem = false;
