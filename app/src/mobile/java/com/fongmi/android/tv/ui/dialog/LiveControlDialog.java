@@ -78,13 +78,11 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
     @Override
     protected void initView() {
         binding.sheetWall.setVisibility(View.GONE);
-        binding.line.setText(parent.control.action.line.getText());
         binding.player.setText(parent.control.action.player.getText());
         binding.decode.setText(parent.control.action.decode.getText());
         binding.invert.setSelected(parent.control.action.invert.isSelected());
         binding.across.setSelected(parent.control.action.across.isSelected());
         binding.change.setSelected(parent.control.action.change.isSelected());
-        setLineVisible();
         setTrackVisible();
         setScaleText();
         binding.controlScroll.post(() -> binding.controlScroll.scrollTo(0, 0));
@@ -93,7 +91,10 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
     @Override
     protected void initEvent() {
         binding.source.setOnClickListener(v -> listener().onLiveSourcePanel());
-        binding.history.setOnClickListener(v -> listener().onLiveHistoryPanel());
+        binding.epg.setOnClickListener(v -> {
+            listener().onLiveEpgPanel();
+            dismiss();
+        });
         binding.cast.setOnClickListener(v -> listener().onLiveCastPanel());
         binding.pip.setOnClickListener(v -> {
             listener().onLivePiPPanel();
@@ -103,7 +104,6 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
             listener().onLiveBackgroundPanel();
             dismiss();
         });
-        binding.line.setOnClickListener(v -> listener().onLiveLinePanel());
         binding.invert.setOnClickListener(v -> active(binding.invert, parent.control.action.invert));
         binding.across.setOnClickListener(v -> active(binding.across, parent.control.action.across));
         binding.change.setOnClickListener(v -> active(binding.change, parent.control.action.change));
@@ -122,11 +122,6 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
 
     private void onTrack(View view) {
         listener().onLiveTrackPanel(Integer.parseInt(view.getTag().toString()));
-    }
-
-    private void setLineVisible() {
-        boolean visible = parent.control.action.line.getVisibility() != View.GONE;
-        binding.lineRow.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     private void setTrackVisible() {
@@ -212,15 +207,13 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
 
         void onLiveSourcePanel();
 
-        void onLiveHistoryPanel();
+        void onLiveEpgPanel();
 
         void onLiveCastPanel();
 
         void onLivePiPPanel();
 
         void onLiveBackgroundPanel();
-
-        void onLiveLinePanel();
 
         void onLiveScalePanel(int scale);
 

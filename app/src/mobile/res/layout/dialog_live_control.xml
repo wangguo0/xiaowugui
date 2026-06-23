@@ -49,9 +49,9 @@
                     android:text="@string/live_control_source" />
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/history"
+                    android:id="@+id/epg"
                     style="@style/ControlSheetButton"
-                    android:text="@string/play_config" />
+                    android:text="@string/live_control_epg" />
 
                 <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/cast"
@@ -67,43 +67,6 @@
                     android:id="@+id/background"
                     style="@style/ControlSheetButton"
                     android:text="@string/player_background" />
-            </androidx.appcompat.widget.LinearLayoutCompat>
-
-            <androidx.appcompat.widget.LinearLayoutCompat
-                android:id="@+id/lineRow"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/line"
-                    style="@style/ControlSheetButton"
-                    tools:text="来源 1" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="7dp"
-                    android:layout_weight="1" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="7dp"
-                    android:layout_weight="1" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="7dp"
-                    android:layout_weight="1" />
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="7dp"
-                    android:layout_weight="1" />
             </androidx.appcompat.widget.LinearLayoutCompat>
 
             <com.google.android.material.textview.MaterialTextView

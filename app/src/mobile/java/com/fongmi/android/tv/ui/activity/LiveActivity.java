@@ -109,6 +109,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private Boolean embeddedUiMode;
     private Channel lastLineClickChannel;
     private long lastLineClickTime;
+    private boolean pendingShowEpg;
 
     public static void start(Context context) {
         context.startActivity(new Intent(context, LiveActivity.class).putExtra("empty", LiveConfig.isEmpty()));
@@ -840,7 +841,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void setEpg(Epg epg) {
-        if (mChannel == null || !mChannel.getTvgId().equals(epg.getKey())) return;
+        if (mChannel == null) return;
+        if (!mChannel.getTvgId().equals(epg.getKey())) {
+            pendingShowEpg = false;
+            return;
+        }
         EpgData data = epg.getEpgData();
         boolean hasTitle = !data.getTitle().isEmpty();
         mEpgDataAdapter.addAll(epg.getList());
@@ -850,6 +855,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         setLiveProgram(epg);
         setWidth(epg);
         setMetadata();
+        if (pendingShowEpg) {
+            pendingShowEpg = false;
+            showEpg(mChannel);
+        }
     }
 
     private void setEpg(boolean success) {
@@ -914,8 +923,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     @Override
-    public void onLiveHistoryPanel() {
-        onConfig();
+    public void onLiveEpgPanel() {
+        if (mChannel == null) return;
+        pendingShowEpg = true;
+        mViewModel.parseXml(getHome());
+        mViewModel.getEpg(mChannel);
+        hideControl();
+        hideInfo();
     }
 
     @Override
@@ -933,12 +947,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     public void onLiveBackgroundPanel() {
         moveTaskToBack(true);
         setAudioOnly(true);
-    }
-
-    @Override
-    public void onLiveLinePanel() {
-        if (mChannel != null && !mChannel.isOnly()) showLineDialog(mChannel);
-        else onLine();
     }
 
     @Override

@@ -1,12 +1,24 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.app.Dialog;
 import android.content.Context;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.bean.Live;
 import com.fongmi.android.tv.databinding.DialogLiveBinding;
@@ -14,9 +26,10 @@ import com.fongmi.android.tv.impl.LiveListener;
 import com.fongmi.android.tv.ui.adapter.LiveAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 
-public class LiveDialog extends BaseAlertDialog implements LiveAdapter.OnClickListener {
+public class LiveDialog extends BaseBottomSheetDialog implements LiveAdapter.OnClickListener {
 
     private DialogLiveBinding binding;
     private LiveListener listener;
@@ -40,14 +53,24 @@ public class LiveDialog extends BaseAlertDialog implements LiveAdapter.OnClickLi
         listener = isFull() ? (LiveListener) context : (LiveListener) getParentFragment();
     }
 
+    @NonNull
     @Override
-    protected ViewBinding getBinding() {
-        return binding = DialogLiveBinding.inflate(getLayoutInflater());
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+        Dialog dialog = super.onCreateDialog(savedInstanceState);
+        configureWindow(dialog);
+        return dialog;
     }
 
     @Override
-    protected MaterialAlertDialogBuilder getBuilder() {
-        return builder().setView(getBinding().getRoot());
+    public void onStart() {
+        super.onStart();
+        configureWindow(getDialog());
+        if (adapter.getItemCount() == 0) dismiss();
+    }
+
+    @Override
+    protected ViewBinding getBinding(@NonNull LayoutInflater inflater, @Nullable ViewGroup container) {
+        return binding = DialogLiveBinding.inflate(inflater, container, false);
     }
 
     @Override
@@ -57,8 +80,9 @@ public class LiveDialog extends BaseAlertDialog implements LiveAdapter.OnClickLi
         binding.recycler.setAdapter(adapter);
         binding.recycler.setItemAnimator(null);
         binding.recycler.setHasFixedSize(true);
-        if (isFull()) binding.recycler.setMaxHeight(ResUtil.dp2px(264));
-        binding.recycler.addItemDecoration(new SpaceItemDecoration(1, 8));
+        binding.recycler.setLayoutManager(isFull() ? new GridLayoutManager(requireContext(), 2) : new LinearLayoutManager(requireContext()));
+        binding.recycler.addItemDecoration(new SpaceItemDecoration(isFull() ? 2 : 1, 12));
+        binding.recycler.setMaxHeight(ResUtil.getScreenHeight(requireContext()) * (ResUtil.isLand(requireContext()) ? 72 : 48) / 100);
         binding.recycler.post(() -> binding.recycler.scrollToPosition(LiveConfig.getHomeIndex()));
     }
 
@@ -96,10 +120,44 @@ public class LiveDialog extends BaseAlertDialog implements LiveAdapter.OnClickLi
         return true;
     }
 
+    private void configureWindow(Dialog dialog) {
+        if (dialog == null || dialog.getWindow() == null) return;
+        Window window = dialog.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        window.setDimAmount(0f);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+    }
+
     @Override
-    public void onStart() {
-        super.onStart();
-        if (adapter.getItemCount() == 0) dismiss();
-        else if (ResUtil.isLand(requireContext())) setWidth(0.5f);
+    protected boolean transparent() {
+        return true;
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return true;
+    }
+
+    @Override
+    protected void setBehavior(BottomSheetDialog dialog) {
+        FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (sheet == null) return;
+        sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
+        int height = getPanelHeight();
+        ViewGroup.LayoutParams params = sheet.getLayoutParams();
+        params.height = height;
+        sheet.setLayoutParams(params);
+        BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
+        behavior.setPeekHeight(height);
+        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        behavior.setSkipCollapsed(true);
+        behavior.setDraggable(false);
+    }
+
+    private int getPanelHeight() {
+        int screen = ResUtil.getScreenHeight(requireContext());
+        if (ResUtil.isLand(requireContext())) return Math.max(ResUtil.dp2px(240), Math.min(ResUtil.dp2px(430), Math.round(screen * 0.72f)));
+        return Math.max(ResUtil.dp2px(300), Math.min(ResUtil.dp2px(520), Math.round(screen * 0.52f)));
     }
 }

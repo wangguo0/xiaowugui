@@ -37,10 +37,12 @@
     <string name="control_track">Track</string>
     <string name="control_other">Other</string>
     <string name="live_control_play">Live</string>
-    <string name="live_control_source">Source</string>
+    <string name="live_control_source">Live source</string>
+    <string name="live_control_epg">EPG</string>
     <string name="live_control_pip">PiP</string>
     <string name="live_control_preference">Preference</string>
     <string name="live_control_player">Player</string>
+    <string name="live_source_select">Select live source</string>
 
     <!-- Dialog -->
     <string name="dialog_delete_record">Delete all records?</string>
