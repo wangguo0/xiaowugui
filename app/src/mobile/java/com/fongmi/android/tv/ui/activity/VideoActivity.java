@@ -109,6 +109,7 @@ import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -470,7 +471,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.flag.setAdapter(mFlagAdapter = new FlagAdapter(this));
         mBinding.quick.setAdapter(mQuickAdapter = new QuickAdapter(this));
         int episodeSpanCount = getEpisodeSpanCount();
-        mBinding.episode.setNestedScrollingEnabled(true);
+        mBinding.episode.setNestedScrollingEnabled(false);
         mBinding.episode.setHasFixedSize(false);
         mBinding.episode.setItemAnimator(null);
         mBinding.episode.setLayoutManager(new GridLayoutManager(this, episodeSpanCount));
@@ -795,7 +796,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onContent() {
-        mBinding.content.setMaxLines(mBinding.content.getMaxLines() == 3 ? Integer.MAX_VALUE : 3);
+        CharSequence content = mBinding.content.getText();
+        if (TextUtils.isEmpty(content)) return;
+        new MaterialAlertDialogBuilder(this)
+                .setTitle(R.string.detail_content)
+                .setMessage(content)
+                .setPositiveButton(R.string.dialog_positive, null)
+                .show();
     }
 
     private void onReverse() {

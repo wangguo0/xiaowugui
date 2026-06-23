@@ -187,6 +187,40 @@
                         tools:text="演員：FongMi" />
 
                     <androidx.appcompat.widget.LinearLayoutCompat
+                        android:id="@+id/content_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            style="@style/Video.ContextText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_marginEnd="16dp"
+                            android:text="@string/detail_content"
+                            android:textColor="@color/white_70"
+                            android:textSize="13sp" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/content"
+                            style="@style/Video.ContextText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="16dp"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginEnd="16dp"
+                            android:ellipsize="end"
+                            android:lineSpacingExtra="3dp"
+                            android:maxLines="2"
+                            android:textColor="@color/white_90"
+                            android:textSize="13sp"
+                            tools:text="一個身世神秘的少年范閒，因對自身身世的好奇而離開故鄉澹州，前赴南慶京都。" />
+
+                    </androidx.appcompat.widget.LinearLayoutCompat>
+
+                    <androidx.appcompat.widget.LinearLayoutCompat
                         android:id="@+id/actionRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -333,7 +367,7 @@
                         android:layout_marginBottom="8dp"
                         android:clipChildren="false"
                         android:clipToPadding="false"
-                        android:nestedScrollingEnabled="true"
+                        android:nestedScrollingEnabled="false"
                         android:overScrollMode="never"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
@@ -342,41 +376,6 @@
                         app:spanCount="4"
                         tools:itemCount="28"
                         tools:listitem="@layout/adapter_episode_grid" />
-
-                    <androidx.appcompat.widget.LinearLayoutCompat
-                        android:id="@+id/content_layout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical">
-
-                        <com.google.android.material.textview.MaterialTextView
-                            style="@style/Video.ContextText"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_marginTop="8dp"
-                            android:layout_marginEnd="16dp"
-                            android:text="@string/detail_content"
-                            android:textColor="@color/white"
-                            android:textSize="16sp" />
-
-                        <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/content"
-                            style="@style/Video.ContextText"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_marginTop="8dp"
-                            android:layout_marginEnd="16dp"
-                            android:layout_marginBottom="8dp"
-                            android:ellipsize="end"
-                            android:lineSpacingExtra="4dp"
-                            android:maxLines="3"
-                            android:textColor="@color/white"
-                            android:textSize="14sp"
-                            tools:text="一個身世神秘的少年范閒（張若昀飾），因對自身身世的好奇而離開故鄉澹州，前赴南慶京都。范閒在京中各大勢力之間遊走，以探查自己屢遭刺殺的原因。其間結識靖王世子、二皇子，與太子、長公主等人對抗，並遊歷四方、闖蕩江湖，卻意外發現這世界隱藏著的秘密。本劇第一季上半部主要描述范閒在南慶京都追查刺殺的幕後黑手，京中各式人等對范閒繼承內庫的態度和應對，以及監察院院長陳萍萍希望范閒接掌監察院所做的一切舉動。下半部劇情發生在北齊上京。南慶駐北齊上京諜報首領言冰雲被北齊官方抓獲，慶帝與陳萍萍同意用已被關在監察院大牢多年的前北魏諜報首領肖恩交換言冰雲，並派范閒親率南慶使團負責此事。" />
-
-                    </androidx.appcompat.widget.LinearLayoutCompat>
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/quick"
