@@ -261,6 +261,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.text.setOnLongClickListener(view -> onTextLong());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
+        if (mBinding.liveSource != null) {
+            mBinding.liveSource.setOnClickListener(view -> onLiveSource());
+            mBinding.liveSource.setOnTouchListener(this::onLiveSettingTouch);
+        }
         if (mBinding.liveSetting != null) {
             mBinding.liveSetting.setOnClickListener(view -> onLiveSetting());
             mBinding.liveSetting.setOnTouchListener(this::onLiveSettingTouch);
@@ -486,6 +490,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (LiveConfig.isOnly()) setLive(getHome());
         else LiveDialog.show(this);
         hideControl();
+    }
+
+    private void onLiveSource() {
+        refreshInjectedLives();
+        LiveDialog.show(this);
+        hideControl();
+        hideInfo();
     }
 
     private void refreshInjectedLives() {
