@@ -87,6 +87,16 @@ public class TimerDialog extends BaseBottomSheetDialog implements Timer.Callback
     }
 
     @Override
+    protected boolean transparent() {
+        return true;
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return true;
+    }
+
+    @Override
     public void dismiss() {
         Timer.get().setCallback(null);
         super.dismiss();

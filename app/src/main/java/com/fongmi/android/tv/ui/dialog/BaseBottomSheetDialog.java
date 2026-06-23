@@ -11,6 +11,7 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.WindowCompat;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
@@ -31,8 +32,15 @@ public abstract class BaseBottomSheetDialog extends BottomSheetDialogFragment {
         dialog.setOnShowListener(d -> setBehavior(dialog));
         Window window = dialog.getWindow();
         if (window == null) return dialog;
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        if (Util.isFullscreen(getActivity())) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (stableOverlay()) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            window.setDimAmount(0f);
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+            WindowCompat.setDecorFitsSystemWindows(window, true);
+        } else {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            if (Util.isFullscreen(getActivity())) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
         return dialog;
     }
 
@@ -56,6 +64,10 @@ public abstract class BaseBottomSheetDialog extends BottomSheetDialogFragment {
     }
 
     protected boolean transparent() {
+        return false;
+    }
+
+    protected boolean stableOverlay() {
         return false;
     }
 

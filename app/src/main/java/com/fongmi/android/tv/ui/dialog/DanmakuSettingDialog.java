@@ -57,6 +57,16 @@ public final class DanmakuSettingDialog {
         protected void initView() {
             new DanmakuSettingPanel(binding, player).bind();
         }
+
+        @Override
+        protected boolean transparent() {
+            return true;
+        }
+
+        @Override
+        protected boolean stableOverlay() {
+            return true;
+        }
     }
 
     public static final class SideSheet extends BaseSideSheetDialog {

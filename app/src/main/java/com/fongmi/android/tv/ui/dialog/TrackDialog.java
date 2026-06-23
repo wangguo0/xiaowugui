@@ -31,6 +31,7 @@ import com.fongmi.android.tv.ui.adapter.TrackAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -108,7 +109,6 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
 
     private void onOffset(View view) {
         OffsetDialog.create().player(player).type(type).show(requireActivity());
-        dismiss();
     }
 
     private void onChoose(View view) {
@@ -155,6 +155,16 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
     public void onItemClick(Track item) {
         player.setTrack(Arrays.asList(item.key(player.getKey()).save()));
         dismiss();
+    }
+
+    @Override
+    protected boolean transparent() {
+        return !Util.isLeanback();
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return !Util.isLeanback();
     }
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {

@@ -14,6 +14,7 @@ import com.fongmi.android.tv.databinding.FragmentEpisodeBinding;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.base.ViewType;
+import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,7 @@ public class EpisodeFragment extends BaseFragment implements EpisodeAdapter.OnCl
         mBinding.recycler.setHasFixedSize(true);
         mBinding.recycler.setItemAnimator(null);
         mBinding.recycler.setLayoutManager(new GridLayoutManager(getContext(), getSpanCount()));
+        mBinding.recycler.addItemDecoration(new SpaceItemDecoration(getSpanCount(), 8));
         mBinding.recycler.setAdapter(adapter = new EpisodeAdapter(this, ViewType.GRID, getItems()));
         mBinding.recycler.scrollToPosition(adapter.getPosition());
     }

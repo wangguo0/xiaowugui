@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/shape_player_child_sheet_panel"
     android:orientation="vertical">
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -18,7 +20,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/play_timer"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/white_70"
             android:textSize="16sp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -38,10 +40,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:background="@drawable/shape_accent"
+            android:background="@drawable/selector_player_child_sheet_button"
             android:tag="5"
             android:text="@string/timer_5"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/selector_control_sheet_text"
             android:textSize="14sp" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -50,10 +52,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="8dp"
-            android:background="@drawable/shape_accent"
+            android:background="@drawable/selector_player_child_sheet_button"
             android:tag="15"
             android:text="@string/timer_15"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/selector_control_sheet_text"
             android:textSize="14sp" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -62,10 +64,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="8dp"
-            android:background="@drawable/shape_accent"
+            android:background="@drawable/selector_player_child_sheet_button"
             android:tag="30"
             android:text="@string/timer_30"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/selector_control_sheet_text"
             android:textSize="14sp" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -73,10 +75,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:background="@drawable/shape_accent"
+            android:background="@drawable/selector_player_child_sheet_button"
             android:tag="60"
             android:text="@string/timer_60"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/selector_control_sheet_text"
             android:textSize="14sp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
@@ -96,7 +98,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:layout_marginBottom="24dp"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/white"
             android:textSize="48sp"
             tools:text="5:00" />
 
@@ -107,7 +109,9 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:singleLine="true"
-            android:text="@string/timer_delay" />
+            android:text="@string/timer_delay"
+            android:textColor="@color/white"
+            app:backgroundTint="#FF4B4B4F" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/reset"
@@ -116,7 +120,9 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
             android:singleLine="true"
-            android:text="@string/timer_cancel" />
+            android:text="@string/timer_cancel"
+            android:textColor="@color/white_90"
+            app:strokeColor="#66FFFFFF" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 </androidx.appcompat.widget.LinearLayoutCompat>

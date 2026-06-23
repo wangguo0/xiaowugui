@@ -176,6 +176,39 @@
                     android:paddingBottom="8dp">
 
                     <androidx.appcompat.widget.LinearLayoutCompat
+                        android:id="@+id/actionRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:gravity="center"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/search"
+                            style="@style/VideoActionButton"
+                            android:text="@string/play_search"
+                            app:drawableTopCompat="@drawable/ic_action_search"
+                            app:drawableTint="@color/white" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/castAction"
+                            style="@style/VideoActionButton"
+                            android:text="@string/play_cast"
+                            app:drawableTopCompat="@drawable/ic_control_cast"
+                            app:drawableTint="@color/white" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/settingAction"
+                            style="@style/VideoActionButton"
+                            android:text="@string/nav_setting"
+                            app:drawableTopCompat="@drawable/ic_control_setting"
+                            app:drawableTint="@color/white" />
+
+                    </androidx.appcompat.widget.LinearLayoutCompat>
+
+                    <androidx.appcompat.widget.LinearLayoutCompat
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
@@ -195,22 +228,6 @@
                             android:layout_width="0dp"
                             android:layout_height="0dp"
                             android:layout_weight="1" />
-
-                        <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/search"
-                            style="@style/Video.ContextText"
-                            android:layout_width="wrap_content"
-                            android:layout_height="32dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:drawablePadding="4dp"
-                            android:gravity="center"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="8dp"
-                            android:text="@string/play_search"
-                            android:textColor="@color/white"
-                            android:textSize="14sp"
-                            app:drawableStartCompat="@drawable/ic_action_search"
-                            app:drawableTint="@color/white" />
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -304,10 +321,13 @@
                         android:layout_marginBottom="8dp"
                         android:clipChildren="false"
                         android:clipToPadding="false"
-                        android:orientation="horizontal"
+                        android:nestedScrollingEnabled="false"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
-                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+                        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+                        app:spanCount="6"
+                        tools:itemCount="36"
+                        tools:listitem="@layout/adapter_episode_grid" />
 
                     <androidx.appcompat.widget.LinearLayoutCompat
                         android:id="@+id/content_layout"

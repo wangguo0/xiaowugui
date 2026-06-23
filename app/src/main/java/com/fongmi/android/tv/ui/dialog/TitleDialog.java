@@ -15,6 +15,7 @@ import com.fongmi.android.tv.databinding.DialogTitleBinding;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.ui.adapter.TitleAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
+import com.fongmi.android.tv.utils.Util;
 
 public final class TitleDialog extends BaseBottomSheetDialog implements TitleAdapter.OnClickListener {
 
@@ -59,5 +60,15 @@ public final class TitleDialog extends BaseBottomSheetDialog implements TitleAda
     public void onItemClick(MediaTitle item) {
         player.setTitle(item);
         dismiss();
+    }
+
+    @Override
+    protected boolean transparent() {
+        return !Util.isLeanback();
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return !Util.isLeanback();
     }
 }

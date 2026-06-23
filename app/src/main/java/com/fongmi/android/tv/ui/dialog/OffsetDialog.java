@@ -65,6 +65,16 @@ public final class OffsetDialog {
         protected void initView() {
             new OffsetPanel(binding, player, type).bind();
         }
+
+        @Override
+        protected boolean transparent() {
+            return true;
+        }
+
+        @Override
+        protected boolean stableOverlay() {
+            return true;
+        }
     }
 
     public static final class SideSheet extends BaseSideSheetDialog {

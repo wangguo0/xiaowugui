@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/shape_player_child_sheet_panel"
     android:orientation="vertical">
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -20,7 +21,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/white_70"
             android:textSize="16sp"
             tools:text="選擇字幕" />
 
@@ -30,6 +31,7 @@
             android:layout_height="wrap_content"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_action_choose"
+            app:tint="@color/white_90"
             android:visibility="gone"
             tools:visibility="visible" />
 
@@ -40,6 +42,7 @@
             android:layout_marginStart="16dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_action_subtitle"
+            app:tint="@color/white_90"
             android:visibility="gone"
             tools:visibility="visible" />
 
@@ -50,6 +53,7 @@
             android:layout_marginStart="16dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_action_offset"
+            app:tint="@color/white_90"
             android:visibility="gone"
             tools:visibility="visible" />
 

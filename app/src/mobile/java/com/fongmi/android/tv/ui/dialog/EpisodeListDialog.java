@@ -13,6 +13,7 @@ import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.databinding.DialogEpisodeListBinding;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
 import com.fongmi.android.tv.ui.base.ViewType;
+import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.List;
@@ -60,6 +61,7 @@ public class EpisodeListDialog extends BaseSideSheetDialog implements EpisodeAda
     private void setRecyclerView() {
         binding.recycler.setHasFixedSize(true);
         binding.recycler.setItemAnimator(null);
+        binding.recycler.addItemDecoration(new SpaceItemDecoration(1, 8));
         binding.recycler.setAdapter(adapter = new EpisodeAdapter(this, ViewType.GRID));
     }
 

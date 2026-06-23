@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/shape_player_child_sheet_panel"
     android:orientation="vertical">
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -22,7 +23,7 @@
             android:layout_weight="1"
             android:text="@string/offset_setting"
             android:textAppearance="?attr/textAppearanceHeadlineSmall"
-            android:textColor="?attr/colorOnSurface" />
+            android:textColor="@color/white_70" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/reset"
@@ -30,7 +31,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/danmaku_reset"
-            android:textColor="?attr/colorPrimary" />
+            android:textColor="@color/white"
+            app:backgroundTint="#FF4B4B4F" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -55,14 +57,15 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/offset_audio"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="@color/white_90" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/audioValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?attr/colorPrimary" />
+                android:textColor="@color/white_70" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -99,14 +102,15 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/offset_text"
-                android:textAppearance="?attr/textAppearanceBodyLarge" />
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="@color/white_90" />
 
             <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/textValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAppearance="?attr/textAppearanceBodyMedium"
-                android:textColor="?attr/colorPrimary" />
+                android:textColor="@color/white_70" />
 
         </androidx.appcompat.widget.LinearLayoutCompat>
 

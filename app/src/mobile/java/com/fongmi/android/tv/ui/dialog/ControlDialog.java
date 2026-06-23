@@ -1,12 +1,18 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.app.Dialog;
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
@@ -25,6 +31,8 @@ import com.fongmi.android.tv.ui.base.ViewType;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Timer;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.slider.Slider;
 
 import java.util.Arrays;
@@ -75,16 +83,40 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         return this;
     }
 
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+        Dialog dialog = super.onCreateDialog(savedInstanceState);
+        configureWindow(dialog);
+        return dialog;
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        configureWindow(getDialog());
+    }
+
+    private void configureWindow(Dialog dialog) {
+        if (dialog == null || dialog.getWindow() == null) return;
+        Window window = dialog.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        window.setDimAmount(0f);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+    }
+
     @Override
     protected ViewBinding getBinding(@NonNull LayoutInflater inflater, @Nullable ViewGroup container) {
         binding = DialogControlBinding.inflate(inflater, container, false);
         scales = Arrays.asList(binding.scale0, binding.scale1, binding.scale2, binding.scale3, binding.scale4);
-        speeds = Arrays.asList(binding.speed05, binding.speed075, binding.speed10, binding.speed12, binding.speed15, binding.speed20, binding.speed30);
+        speeds = Arrays.asList(binding.speed05, binding.speed075, binding.speed10, binding.speed125, binding.speed15, binding.speed175, binding.speed20, binding.speed25, binding.speed30, binding.speed50);
         return binding;
     }
 
     @Override
     protected void initView() {
+        setSheetBackground();
         binding.decode.setText(parent.control.action.decode.getText());
         binding.lut.setText(parent.control.action.lut.getText());
         binding.ending.setText(parent.control.action.ending.getText());
@@ -96,6 +128,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         setScaleText();
         setPlayer();
         setParse();
+        binding.controlScroll.post(() -> binding.controlScroll.scrollTo(0, 0));
     }
 
     @Override
@@ -104,12 +137,14 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.speed.addOnChangeListener(this::setSpeed);
         for (TextView view : speeds) view.setOnClickListener(this::setSpeedPreset);
         for (TextView view : scales) view.setOnClickListener(this::setScale);
-        binding.text.setOnClickListener(v -> dismiss(parent.control.action.text));
-        binding.audio.setOnClickListener(v -> dismiss(parent.control.action.audio));
-        binding.video.setOnClickListener(v -> dismiss(parent.control.action.video));
-        binding.title.setOnClickListener(v -> dismiss(parent.control.action.title));
+        binding.reset.setOnClickListener(v -> dismiss(parent.control.action.reset));
+        binding.fullscreen.setOnClickListener(v -> dismiss(parent.control.fullscreen));
+        binding.text.setOnClickListener(v -> onTrack(binding.text));
+        binding.audio.setOnClickListener(v -> onTrack(binding.audio));
+        binding.video.setOnClickListener(v -> onTrack(binding.video));
+        binding.title.setOnClickListener(v -> ((Listener) requireActivity()).onTitlePanel());
         binding.player.setOnClickListener(v -> click(binding.player, parent.control.action.player));
-        binding.danmaku.setOnClickListener(v -> dismiss(parent.control.action.danmaku));
+        binding.danmaku.setOnClickListener(v -> ((Listener) requireActivity()).onDanmakuPanel());
         binding.repeat.setOnClickListener(v -> active(binding.repeat, parent.control.action.repeat));
         binding.decode.setOnClickListener(v -> click(binding.decode, parent.control.action.decode));
         binding.lut.setOnClickListener(v -> onLut());
@@ -122,7 +157,14 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private void onTimer(View view) {
         TimerDialog.create().show(getActivity());
-        dismiss();
+    }
+
+    private void onTrack(View view) {
+        ((Listener) requireActivity()).onTrackPanel(Integer.parseInt(view.getTag().toString()));
+    }
+
+    private void setSheetBackground() {
+        binding.sheetWall.setVisibility(View.GONE);
     }
 
     private void setSpeed(@NonNull Slider slider, float value, boolean fromUser) {
@@ -180,7 +222,6 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private void onLut() {
         ((Listener) requireActivity()).onLutPanel();
-        dismiss();
     }
 
     private boolean longClick(TextView view, TextView target) {
@@ -198,8 +239,10 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.speed.setValue(Math.max(player.getSpeed(), 0.5f));
         setSpeedPresets();
         binding.player.setText(parent.control.action.player.getText());
+        binding.reset.setText(parent.control.action.reset.getText());
         binding.decode.setVisibility(parent.control.action.decode.getVisibility());
         binding.danmaku.setVisibility(parent.control.action.danmaku.getVisibility());
+        setTrackVisible();
     }
 
     public void setParseVisible(boolean visible) {
@@ -211,11 +254,41 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.text.setVisibility(parent.control.action.text.getVisibility());
         binding.audio.setVisibility(parent.control.action.audio.getVisibility());
         binding.video.setVisibility(parent.control.action.video.getVisibility());
-        binding.track.setVisibility(binding.text.getVisibility() == View.GONE && binding.audio.getVisibility() == View.GONE && binding.video.getVisibility() == View.GONE ? View.GONE : View.VISIBLE);
+        boolean visible = binding.text.getVisibility() != View.GONE || binding.audio.getVisibility() != View.GONE || binding.video.getVisibility() != View.GONE || binding.title.getVisibility() != View.GONE || binding.danmaku.getVisibility() != View.GONE;
+        binding.trackText.setVisibility(visible ? View.VISIBLE : View.GONE);
+        binding.trackRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    @Override
+    protected boolean transparent() {
+        return true;
+    }
+
+    @Override
+    protected void setBehavior(BottomSheetDialog dialog) {
+        FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (sheet == null) return;
+        sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
+        int height = getPanelHeight();
+        ViewGroup.LayoutParams params = sheet.getLayoutParams();
+        params.height = height;
+        sheet.setLayoutParams(params);
+        BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
+        behavior.setPeekHeight(height);
+        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+        behavior.setSkipCollapsed(true);
+        behavior.setDraggable(false);
+    }
+
+    private int getPanelHeight() {
+        int screen = ResUtil.getScreenHeight(requireContext());
+        if (ResUtil.isLand(requireContext())) return Math.max(ResUtil.dp2px(260), Math.min(ResUtil.dp2px(420), Math.round(screen * 0.82f)));
+        return Math.max(ResUtil.dp2px(330), Math.min(ResUtil.dp2px(520), Math.round(screen * 0.52f)));
     }
 
     public void setTitleVisible() {
         binding.title.setVisibility(parent.control.action.title.getVisibility());
+        setTrackVisible();
     }
 
     @Override
@@ -235,5 +308,11 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         void onLutImport();
 
         void onLutPanel();
+
+        void onTrackPanel(int type);
+
+        void onTitlePanel();
+
+        void onDanmakuPanel();
     }
 }

@@ -1,17 +1,22 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.LinearLayoutCompat;
+import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -34,6 +39,13 @@ import java.util.List;
 
 public class LutPanelDialog extends BaseBottomSheetDialog {
 
+    private static final int PANEL_COLOR = 0xFF28282A;
+    private static final int BUTTON_COLOR = 0xFF37373A;
+    private static final int BUTTON_FOCUS_COLOR = 0xFF424247;
+    private static final int BUTTON_SELECTED_COLOR = 0xFF4B4B4F;
+    private static final int BUTTON_STROKE_COLOR = 0x14FFFFFF;
+    private static final int BUTTON_ACTIVE_STROKE_COLOR = 0x33FFFFFF;
+
     private MaterialTextView title;
     private MaterialTextView delay;
     private MaterialTextView empty;
@@ -55,6 +67,29 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         show(activity.getSupportFragmentManager(), null);
     }
 
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(Bundle savedInstanceState) {
+        Dialog dialog = super.onCreateDialog(savedInstanceState);
+        configureWindow(dialog);
+        return dialog;
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        configureWindow(getDialog());
+    }
+
+    private void configureWindow(Dialog dialog) {
+        if (dialog == null || dialog.getWindow() == null) return;
+        Window window = dialog.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        window.setDimAmount(0f);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        WindowCompat.setDecorFitsSystemWindows(window, true);
+    }
+
     @Override
     protected ViewBinding getBinding(@NonNull LayoutInflater inflater, @Nullable ViewGroup container) {
         return new SimpleBinding(createContent());
@@ -74,15 +109,15 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         LinearLayoutCompat root = new LinearLayoutCompat(requireContext());
         root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.setOrientation(LinearLayoutCompat.VERTICAL);
-        root.setPadding(dp(16), dp(16), dp(16), dp(16));
-        root.setBackgroundColor(0xF6101118);
+        root.setPadding(dp(16), dp(16), dp(9), dp(20));
+        root.setBackground(panelBackground());
 
         LinearLayoutCompat header = new LinearLayoutCompat(requireContext());
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setOrientation(LinearLayoutCompat.HORIZONTAL);
         root.addView(header, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        title = text(R.string.player_lut, 18, true);
+        title = text(R.string.player_lut, 17, true);
         header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         MaterialTextView close = chip(R.string.lut_close);
@@ -93,7 +128,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         tools.setGravity(Gravity.CENTER_VERTICAL);
         tools.setOrientation(LinearLayoutCompat.HORIZONTAL);
         LinearLayoutCompat.LayoutParams toolParams = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        toolParams.setMargins(0, dp(12), 0, dp(6));
+        toolParams.setMargins(0, dp(10), 0, dp(4));
         root.addView(tools, toolParams);
 
         delay = chip(0);
@@ -106,7 +141,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
 
         empty = text(R.string.lut_empty_presets, 14, false);
         empty.setGravity(Gravity.CENTER);
-        root.addView(empty, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        root.addView(empty, new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
 
         recycler = new RecyclerView(requireContext());
         recycler.setClipToPadding(false);
@@ -119,6 +154,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     protected void setBehavior(BottomSheetDialog dialog) {
         FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
         if (sheet == null) return;
+        sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
         int height = getPanelHeight();
         ViewGroup.LayoutParams params = sheet.getLayoutParams();
         params.height = height;
@@ -127,11 +163,12 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         behavior.setPeekHeight(height);
         behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
         behavior.setSkipCollapsed(true);
+        behavior.setDraggable(false);
     }
 
     private int getPanelHeight() {
         int screen = ResUtil.getScreenHeight(requireContext());
-        return Math.max(dp(320), Math.min(dp(480), Math.round(screen * 0.52f)));
+        return Math.max(dp(300), Math.min(dp(460), Math.round(screen * 0.46f)));
     }
 
     private void refreshList() {
@@ -169,12 +206,13 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     }
 
     private MaterialTextView chip(int resId) {
-        MaterialTextView view = text(resId, 14, false);
+        MaterialTextView view = text(resId, 13, false);
         view.setFocusable(true);
         view.setGravity(Gravity.CENTER);
-        view.setPadding(dp(10), dp(7), dp(10), dp(7));
-        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.setMarginStart(dp(8));
+        view.setMinHeight(dp(34));
+        view.setPadding(dp(12), 0, dp(12), 0);
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(34));
+        params.setMarginStart(dp(7));
         view.setLayoutParams(params);
         setBackground(view, false, false);
         view.setOnFocusChangeListener((v, focused) -> setBackground((MaterialTextView) v, false, focused));
@@ -184,7 +222,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     private MaterialTextView text(int resId, int sp, boolean bold) {
         MaterialTextView view = new MaterialTextView(requireContext());
         if (resId != 0) view.setText(resId);
-        view.setTextColor(Color.WHITE);
+        view.setTextColor(0xE6FFFFFF);
         view.setTextSize(sp);
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return view;
@@ -192,10 +230,18 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
 
     private void setBackground(MaterialTextView view, boolean selected, boolean focused) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(selected ? 0xFF2F80ED : focused ? 0x44FFFFFF : 0x22FFFFFF);
-        drawable.setStroke(dp(1), selected || focused ? 0xFFFFFFFF : 0x33FFFFFF);
-        drawable.setCornerRadius(dp(6));
+        drawable.setColor(selected ? BUTTON_SELECTED_COLOR : focused ? BUTTON_FOCUS_COLOR : BUTTON_COLOR);
+        drawable.setStroke(dp(1), selected || focused ? BUTTON_ACTIVE_STROKE_COLOR : BUTTON_STROKE_COLOR);
+        drawable.setCornerRadius(dp(7));
         view.setBackground(drawable);
+        view.setTextColor(selected ? Color.WHITE : 0xE6FFFFFF);
+    }
+
+    private GradientDrawable panelBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(PANEL_COLOR);
+        drawable.setCornerRadii(new float[]{dp(18), dp(18), dp(18), dp(18), 0, 0, 0, 0});
+        return drawable;
     }
 
     private int dp(int value) {
@@ -261,9 +307,9 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
             view.setFocusable(true);
             view.setGravity(Gravity.CENTER_VERTICAL);
             view.setSingleLine(true);
-            view.setPadding(dp(12), 0, dp(12), 0);
-            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
-            params.setMargins(0, dp(8), 0, 0);
+            view.setPadding(dp(14), 0, dp(14), 0);
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+            params.setMargins(0, dp(7), dp(7), 0);
             view.setLayoutParams(params);
             return new ViewHolder(view);
         }

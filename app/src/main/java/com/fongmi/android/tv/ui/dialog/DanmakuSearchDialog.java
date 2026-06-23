@@ -150,4 +150,14 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
         super.onDestroyView();
         DanmakuApi.cancel();
     }
+
+    @Override
+    protected boolean transparent() {
+        return !Util.isLeanback();
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return !Util.isLeanback();
+    }
 }
