@@ -838,7 +838,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private int getEpisodeSpan(List<Episode> items) {
-        return PlayerSetting.getEpisodeColumn();
+        int maxLen = 0;
+        for (Episode item : items) maxLen = Math.max(maxLen, item.getDesc().concat(item.getName()).length());
+        if (maxLen >= 12) return PlayerSetting.getEpisodeColumn();
+        int ideal = maxLen >= 10 ? 130 : maxLen >= 7 ? 104 : 80;
+        int width = mBinding.episode.getWidth() > 0 ? mBinding.episode.getWidth() : ResUtil.getScreenWidth(this) - ResUtil.dp2px(32);
+        int span = width / ResUtil.dp2px(ideal);
+        return Math.max(2, Math.min(getEpisodeSpanCount(), span));
     }
 
     private int getSelectedEpisodePosition(List<Episode> items) {

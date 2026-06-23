@@ -295,8 +295,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         if (sheet == null) return;
         sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
         BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
-        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
-        behavior.setSkipCollapsed(true);
+        behavior.setFitToContents(false);
         behavior.setDraggable(false);
         setSheetHeight(sheet, behavior);
         sheet.post(() -> setSheetHeight(sheet, behavior));
@@ -308,6 +307,9 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         params.height = height;
         sheet.setLayoutParams(params);
         behavior.setPeekHeight(height);
+        behavior.setExpandedOffset(Math.max(0, ResUtil.getScreenHeight(requireContext()) - height));
+        behavior.setSkipCollapsed(true);
+        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
     }
 
     private int getContentHeight(FrameLayout sheet) {
@@ -316,7 +318,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         int width = sheet.getWidth() > 0 ? sheet.getWidth() : ResUtil.getScreenWidth(requireContext());
         int contentWidth = Math.max(0, width - binding.controlScroll.getPaddingStart() - binding.controlScroll.getPaddingEnd());
         content.measure(View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        return content.getMeasuredHeight() + binding.controlScroll.getPaddingTop() + binding.controlScroll.getPaddingBottom();
+        return content.getMeasuredHeight() + binding.controlScroll.getPaddingTop() + binding.controlScroll.getPaddingBottom() + ResUtil.dp2px(8);
     }
 
     private int getPanelMaxHeight() {

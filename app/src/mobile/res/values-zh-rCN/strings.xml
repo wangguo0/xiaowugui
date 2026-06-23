@@ -34,7 +34,7 @@
     <!-- Control -->
     <string name="control_speed">倍速</string>
     <string name="control_scale">缩放</string>
-    <string name="control_episode_column">选集列数</string>
+    <string name="control_episode_column">长标题列数</string>
     <string name="control_episode_column_single">单列</string>
     <string name="control_episode_column_double">双列</string>
     <string name="control_track">轨道</string>

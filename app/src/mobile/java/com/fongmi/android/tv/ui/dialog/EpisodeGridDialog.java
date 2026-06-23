@@ -86,8 +86,15 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     }
 
     private void setSpanCount() {
-        spanCount = PlayerSetting.getEpisodeColumn();
+        int avg = (int) Math.ceil(episodes.stream().mapToInt(e -> e.getName().length()).average().orElse(0));
+        int max = episodes.stream().mapToInt(e -> e.getDesc().concat(e.getName()).length()).max().orElse(0);
+        boolean longTitle = avg >= 8 || max >= 12;
+        if (longTitle) spanCount = PlayerSetting.getEpisodeColumn();
+        else if (avg >= 4) spanCount = 3;
+        else if (avg >= 2) spanCount = 4;
+        else spanCount = 5;
         itemCount = episodes.size() <= 60 ? 20 : spanCount * (ResUtil.isLand(requireActivity()) ? 5 : 10);
+        binding.column.setVisibility(longTitle ? View.VISIBLE : View.GONE);
         binding.column.setImageResource(spanCount == 1 ? R.drawable.ic_site_double_column : R.drawable.ic_site_single_column);
     }
 

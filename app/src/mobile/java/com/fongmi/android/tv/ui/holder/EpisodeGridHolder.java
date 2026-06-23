@@ -25,12 +25,12 @@ public class EpisodeGridHolder extends BaseEpisodeHolder {
         binding.text.setActivated(item.isSelected());
         binding.text.setHorizontallyScrolling(true);
         binding.text.setText(item.getDesc().concat(item.getName()));
-        setMarquee(binding.text.hasFocus());
-        binding.text.setOnFocusChangeListener((view, hasFocus) -> setMarquee(hasFocus));
+        setMarquee(binding.text.hasFocus() || item.isSelected());
+        binding.text.setOnFocusChangeListener((view, hasFocus) -> setMarquee(hasFocus || binding.text.isActivated()));
         binding.text.setOnClickListener(v -> {
             listener.onItemClick(item);
         });
-        binding.text.post(() -> setMarquee(binding.text.hasFocus()));
+        binding.text.post(() -> setMarquee(binding.text.hasFocus() || binding.text.isActivated()));
     }
 
     private void setMarquee(boolean focused) {
