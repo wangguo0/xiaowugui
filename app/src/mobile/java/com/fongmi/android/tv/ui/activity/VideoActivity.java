@@ -460,7 +460,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setEpisodeBottomInset(int bottom) {
-        int padding = Math.max(bottom, ResUtil.dp2px(56)) + ResUtil.dp2px(8);
+        int padding = bottom + ResUtil.dp2px(12);
+        padding = Math.max(padding, ResUtil.dp2px(28));
         mBinding.episode.setPaddingRelative(mBinding.episode.getPaddingStart(), mBinding.episode.getPaddingTop(), mBinding.episode.getPaddingEnd(), padding);
     }
 

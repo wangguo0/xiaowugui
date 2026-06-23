@@ -77,10 +77,10 @@
             android:layout_alignTop="@+id/video"
             android:layout_marginEnd="16dp"
             android:layout_toEndOf="@+id/video"
-            android:maxLines="3"
-            android:singleLine="true"
+            android:ellipsize="end"
+            android:maxLines="2"
             android:textColor="@color/white"
-            android:textSize="20sp"
+            android:textSize="19sp"
             tools:text="慶餘年第二季" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -90,11 +90,11 @@
             android:layout_height="wrap_content"
             android:layout_below="@+id/name"
             android:layout_alignStart="@+id/name"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="16dp"
             android:singleLine="true"
-            android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textColor="@color/white_90"
+            android:textSize="13sp"
             tools:text="更新到第二季" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -104,11 +104,11 @@
             android:layout_height="wrap_content"
             android:layout_below="@+id/remark"
             android:layout_alignStart="@+id/name"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="16dp"
             android:singleLine="true"
-            android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textColor="@color/white_80"
+            android:textSize="13sp"
             tools:text="站源：泥巴" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -118,11 +118,11 @@
             android:layout_height="wrap_content"
             android:layout_below="@+id/site"
             android:layout_alignStart="@+id/name"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="16dp"
             android:singleLine="true"
-            android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textColor="@color/white_90"
+            android:textSize="13sp"
             tools:text="年份：2022 地區：台灣 類型：科幻" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -132,11 +132,11 @@
             android:layout_height="wrap_content"
             android:layout_below="@+id/other"
             android:layout_alignStart="@+id/name"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="16dp"
             android:singleLine="true"
-            android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textColor="@color/white_80"
+            android:textSize="13sp"
             tools:text="導演：FongMi" />
 
         <com.google.android.material.textview.MaterialTextView
@@ -147,12 +147,12 @@
             android:layout_below="@+id/director"
             android:layout_alignStart="@+id/name"
             android:layout_alignBottom="@+id/video"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_marginEnd="16dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textColor="@color/white_80"
+            android:textSize="13sp"
             tools:text="演員：FongMi" />
 
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -179,15 +179,16 @@
                         android:id="@+id/content_layout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="vertical">
+                        android:layout_marginStart="16dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginEnd="16dp"
+                        android:gravity="top"
+                        android:orientation="horizontal">
 
                         <com.google.android.material.textview.MaterialTextView
                             style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_marginEnd="16dp"
                             android:text="@string/detail_content"
                             android:textColor="@color/white_70"
                             android:textSize="13sp" />
@@ -195,11 +196,10 @@
                         <com.google.android.material.textview.MaterialTextView
                             android:id="@+id/content"
                             style="@style/Video.ContextText"
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_marginTop="4dp"
-                            android:layout_marginEnd="16dp"
+                            android:layout_marginStart="4dp"
+                            android:layout_weight="1"
                             android:ellipsize="end"
                             android:lineSpacingExtra="3dp"
                             android:maxLines="2"
@@ -214,7 +214,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="14dp"
                         android:layout_marginEnd="16dp"
                         android:gravity="center"
                         android:orientation="horizontal">
@@ -283,7 +283,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="14dp"
                         android:layout_marginEnd="16dp"
                         android:text="@string/detail_quality"
                         android:textColor="@color/white"
