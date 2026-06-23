@@ -110,8 +110,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private Runnable mR1;
     private Runnable mR2;
     private Runnable mR3;
-    private Runnable mR4;
-    private long lastLiveReloadTime;
     private boolean rotate;
     private int count;
     private PiP mPiP;
@@ -214,7 +212,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::hideInfo;
-        mR4 = this::checkLiveStall;
         mPiP = new PiP();
         setRecyclerView();
         mOsd = new PlayerOsdController(mBinding.osd.getRoot(), mBinding.osd.osdTopLeft, mBinding.osd.osdTopRight, mBinding.osd.osdBottomLeft, mBinding.osd.osdBottomRight, mBinding.osd.osdMiniProgress, new PlayerOsdController.Source() {
@@ -967,7 +964,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mPlaybackKey = result.getRealUrl();
         startPlayer(mPlaybackKey, result, false, getHome().getTimeout(), buildMetadata());
         mBinding.control.action.speed.setText(player().setSpeed(PlayerSetting.getDefaultSpeed()));
-        App.post(mR4, 1000);
     }
 
     private void checkControl() {
@@ -1114,7 +1110,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
                 hideProgress();
                 checkControl();
                 player().reset();
-                App.post(mR4, 1000);
                 break;
             case Player.STATE_ENDED:
                 checkEnded();
@@ -1223,32 +1218,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void checkEnded() {
-        if (shouldReloadLive()) {
-            reloadLive();
+        if (player().isLive()) {
+            checkNext();
         } else {
             nextChannel();
         }
-    }
-
-    private void checkLiveStall() {
-        if (service() == null || mChannel == null || player().isEmpty()) return;
-        long duration = player().getDuration();
-        long position = player().getPosition();
-        boolean nearEnd = duration > 0 && duration <= 90_000 && position >= duration - 1000;
-        if (nearEnd) reloadLive();
-        else App.post(mR4, 1000);
-    }
-
-    private boolean shouldReloadLive() {
-        long duration = player().getDuration();
-        return mChannel != null && (player().isLive() || duration > 0 && duration <= 90_000);
-    }
-
-    private void reloadLive() {
-        long now = System.currentTimeMillis();
-        if (now - lastLiveReloadTime < 3000) return;
-        lastLiveReloadTime = now;
-        fetch();
     }
 
     private void setTrackVisible() {
@@ -1618,7 +1592,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     protected void onDestroy() {
         Source.get().exit();
-        App.removeCallbacks(mR1, mR2, mR3, mR4);
+        App.removeCallbacks(mR1, mR2, mR3);
         if (mOsd != null) mOsd.release();
         mViewModel.url().removeObserver(mObserveUrl);
         mViewModel.epg().removeObserver(mObserveEpg);

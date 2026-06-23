@@ -118,7 +118,7 @@ public class PlayerOsdController {
     }
 
     private void setBottomLeft(PlayerManager player) {
-        if (controlsVisible || !PlayerSetting.isOsdProgress() || player == null) {
+        if (controlsVisible || !PlayerSetting.isOsdProgress() || player == null || player.isLive()) {
             bottomLeft.setVisibility(View.GONE);
             return;
         }
@@ -141,7 +141,7 @@ public class PlayerOsdController {
     }
 
     private void setMiniProgress(PlayerManager player) {
-        if (controlsVisible || !PlayerSetting.isOsdMini() || player == null) {
+        if (controlsVisible || !PlayerSetting.isOsdMini() || player == null || player.isLive()) {
             miniProgress.setVisibility(View.GONE);
             return;
         }
