@@ -15,6 +15,7 @@ import android.view.ViewConfiguration;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.lifecycle.Observer;
@@ -115,6 +116,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private long lastLineClickTime;
     private boolean pendingShowEpg;
     private boolean pendingShowProgram;
+    private VideoSize videoSize;
 
     public static void start(Context context) {
         context.startActivity(new Intent(context, LiveActivity.class).putExtra("empty", LiveConfig.isEmpty()));
@@ -254,6 +256,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.across.setSelected(LiveSetting.isAcross());
         mBinding.control.action.change.setSelected(LiveSetting.isChange());
         mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> mPiP.update(this, view));
+        updateVideoHeight(VideoSize.UNKNOWN);
     }
 
     private void setNavigation() {
@@ -1086,6 +1089,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected void onSizeChanged(VideoSize size) {
+        videoSize = size;
+        updateVideoHeight(size);
         applyResizeMode(LiveSetting.getScale());
         setSizeText();
     }
@@ -1299,9 +1304,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             noPadding(mBinding.recycler);
             noPadding(mBinding.control.getRoot());
         } else {
-            setPadding(mBinding.recycler, true);
+            updateLiveMenuInsets();
             updateControlInsets();
         }
+        updateVideoHeight(videoSize);
     }
 
     private void scrollToPosition(RecyclerView view, int position) {
@@ -1464,6 +1470,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         }
         embeddedUiMode = embedded;
         updateControlInsets();
+        updateVideoHeight(videoSize);
     }
 
     private void updateLiveMenuInsets() {
@@ -1474,6 +1481,34 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private void updateControlInsets() {
         if (isEmbeddedLiveUi()) noPadding(mBinding.control.getRoot());
         else setPadding(mBinding.control.getRoot());
+    }
+
+    private void updateVideoHeight(VideoSize size) {
+        ViewGroup.LayoutParams params = mBinding.video.getLayoutParams();
+        if (!(params instanceof LinearLayoutCompat.LayoutParams layout)) return;
+        if (!isEmbeddedLiveUi()) {
+            if (params.height == 0 && layout.weight == 9) return;
+            params.height = 0;
+            layout.weight = 9;
+            mBinding.video.setLayoutParams(params);
+            return;
+        }
+        int height = getEmbeddedVideoHeight(size);
+        if (params.height == height && layout.weight == 0) return;
+        params.height = height;
+        layout.weight = 0;
+        mBinding.video.setLayoutParams(params);
+    }
+
+    private int getEmbeddedVideoHeight(VideoSize size) {
+        int width = ResUtil.getScreenWidth();
+        int screen = ResUtil.getScreenHeight(this);
+        int videoWidth = size == null || size.width <= 0 ? 16 : size.width;
+        int videoHeight = size == null || size.height <= 0 ? 9 : size.height;
+        float ratio = Math.max(9f / 16f, (float) videoHeight / videoWidth);
+        int height = Math.round(width * ratio);
+        int max = Math.round(screen * 0.40f);
+        return Math.max(ResUtil.dp2px(180), Math.min(height, max));
     }
 
     @Override
