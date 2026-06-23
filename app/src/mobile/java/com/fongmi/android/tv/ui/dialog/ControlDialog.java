@@ -13,6 +13,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
@@ -48,6 +50,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     private PlayerManager player;
     private History history;
     private boolean parse;
+    private int scrollBasePaddingBottom;
 
     public ControlDialog() {
         this.scale = ResUtil.getStringArray(R.array.select_scale);
@@ -116,6 +119,8 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     @Override
     protected void initView() {
+        scrollBasePaddingBottom = binding.controlScroll.getPaddingBottom();
+        setControlPadding();
         setSheetBackground();
         binding.decode.setText(parent.control.action.decode.getText());
         setLut();
@@ -130,6 +135,11 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         setPlayer();
         setParse();
         binding.controlScroll.post(() -> binding.controlScroll.scrollTo(0, 0));
+    }
+
+    private void setControlPadding() {
+        int bottom = scrollBasePaddingBottom + getNavigationBottomInset();
+        binding.controlScroll.setPaddingRelative(binding.controlScroll.getPaddingStart(), binding.controlScroll.getPaddingTop(), binding.controlScroll.getPaddingEnd(), bottom);
     }
 
     @Override
@@ -314,6 +324,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private int getContentHeight(FrameLayout sheet) {
         if (binding == null || binding.controlScroll.getChildCount() == 0) return getPanelMaxHeight();
+        setControlPadding();
         View content = binding.controlScroll.getChildAt(0);
         int width = sheet.getWidth() > 0 ? sheet.getWidth() : ResUtil.getScreenWidth(requireContext());
         int contentWidth = Math.max(0, width - binding.controlScroll.getPaddingStart() - binding.controlScroll.getPaddingEnd());
@@ -339,7 +350,14 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         parent.getRoot().getLocationOnScreen(root);
         int rootBottom = root[1] + parent.getRoot().getHeight();
         int videoBottom = video[1] + parent.video.getHeight();
-        return Math.max(ResUtil.dp2px(260), rootBottom - videoBottom);
+        return Math.max(ResUtil.dp2px(260), rootBottom - videoBottom - getNavigationBottomInset());
+    }
+
+    private int getNavigationBottomInset() {
+        if (ResUtil.isLand(requireContext())) return 0;
+        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(requireActivity().getWindow().getDecorView());
+        int bottom = insets == null ? 0 : insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
+        return Math.max(bottom, ResUtil.dp2px(48));
     }
 
     public void setTitleVisible() {
