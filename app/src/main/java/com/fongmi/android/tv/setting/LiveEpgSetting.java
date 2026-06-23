@@ -50,6 +50,21 @@ public class LiveEpgSetting {
         Prefers.put(KEY_HISTORY, App.gson().toJson(items));
     }
 
+    public static void removeHistory(String url) {
+        url = normalize(url);
+        if (url.isEmpty()) return;
+        List<String> items = getHistory();
+        if (items.remove(url)) Prefers.put(KEY_HISTORY, App.gson().toJson(items));
+        if (getUrl().equals(url)) Prefers.put(KEY_URL, "");
+    }
+
+    public static void replaceHistory(String oldUrl, String newUrl) {
+        oldUrl = normalize(oldUrl);
+        newUrl = normalize(newUrl);
+        if (!oldUrl.isEmpty() && !oldUrl.equals(newUrl)) removeHistory(oldUrl);
+        putUrl(newUrl);
+    }
+
     public static void clearHistory() {
         Prefers.put(KEY_HISTORY, App.gson().toJson(Collections.emptyList()));
     }

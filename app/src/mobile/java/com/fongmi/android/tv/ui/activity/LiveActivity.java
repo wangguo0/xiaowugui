@@ -69,6 +69,7 @@ import com.fongmi.android.tv.ui.dialog.LiveControlDialog;
 import com.fongmi.android.tv.ui.dialog.LiveDialog;
 import com.fongmi.android.tv.ui.dialog.LiveEpgDialog;
 import com.fongmi.android.tv.ui.dialog.LiveLineDialog;
+import com.fongmi.android.tv.ui.dialog.LiveProgramDialog;
 import com.fongmi.android.tv.ui.dialog.PassDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
@@ -112,6 +113,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private Channel lastLineClickChannel;
     private long lastLineClickTime;
     private boolean pendingShowEpg;
+    private boolean pendingShowProgram;
 
     public static void start(Context context) {
         context.startActivity(new Intent(context, LiveActivity.class).putExtra("empty", LiveConfig.isEmpty()));
@@ -230,6 +232,9 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             mBinding.liveSetting.setOnClickListener(view -> onLiveSetting());
             mBinding.liveSetting.setOnTouchListener(this::onLiveSettingTouch);
         }
+        if (mBinding.liveCurrent != null) mBinding.liveCurrent.setOnClickListener(view -> onLiveProgram());
+        if (mBinding.liveProgram != null) mBinding.liveProgram.setOnClickListener(view -> onLiveProgram());
+        if (mBinding.liveProgramNext != null) mBinding.liveProgramNext.setOnClickListener(view -> onLiveProgram());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
     }
 
@@ -838,6 +843,27 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.liveProgramNext.setVisibility(View.VISIBLE);
     }
 
+    private void onLiveProgram() {
+        if (mChannel == null) return;
+        if (!mChannel.getDataList().isEmpty()) {
+            showLiveProgram();
+            return;
+        }
+        pendingShowProgram = true;
+        mViewModel.getEpg(mChannel);
+        Notify.show(R.string.live_program_empty);
+    }
+
+    private void showLiveProgram() {
+        if (mChannel == null || mChannel.getDataList().isEmpty()) {
+            Notify.show(R.string.live_program_empty);
+            return;
+        }
+        LiveProgramDialog.create().channel(mChannel).zoneId(mViewModel.getZoneId()).show(this);
+        hideControl();
+        hideInfo();
+    }
+
     private String getProgramText(EpgData data, String empty) {
         return data == null || data.format().isEmpty() ? empty : data.format();
     }
@@ -846,6 +872,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (mChannel == null) return;
         if (!mChannel.getTvgId().equals(epg.getKey())) {
             pendingShowEpg = false;
+            pendingShowProgram = false;
             return;
         }
         EpgData data = epg.getEpgData();
@@ -860,6 +887,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (pendingShowEpg) {
             pendingShowEpg = false;
             showEpg(mChannel);
+        }
+        if (pendingShowProgram) {
+            pendingShowProgram = false;
+            showLiveProgram();
         }
     }
 

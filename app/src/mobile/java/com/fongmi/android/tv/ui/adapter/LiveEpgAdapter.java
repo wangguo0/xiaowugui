@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -39,6 +40,10 @@ public class LiveEpgAdapter extends RecyclerView.Adapter<LiveEpgAdapter.ViewHold
     public interface OnClickListener {
 
         void onEpgClick(String url);
+
+        void onEpgEdit(String url);
+
+        void onEpgDelete(String url);
     }
 
     @Override
@@ -55,9 +60,14 @@ public class LiveEpgAdapter extends RecyclerView.Adapter<LiveEpgAdapter.ViewHold
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         String item = items.get(position);
+        boolean editable = !item.isEmpty();
         holder.binding.text.setText(item.isEmpty() ? ResUtil.getString(R.string.live_epg_default) : item);
-        holder.binding.text.setSelected(item.equals(LiveEpgSetting.getUrl()));
-        holder.binding.text.setOnClickListener(v -> listener.onEpgClick(item));
+        holder.binding.getRoot().setSelected(item.equals(LiveEpgSetting.getUrl()));
+        holder.binding.edit.setVisibility(editable ? View.VISIBLE : View.GONE);
+        holder.binding.delete.setVisibility(editable ? View.VISIBLE : View.GONE);
+        holder.binding.getRoot().setOnClickListener(v -> listener.onEpgClick(item));
+        holder.binding.edit.setOnClickListener(v -> listener.onEpgEdit(item));
+        holder.binding.delete.setOnClickListener(v -> listener.onEpgDelete(item));
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

@@ -28,6 +28,7 @@ public class LiveEpgDialog extends BaseBottomSheetDialog implements LiveEpgAdapt
 
     private DialogLiveEpgBinding binding;
     private LiveEpgAdapter adapter;
+    private String editingUrl;
 
     public static LiveEpgDialog create() {
         return new LiveEpgDialog();
@@ -85,12 +86,13 @@ public class LiveEpgDialog extends BaseBottomSheetDialog implements LiveEpgAdapt
             Notify.show(com.fongmi.android.tv.R.string.live_epg_empty);
             return;
         }
+        if (editingUrl != null) LiveEpgSetting.replaceHistory(editingUrl, url);
         select(url);
         adapter.reload();
     }
 
     private void select(String url) {
-        LiveEpgSetting.putUrl(url);
+        if (editingUrl == null) LiveEpgSetting.putUrl(url);
         ((Listener) requireActivity()).onLiveEpgSelected(url);
         dismiss();
     }
@@ -98,6 +100,28 @@ public class LiveEpgDialog extends BaseBottomSheetDialog implements LiveEpgAdapt
     @Override
     public void onEpgClick(String url) {
         select(url);
+    }
+
+    @Override
+    public void onEpgEdit(String url) {
+        editingUrl = url;
+        binding.input.setText(url);
+        binding.input.setSelection(binding.input.length());
+        binding.add.setText(com.fongmi.android.tv.R.string.live_epg_save);
+        binding.input.requestFocus();
+    }
+
+    @Override
+    public void onEpgDelete(String url) {
+        boolean current = url.equals(LiveEpgSetting.getUrl());
+        if (url.equals(editingUrl)) {
+            editingUrl = null;
+            binding.input.setText("");
+            binding.add.setText(com.fongmi.android.tv.R.string.live_epg_apply);
+        }
+        LiveEpgSetting.removeHistory(url);
+        adapter.reload();
+        if (current) ((Listener) requireActivity()).onLiveEpgSelected("");
     }
 
     private void configureWindow(Dialog dialog) {
