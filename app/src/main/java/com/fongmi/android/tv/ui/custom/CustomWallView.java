@@ -40,9 +40,9 @@ import pl.droidsonroids.gif.GifDrawable;
 
 public class CustomWallView extends FrameLayout implements DefaultLifecycleObserver {
 
-    private static final int[] WALL_PAPERS = {0, R.drawable.wallpaper_1, R.drawable.wallpaper_2, R.drawable.wallpaper_3, R.drawable.wallpaper_4};
+    private static final int[] WALL_PAPERS = {0, R.drawable.wallpaper_1};
     private static final int DEFAULT_WALL_COLOR = 0xFF0F1115;
-    private static final int[] WALL_COLORS = {DEFAULT_WALL_COLOR, 0xFF40C090, 0xFF4870E0, 0xFF48B0C0, 0xFF404040};
+    private static final int[] WALL_COLORS = {DEFAULT_WALL_COLOR, 0xFF40C090};
     private static final int TYPE_RES = 0;
     private static final int TYPE_GIF = 1;
     private static final int TYPE_VIDEO = 2;
