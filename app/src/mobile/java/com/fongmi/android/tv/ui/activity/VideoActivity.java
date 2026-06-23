@@ -839,12 +839,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private int getEpisodeSpan(List<Episode> items) {
-        int maxLen = 0;
-        for (Episode item : items) maxLen = Math.max(maxLen, item.getDesc().concat(item.getName()).length());
-        int ideal = maxLen >= 14 ? 160 : maxLen >= 10 ? 130 : maxLen >= 7 ? 104 : 80;
-        int width = mBinding.episode.getWidth() > 0 ? mBinding.episode.getWidth() : ResUtil.getScreenWidth(this) - ResUtil.dp2px(32);
-        int span = width / ResUtil.dp2px(ideal);
-        return Math.max(2, Math.min(getEpisodeSpanCount(), span));
+        return PlayerSetting.getEpisodeColumn();
     }
 
     private int getSelectedEpisodePosition(List<Episode> items) {
@@ -2017,6 +2012,21 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     public void onScale(int tag) {
         mKeyDown.resetScale();
         setScale(tag);
+    }
+
+    @Override
+    public void onEpisodeColumn(int column) {
+        PlayerSetting.putEpisodeColumn(column);
+        if (mEpisodeAdapter == null) return;
+        if (mFlagAdapter == null || mFlagAdapter.isEmpty()) {
+            updateEpisodeSpan(mEpisodeAdapter.getItems());
+            mEpisodeAdapter.notifyItemRangeChanged(0, mEpisodeAdapter.getItemCount());
+        } else {
+            EpisodeGroupAdapter.Group group = mEpisodeGroupAdapter.isEmpty() ? null : mEpisodeGroupAdapter.getItems().get(mEpisodeGroupAdapter.getPosition());
+            setVisibleEpisodeAdapter(getFlag().getEpisodes(), group);
+        }
+        scrollToPosition(mBinding.episode, mEpisodeAdapter.getPosition());
+        mBinding.episode.post(this::updateEpisodeViewportHeight);
     }
 
     @Override

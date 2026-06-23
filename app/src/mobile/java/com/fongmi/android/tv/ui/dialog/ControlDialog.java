@@ -214,7 +214,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     }
 
     private void setEpisodeColumn(int column) {
-        PlayerSetting.putEpisodeColumn(column);
+        ((Listener) requireActivity()).onEpisodeColumn(column);
         setEpisodeColumn();
     }
 
@@ -308,7 +308,22 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     private int getPanelHeight() {
         int screen = ResUtil.getScreenHeight(requireContext());
         if (ResUtil.isLand(requireContext())) return Math.max(ResUtil.dp2px(260), Math.min(ResUtil.dp2px(420), Math.round(screen * 0.82f)));
-        return Math.max(ResUtil.dp2px(330), Math.min(ResUtil.dp2px(520), Math.round(screen * 0.52f)));
+        int available = getPortAvailableHeight(screen);
+        int desired = Math.min(ResUtil.dp2px(640), Math.round(screen * 0.68f));
+        int min = ResUtil.dp2px(330);
+        if (available <= min) return available;
+        return Math.min(available, Math.max(min, desired));
+    }
+
+    private int getPortAvailableHeight(int fallback) {
+        if (parent == null || parent.video.getHeight() <= 0) return Math.round(fallback * 0.58f);
+        int[] video = new int[2];
+        int[] root = new int[2];
+        parent.video.getLocationOnScreen(video);
+        parent.getRoot().getLocationOnScreen(root);
+        int rootBottom = root[1] + parent.getRoot().getHeight();
+        int videoBottom = video[1] + parent.video.getHeight();
+        return Math.max(ResUtil.dp2px(260), rootBottom - videoBottom);
     }
 
     public void setTitleVisible() {
@@ -325,6 +340,8 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     public interface Listener {
 
         void onScale(int tag);
+
+        void onEpisodeColumn(int column);
 
         void onParse(Parse item);
 
