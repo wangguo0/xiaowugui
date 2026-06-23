@@ -1496,7 +1496,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void updateEmbeddedUiMode() {
         boolean embedded = isEmbeddedLiveUi();
-        mBinding.navigation.setVisibility(embedded ? View.VISIBLE : View.GONE);
+        mBinding.navigation.setVisibility(View.GONE);
         if (embeddedUiMode != null && embeddedUiMode && !embedded) {
             hideControl();
             hideUI();
