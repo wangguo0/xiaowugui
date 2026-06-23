@@ -1396,6 +1396,12 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void onSingleTap() {
+        if (!isEmbeddedLiveUi()) {
+            if (isVisible(mBinding.control.getRoot())) hideControl();
+            else showControl();
+            hideInfo();
+            return;
+        }
         onToggle();
     }
 

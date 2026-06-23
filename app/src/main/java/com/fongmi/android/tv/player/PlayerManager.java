@@ -264,6 +264,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     public String getLutText() {
+        if (LutSetting.isEnabled() && videoEffectsActive) return LutSetting.getButtonText();
         if (!TextUtils.isEmpty(getLutUnavailableReason())) return ResUtil.getString(R.string.play_lut);
         return LutSetting.getButtonText();
     }
