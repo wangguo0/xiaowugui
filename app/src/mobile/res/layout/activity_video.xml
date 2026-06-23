@@ -234,7 +234,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginTop="10dp"
                         android:layout_marginEnd="16dp"
                         android:gravity="center"
                         android:orientation="horizontal">
@@ -265,7 +265,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"
-                        android:layout_marginTop="14dp"
+                        android:layout_marginTop="10dp"
                         android:layout_marginEnd="12dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
