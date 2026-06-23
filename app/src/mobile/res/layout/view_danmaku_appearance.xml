@@ -116,28 +116,60 @@
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_style_none" />
+            android:text="@string/danmaku_style_none"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
         <com.google.android.material.chip.Chip
             android:id="@+id/styleShadow"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_style_shadow" />
+            android:text="@string/danmaku_style_shadow"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
         <com.google.android.material.chip.Chip
             android:id="@+id/styleStroke"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_style_stroke" />
+            android:text="@string/danmaku_style_stroke"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
         <com.google.android.material.chip.Chip
             android:id="@+id/styleProjection"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_style_projection" />
+            android:text="@string/danmaku_style_projection"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
     </com.google.android.material.chip.ChipGroup>
 
@@ -347,21 +379,45 @@
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_color_default" />
+            android:text="@string/danmaku_color_default"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
         <com.google.android.material.chip.Chip
             android:id="@+id/colorColorful"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_color_colorful" />
+            android:text="@string/danmaku_color_colorful"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
         <com.google.android.material.chip.Chip
             android:id="@+id/colorGradient"
             style="@style/Widget.Material3.Chip.Filter"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/danmaku_color_gradient" />
+            android:text="@string/danmaku_color_gradient"
+            android:textColor="@color/danmaku_choice_text"
+            app:checkedIconTint="@color/danmaku_choice_text"
+            app:chipBackgroundColor="@color/danmaku_choice_bg"
+            app:chipMinHeight="40dp"
+            app:chipStrokeColor="@color/danmaku_choice_stroke"
+            app:chipStrokeWidth="1dp"
+            app:ensureMinTouchTargetSize="false"
+            app:rippleColor="#22FFFFFF" />
 
     </com.google.android.material.chip.ChipGroup>
 

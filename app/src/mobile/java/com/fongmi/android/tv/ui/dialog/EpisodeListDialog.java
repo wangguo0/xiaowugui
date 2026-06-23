@@ -63,6 +63,11 @@ public class EpisodeListDialog extends BaseSideSheetDialog implements FlagAdapte
     }
 
     @Override
+    protected boolean edgeToEdgeOnFullscreen() {
+        return true;
+    }
+
+    @Override
     protected void initView() {
         setRecyclerView();
         flagAdapter.addAll(flags == null ? new ArrayList<>() : flags);
