@@ -20,6 +20,9 @@ import com.github.catvod.utils.Prefers;
 
 public class Setting {
 
+    public static final int WALL_GRAPHITE = 5;
+    public static final int WALL_GREEN = 1;
+
     public static String getDoh() {
         return Prefers.getString("doh");
     }
@@ -53,7 +56,7 @@ public class Setting {
     }
 
     public static int getWall() {
-        return Prefers.getInt("wall", 0);
+        return Prefers.getInt("wall", WALL_GRAPHITE);
     }
 
     public static void putWall(int wall) {

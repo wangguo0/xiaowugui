@@ -243,7 +243,7 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     }
 
     private void setWallDefault(View view) {
-        Setting.putWall(Setting.getWall() == 0 ? 1 : 0);
+        Setting.putWall(Setting.getWall() == Setting.WALL_GRAPHITE ? Setting.WALL_GREEN : Setting.WALL_GRAPHITE);
         Setting.putWallType(0);
         ConfigEvent.wall();
     }
