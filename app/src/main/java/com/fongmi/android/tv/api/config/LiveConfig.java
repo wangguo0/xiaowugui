@@ -202,6 +202,7 @@ public class LiveConfig extends BaseConfig {
 
     private void finishLive(Config config, String spider) {
         CustomCspSetting.inject(getLives(), spider);
+        getLives().removeIf(Live::isEmpty);
         Map<String, Live> items = Live.findAll().stream().collect(Collectors.toMap(Live::getName, Function.identity()));
         getLives().forEach(live -> live.sync(items.get(live.getName())));
         setHome(config, getLives().isEmpty() ? new Live() : getLives().stream().filter(item -> item.getName().equals(config.getHome())).findFirst().orElse(getLives().get(0)), false);
