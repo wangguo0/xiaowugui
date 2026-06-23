@@ -13,6 +13,7 @@ import com.fongmi.android.tv.bean.Group;
 import com.fongmi.android.tv.bean.Live;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.player.Source;
+import com.fongmi.android.tv.setting.LiveEpgSetting;
 import com.fongmi.android.tv.utils.Formatters;
 import com.github.catvod.net.OkHttp;
 
@@ -30,7 +31,7 @@ public class LiveApi {
     }
 
     public static boolean parseXml(@NonNull Live item) {
-        return item.getEpgXml().stream().map(url -> startXml(item, url)).reduce(false, Boolean::logicalOr);
+        return LiveEpgSetting.getXmlUrls(item).stream().map(url -> startXml(item, url)).reduce(false, Boolean::logicalOr);
     }
 
     @NonNull

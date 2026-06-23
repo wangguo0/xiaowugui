@@ -60,7 +60,7 @@ public class EpgParser {
 
     public static void start(Live live, String url) throws Exception {
         long t0 = System.currentTimeMillis();
-        File file = Path.epg(UrlUtil.path(url));
+        File file = Path.epg(cacheFileName(url));
         String reason = refreshReason(file);
         boolean refresh = reason != null;
         Log.i(TAG, "start url=" + url + " file=" + file.getName() + " refresh=" + refresh + (refresh ? " reason=" + reason : ""));
@@ -69,6 +69,14 @@ public class EpgParser {
         if (gzip) readGzip(live, file, refresh);
         else readXml(live, file);
         Log.i(TAG, "start done elapsed=" + (System.currentTimeMillis() - t0) + "ms");
+    }
+
+    private static String cacheFileName(String url) {
+        String name = UrlUtil.path(url);
+        if (!name.isEmpty()) return name;
+        String host = UrlUtil.host(url);
+        if (host.isEmpty()) host = "epg";
+        return host.replaceAll("[^A-Za-z0-9._-]", "_") + "_" + Integer.toHexString(url.hashCode()) + ".xml";
     }
 
     public static Epg getEpg(String xml, String key, ZoneId zoneId) {
