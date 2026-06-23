@@ -218,6 +218,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.text.setOnLongClickListener(view -> onTextLong());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
+        if (mBinding.liveSetting != null) mBinding.liveSetting.setOnClickListener(view -> onLiveSetting());
+        if (mBinding.liveLine != null) mBinding.liveLine.setOnClickListener(view -> onLine());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
     }
 
@@ -464,6 +466,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private void onConfig() {
         HistoryDialog.create().live().readOnly().show(this);
         hideControl();
+    }
+
+    private void onLiveSetting() {
+        showControl();
+        hideInfo();
     }
 
     private void onInvert() {
@@ -747,6 +754,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.widget.play.setText("");
         mBinding.widget.name.setMaxEms(48);
         mChannel.loadLogo(mBinding.widget.logo);
+        setLiveHeader();
         mBinding.control.title.setSelected(true);
         mBinding.widget.line.setText(mChannel.getLine());
         mBinding.widget.name.setText(mChannel.getShow());
@@ -758,6 +766,34 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.widget.line.setVisibility(mChannel.getLineVisible());
         mBinding.control.action.line.setText(mBinding.widget.line.getText());
         mBinding.control.action.line.setVisibility(mBinding.widget.line.getVisibility());
+        if (mBinding.liveLine != null) {
+            mBinding.liveLine.setText(mBinding.widget.line.getText());
+            mBinding.liveLine.setVisibility(mBinding.widget.line.getVisibility());
+        }
+    }
+
+    private void setLiveHeader() {
+        if (mBinding.liveTitle == null || mChannel == null) return;
+        mBinding.liveTitle.setText(mChannel.getShow());
+        mBinding.liveTitle.setSelected(true);
+        mBinding.liveLogoFallback.setVisibility(mChannel.getLogo().isEmpty() ? View.VISIBLE : View.GONE);
+        mChannel.loadLogo(mBinding.liveLogo);
+        setLiveProgram(null);
+    }
+
+    private void setLiveProgram(Epg epg) {
+        if (mBinding.liveProgram == null) return;
+        String empty = getString(R.string.live_no_epg);
+        if (epg == null || epg.getList().isEmpty()) {
+            mBinding.liveProgram.setText(empty);
+            mBinding.liveProgramNext.setText(empty);
+            return;
+        }
+        int selected = epg.getSelected();
+        EpgData current = selected >= 0 && selected < epg.getList().size() ? epg.getList().get(selected) : epg.getEpgData();
+        EpgData next = selected + 1 < epg.getList().size() ? epg.getList().get(selected + 1) : null;
+        mBinding.liveProgram.setText(current == null || current.format().isEmpty() ? empty : current.format());
+        mBinding.liveProgramNext.setText(next == null || next.format().isEmpty() ? empty : next.format());
     }
 
     private void setEpg(Epg epg) {
@@ -768,6 +804,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (hasTitle) mBinding.control.title.setText(getString(R.string.detail_title, mChannel.getShow(), data.getTitle()));
         mBinding.widget.name.setMaxEms(hasTitle ? 12 : 48);
         mBinding.widget.play.setText(data.format());
+        setLiveProgram(epg);
         setWidth(epg);
         setMetadata();
     }

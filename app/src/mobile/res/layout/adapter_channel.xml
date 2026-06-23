@@ -2,29 +2,32 @@
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:layout_marginTop="4dp"
-    android:layout_marginBottom="4dp"
+    android:layout_height="56dp"
+    android:layout_marginTop="3dp"
+    android:layout_marginBottom="3dp"
     android:background="@drawable/shape_live"
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/number"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="12dp"
+        android:layout_width="42dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/shape_live_channel_num"
         android:duplicateParentState="true"
         android:fontFeatureSettings="tnum"
+        android:gravity="center"
+        android:singleLine="true"
         android:textColor="@color/selector_live_text"
-        android:textSize="14sp"
+        android:textSize="13sp"
         tools:text="01" />
 
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/logo"
         android:layout_width="44dp"
         android:layout_height="33dp"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="8dp"
         android:visibility="gone" />
 
     <com.google.android.material.textview.MaterialTextView
@@ -36,7 +39,7 @@
         android:ellipsize="marquee"
         android:singleLine="true"
         android:textColor="@color/selector_live_text"
-        android:textSize="14sp"
+        android:textSize="15sp"
         tools:text="CNN" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>
