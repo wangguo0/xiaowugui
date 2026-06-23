@@ -64,6 +64,7 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.dialog.CastDialog;
 import com.fongmi.android.tv.ui.dialog.HistoryDialog;
 import com.fongmi.android.tv.ui.dialog.InfoDialog;
+import com.fongmi.android.tv.ui.dialog.LiveControlDialog;
 import com.fongmi.android.tv.ui.dialog.LiveDialog;
 import com.fongmi.android.tv.ui.dialog.LiveLineDialog;
 import com.fongmi.android.tv.ui.dialog.PassDialog;
@@ -84,7 +85,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class LiveActivity extends PlaybackActivity implements CustomKeyDown.Listener, TrackDialog.Listener, Biometric.Callback, PassListener, ConfigListener, LiveListener, GroupAdapter.OnClickListener, ChannelAdapter.OnClickListener, EpgDataAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener {
+public class LiveActivity extends PlaybackActivity implements CustomKeyDown.Listener, TrackDialog.Listener, Biometric.Callback, PassListener, ConfigListener, LiveListener, GroupAdapter.OnClickListener, ChannelAdapter.OnClickListener, EpgDataAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener, LiveControlDialog.Listener {
 
     private ActivityLiveBinding mBinding;
     private ChannelAdapter mChannelAdapter;
@@ -222,7 +223,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.text.setOnLongClickListener(view -> onTextLong());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
-        if (mBinding.liveSetting != null) mBinding.liveSetting.setOnClickListener(view -> onLiveSetting());
+        if (mBinding.liveSetting != null) {
+            mBinding.liveSetting.setOnClickListener(view -> onLiveSetting());
+            mBinding.liveSetting.setOnTouchListener(this::onLiveSettingTouch);
+        }
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
     }
 
@@ -472,8 +476,17 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void onLiveSetting() {
-        showControl();
+        LiveControlDialog.create().parent(mBinding).show(this);
         hideInfo();
+    }
+
+    private boolean onLiveSettingTouch(View view, MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            view.animate().scaleX(1.08f).scaleY(1.08f).alpha(0.82f).setDuration(90).start();
+        } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+            view.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(130).start();
+        }
+        return false;
     }
 
     private void onInvert() {
@@ -893,6 +906,52 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mHides.clear();
         mChannel = null;
         mGroup = null;
+    }
+
+    @Override
+    public void onLiveSourcePanel() {
+        onHome();
+    }
+
+    @Override
+    public void onLiveHistoryPanel() {
+        onConfig();
+    }
+
+    @Override
+    public void onLiveCastPanel() {
+        onCast();
+        hideControl();
+    }
+
+    @Override
+    public void onLivePiPPanel() {
+        if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), LiveSetting.getScale());
+    }
+
+    @Override
+    public void onLiveBackgroundPanel() {
+        moveTaskToBack(true);
+        setAudioOnly(true);
+    }
+
+    @Override
+    public void onLiveLinePanel() {
+        if (mChannel != null && !mChannel.isOnly()) showLineDialog(mChannel);
+        else onLine();
+    }
+
+    @Override
+    public void onLiveScalePanel(int scale) {
+        if (mKeyDown.getScale() != 1.0f) mKeyDown.resetScale();
+        setScale(scale);
+        setR1Callback();
+    }
+
+    @Override
+    public void onLiveTrackPanel(int type) {
+        TrackDialog.create().type(type).player(player()).show(this);
+        hideControl();
     }
 
     private final PlaybackService.NavigationCallback mNavigationCallback = new PlaybackService.NavigationCallback() {

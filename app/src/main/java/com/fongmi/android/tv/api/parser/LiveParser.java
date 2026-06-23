@@ -13,6 +13,7 @@ import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Json;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,6 +44,11 @@ public class LiveParser {
         String[] splits = line.split(" ");
         for (String split : splits) for (String keyword : keywords) if (split.contains(keyword)) return split.split("=")[1].replace("\"", "");
         return "";
+    }
+
+    private static boolean isMetaChannel(String name) {
+        String text = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
+        return text.startsWith("更新时间") || text.startsWith("更新日期") || text.startsWith("update time") || text.startsWith("update date") || text.startsWith("last update");
     }
 
     public static void start(Live live) throws Exception {
@@ -126,6 +132,7 @@ public class LiveParser {
             if (setting.find(line)) setting.check(line);
             if (line.contains("#genre#")) setting.clear();
             if (line.contains("#genre#")) live.getGroups().add(Group.create(split[0], live.isPass()));
+            if (split.length > 1 && isMetaChannel(split[0])) continue;
             if (split.length > 1 && live.getGroups().isEmpty()) live.getGroups().add(Group.create());
             if (split.length > 1 && split[1].contains("://")) {
                 Group group = live.getGroups().get(live.getGroups().size() - 1);

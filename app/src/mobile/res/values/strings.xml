@@ -36,6 +36,11 @@
     <string name="control_scale">Scale</string>
     <string name="control_track">Track</string>
     <string name="control_other">Other</string>
+    <string name="live_control_play">Live</string>
+    <string name="live_control_source">Source</string>
+    <string name="live_control_pip">PiP</string>
+    <string name="live_control_preference">Preference</string>
+    <string name="live_control_player">Player</string>
 
     <!-- Dialog -->
     <string name="dialog_delete_record">Delete all records?</string>
