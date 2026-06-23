@@ -10,6 +10,7 @@ import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
@@ -55,8 +56,14 @@ public class TypeDialog extends BaseBottomSheetDialog implements TypeAdapter.OnC
     @Override
     public Dialog onCreateDialog(Bundle savedInstanceState) {
         Dialog dialog = super.onCreateDialog(savedInstanceState);
-        clearDim(dialog.getWindow());
+        configureWindow(dialog.getWindow());
         return dialog;
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (getDialog() != null) configureWindow(getDialog().getWindow());
     }
 
     @Override
@@ -65,9 +72,14 @@ public class TypeDialog extends BaseBottomSheetDialog implements TypeAdapter.OnC
     }
 
     @Override
+    protected boolean stableOverlay() {
+        return true;
+    }
+
+    @Override
     protected void setBehavior(BottomSheetDialog dialog) {
         super.setBehavior(dialog);
-        clearDim(dialog.getWindow());
+        configureWindow(dialog.getWindow());
         FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
         if (sheet != null) sheet.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
     }
@@ -90,11 +102,13 @@ public class TypeDialog extends BaseBottomSheetDialog implements TypeAdapter.OnC
         listener.onItemClick(position, item);
     }
 
-    private void clearDim(Window window) {
+    private void configureWindow(Window window) {
         if (window == null) return;
-        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
         WindowManager.LayoutParams params = window.getAttributes();
         params.dimAmount = 0f;
         window.setAttributes(params);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        WindowCompat.setDecorFitsSystemWindows(window, true);
     }
 }
