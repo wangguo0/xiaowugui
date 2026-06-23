@@ -23,10 +23,13 @@ public class EpisodeGridHolder extends BaseEpisodeHolder {
     @Override
     public void initView(Episode item) {
         binding.text.setActivated(item.isSelected());
-        binding.text.setSelected(false);
-        binding.text.setEllipsize(TextUtils.TruncateAt.START);
+        binding.text.setSelected(binding.text.hasFocus());
+        binding.text.setEllipsize(binding.text.hasFocus() ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.START);
         binding.text.setText(item.getDesc().concat(item.getName()));
-        binding.text.setOnFocusChangeListener((view, hasFocus) -> binding.text.setEllipsize(hasFocus ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.START));
+        binding.text.setOnFocusChangeListener((view, hasFocus) -> {
+            binding.text.setSelected(hasFocus);
+            binding.text.setEllipsize(hasFocus ? TextUtils.TruncateAt.MARQUEE : TextUtils.TruncateAt.START);
+        });
         binding.text.setOnClickListener(v -> listener.onItemClick(item));
     }
 }
