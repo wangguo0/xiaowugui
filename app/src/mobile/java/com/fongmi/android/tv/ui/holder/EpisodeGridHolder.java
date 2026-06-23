@@ -28,8 +28,6 @@ public class EpisodeGridHolder extends BaseEpisodeHolder {
         setMarquee(binding.text.hasFocus());
         binding.text.setOnFocusChangeListener((view, hasFocus) -> setMarquee(hasFocus));
         binding.text.setOnClickListener(v -> {
-            binding.text.requestFocus();
-            setMarquee(true);
             listener.onItemClick(item);
         });
         binding.text.post(() -> setMarquee(binding.text.hasFocus()));

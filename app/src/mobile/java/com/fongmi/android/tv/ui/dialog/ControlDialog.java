@@ -294,18 +294,32 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
         if (sheet == null) return;
         sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
-        int height = getPanelHeight();
-        ViewGroup.LayoutParams params = sheet.getLayoutParams();
-        params.height = height;
-        sheet.setLayoutParams(params);
         BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
-        behavior.setPeekHeight(height);
         behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
         behavior.setSkipCollapsed(true);
         behavior.setDraggable(false);
+        setSheetHeight(sheet, behavior);
+        sheet.post(() -> setSheetHeight(sheet, behavior));
     }
 
-    private int getPanelHeight() {
+    private void setSheetHeight(FrameLayout sheet, BottomSheetBehavior<FrameLayout> behavior) {
+        int height = Math.min(getPanelMaxHeight(), getContentHeight(sheet));
+        ViewGroup.LayoutParams params = sheet.getLayoutParams();
+        params.height = height;
+        sheet.setLayoutParams(params);
+        behavior.setPeekHeight(height);
+    }
+
+    private int getContentHeight(FrameLayout sheet) {
+        if (binding == null || binding.controlScroll.getChildCount() == 0) return getPanelMaxHeight();
+        View content = binding.controlScroll.getChildAt(0);
+        int width = sheet.getWidth() > 0 ? sheet.getWidth() : ResUtil.getScreenWidth(requireContext());
+        int contentWidth = Math.max(0, width - binding.controlScroll.getPaddingStart() - binding.controlScroll.getPaddingEnd());
+        content.measure(View.MeasureSpec.makeMeasureSpec(contentWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        return content.getMeasuredHeight() + binding.controlScroll.getPaddingTop() + binding.controlScroll.getPaddingBottom();
+    }
+
+    private int getPanelMaxHeight() {
         int screen = ResUtil.getScreenHeight(requireContext());
         if (ResUtil.isLand(requireContext())) return Math.max(ResUtil.dp2px(260), Math.min(ResUtil.dp2px(420), Math.round(screen * 0.82f)));
         int available = getPortAvailableHeight(screen);
