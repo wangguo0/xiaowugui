@@ -358,9 +358,9 @@
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/episodeGroup"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="32dp"
                         android:layout_marginTop="8dp"
-                        android:clipChildren="false"
+                        android:clipChildren="true"
                         android:clipToPadding="false"
                         android:orientation="horizontal"
                         android:paddingStart="16dp"
