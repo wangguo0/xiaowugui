@@ -135,6 +135,7 @@ public final class TrackDialog extends BaseBottomSheetDialog implements TrackAda
             Tracks.Group trackGroup = groups.get(i);
             if (trackGroup.getType() != type) continue;
             for (int j = 0; j < trackGroup.length; j++) {
+                if (!trackGroup.isTrackSupported(j)) continue;
                 Format format = trackGroup.getTrackFormat(j);
                 String name = provider.getTrackName(format);
                 Track item = new Track(type, name, PlayerHelper.describeFormat(format));
