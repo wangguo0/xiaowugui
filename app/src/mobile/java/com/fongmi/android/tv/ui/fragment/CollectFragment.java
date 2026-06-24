@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.fragment;
 
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -11,6 +13,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.MenuProvider;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.ViewModelProvider;
@@ -242,7 +245,12 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Colle
     @Override
     public void onPrepareMenu(@NonNull Menu menu) {
         MenuItem item = menu.findItem(R.id.action_column);
-        if (item != null) item.setIcon(getCount() == 1 ? R.drawable.ic_site_double_column : R.drawable.ic_site_single_column);
+        if (item == null) return;
+        Drawable icon = ContextCompat.getDrawable(requireContext(), getCount() == 1 ? R.drawable.ic_site_double_column : R.drawable.ic_site_single_column);
+        if (icon == null) return;
+        icon = icon.mutate();
+        icon.setTint(Color.WHITE);
+        item.setIcon(icon);
     }
 
     @Override
