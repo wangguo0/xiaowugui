@@ -31,9 +31,37 @@ public class Setting {
     public static final int WALL_LIQUID_CHROME = 13;
     public static final int WALL_NEON_BERRY = 14;
     public static final int WALL_CHAMPAGNE_MIST = 15;
+    public static final int WALL_GLASS_GRADIENT = 16;
+    public static final int WALL_DEEP_SPACE_GLASS = 17;
+    public static final int WALL_POLAR_LIGHT_GLASS = 18;
+    public static final int WALL_NEON_CYBER = 19;
+    public static final int WALL_WARM_MOON_GLASS = 20;
+    public static final int WALL_CRYSTAL_SKY = 21;
+    public static final int WALL_DREAM_PURPLE = 22;
+    public static final int WALL_SKY_MINT = 23;
+    public static final int WALL_FOREST_MIST = 24;
+    public static final int WALL_DAYLIGHT_MINIMAL = 25;
+    public static final int WALL_DEEP_SEA = 26;
+    public static final int WALL_VIOLET_SMOKE = 27;
+    public static final int WALL_ROSE_VEIL = 28;
+    public static final int WALL_EMERALD_AURORA = 29;
+    public static final int WALL_BLUE_SILK = 30;
+    public static final int WALL_PEACH_DAWN = 31;
+    public static final int WALL_GRAPHITE_SMOKE = 32;
+    public static final int WALL_PASTEL_PRISM = 33;
+    public static final int WALL_MIDNIGHT_MOON = 34;
+    public static final int WALL_CYAN_CRYSTAL = 35;
+    public static final int WALL_LAVENDER_CRYSTAL = 36;
     public static final int WALL_GREEN = 1;
 
-    private static final int[] DEFAULT_WALLS = {WALL_AURORA_GLASS, WALL_SUNSET_PRISM, WALL_MINT_GLACIER, WALL_LIQUID_CHROME, WALL_NEON_BERRY, WALL_CHAMPAGNE_MIST};
+    private static final int[] DEFAULT_WALLS = {
+            WALL_DREAM_PURPLE, WALL_SKY_MINT, WALL_NEON_CYBER, WALL_FOREST_MIST, WALL_DAYLIGHT_MINIMAL,
+            WALL_DEEP_SEA, WALL_VIOLET_SMOKE, WALL_ROSE_VEIL, WALL_EMERALD_AURORA, WALL_BLUE_SILK,
+            WALL_PEACH_DAWN, WALL_GRAPHITE_SMOKE, WALL_PASTEL_PRISM, WALL_MIDNIGHT_MOON, WALL_CYAN_CRYSTAL,
+            WALL_LAVENDER_CRYSTAL, WALL_AURORA_GLASS, WALL_GLASS_GRADIENT, WALL_DEEP_SPACE_GLASS,
+            WALL_POLAR_LIGHT_GLASS, WALL_WARM_MOON_GLASS, WALL_CRYSTAL_SKY, WALL_SUNSET_PRISM, WALL_MINT_GLACIER,
+            WALL_LIQUID_CHROME, WALL_NEON_BERRY, WALL_CHAMPAGNE_MIST
+    };
 
     public static String getDoh() {
         return Prefers.getString("doh");
@@ -92,8 +120,8 @@ public class Setting {
     }
 
     public static int getWall() {
-        int wall = Prefers.getInt("wall", WALL_AURORA_GLASS);
-        return wall == WALL_GREEN || isLegacyColorWall(wall) ? WALL_AURORA_GLASS : wall;
+        int wall = Prefers.getInt("wall", WALL_DREAM_PURPLE);
+        return wall == WALL_GREEN || isLegacyColorWall(wall) ? WALL_DREAM_PURPLE : wall;
     }
 
     public static void putWall(int wall) {
@@ -113,7 +141,7 @@ public class Setting {
         for (int i = 0; i < DEFAULT_WALLS.length; i++) {
             if (DEFAULT_WALLS[i] == wall) return DEFAULT_WALLS[(i + 1) % DEFAULT_WALLS.length];
         }
-        return WALL_AURORA_GLASS;
+        return WALL_DREAM_PURPLE;
     }
 
     public static int[] getDefaultWalls() {
@@ -140,7 +168,7 @@ public class Setting {
     }
 
     public static boolean isBuiltInDesignWall(int wall) {
-        return wall == WALL_AURORA_GLASS || wall == WALL_SUNSET_PRISM || wall == WALL_MINT_GLACIER || wall == WALL_LIQUID_CHROME || wall == WALL_NEON_BERRY || wall == WALL_CHAMPAGNE_MIST;
+        return getDefaultWallIndex(wall) != -1;
     }
 
     public static int getBuiltInWallColor(int wall) {
@@ -150,6 +178,27 @@ public class Setting {
         if (wall == WALL_LIQUID_CHROME) return 0xFF53657F;
         if (wall == WALL_NEON_BERRY) return 0xFF7B42CF;
         if (wall == WALL_CHAMPAGNE_MIST) return 0xFFB47692;
+        if (wall == WALL_GLASS_GRADIENT) return 0xFFA7DDF2;
+        if (wall == WALL_DEEP_SPACE_GLASS) return 0xFF2E2B74;
+        if (wall == WALL_POLAR_LIGHT_GLASS) return 0xFFBFE8F2;
+        if (wall == WALL_NEON_CYBER) return 0xFF4B2BD8;
+        if (wall == WALL_WARM_MOON_GLASS) return 0xFFC7A796;
+        if (wall == WALL_CRYSTAL_SKY) return 0xFFAFCDF7;
+        if (wall == WALL_DREAM_PURPLE) return 0xFF9E80E8;
+        if (wall == WALL_SKY_MINT) return 0xFFA8DCE5;
+        if (wall == WALL_FOREST_MIST) return 0xFF4E8750;
+        if (wall == WALL_DAYLIGHT_MINIMAL) return 0xFFD7E3EE;
+        if (wall == WALL_DEEP_SEA) return 0xFF2F7290;
+        if (wall == WALL_VIOLET_SMOKE) return 0xFF7C4BE2;
+        if (wall == WALL_ROSE_VEIL) return 0xFFEAC7EB;
+        if (wall == WALL_EMERALD_AURORA) return 0xFF27B07D;
+        if (wall == WALL_BLUE_SILK) return 0xFF79BDD4;
+        if (wall == WALL_PEACH_DAWN) return 0xFFFFB58F;
+        if (wall == WALL_GRAPHITE_SMOKE) return 0xFF4B5360;
+        if (wall == WALL_PASTEL_PRISM) return 0xFFDAD7FF;
+        if (wall == WALL_MIDNIGHT_MOON) return 0xFF4935B4;
+        if (wall == WALL_CYAN_CRYSTAL) return 0xFF37C7E4;
+        if (wall == WALL_LAVENDER_CRYSTAL) return 0xFFB8A9F5;
         return 0xFF2B8ECB;
     }
 
@@ -160,7 +209,28 @@ public class Setting {
         if (wall == WALL_LIQUID_CHROME) return "银色潮汐";
         if (wall == WALL_NEON_BERRY) return "莓果极光";
         if (wall == WALL_CHAMPAGNE_MIST) return "香槟晨雾";
-        return "蓝紫流光";
+        if (wall == WALL_GLASS_GRADIENT) return "玻璃渐变风";
+        if (wall == WALL_DEEP_SPACE_GLASS) return "深空玻璃风";
+        if (wall == WALL_POLAR_LIGHT_GLASS) return "极光轻玻璃风";
+        if (wall == WALL_NEON_CYBER) return "暗夜霓虹";
+        if (wall == WALL_WARM_MOON_GLASS) return "暖月玻璃风";
+        if (wall == WALL_CRYSTAL_SKY) return "冰晶幻彩风";
+        if (wall == WALL_DREAM_PURPLE) return "梦幻紫霞";
+        if (wall == WALL_SKY_MINT) return "青空薄荷";
+        if (wall == WALL_FOREST_MIST) return "森林雾绿";
+        if (wall == WALL_DAYLIGHT_MINIMAL) return "白昼极简";
+        if (wall == WALL_DEEP_SEA) return "深海月影";
+        if (wall == WALL_VIOLET_SMOKE) return "紫雾星旋";
+        if (wall == WALL_ROSE_VEIL) return "粉白轻纱";
+        if (wall == WALL_EMERALD_AURORA) return "翡翠极光";
+        if (wall == WALL_BLUE_SILK) return "蓝绸流影";
+        if (wall == WALL_PEACH_DAWN) return "暖桃晨光";
+        if (wall == WALL_GRAPHITE_SMOKE) return "石墨烟岚";
+        if (wall == WALL_PASTEL_PRISM) return "彩虹幻璃";
+        if (wall == WALL_MIDNIGHT_MOON) return "午夜月影";
+        if (wall == WALL_CYAN_CRYSTAL) return "水晶青蓝";
+        if (wall == WALL_LAVENDER_CRYSTAL) return "薰衣水晶";
+        return "梦幻紫霞";
     }
 
     public static String getWallDesc(String desc) {

@@ -270,17 +270,10 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     }
 
     private void setWallDefault(View view) {
-        int[] walls = Setting.getDefaultWalls();
-        String[] names = new String[walls.length];
-        for (int i = 0; i < walls.length; i++) names[i] = Setting.getBuiltInWallName(walls[i]);
-        int index = Math.max(0, Setting.getDefaultWallIndex(Setting.getWall()));
-        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.setting_builtin_wall).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(names, index, (dialog, which) -> {
-            Setting.putWall(walls[which]);
-            Setting.putWallType(0);
-            setWallText();
-            ConfigEvent.wall();
-            dialog.dismiss();
-        }).show();
+        Setting.putWall(Setting.nextDefaultWall());
+        Setting.putWallType(0);
+        setWallText();
+        ConfigEvent.wall();
     }
 
     private void setWallRefresh(View view) {
