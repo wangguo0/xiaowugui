@@ -46,6 +46,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
     private List<Flag> flags;
     private int episodeSpanCount = 4;
     private int episodeTouchSlop;
+    private int episodeDragDirection;
     private float episodeDownY;
     private boolean episodeGroupSwitched;
     private boolean reverse;
@@ -214,6 +215,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 episodeDownY = e.getY();
+                episodeDragDirection = 0;
                 episodeGroupSwitched = false;
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -222,6 +224,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 episodeDownY = 0;
+                episodeDragDirection = 0;
                 episodeGroupSwitched = false;
                 break;
         }
@@ -231,8 +234,9 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
     private void switchEpisodeGroupByDrag(float dy) {
         if (episodeGroupSwitched || groupAdapter == null || groupAdapter.getItemCount() < 2) return;
         if (Math.abs(dy) < episodeTouchSlop) return;
-        if (dy < 0 && !binding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
-        else if (dy > 0 && !binding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
+        if (episodeDragDirection == 0) episodeDragDirection = dy < 0 ? 1 : -1;
+        if (episodeDragDirection > 0 && !binding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
+        else if (episodeDragDirection < 0 && !binding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
     }
 
     private void switchEpisodeGroup(int offset, boolean scrollToEnd) {

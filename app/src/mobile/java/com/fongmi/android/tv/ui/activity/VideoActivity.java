@@ -156,6 +156,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private int mEpisodeBottomInset;
     private int mEpisodeMaxHeight;
     private int mEpisodeTouchSlop;
+    private int mEpisodeDragDirection;
     private float mEpisodeDownY;
     private boolean mEpisodeGroupSwitched;
     private Runnable mR1;
@@ -1233,6 +1234,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 mEpisodeDownY = e.getY();
+                mEpisodeDragDirection = 0;
                 mEpisodeGroupSwitched = false;
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -1241,6 +1243,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 mEpisodeDownY = 0;
+                mEpisodeDragDirection = 0;
                 mEpisodeGroupSwitched = false;
                 break;
         }
@@ -1250,8 +1253,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void switchEpisodeGroupByDrag(float dy) {
         if (mEpisodeGroupSwitched || mEpisodeGroupAdapter == null || mEpisodeGroupAdapter.getItemCount() < 2) return;
         if (Math.abs(dy) < mEpisodeTouchSlop) return;
-        if (dy < 0 && !mBinding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
-        else if (dy > 0 && !mBinding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
+        if (mEpisodeDragDirection == 0) mEpisodeDragDirection = dy < 0 ? 1 : -1;
+        if (mEpisodeDragDirection > 0 && !mBinding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
+        else if (mEpisodeDragDirection < 0 && !mBinding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
     }
 
     private void switchEpisodeGroup(int offset, boolean scrollToEnd) {
