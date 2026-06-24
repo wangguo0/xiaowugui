@@ -489,8 +489,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setEpisodeBottomInset(int bottom) {
         mEpisodeBottomInset = bottom;
-        int padding = bottom + ResUtil.dp2px(12);
-        padding = Math.max(padding, ResUtil.dp2px(28));
+        int padding = bottom + ResUtil.dp2px(8);
+        padding = Math.max(padding, ResUtil.dp2px(18));
         mBinding.episode.setPaddingRelative(mBinding.episode.getPaddingStart(), mBinding.episode.getPaddingTop(), mBinding.episode.getPaddingEnd(), padding);
         mBinding.episode.post(this::updateEpisodeViewportHeight);
     }
@@ -501,8 +501,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         int[] episode = new int[2];
         mBinding.getRoot().getLocationOnScreen(root);
         mBinding.episode.getLocationOnScreen(episode);
-        int available = root[1] + mBinding.getRoot().getHeight() - mEpisodeBottomInset - ResUtil.dp2px(8) - episode[1];
-        int limit = ResUtil.isPad() || ResUtil.isLand(this) ? ResUtil.dp2px(328) : ResUtil.dp2px(280);
+        int available = root[1] + mBinding.getRoot().getHeight() - mEpisodeBottomInset - ResUtil.dp2px(4) - episode[1];
+        int limit = ResUtil.isPad() || ResUtil.isLand(this) ? ResUtil.dp2px(328) : ResUtil.dp2px(320);
         int height = Math.min(limit, available);
         if (height <= 0 || height == mEpisodeMaxHeight) return;
         mEpisodeMaxHeight = height;
@@ -524,7 +524,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.episode.setHasFixedSize(false);
         mBinding.episode.setItemAnimator(null);
         mBinding.episode.setLayoutManager(new GridLayoutManager(this, mEpisodeSpanCount));
-        mBinding.episode.addItemDecoration(mEpisodeDecoration = new SpaceItemDecoration(mEpisodeSpanCount, 8));
+        mBinding.episode.addItemDecoration(mEpisodeDecoration = new SpaceItemDecoration(mEpisodeSpanCount, 6));
         mBinding.episode.setAdapter(mEpisodeAdapter = new EpisodeAdapter(this, ViewType.GRID));
         mBinding.episode.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -862,7 +862,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mEpisodeSpanCount = span;
         mBinding.episode.setLayoutManager(new GridLayoutManager(this, mEpisodeSpanCount));
         if (mEpisodeDecoration != null) mBinding.episode.removeItemDecoration(mEpisodeDecoration);
-        mBinding.episode.addItemDecoration(mEpisodeDecoration = new SpaceItemDecoration(mEpisodeSpanCount, 8));
+        mBinding.episode.addItemDecoration(mEpisodeDecoration = new SpaceItemDecoration(mEpisodeSpanCount, 6));
     }
 
     private int getEpisodeSpan(List<Episode> items) {
