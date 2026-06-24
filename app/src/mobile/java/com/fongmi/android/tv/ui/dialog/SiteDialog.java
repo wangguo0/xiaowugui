@@ -109,6 +109,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         Util.hideKeyboard(binding.keyword);
         block = !block;
         binding.block.setSelected(block);
+        binding.block.setImageResource(block ? R.drawable.ic_site_visible : R.drawable.ic_site_hidden);
         adapter.block(block);
         groups = getGroups();
         setGroupView();

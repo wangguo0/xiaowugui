@@ -43,7 +43,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="0dp"
             android:scaleType="center"
-            android:src="@drawable/ic_site_block"
+            android:src="@drawable/ic_site_hidden"
             app:tint="@color/selector_control" />
 
         <androidx.appcompat.widget.AppCompatImageView
