@@ -19,6 +19,7 @@ import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.DialogSiteBinding;
 import com.fongmi.android.tv.impl.SiteListener;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.setting.SiteBlockSetting;
 import com.fongmi.android.tv.ui.adapter.SiteAdapter;
 import com.fongmi.android.tv.ui.custom.CustomTextListener;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
@@ -41,6 +42,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     private List<String> groups;
     private boolean search;
     private boolean change;
+    private boolean block;
     private int columnCount = 1;
 
     public static SiteDialog create() {
@@ -99,7 +101,19 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
                 binding.recycler.scrollToPosition(0);
             }
         });
+        binding.block.setOnClickListener(this::onBlockToggle);
         binding.search.setOnClickListener(this::onColumnToggle);
+    }
+
+    private void onBlockToggle(View view) {
+        Util.hideKeyboard(binding.keyword);
+        block = !block;
+        binding.block.setSelected(block);
+        adapter.block(block);
+        groups = getGroups();
+        setGroupView();
+        filter();
+        binding.recycler.scrollToPosition(0);
     }
 
     private void onColumnToggle(View view) {
@@ -116,12 +130,11 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
         binding.recycler.addItemDecoration(itemDecoration);
         binding.recycler.setLayoutManager(columnCount == 1 ? new LinearLayoutManager(requireContext()) : new GridLayoutManager(requireContext(), columnCount));
         binding.search.setImageResource(columnCount == 1 ? R.drawable.ic_site_double_column : R.drawable.ic_site_single_column);
-        binding.actionSpacer.setVisibility(search && change && columnCount == 1 ? View.VISIBLE : View.GONE);
         if (adapter != null) adapter.column(columnCount);
     }
 
     private List<String> getGroups() {
-        return new ArrayList<>(Site.getGroups(VodConfig.get().getSites()));
+        return new ArrayList<>(Site.getGroups(SiteBlockSetting.filter(VodConfig.get().getSites(), block)));
     }
 
     private void setGroupView() {
@@ -186,6 +199,11 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
 
     @Override
     public void onTextClick(Site item) {
+        if (block) {
+            SiteBlockSetting.toggle(item);
+            filter();
+            return;
+        }
         if (listener != null) listener.setSite(item);
         dismiss();
     }
@@ -221,7 +239,7 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     @Override
     public void onStart() {
         super.onStart();
-        if (adapter.getItemCount() == 0) dismiss();
+        if (adapter.getItemCount() == 0 && SiteBlockSetting.filter(VodConfig.get().getSites(), true).isEmpty()) dismiss();
         else if (ResUtil.isLand(requireContext())) setWidth(0.5f);
     }
 }
