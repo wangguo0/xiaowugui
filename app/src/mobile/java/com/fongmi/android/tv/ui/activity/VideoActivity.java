@@ -14,7 +14,6 @@ import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -155,12 +154,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private int mEpisodeSpanCount;
     private int mEpisodeBottomInset;
     private int mEpisodeMaxHeight;
-    private int mEpisodeTouchSlop;
-    private int mEpisodeDragDirection;
-    private float mEpisodeDownY;
-    private boolean mEpisodeTouchAtTop;
-    private boolean mEpisodeTouchAtBottom;
-    private boolean mEpisodeGroupSwitched;
     private Runnable mR1;
     private Runnable mR2;
     private Runnable mR3;
@@ -404,7 +397,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mObserveSearch = this::setSearch;
         mBroken = new ArrayList<>();
         mClock = Clock.create();
-        mEpisodeTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop() * 2;
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
@@ -482,7 +474,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.opening.setOnLongClickListener(view -> onOpeningReset());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
         mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
-        mBinding.episode.setOnTouchListener(this::onEpisodeTouch);
         mBinding.swipeLayout.setOnRefreshListener(this::onSwipeRefresh);
     }
 
@@ -535,6 +526,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.episode.setLayoutManager(new GridLayoutManager(this, mEpisodeSpanCount));
         mBinding.episode.addItemDecoration(mEpisodeDecoration = new SpaceItemDecoration(mEpisodeSpanCount, 8));
         mBinding.episode.setAdapter(mEpisodeAdapter = new EpisodeAdapter(this, ViewType.GRID));
+        mBinding.episode.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                syncEpisodeGroupByScroll();
+            }
+        });
         mBinding.quality.setHasFixedSize(true);
         mBinding.quality.setItemAnimator(null);
         mBinding.quality.addItemDecoration(new SpaceItemDecoration(8));
@@ -779,7 +776,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     public void onItemClick(EpisodeGroupAdapter.Group item) {
         mEpisodeGroupAdapter.setSelected(item);
-        setVisibleEpisodeAdapter(getFlag().getEpisodes(), item);
+        scrollEpisodeToPosition(item.start);
         scrollToPosition(mBinding.episodeGroup, mEpisodeGroupAdapter.getPosition());
     }
 
@@ -820,21 +817,43 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         List<EpisodeGroupAdapter.Group> groups = EpisodeGroupAdapter.build(size, getSelectedEpisodePosition(items), mHistory != null && mHistory.isRevSort());
         mEpisodeGroupAdapter.addAll(groups);
         mBinding.episodeGroup.setVisibility(groups.size() > 1 ? View.VISIBLE : View.GONE);
-        setVisibleEpisodeAdapter(items, mEpisodeGroupAdapter.isEmpty() ? null : mEpisodeGroupAdapter.getItems().get(mEpisodeGroupAdapter.getPosition()));
+        setEpisodeItems(items);
         mBinding.episode.post(this::updateEpisodeViewportHeight);
     }
 
-    private void setVisibleEpisodeAdapter(List<Episode> items, EpisodeGroupAdapter.Group group) {
-        if (group == null) {
-            updateEpisodeSpan(items);
-            mEpisodeAdapter.addAll(items);
+    private void setEpisodeItems(List<Episode> items) {
+        updateEpisodeSpan(items);
+        mEpisodeAdapter.addAll(items);
+        selectEpisodeGroupByPosition(mEpisodeAdapter.getPosition());
+    }
+
+    private void syncEpisodeGroupByScroll() {
+        RecyclerView.LayoutManager manager = mBinding.episode.getLayoutManager();
+        if (!(manager instanceof GridLayoutManager)) return;
+        int position = ((GridLayoutManager) manager).findFirstVisibleItemPosition();
+        if (position == RecyclerView.NO_POSITION) return;
+        selectEpisodeGroupByPosition(position);
+    }
+
+    private void selectEpisodeGroupByPosition(int position) {
+        if (mEpisodeGroupAdapter == null || mEpisodeGroupAdapter.isEmpty()) return;
+        int current = mEpisodeGroupAdapter.getPosition();
+        List<EpisodeGroupAdapter.Group> groups = mEpisodeGroupAdapter.getItems();
+        for (int i = 0; i < groups.size(); i++) {
+            EpisodeGroupAdapter.Group group = groups.get(i);
+            if (position < group.start || position >= group.end) continue;
+            if (i != current) {
+                mEpisodeGroupAdapter.setSelected(group);
+                mBinding.episodeGroup.scrollToPosition(i);
+            }
             return;
         }
-        int start = Math.max(0, Math.min(group.start, items.size()));
-        int end = Math.max(start, Math.min(group.end, items.size()));
-        ArrayList<Episode> visible = new ArrayList<>(items.subList(start, end));
-        updateEpisodeSpan(visible);
-        mEpisodeAdapter.addAll(visible);
+    }
+
+    private void scrollEpisodeToPosition(int position) {
+        RecyclerView.LayoutManager manager = mBinding.episode.getLayoutManager();
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
+        else mBinding.episode.scrollToPosition(position);
     }
 
     private void updateEpisodeSpan(List<Episode> items) {
@@ -1230,57 +1249,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private boolean onActionTouch(View v, MotionEvent e) {
         setR1Callback();
         return false;
-    }
-
-    private boolean onEpisodeTouch(View v, MotionEvent e) {
-        switch (e.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                mEpisodeDownY = e.getY();
-                mEpisodeDragDirection = 0;
-                mEpisodeTouchAtTop = !mBinding.episode.canScrollVertically(-1);
-                mEpisodeTouchAtBottom = !mBinding.episode.canScrollVertically(1);
-                mEpisodeGroupSwitched = false;
-                break;
-            case MotionEvent.ACTION_MOVE:
-                switchEpisodeGroupByDrag(e.getY() - mEpisodeDownY);
-                break;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                mEpisodeDownY = 0;
-                mEpisodeDragDirection = 0;
-                mEpisodeTouchAtTop = false;
-                mEpisodeTouchAtBottom = false;
-                mEpisodeGroupSwitched = false;
-                break;
-        }
-        return false;
-    }
-
-    private void switchEpisodeGroupByDrag(float dy) {
-        if (mEpisodeGroupSwitched || mEpisodeGroupAdapter == null || mEpisodeGroupAdapter.getItemCount() < 2) return;
-        if (Math.abs(dy) < mEpisodeTouchSlop) return;
-        if (mEpisodeDragDirection == 0) mEpisodeDragDirection = dy < 0 ? 1 : -1;
-        if (mEpisodeDragDirection > 0 && mEpisodeTouchAtBottom) switchEpisodeGroup(1, false);
-        else if (mEpisodeDragDirection < 0 && mEpisodeTouchAtTop) switchEpisodeGroup(-1, true);
-    }
-
-    private void switchEpisodeGroup(int offset, boolean scrollToEnd) {
-        int position = mEpisodeGroupAdapter.getPosition();
-        int target = position + offset;
-        if (target < 0 || target >= mEpisodeGroupAdapter.getItemCount()) return;
-        mEpisodeGroupSwitched = true;
-        EpisodeGroupAdapter.Group group = mEpisodeGroupAdapter.getItems().get(target);
-        mEpisodeGroupAdapter.setSelected(group);
-        setVisibleEpisodeAdapter(getFlag().getEpisodes(), group);
-        scrollToPosition(mBinding.episodeGroup, target);
-        scrollEpisodeGroupBoundary(scrollToEnd);
-    }
-
-    private void scrollEpisodeGroupBoundary(boolean scrollToEnd) {
-        int position = scrollToEnd ? Math.max(0, mEpisodeAdapter.getItemCount() - 1) : 0;
-        RecyclerView.LayoutManager manager = mBinding.episode.getLayoutManager();
-        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
-        else mBinding.episode.scrollToPosition(position);
     }
 
     private void onSwipeRefresh() {
@@ -2087,8 +2055,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             updateEpisodeSpan(mEpisodeAdapter.getItems());
             mEpisodeAdapter.notifyItemRangeChanged(0, mEpisodeAdapter.getItemCount());
         } else {
-            EpisodeGroupAdapter.Group group = mEpisodeGroupAdapter.isEmpty() ? null : mEpisodeGroupAdapter.getItems().get(mEpisodeGroupAdapter.getPosition());
-            setVisibleEpisodeAdapter(getFlag().getEpisodes(), group);
+            setEpisodeItems(getFlag().getEpisodes());
         }
         scrollToPosition(mBinding.episode, mEpisodeAdapter.getPosition());
         mBinding.episode.post(this::updateEpisodeViewportHeight);
