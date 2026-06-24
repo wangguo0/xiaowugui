@@ -140,12 +140,12 @@ public class Setting {
     }
 
     public static int getBuiltInWallColor(int wall) {
-        if (wall == WALL_AURORA_GLASS) return 0xFF315A70;
-        if (wall == WALL_SUNSET_PRISM) return 0xFF82435B;
-        if (wall == WALL_MINT_GLACIER) return 0xFF3F7067;
-        if (wall == WALL_LIQUID_CHROME) return 0xFF3D4354;
-        if (wall == WALL_NEON_BERRY) return 0xFF573B74;
-        if (wall == WALL_CHAMPAGNE_MIST) return 0xFF705566;
+        if (wall == WALL_AURORA_GLASS) return 0xFF2B8ECB;
+        if (wall == WALL_SUNSET_PRISM) return 0xFFB65B88;
+        if (wall == WALL_MINT_GLACIER) return 0xFF55BCA8;
+        if (wall == WALL_LIQUID_CHROME) return 0xFF53657F;
+        if (wall == WALL_NEON_BERRY) return 0xFF7B42CF;
+        if (wall == WALL_CHAMPAGNE_MIST) return 0xFFB47692;
         if (wall == WALL_CINEMA_WARM) return 0xFF3E4742;
         if (wall == WALL_CINEMA_MOSS) return 0xFF414A3E;
         if (wall == WALL_CINEMA_BLUE) return 0xFF424C57;
@@ -154,12 +154,12 @@ public class Setting {
     }
 
     public static String getBuiltInWallName(int wall) {
-        if (wall == WALL_AURORA_GLASS) return "极光玻璃";
-        if (wall == WALL_SUNSET_PRISM) return "日落棱镜";
-        if (wall == WALL_MINT_GLACIER) return "薄荷冰川";
-        if (wall == WALL_LIQUID_CHROME) return "液态铬彩";
-        if (wall == WALL_NEON_BERRY) return "霓虹莓果";
-        if (wall == WALL_CHAMPAGNE_MIST) return "香槟雾光";
+        if (wall == WALL_AURORA_GLASS) return "蓝紫流光";
+        if (wall == WALL_SUNSET_PRISM) return "珊瑚暮色";
+        if (wall == WALL_MINT_GLACIER) return "薄荷星云";
+        if (wall == WALL_LIQUID_CHROME) return "银色潮汐";
+        if (wall == WALL_NEON_BERRY) return "莓果极光";
+        if (wall == WALL_CHAMPAGNE_MIST) return "香槟晨雾";
         if (wall == WALL_CINEMA_WARM) return "雾松灰";
         if (wall == WALL_CINEMA_MOSS) return "苔原绿灰";
         if (wall == WALL_CINEMA_BLUE) return "暮蓝灰";
