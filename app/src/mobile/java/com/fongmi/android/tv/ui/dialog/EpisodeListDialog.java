@@ -134,7 +134,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
         binding.episode.setHasFixedSize(true);
         binding.episode.setItemAnimator(null);
         binding.episode.setLayoutManager(new GridLayoutManager(requireContext(), episodeSpanCount));
-        binding.episode.addItemDecoration(episodeDecoration = new SpaceItemDecoration(episodeSpanCount, 6));
+        binding.episode.addItemDecoration(episodeDecoration = new SpaceItemDecoration(episodeSpanCount, 8));
         binding.episode.setAdapter(episodeAdapter = new EpisodeAdapter(this, ViewType.GRID));
         binding.episode.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -170,7 +170,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
         episodeSpanCount = span;
         binding.episode.setLayoutManager(new GridLayoutManager(requireContext(), episodeSpanCount));
         if (episodeDecoration != null) binding.episode.removeItemDecoration(episodeDecoration);
-        binding.episode.addItemDecoration(episodeDecoration = new SpaceItemDecoration(episodeSpanCount, 6));
+        binding.episode.addItemDecoration(episodeDecoration = new SpaceItemDecoration(episodeSpanCount, 8));
     }
 
     private int getEpisodeSpan(List<Episode> episodes) {
@@ -226,7 +226,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
 
     private void scrollEpisodeToPosition(int position) {
         RecyclerView.LayoutManager manager = binding.episode.getLayoutManager();
-        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, binding.episode.getPaddingTop());
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
         else binding.episode.scrollToPosition(position);
     }
 
