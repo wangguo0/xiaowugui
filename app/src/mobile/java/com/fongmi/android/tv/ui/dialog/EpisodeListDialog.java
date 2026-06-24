@@ -226,7 +226,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
 
     private void scrollEpisodeToPosition(int position) {
         RecyclerView.LayoutManager manager = binding.episode.getLayoutManager();
-        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, binding.episode.getPaddingTop());
         else binding.episode.scrollToPosition(position);
     }
 

@@ -852,7 +852,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void scrollEpisodeToPosition(int position) {
         RecyclerView.LayoutManager manager = mBinding.episode.getLayoutManager();
-        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, mBinding.episode.getPaddingTop());
         else mBinding.episode.scrollToPosition(position);
     }
 
