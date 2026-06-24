@@ -2,6 +2,7 @@ package com.fongmi.android.tv.bean;
 
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import androidx.annotation.Nullable;
@@ -304,7 +305,13 @@ public class Channel {
     }
 
     public void loadLogo(ImageView view) {
-        ImgUtil.load(getName(), getLogo(), view, false);
+        int width = 0, height = 0;
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params != null && params.width > 0 && params.height > 0) {
+            width = params.width;
+            height = params.height;
+        }
+        ImgUtil.load(getName(), getLogo(), view, false, width, height);
     }
 
     public void switchLine(boolean next) {

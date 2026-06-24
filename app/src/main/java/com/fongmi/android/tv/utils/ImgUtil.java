@@ -63,6 +63,14 @@ public class ImgUtil {
         }
     }
 
+    public static void load(Context context, String url, int width, int height, CustomTarget<Drawable> target) {
+        try {
+            Glide.with(context).load(getUrl(url)).override(width, height).error(R.drawable.artwork).into(target);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
+
     public static void preload(Context context, String url) {
         if (TextUtils.isEmpty(url)) return;
         try {
@@ -84,7 +92,7 @@ public class ImgUtil {
         load(text, url, view, true, width, height);
     }
 
-    private static void load(String text, String url, ImageView view, boolean vod, int width, int height) {
+    public static void load(String text, String url, ImageView view, boolean vod, int width, int height) {
         view.setScaleType(vod ? CENTER_CROP : FIT_CENTER);
         if (!vod) view.setVisibility(TextUtils.isEmpty(url) ? View.GONE : View.VISIBLE);
         if (TextUtils.isEmpty(url) || failed.contains(url)) view.setImageDrawable(getTextDrawable(text, vod));
