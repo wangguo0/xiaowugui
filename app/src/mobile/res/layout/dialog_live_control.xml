@@ -44,6 +44,11 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/config"
+                    style="@style/ControlSheetButton"
+                    android:text="@string/live_control_config" />
+
+                <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/source"
                     style="@style/ControlSheetButton"
                     android:text="@string/live_control_source" />
@@ -52,6 +57,16 @@
                     android:id="@+id/epg"
                     style="@style/ControlSheetButton"
                     android:text="@string/live_control_epg" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/ControlSheetTitle"
+                android:text="@string/live_control_action" />
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
                     android:id="@+id/cast"

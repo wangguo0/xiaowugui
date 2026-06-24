@@ -39,9 +39,11 @@
     <string name="control_episode_column_double">Double</string>
     <string name="control_track">Track</string>
     <string name="control_other">Other</string>
-    <string name="live_control_play">Live</string>
+    <string name="live_control_play">Sources</string>
+    <string name="live_control_config">Subscription</string>
     <string name="live_control_source">Live source</string>
-    <string name="live_control_epg">EPG</string>
+    <string name="live_control_epg">EPG source</string>
+    <string name="live_control_action">Actions</string>
     <string name="live_control_pip">PiP</string>
     <string name="live_control_preference">Preference</string>
     <string name="live_control_player">Player</string>

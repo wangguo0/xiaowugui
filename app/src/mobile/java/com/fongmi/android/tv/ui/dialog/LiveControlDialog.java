@@ -90,6 +90,10 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
 
     @Override
     protected void initEvent() {
+        binding.config.setOnClickListener(v -> {
+            listener().onLiveConfigPanel();
+            dismiss();
+        });
         binding.source.setOnClickListener(v -> listener().onLiveSourcePanel());
         binding.epg.setOnClickListener(v -> {
             listener().onLiveEpgPanel();
@@ -211,6 +215,8 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
     }
 
     public interface Listener {
+
+        void onLiveConfigPanel();
 
         void onLiveSourcePanel();
 

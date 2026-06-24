@@ -9,10 +9,12 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -104,6 +106,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private LiveViewModel mViewModel;
     private CustomKeyDown mKeyDown;
     private PlayerOsdController mOsd;
+    private Result mPendingStartResult;
     private List<Group> mHides;
     private String mPlaybackKey;
     private String mPendingReloadUrl;
@@ -181,7 +184,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         setPlayerKernel();
         setDecode();
         mBinding.control.action.speed.setText(player().getSpeedText());
-        checkLive();
+        if (mPendingStartResult != null) {
+            Result result = mPendingStartResult;
+            mPendingStartResult = null;
+            start(result);
+        } else {
+            checkLive();
+        }
     }
 
     @Override
@@ -285,12 +294,12 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void setVideoView() {
+        updateVideoHeight(VideoSize.UNKNOWN);
         setScale(LiveSetting.getScale());
         mBinding.control.action.invert.setSelected(LiveSetting.isInvert());
         mBinding.control.action.across.setSelected(LiveSetting.isAcross());
         mBinding.control.action.change.setSelected(LiveSetting.isChange());
         mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> mPiP.update(this, view));
-        updateVideoHeight(VideoSize.UNKNOWN);
     }
 
     private void setNavigation() {
@@ -317,8 +326,50 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void setScale(int scale) {
         LiveSetting.putScale(scale);
-        applyResizeMode(scale);
+        applyLiveResizeMode(scale);
         mBinding.control.action.scale.setText(ResUtil.getStringArray(R.array.select_scale)[scale]);
+    }
+
+    private void applyLiveResizeMode(int scale) {
+        applyResizeMode(scale);
+        updatePlayerBounds(scale);
+        mBinding.exo.post(() -> {
+            int current = LiveSetting.getScale();
+            applyResizeMode(current);
+            updatePlayerBounds(current);
+        });
+    }
+
+    private void updatePlayerBounds(int scale) {
+        int parentWidth = mBinding.video.getWidth();
+        int parentHeight = mBinding.video.getHeight();
+        if (parentWidth <= 0 || parentHeight <= 0) return;
+        FrameLayout.LayoutParams params = getPlayerLayoutParams();
+        if (scale == 1 || scale == 2) {
+            float ratio = scale == 1 ? 16f / 9f : 4f / 3f;
+            int width = parentWidth;
+            int height = Math.round(width / ratio);
+            if (height > parentHeight) {
+                height = parentHeight;
+                width = Math.round(height * ratio);
+            }
+            if (params.width == width && params.height == height && params.gravity == Gravity.CENTER) return;
+            params.width = width;
+            params.height = height;
+            params.gravity = Gravity.CENTER;
+        } else {
+            if (params.width == ViewGroup.LayoutParams.MATCH_PARENT && params.height == ViewGroup.LayoutParams.MATCH_PARENT && params.gravity == Gravity.CENTER) return;
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.gravity = Gravity.CENTER;
+        }
+        mBinding.exo.setLayoutParams(params);
+    }
+
+    private FrameLayout.LayoutParams getPlayerLayoutParams() {
+        ViewGroup.LayoutParams params = mBinding.exo.getLayoutParams();
+        if (params instanceof FrameLayout.LayoutParams frame) return frame;
+        return new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
     }
 
     private void setViewModel() {
@@ -689,7 +740,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (service() == null || isInPictureInPictureMode()) return;
         boolean embedded = isEmbeddedLiveUi();
         mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
-        mBinding.control.cast.setVisibility(embedded || player().isEmpty() ? View.GONE : View.VISIBLE);
+        mBinding.control.cast.setVisibility(View.GONE);
         mBinding.control.right.rotate.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.center.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.bottom.setVisibility(isLock() ? View.GONE : View.VISIBLE);
@@ -739,9 +790,9 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (isEmbeddedLiveUi()) {
             if (isVisible(mBinding.control.getRoot())) hideControl();
             else showControl();
-        } else {
-            exitFullscreenLive();
-        }
+        } else if (isVisible(mBinding.control.getRoot())) hideControl();
+        else if (isVisible(mBinding.recycler)) hideUI();
+        else showUI();
         hideInfo();
     }
 
@@ -960,8 +1011,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private void fetch(EpgData item) {
         if (mChannel == null) return;
         mViewModel.getUrl(mChannel, item);
-        player().clear();
-        player().stop();
+        if (service() != null) {
+            player().clear();
+            player().stop();
+        }
         hideUI();
     }
 
@@ -969,12 +1022,18 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (mChannel == null) return;
         LiveConfig.get().setKeep(mChannel);
         mViewModel.getUrl(mChannel);
-        player().clear();
-        player().stop();
+        if (service() != null) {
+            player().clear();
+            player().stop();
+        }
         showProgress();
     }
 
     private void start(Result result) {
+        if (service() == null) {
+            mPendingStartResult = result;
+            return;
+        }
         String realUrl = result.getRealUrl();
         if (isSameReloadUrl(realUrl)) {
             String msg = mPendingReloadMsg;
@@ -1014,7 +1073,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void setSizeText() {
-        String text = player().getSizeText();
+        String text = service() == null ? "" : player().getSizeText();
         mBinding.control.size.setText(text);
         mBinding.control.size.setVisibility(text.isEmpty() ? View.GONE : View.VISIBLE);
     }
@@ -1031,6 +1090,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mHides.clear();
         mChannel = null;
         mGroup = null;
+    }
+
+    @Override
+    public void onLiveConfigPanel() {
+        onConfig();
     }
 
     @Override
@@ -1174,13 +1238,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     protected void onSizeChanged(VideoSize size) {
         videoSize = size;
         updateVideoHeight(size);
-        applyResizeMode(LiveSetting.getScale());
+        applyLiveResizeMode(LiveSetting.getScale());
         setSizeText();
     }
 
     @Override
     protected void onSurfaceAttached() {
-        applyResizeMode(LiveSetting.getScale());
+        applyLiveResizeMode(LiveSetting.getScale());
     }
 
     @Override
@@ -1293,6 +1357,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void setMetadata() {
+        if (service() == null) return;
         player().setMetadata(buildMetadata());
     }
 
@@ -1391,6 +1456,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             updateControlInsets();
         }
         updateVideoHeight(videoSize);
+        applyLiveResizeMode(LiveSetting.getScale());
     }
 
     private void scrollToPosition(RecyclerView view, int position) {
@@ -1464,21 +1530,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void onSingleTap() {
-        if (!isEmbeddedLiveUi()) {
-            if (isVisible(mBinding.control.getRoot())) hideControl();
-            else showControl();
-            hideInfo();
-            return;
-        }
         onToggle();
     }
 
     @Override
     public void onDoubleTap() {
-        if (!isEmbeddedLiveUi()) {
-            exitFullscreenLive();
-            return;
-        }
         if (isVisible(mBinding.recycler)) hideUI();
         if (isVisible(mBinding.control.getRoot())) hideControl();
         else showControl();
@@ -1573,6 +1629,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         embeddedUiMode = embedded;
         updateControlInsets();
         updateVideoHeight(videoSize);
+        applyLiveResizeMode(LiveSetting.getScale());
     }
 
     private void updateLiveMenuInsets() {
