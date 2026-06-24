@@ -147,7 +147,7 @@ public class Backup {
         if (key.startsWith("remote_trust_")) return false;
         if (key.startsWith("cache_")) return options.isWebHome() || options.isSpider();
         if (key.startsWith("config_")) return options.isConfig();
-        if ("keyword".equals(key) || "hot".equals(key)) return options.isSearch();
+        if ("keyword".equals(key) || "hot".equals(key) || key.startsWith("hot_")) return options.isSearch();
         if ("git_cloud_accounts".equals(key)) return options.isSpider() || options.isSettings() || options.isLoginState();
         if (key.startsWith("login_state_")) return options.isLoginState();
         if (isAppPref(key)) return options.isSettings();
