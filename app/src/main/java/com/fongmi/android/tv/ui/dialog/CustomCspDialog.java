@@ -15,6 +15,7 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -35,6 +36,7 @@ import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
@@ -53,6 +55,7 @@ import com.fongmi.android.tv.ui.custom.SettingClipboardOverlay;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.utils.Path;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -80,6 +83,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     private DialogCustomCspBinding binding;
     private CustomCspSetting.Registry registry;
     private CspAdapter adapter;
+    private ItemTouchHelper sortTouchHelper;
     private CustomCspSetting.Item pendingImport;
     private boolean pendingExtensionImport;
     private CspEditor editor;
@@ -91,6 +95,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     private boolean textMode;
     private boolean editMode;
     private boolean recognizeMode;
+    private boolean sortMode;
     private boolean reverseOrder;
     private boolean saved;
     private boolean jsonDirty = true;
@@ -153,6 +158,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         getDialog().setOnKeyListener((dialog, keyCode, event) -> {
             if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) return false;
             if (editMode) showList();
+            else if (sortMode) setSortMode(false);
             else closeAndSave(false);
             return true;
         });
@@ -169,6 +175,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         binding.recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recycler.setItemAnimator(null);
         binding.recycler.setAdapter(adapter);
+        if (Util.isMobile()) attachSortTouchHelper();
         binding.modeGroup.check(R.id.uiMode);
         syncJsonFromForm(false);
         showTextMode(false);
@@ -197,8 +204,10 @@ public class CustomCspDialog extends BaseAlertDialog {
         setupScrollableText(binding.jsonText);
         binding.add.setOnClickListener(view -> addItem());
         binding.recognize.setOnClickListener(view -> showRecognizePanel());
+        binding.sort.setOnClickListener(view -> setSortMode(!sortMode));
         binding.negative.setOnClickListener(view -> {
             if (editMode) showList();
+            else if (sortMode) setSortMode(false);
             else closeAndSave(false);
         });
         binding.positive.setOnClickListener(view -> onPositive());
@@ -272,6 +281,7 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private boolean showTextMode(boolean text) {
         if (editMode) return false;
+        if (sortMode) setSortMode(false);
         if (text == textMode) {
             updateModeVisibility();
             return true;
@@ -284,17 +294,77 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private void updateModeVisibility() {
-        binding.recycler.setVisibility(textMode ? View.GONE : View.VISIBLE);
+        boolean listMode = !textMode && !editMode;
+        boolean mobileSort = Util.isMobile() && listMode;
+        binding.recycler.setVisibility(listMode ? View.VISIBLE : View.GONE);
         binding.jsonLayout.setVisibility(textMode && !editMode ? View.VISIBLE : View.GONE);
         binding.editPanel.setVisibility(editMode ? View.VISIBLE : View.GONE);
-        binding.recycler.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
-        binding.jsonLayout.setVisibility(textMode && !editMode ? View.VISIBLE : View.GONE);
-        binding.add.setVisibility(textMode || editMode ? View.GONE : View.VISIBLE);
-        binding.recognize.setVisibility(editMode ? View.GONE : View.VISIBLE);
-        binding.enabled.setVisibility(editMode ? View.GONE : View.VISIBLE);
-        binding.reverse.setVisibility(editMode ? View.GONE : View.VISIBLE);
+        binding.add.setVisibility(listMode && !sortMode ? View.VISIBLE : View.GONE);
+        binding.recognize.setVisibility(!editMode && !sortMode ? View.VISIBLE : View.GONE);
+        binding.sort.setVisibility(mobileSort ? View.VISIBLE : View.GONE);
+        binding.sort.setText(sortMode ? R.string.setting_custom_csp_sort_done : R.string.setting_custom_csp_sort);
+        binding.enabled.setVisibility(editMode || sortMode ? View.GONE : View.VISIBLE);
+        binding.reverse.setVisibility(editMode || sortMode ? View.GONE : View.VISIBLE);
+        binding.insertPanel.setVisibility(sortMode ? View.INVISIBLE : View.VISIBLE);
         binding.globalPanel.setVisibility(editMode ? View.GONE : View.VISIBLE);
-        binding.modeGroup.setVisibility(editMode ? View.GONE : View.VISIBLE);
+        binding.modeGroup.setVisibility(editMode || sortMode ? View.GONE : View.VISIBLE);
+    }
+
+    private void setSortMode(boolean sort) {
+        if (sort && (!Util.isMobile() || textMode || editMode)) return;
+        if (sortMode == sort) {
+            updateModeVisibility();
+            return;
+        }
+        syncAllVisibleRows();
+        if (sort && reverseOrder) {
+            reverseOrder = false;
+            updateReverseText();
+            adapter.setReverseOrder(false);
+        }
+        sortMode = sort;
+        adapter.setSortMode(sortMode);
+        updateModeVisibility();
+        if (sortMode) focusSortList();
+        else binding.sort.requestFocus();
+    }
+
+    private void focusSortList() {
+        binding.recycler.post(() -> {
+            RecyclerView.ViewHolder holder = binding.recycler.findViewHolderForAdapterPosition(0);
+            if (holder != null) holder.itemView.requestFocus();
+            else binding.recycler.requestFocus();
+        });
+    }
+
+    private void attachSortTouchHelper() {
+        sortTouchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override
+            public boolean isLongPressDragEnabled() {
+                return false;
+            }
+
+            @Override
+            public boolean isItemViewSwipeEnabled() {
+                return false;
+            }
+
+            @Override
+            public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+                return sortMode ? super.getMovementFlags(recyclerView, viewHolder) : 0;
+            }
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
+                adapter.moveDisplay(source.getBindingAdapterPosition(), target.getBindingAdapterPosition());
+                return true;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            }
+        });
+        sortTouchHelper.attachToRecyclerView(binding.recycler);
     }
 
     private void addItem() {
@@ -360,6 +430,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private void showEdit(CustomCspSetting.Item item, int position) {
+        if (sortMode) setSortMode(false);
         syncAllVisibleRows();
         editMode = true;
         editingPosition = position;
@@ -482,6 +553,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private void showRecognizePanel() {
+        if (sortMode) setSortMode(false);
         syncAllVisibleRows();
         editMode = true;
         recognizeMode = true;
@@ -613,6 +685,10 @@ public class CustomCspDialog extends BaseAlertDialog {
         return Math.max(MIN_INSERT_INDEX, Math.min(MAX_INSERT_INDEX, index));
     }
 
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private void syncAllVisibleRows() {
         if (editMode && editor != null) {
             editor.sync();
@@ -679,6 +755,48 @@ public class CustomCspDialog extends BaseAlertDialog {
         dialog.show();
     }
 
+    private void showSortActions(int displayPosition) {
+        if (!sortMode || displayPosition == RecyclerView.NO_POSITION) return;
+        int index = adapter.itemIndex(displayPosition);
+        if (index < 0 || index >= adapter.getItemCount()) return;
+        String[] actions = {
+                getString(R.string.setting_custom_csp_sort_top),
+                getString(R.string.setting_custom_csp_sort_forward_five),
+                getString(R.string.setting_custom_csp_sort_backward_five),
+                getString(R.string.setting_custom_csp_sort_bottom),
+                getString(R.string.setting_custom_csp_sort_move_to)
+        };
+        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.setting_custom_csp_sort_more)
+                .setItems(actions, (dialog, which) -> {
+                    if (which == 0) moveSortItem(index, 0);
+                    else if (which == 1) moveSortItem(index, index - 5);
+                    else if (which == 2) moveSortItem(index, index + 5);
+                    else if (which == 3) moveSortItem(index, adapter.getItemCount() - 1);
+                    else showMoveToPosition(index);
+                })
+                .show();
+    }
+
+    private void showMoveToPosition(int index) {
+        if (!sortMode || index < 0 || index >= adapter.getItemCount()) return;
+        TextInputEditText input = createInput(false);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setText(String.valueOf(index + 1));
+        input.selectAll();
+        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.setting_custom_csp_sort_move_to_title)
+                .setView(createInputPanel(getString(R.string.setting_custom_csp_sort_move_to_hint, adapter.getItemCount()), input))
+                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> moveSortItem(index, parseInt(input.getText().toString(), index + 1) - 1))
+                .setNegativeButton(R.string.dialog_negative, null)
+                .show();
+    }
+
+    private void moveSortItem(int fromIndex, int toIndex) {
+        int position = adapter.moveItemToIndex(fromIndex, clamp(toIndex, 0, adapter.getItemCount() - 1));
+        scrollToItem(position);
+    }
+
     private TextInputEditText createInput(boolean multiline) {
         TextInputEditText input = new TextInputEditText(requireContext());
         input.setSelectAllOnFocus(false);
@@ -691,6 +809,10 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private View createInputPanel(int hint, TextInputEditText input) {
+        return createInputPanel(getString(hint), input);
+    }
+
+    private View createInputPanel(String hint, TextInputEditText input) {
         LinearLayoutCompat container = new LinearLayoutCompat(requireContext());
         container.setOrientation(LinearLayoutCompat.VERTICAL);
         container.setPadding(ResUtil.dp2px(20), ResUtil.dp2px(8), ResUtil.dp2px(20), 0);
@@ -918,6 +1040,7 @@ public class CustomCspDialog extends BaseAlertDialog {
 
         private final List<CustomCspSetting.Item> items;
         private boolean reverseOrder;
+        private boolean sortMode;
 
         CspAdapter(List<CustomCspSetting.Item> items) {
             this.items = items;
@@ -956,19 +1079,37 @@ public class CustomCspDialog extends BaseAlertDialog {
             notifyDataSetChanged();
         }
 
+        void setSortMode(boolean sortMode) {
+            if (this.sortMode == sortMode) return;
+            this.sortMode = sortMode;
+            notifyDataSetChanged();
+        }
+
         boolean hasInvalidExtensions() {
             for (CustomCspSetting.Item item : items) if (item.hasInvalidExtensions()) return true;
             return false;
         }
 
         void move(int fromPosition, int toPosition) {
-            if (fromPosition < 0 || toPosition < 0 || fromPosition >= items.size() || toPosition >= items.size()) return;
-            int from = itemIndex(fromPosition);
-            int to = itemIndex(toPosition);
-            Collections.swap(items, from, to);
+            moveDisplay(fromPosition, toPosition);
+        }
+
+        int moveDisplay(int fromPosition, int toPosition) {
+            if (fromPosition < 0 || toPosition < 0 || fromPosition >= items.size() || toPosition >= items.size()) return -1;
+            return moveItemToIndex(itemIndex(fromPosition), itemIndex(toPosition));
+        }
+
+        int moveItemToIndex(int fromIndex, int toIndex) {
+            if (fromIndex < 0 || toIndex < 0 || fromIndex >= items.size() || toIndex >= items.size()) return -1;
+            if (fromIndex == toIndex) return displayPosition(toIndex);
+            int fromPosition = displayPosition(fromIndex);
+            int toPosition = displayPosition(toIndex);
+            CustomCspSetting.Item item = items.remove(fromIndex);
+            items.add(toIndex, item);
             markJsonDirty();
             notifyItemMoved(fromPosition, toPosition);
             notifyItemRangeChanged(Math.min(fromPosition, toPosition), Math.abs(fromPosition - toPosition) + 1);
+            return toPosition;
         }
 
         void remove(int position, View removed) {
@@ -1038,7 +1179,9 @@ public class CustomCspDialog extends BaseAlertDialog {
                 root.setFocusable(true);
                 root.setClickable(true);
                 root.setOnFocusChangeListener((view, hasFocus) -> view.setActivated(hasFocus));
-                root.setOnClickListener(view -> editCurrent());
+                root.setOnClickListener(view -> {
+                    if (!sortMode) editCurrent();
+                });
 
                 LinearLayoutCompat header = new LinearLayoutCompat(requireContext());
                 header.setGravity(Gravity.CENTER_VERTICAL);
@@ -1048,16 +1191,33 @@ public class CustomCspDialog extends BaseAlertDialog {
                 MaterialTextView title = text((position + 1) + ". " + item.getName(), 15, Color.BLACK, true);
                 header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
                 header.addView(badge(kindName(item), statusColor(item)));
-                AppCompatImageButton up = iconButton(R.drawable.ic_subtitle_up, R.string.setting_custom_csp_up, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1));
-                AppCompatImageButton down = iconButton(R.drawable.ic_subtitle_down, R.string.setting_custom_csp_down, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1));
-                linkCardFocus(root, up);
-                linkCardFocus(root, down);
-                header.addView(up, iconLayout(8));
-                header.addView(down, iconLayout(4));
+                if (sortMode) {
+                    AppCompatImageButton drag = iconButton(R.drawable.ic_action_drag, R.string.setting_custom_csp_sort_drag, null);
+                    AppCompatImageButton more = iconButton(R.drawable.ic_action_more_vert, R.string.setting_custom_csp_sort_more, view -> showSortActions(getBindingAdapterPosition()));
+                    drag.setOnTouchListener((view, event) -> {
+                        if (event.getActionMasked() != MotionEvent.ACTION_DOWN || sortTouchHelper == null || getBindingAdapterPosition() == RecyclerView.NO_POSITION) return false;
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        sortTouchHelper.startDrag(this);
+                        return true;
+                    });
+                    linkCardFocus(root, drag);
+                    linkCardFocus(root, more);
+                    header.addView(drag, iconLayout(8));
+                    header.addView(more, iconLayout(4));
+                } else {
+                    AppCompatImageButton up = iconButton(R.drawable.ic_subtitle_up, R.string.setting_custom_csp_up, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() - 1));
+                    AppCompatImageButton down = iconButton(R.drawable.ic_subtitle_down, R.string.setting_custom_csp_down, view -> move(getBindingAdapterPosition(), getBindingAdapterPosition() + 1));
+                    linkCardFocus(root, up);
+                    linkCardFocus(root, down);
+                    header.addView(up, iconLayout(8));
+                    header.addView(down, iconLayout(4));
+                }
 
                 addDetail(root, primaryDetail(item));
                 if (!item.isLive()) addDetail(root, getString(R.string.setting_custom_csp_key) + ": " + item.getKey());
                 addDetail(root, meta(item));
+
+                if (sortMode) return;
 
                 LinearLayoutCompat actions = new LinearLayoutCompat(requireContext());
                 actions.setGravity(Gravity.CENTER_VERTICAL);

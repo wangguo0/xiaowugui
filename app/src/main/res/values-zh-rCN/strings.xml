@@ -531,6 +531,17 @@
     <string name="setting_custom_csp_recognize_empty">请先粘贴站点 JSON</string>
     <string name="setting_custom_csp_recognize_invalid">未识别到有效站点 JSON</string>
     <string name="setting_custom_csp_recognize_done">已添加 %1$d 个条目</string>
+    <string name="setting_custom_csp_sort">排序</string>
+    <string name="setting_custom_csp_sort_done">完成</string>
+    <string name="setting_custom_csp_sort_drag">拖拽排序</string>
+    <string name="setting_custom_csp_sort_more">排序操作</string>
+    <string name="setting_custom_csp_sort_top">置顶</string>
+    <string name="setting_custom_csp_sort_bottom">置底</string>
+    <string name="setting_custom_csp_sort_forward_five">上移 5 位</string>
+    <string name="setting_custom_csp_sort_backward_five">下移 5 位</string>
+    <string name="setting_custom_csp_sort_move_to">移动到指定位置</string>
+    <string name="setting_custom_csp_sort_move_to_title">移动到指定位置</string>
+    <string name="setting_custom_csp_sort_move_to_hint">位置 1-%1$d</string>
     <string name="setting_custom_csp_count">%1$d/%2$d 可用</string>
     <string name="setting_custom_csp_api">API / CSP 类名</string>
     <string name="setting_custom_csp_code">代码</string>

@@ -67,6 +67,7 @@
         android:orientation="horizontal">
 
         <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/insertPanel"
             android:layout_width="0dp"
             android:layout_height="42dp"
             android:gravity="center_vertical"
@@ -150,6 +151,21 @@
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
             android:text="@string/setting_custom_csp_recognize"
+            android:textColor="@color/dialog_outlined_button_text"
+            app:backgroundTint="@color/dialog_outlined_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sort"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="6dp"
+            android:minHeight="38dp"
+            android:minWidth="64dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="@string/setting_custom_csp_sort"
             android:textColor="@color/dialog_outlined_button_text"
             app:backgroundTint="@color/dialog_outlined_button_bg"
             app:strokeColor="@color/dialog_outlined_button_stroke" />

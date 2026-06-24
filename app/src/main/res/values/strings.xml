@@ -533,6 +533,17 @@
     <string name="setting_custom_csp_recognize_empty">Paste site JSON first</string>
     <string name="setting_custom_csp_recognize_invalid">No valid site JSON detected</string>
     <string name="setting_custom_csp_recognize_done">Added %1$d items</string>
+    <string name="setting_custom_csp_sort">Sort</string>
+    <string name="setting_custom_csp_sort_done">Done</string>
+    <string name="setting_custom_csp_sort_drag">Drag to sort</string>
+    <string name="setting_custom_csp_sort_more">Sort actions</string>
+    <string name="setting_custom_csp_sort_top">Move to top</string>
+    <string name="setting_custom_csp_sort_bottom">Move to bottom</string>
+    <string name="setting_custom_csp_sort_forward_five">Move up 5</string>
+    <string name="setting_custom_csp_sort_backward_five">Move down 5</string>
+    <string name="setting_custom_csp_sort_move_to">Move to position</string>
+    <string name="setting_custom_csp_sort_move_to_title">Move to position</string>
+    <string name="setting_custom_csp_sort_move_to_hint">Position 1-%1$d</string>
     <string name="setting_custom_csp_count">%1$d/%2$d active</string>
     <string name="setting_custom_csp_api">API / csp class</string>
     <string name="setting_custom_csp_code">Code</string>
