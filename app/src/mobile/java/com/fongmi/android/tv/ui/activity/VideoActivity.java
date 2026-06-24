@@ -968,7 +968,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onBack() {
         if (isFullscreen()) exitFullscreen();
-        else finish();
+        else finishPlayback();
     }
 
     private void onCast() {
@@ -2171,7 +2171,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (isRedirect()) return;
+        if (isRedirect() || isPlaybackExiting()) return;
         if (isLock()) App.post(this::onLock, 500);
         if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
     }
@@ -2231,6 +2231,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             exitFullscreen();
         } else if (!isLock()) {
             mViewModel.stopSearch();
+            markPlaybackExiting();
             if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
             super.onBackInvoked();
         }

@@ -506,7 +506,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             exitFullscreenLive();
             return;
         }
-        finish();
+        finishPlayback();
     }
 
     private void onCast() {
@@ -1603,7 +1603,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (isRedirect()) return;
+        if (isRedirect() || isPlaybackExiting()) return;
         if (isLock()) App.post(this::onLock, 500);
         enterPiP();
     }
@@ -1740,6 +1740,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         } else if (isVisible(mBinding.recycler) && !isEmbeddedLiveUi()) {
             hideUI();
         } else if (!isLock()) {
+            markPlaybackExiting();
             if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
             super.onBackInvoked();
         }

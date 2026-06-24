@@ -41,6 +41,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private PlaybackService mService;
     private boolean audioOnly;
     private boolean redirect;
+    private boolean playbackExiting;
     private boolean bound;
     private boolean stop;
     private boolean lock;
@@ -65,6 +66,19 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     protected void setRedirect(boolean redirect) {
         this.redirect = redirect;
         if (mService != null) mService.setNavigationCallback(redirect ? null : getNavigationCallback(), getPlaybackKey());
+    }
+
+    protected boolean isPlaybackExiting() {
+        return playbackExiting;
+    }
+
+    protected void markPlaybackExiting() {
+        this.playbackExiting = true;
+    }
+
+    protected void finishPlayback() {
+        markPlaybackExiting();
+        finish();
     }
 
     protected void updateNavigationKey() {
@@ -453,6 +467,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     protected void onResume() {
         super.onResume();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity resume %s", lifecycleState());
+        playbackExiting = false;
         setRedirect(false);
         if (shouldReclaim()) {
             detachSurface();
