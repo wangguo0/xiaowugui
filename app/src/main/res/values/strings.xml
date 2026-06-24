@@ -806,7 +806,6 @@
     <string name="search_hot_tv">TV</string>
     <string name="search_hot_movie">Movie</string>
     <string name="search_hot_variety">Variety</string>
-    <string name="search_hot_anime">Anime</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">Edit</string>

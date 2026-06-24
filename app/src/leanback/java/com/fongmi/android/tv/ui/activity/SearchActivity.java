@@ -19,6 +19,7 @@ import com.fongmi.android.tv.bean.Word;
 import com.fongmi.android.tv.databinding.ActivitySearchBinding;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.adapter.HotWordAdapter;
 import com.fongmi.android.tv.ui.adapter.RecordAdapter;
 import com.fongmi.android.tv.ui.adapter.WordAdapter;
 import com.fongmi.android.tv.ui.base.BaseActivity;
@@ -44,13 +45,14 @@ import okhttp3.Response;
 
 public class SearchActivity extends BaseActivity implements WordAdapter.OnClickListener, RecordAdapter.OnClickListener, CustomKeyboard.Callback {
 
+    private static final int HOT_LIMIT = 10;
+
     private ActivitySearchBinding mBinding;
     private RecordAdapter mRecordAdapter;
     private WordAdapter mWordAdapter;
-    private WordAdapter mHotTvAdapter;
-    private WordAdapter mHotMovieAdapter;
-    private WordAdapter mHotVarietyAdapter;
-    private WordAdapter mHotAnimeAdapter;
+    private HotWordAdapter mHotTvAdapter;
+    private HotWordAdapter mHotMovieAdapter;
+    private HotWordAdapter mHotVarietyAdapter;
     private List<Word.Data> mIqiyiWords = new ArrayList<>();
     private List<Word.Data> mTencentWords = new ArrayList<>();
     private int mSuggestSeq;
@@ -142,16 +144,22 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
 
     private void setRecyclerView() {
         setWordRecycler(mBinding.wordRecycler, mWordAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotTvRecycler, mHotTvAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotMovieRecycler, mHotMovieAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotVarietyRecycler, mHotVarietyAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotAnimeRecycler, mHotAnimeAdapter = new WordAdapter(this));
+        setHotRecycler(mBinding.hotTvRecycler, mHotTvAdapter = new HotWordAdapter(this));
+        setHotRecycler(mBinding.hotMovieRecycler, mHotMovieAdapter = new HotWordAdapter(this));
+        setHotRecycler(mBinding.hotVarietyRecycler, mHotVarietyAdapter = new HotWordAdapter(this));
         mBinding.recordRecycler.setHasFixedSize(false);
         mBinding.recordRecycler.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
         mBinding.recordRecycler.setAdapter(mRecordAdapter = new RecordAdapter(this));
     }
 
     private void setWordRecycler(RecyclerView recyclerView, WordAdapter adapter) {
+        recyclerView.setItemAnimator(null);
+        recyclerView.setHasFixedSize(false);
+        recyclerView.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
+        recyclerView.setAdapter(adapter);
+    }
+
+    private void setHotRecycler(RecyclerView recyclerView, HotWordAdapter adapter) {
         recyclerView.setItemAnimator(null);
         recyclerView.setHasFixedSize(false);
         recyclerView.setLayoutManager(new FlexboxLayoutManager(this, FlexDirection.ROW));
@@ -176,14 +184,12 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     private void getHot() {
         mSuggestSeq++;
         showHot(true);
-        mHotTvAdapter.setItems(Word.objectFrom(Setting.getHotTv()).getData());
-        mHotMovieAdapter.setItems(Word.objectFrom(Setting.getHotMovie()).getData());
-        mHotVarietyAdapter.setItems(Word.objectFrom(Setting.getHotVariety()).getData());
-        mHotAnimeAdapter.setItems(Word.objectFrom(Setting.getHotAnime()).getData());
+        mHotTvAdapter.setItems(hotItems(Setting.getHotTv()));
+        mHotMovieAdapter.setItems(hotItems(Setting.getHotMovie()));
+        mHotVarietyAdapter.setItems(hotItems(Setting.getHotVariety()));
         OkHttp.newCall(rankUrl(3), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotTvAdapter, Setting::putHotTv));
         OkHttp.newCall(rankUrl(2), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotMovieAdapter, Setting::putHotMovie));
         OkHttp.newCall(rankUrl(4), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotVarietyAdapter, Setting::putHotVariety));
-        OkHttp.newCall(rankUrl(5), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotAnimeAdapter, Setting::putHotAnime));
     }
 
     private void getSuggest(String text) {
@@ -207,7 +213,12 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
         mBinding.hotGroup.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
-    private Callback getHotCallback(WordAdapter adapter, HotSaver saver) {
+    private List<Word.Data> hotItems(String result) {
+        List<Word.Data> data = Word.objectFrom(result).getData();
+        return new ArrayList<>(data.subList(0, Math.min(data.size(), HOT_LIMIT)));
+    }
+
+    private Callback getHotCallback(HotWordAdapter adapter, HotSaver saver) {
         return new Callback() {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
@@ -218,10 +229,10 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
         };
     }
 
-    private void setHotAdapter(WordAdapter adapter, HotSaver saver, String result) {
+    private void setHotAdapter(HotWordAdapter adapter, HotSaver saver, String result) {
         if (!empty()) return;
         saver.save(result);
-        adapter.setItems(Word.objectFrom(result).getData());
+        adapter.setItems(hotItems(result));
     }
 
     private Callback getSuggestCallback(int seq, boolean tencent) {
@@ -430,7 +441,7 @@ public class SearchActivity extends BaseActivity implements WordAdapter.OnClickL
     }
 
     private RecyclerView[] getHotRecyclers() {
-        return new RecyclerView[]{mBinding.hotTvRecycler, mBinding.hotMovieRecycler, mBinding.hotVarietyRecycler, mBinding.hotAnimeRecycler};
+        return new RecyclerView[]{mBinding.hotTvRecycler, mBinding.hotMovieRecycler, mBinding.hotVarietyRecycler};
     }
 
     private boolean focusFirstWord() {

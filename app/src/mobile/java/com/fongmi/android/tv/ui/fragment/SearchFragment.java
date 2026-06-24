@@ -29,6 +29,7 @@ import com.fongmi.android.tv.bean.Word;
 import com.fongmi.android.tv.databinding.FragmentSearchBinding;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.adapter.HotWordAdapter;
 import com.fongmi.android.tv.ui.adapter.RecordAdapter;
 import com.fongmi.android.tv.ui.adapter.WordAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
@@ -52,13 +53,14 @@ import okhttp3.Response;
 
 public class SearchFragment extends BaseFragment implements MenuProvider, WordAdapter.OnClickListener, RecordAdapter.OnClickListener {
 
+    private static final int HOT_LIMIT = 10;
+
     private FragmentSearchBinding mBinding;
     private RecordAdapter mRecordAdapter;
     private WordAdapter mWordAdapter;
-    private WordAdapter mHotTvAdapter;
-    private WordAdapter mHotMovieAdapter;
-    private WordAdapter mHotVarietyAdapter;
-    private WordAdapter mHotAnimeAdapter;
+    private HotWordAdapter mHotTvAdapter;
+    private HotWordAdapter mHotMovieAdapter;
+    private HotWordAdapter mHotVarietyAdapter;
     private List<Word.Data> mIqiyiWords = new ArrayList<>();
     private List<Word.Data> mTencentWords = new ArrayList<>();
     private int mSuggestSeq;
@@ -126,16 +128,21 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
 
     private void setRecyclerView() {
         setWordRecycler(mBinding.wordRecycler, mWordAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotTvRecycler, mHotTvAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotMovieRecycler, mHotMovieAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotVarietyRecycler, mHotVarietyAdapter = new WordAdapter(this));
-        setWordRecycler(mBinding.hotAnimeRecycler, mHotAnimeAdapter = new WordAdapter(this));
+        setHotRecycler(mBinding.hotTvRecycler, mHotTvAdapter = new HotWordAdapter(this));
+        setHotRecycler(mBinding.hotMovieRecycler, mHotMovieAdapter = new HotWordAdapter(this));
+        setHotRecycler(mBinding.hotVarietyRecycler, mHotVarietyAdapter = new HotWordAdapter(this));
         mBinding.recordRecycler.setHasFixedSize(false);
         mBinding.recordRecycler.setAdapter(mRecordAdapter = new RecordAdapter(this));
         mBinding.recordRecycler.setLayoutManager(new FlexboxLayoutManager(getContext(), FlexDirection.ROW));
     }
 
     private void setWordRecycler(RecyclerView recyclerView, WordAdapter adapter) {
+        recyclerView.setHasFixedSize(false);
+        recyclerView.setAdapter(adapter);
+        recyclerView.setLayoutManager(new FlexboxLayoutManager(getContext(), FlexDirection.ROW));
+    }
+
+    private void setHotRecycler(RecyclerView recyclerView, HotWordAdapter adapter) {
         recyclerView.setHasFixedSize(false);
         recyclerView.setAdapter(adapter);
         recyclerView.setLayoutManager(new FlexboxLayoutManager(getContext(), FlexDirection.ROW));
@@ -198,14 +205,12 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
     private void getHot() {
         mSuggestSeq++;
         showHot(true);
-        mHotTvAdapter.setItems(Word.objectFrom(Setting.getHotTv()).getData());
-        mHotMovieAdapter.setItems(Word.objectFrom(Setting.getHotMovie()).getData());
-        mHotVarietyAdapter.setItems(Word.objectFrom(Setting.getHotVariety()).getData());
-        mHotAnimeAdapter.setItems(Word.objectFrom(Setting.getHotAnime()).getData());
+        mHotTvAdapter.setItems(hotItems(Setting.getHotTv()));
+        mHotMovieAdapter.setItems(hotItems(Setting.getHotMovie()));
+        mHotVarietyAdapter.setItems(hotItems(Setting.getHotVariety()));
         OkHttp.newCall(rankUrl(3), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotTvAdapter, Setting::putHotTv));
         OkHttp.newCall(rankUrl(2), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotMovieAdapter, Setting::putHotMovie));
         OkHttp.newCall(rankUrl(4), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotVarietyAdapter, Setting::putHotVariety));
-        OkHttp.newCall(rankUrl(5), Map.of(HttpHeaders.REFERER, "https://www.360kan.com/rank/general")).enqueue(getHotCallback(mHotAnimeAdapter, Setting::putHotAnime));
     }
 
     private void getSuggest(String text) {
@@ -228,7 +233,12 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
         mBinding.hotGroup.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
-    private Callback getHotCallback(WordAdapter adapter, HotSaver saver) {
+    private List<Word.Data> hotItems(String result) {
+        List<Word.Data> data = Word.objectFrom(result).getData();
+        return new ArrayList<>(data.subList(0, Math.min(data.size(), HOT_LIMIT)));
+    }
+
+    private Callback getHotCallback(HotWordAdapter adapter, HotSaver saver) {
         return new Callback() {
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
@@ -239,10 +249,10 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
         };
     }
 
-    private void setHotAdapter(WordAdapter adapter, HotSaver saver, String result) {
+    private void setHotAdapter(HotWordAdapter adapter, HotSaver saver, String result) {
         if (!mBinding.keyword.getText().toString().trim().isEmpty()) return;
         saver.save(result);
-        adapter.setItems(Word.objectFrom(result).getData());
+        adapter.setItems(hotItems(result));
     }
 
     private Callback getSuggestCallback(int seq, boolean tencent) {

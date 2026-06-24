@@ -124,8 +124,8 @@
                     android:paddingStart="8dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="8dp"
-                    tools:itemCount="5"
-                    tools:listitem="@layout/adapter_search_word" />
+                    tools:itemCount="10"
+                    tools:listitem="@layout/adapter_search_hot_word" />
 
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
@@ -150,8 +150,8 @@
                     android:paddingStart="8dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="8dp"
-                    tools:itemCount="5"
-                    tools:listitem="@layout/adapter_search_word" />
+                    tools:itemCount="10"
+                    tools:listitem="@layout/adapter_search_hot_word" />
 
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="wrap_content"
@@ -176,34 +176,8 @@
                     android:paddingStart="8dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="8dp"
-                    tools:itemCount="5"
-                    tools:listitem="@layout/adapter_search_word" />
-
-                <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginEnd="16dp"
-                    android:layout_marginBottom="8dp"
-                    android:text="@string/search_hot_anime"
-                    android:textColor="@color/white"
-                    android:textSize="18sp" />
-
-                <androidx.recyclerview.widget.RecyclerView
-                    android:id="@+id/hotAnimeRecycler"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="-8dp"
-                    android:clipChildren="false"
-                    android:clipToPadding="false"
-                    android:nestedScrollingEnabled="false"
-                    android:overScrollMode="never"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="8dp"
-                    tools:itemCount="5"
-                    tools:listitem="@layout/adapter_search_word" />
+                    tools:itemCount="10"
+                    tools:listitem="@layout/adapter_search_hot_word" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 

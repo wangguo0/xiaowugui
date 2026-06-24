@@ -77,14 +77,6 @@ public class Setting {
         Prefers.put("hot_variety", hot);
     }
 
-    public static String getHotAnime() {
-        return Prefers.getString("hot_anime");
-    }
-
-    public static void putHotAnime(String hot) {
-        Prefers.put("hot_anime", hot);
-    }
-
     public static String getUa() {
         return Prefers.getString("ua");
     }
