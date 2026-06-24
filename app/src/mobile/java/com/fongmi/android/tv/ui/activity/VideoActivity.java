@@ -158,6 +158,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private int mEpisodeTouchSlop;
     private int mEpisodeDragDirection;
     private float mEpisodeDownY;
+    private boolean mEpisodeTouchAtTop;
+    private boolean mEpisodeTouchAtBottom;
     private boolean mEpisodeGroupSwitched;
     private Runnable mR1;
     private Runnable mR2;
@@ -1235,6 +1237,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             case MotionEvent.ACTION_DOWN:
                 mEpisodeDownY = e.getY();
                 mEpisodeDragDirection = 0;
+                mEpisodeTouchAtTop = !mBinding.episode.canScrollVertically(-1);
+                mEpisodeTouchAtBottom = !mBinding.episode.canScrollVertically(1);
                 mEpisodeGroupSwitched = false;
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -1244,6 +1248,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             case MotionEvent.ACTION_CANCEL:
                 mEpisodeDownY = 0;
                 mEpisodeDragDirection = 0;
+                mEpisodeTouchAtTop = false;
+                mEpisodeTouchAtBottom = false;
                 mEpisodeGroupSwitched = false;
                 break;
         }
@@ -1254,8 +1260,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mEpisodeGroupSwitched || mEpisodeGroupAdapter == null || mEpisodeGroupAdapter.getItemCount() < 2) return;
         if (Math.abs(dy) < mEpisodeTouchSlop) return;
         if (mEpisodeDragDirection == 0) mEpisodeDragDirection = dy < 0 ? 1 : -1;
-        if (mEpisodeDragDirection > 0 && !mBinding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
-        else if (mEpisodeDragDirection < 0 && !mBinding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
+        if (mEpisodeDragDirection > 0 && mEpisodeTouchAtBottom) switchEpisodeGroup(1, false);
+        else if (mEpisodeDragDirection < 0 && mEpisodeTouchAtTop) switchEpisodeGroup(-1, true);
     }
 
     private void switchEpisodeGroup(int offset, boolean scrollToEnd) {
@@ -1267,7 +1273,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mEpisodeGroupAdapter.setSelected(group);
         setVisibleEpisodeAdapter(getFlag().getEpisodes(), group);
         scrollToPosition(mBinding.episodeGroup, target);
-        mBinding.episode.post(() -> mBinding.episode.scrollToPosition(scrollToEnd ? Math.max(0, mEpisodeAdapter.getItemCount() - 1) : 0));
+        scrollEpisodeGroupBoundary(scrollToEnd);
+    }
+
+    private void scrollEpisodeGroupBoundary(boolean scrollToEnd) {
+        int position = scrollToEnd ? Math.max(0, mEpisodeAdapter.getItemCount() - 1) : 0;
+        RecyclerView.LayoutManager manager = mBinding.episode.getLayoutManager();
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
+        else mBinding.episode.scrollToPosition(position);
     }
 
     private void onSwipeRefresh() {

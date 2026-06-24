@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.Flag;
@@ -48,6 +49,8 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
     private int episodeTouchSlop;
     private int episodeDragDirection;
     private float episodeDownY;
+    private boolean episodeTouchAtTop;
+    private boolean episodeTouchAtBottom;
     private boolean episodeGroupSwitched;
     private boolean reverse;
 
@@ -216,6 +219,8 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
             case MotionEvent.ACTION_DOWN:
                 episodeDownY = e.getY();
                 episodeDragDirection = 0;
+                episodeTouchAtTop = !binding.episode.canScrollVertically(-1);
+                episodeTouchAtBottom = !binding.episode.canScrollVertically(1);
                 episodeGroupSwitched = false;
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -225,6 +230,8 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
             case MotionEvent.ACTION_CANCEL:
                 episodeDownY = 0;
                 episodeDragDirection = 0;
+                episodeTouchAtTop = false;
+                episodeTouchAtBottom = false;
                 episodeGroupSwitched = false;
                 break;
         }
@@ -235,8 +242,8 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
         if (episodeGroupSwitched || groupAdapter == null || groupAdapter.getItemCount() < 2) return;
         if (Math.abs(dy) < episodeTouchSlop) return;
         if (episodeDragDirection == 0) episodeDragDirection = dy < 0 ? 1 : -1;
-        if (episodeDragDirection > 0 && !binding.episode.canScrollVertically(1)) switchEpisodeGroup(1, false);
-        else if (episodeDragDirection < 0 && !binding.episode.canScrollVertically(-1)) switchEpisodeGroup(-1, true);
+        if (episodeDragDirection > 0 && episodeTouchAtBottom) switchEpisodeGroup(1, false);
+        else if (episodeDragDirection < 0 && episodeTouchAtTop) switchEpisodeGroup(-1, true);
     }
 
     private void switchEpisodeGroup(int offset, boolean scrollToEnd) {
@@ -250,7 +257,14 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
         groupAdapter.setSelected(group);
         setEpisodes(flag.getEpisodes(), group);
         binding.group.scrollToPosition(target);
-        binding.episode.post(() -> binding.episode.scrollToPosition(scrollToEnd ? Math.max(0, episodeAdapter.getItemCount() - 1) : 0));
+        scrollEpisodeGroupBoundary(scrollToEnd);
+    }
+
+    private void scrollEpisodeGroupBoundary(boolean scrollToEnd) {
+        int position = scrollToEnd ? Math.max(0, episodeAdapter.getItemCount() - 1) : 0;
+        RecyclerView.LayoutManager manager = binding.episode.getLayoutManager();
+        if (manager instanceof GridLayoutManager) ((GridLayoutManager) manager).scrollToPositionWithOffset(position, 0);
+        else binding.episode.scrollToPosition(position);
     }
 
     @Override
