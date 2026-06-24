@@ -15,6 +15,8 @@ import java.util.List;
 
 public class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.ViewHolder> {
 
+    private static final Object PAYLOAD_SELECTED = new Object();
+
     private final OnClickListener listener;
     private final List<Channel> mItems;
 
@@ -42,22 +44,32 @@ public class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.ViewHold
     }
 
     public void remove(Channel item) {
-        int position = mItems.indexOf(item);
+        int position = indexOf(item);
         if (position == -1) return;
         mItems.remove(position);
         notifyItemRemoved(position);
     }
 
     public void setSelected(int position) {
-        if (position == -1) return;
-        for (int i = 0; i < mItems.size(); i++) mItems.get(i).setSelected(i == position);
-        notifyItemRangeChanged(0, getItemCount());
+        if (position < 0 || position >= mItems.size()) return;
+        for (int i = 0; i < mItems.size(); i++) {
+            Channel item = mItems.get(i);
+            boolean selected = i == position;
+            if (item.isSelected() == selected) continue;
+            item.setSelected(selected);
+            notifyItemChanged(i, PAYLOAD_SELECTED);
+        }
     }
 
     public int setSelected(Channel channel) {
-        int position = mItems.indexOf(channel);
+        int position = indexOf(channel);
         setSelected(position);
         return position;
+    }
+
+    private int indexOf(Channel channel) {
+        for (int i = 0; i < mItems.size(); i++) if (mItems.get(i) == channel) return i;
+        return mItems.indexOf(channel);
     }
 
     @Override
@@ -80,6 +92,15 @@ public class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.ViewHold
         holder.binding.getRoot().setSelected(item.isSelected());
         holder.binding.getRoot().setOnClickListener(view -> listener.onItemClick(item));
         holder.binding.getRoot().setOnLongClickListener(view -> listener.onLongClick(item));
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull ChannelAdapter.ViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (payloads.isEmpty()) {
+            super.onBindViewHolder(holder, position, payloads);
+        } else {
+            holder.binding.getRoot().setSelected(mItems.get(position).isSelected());
+        }
     }
 
     @Override

@@ -465,7 +465,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mGroup = mGroupAdapter.get(position[0]);
         mGroup.setPosition(position[1]);
         onItemClick(mGroup);
-        onItemClick(mGroup.current());
+        selectChannel(mGroup.current(), true);
     }
 
     private void setPosition() {
@@ -665,9 +665,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void hideUI() {
+        hideUI(true);
+    }
+
+    private void hideUI(boolean syncPosition) {
         if (isEmbeddedLiveUi()) {
             keepLiveMenuVisible();
-            setPosition();
+            if (syncPosition) setPosition();
             return;
         }
         if (isGone(mBinding.recycler)) return;
@@ -828,6 +832,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void onItemClick(Channel item) {
+        selectChannel(item, false);
+    }
+
+    private void selectChannel(Channel item, boolean syncPosition) {
         if (item.isSelected() && mChannel != null && mChannel.equals(item) && mChannel.getGroup().equals(mGroup) && isLineDoubleClick(item)) {
             showLineDialog(item);
         } else if (!item.getData(mViewModel.getZoneId()).getList().isEmpty() && item.isSelected() && mChannel != null && mChannel.equals(item) && mChannel.getGroup().equals(mGroup)) {
@@ -843,7 +851,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             mChannel = item;
             setArtwork();
             showInfo();
-            hideUI();
+            hideUI(syncPosition);
             fetch();
             rememberLineClick(item);
         }
@@ -1396,7 +1404,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         boolean limit = position < 0;
         if (LiveSetting.isAcross() & limit) prevGroup();
         else mGroup.setPosition(limit ? mChannelAdapter.getItemCount() - 1 : position);
-        if (!mGroup.isEmpty()) onItemClick(mGroup.current());
+        if (!mGroup.isEmpty()) selectChannel(mGroup.current(), true);
     }
 
     private void nextChannel() {
@@ -1405,7 +1413,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         boolean limit = position > mChannelAdapter.getItemCount() - 1;
         if (LiveSetting.isAcross() && limit) nextGroup();
         else mGroup.setPosition(limit ? 0 : position);
-        if (!mGroup.isEmpty()) onItemClick(mGroup.current());
+        if (!mGroup.isEmpty()) selectChannel(mGroup.current(), true);
     }
 
     private void checkNext() {
@@ -1460,6 +1468,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void scrollToPosition(RecyclerView view, int position) {
+        RecyclerView.Adapter<?> adapter = view.getAdapter();
+        if (adapter == null || position < 0 || position >= adapter.getItemCount()) return;
         view.post(() -> view.scrollToPosition(position));
     }
 
