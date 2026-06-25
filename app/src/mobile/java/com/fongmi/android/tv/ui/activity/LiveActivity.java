@@ -129,6 +129,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private boolean pendingShowEpg;
     private boolean pendingShowProgram;
     private boolean playbackCatchup;
+    private boolean liveMenuOverlay;
     private VideoSize videoSize;
 
     public static void start(Context context) {
@@ -719,9 +720,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             setPosition();
             return;
         }
+        setLiveMenuOverlay(true);
         if (isVisible(mBinding.recycler) || mGroupAdapter.getItemCount() == 0) return;
         mBinding.recycler.setVisibility(View.VISIBLE);
         mBinding.channel.requestFocus();
+        updateOverlayMenuWidths();
         setPosition();
         hideEpg();
     }
@@ -1714,6 +1717,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void updateEmbeddedUiMode() {
         boolean embedded = isEmbeddedLiveUi();
+        setLiveMenuOverlay(!embedded);
         mBinding.navigation.setVisibility(View.GONE);
         if (embeddedUiMode != null && embeddedUiMode && !embedded) {
             hideControl();
@@ -1725,6 +1729,87 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         updateControlInsets();
         updateVideoHeight(videoSize);
         applyLiveResizeMode(LiveSetting.getScale());
+    }
+
+    private void setLiveMenuOverlay(boolean overlay) {
+        if (liveMenuOverlay == overlay) return;
+        liveMenuOverlay = overlay;
+        if (overlay) {
+            moveLiveMenuToVideo();
+            mBinding.recycler.setOrientation(LinearLayoutCompat.HORIZONTAL);
+            mBinding.recycler.setBackgroundResource(R.drawable.shape_live_list);
+            if (mBinding.liveCurrent != null) mBinding.liveCurrent.setVisibility(View.GONE);
+            setLiveListContainerOverlay();
+            updateOverlayMenuWidths();
+        } else {
+            moveLiveMenuToRoot();
+            mBinding.recycler.setOrientation(LinearLayoutCompat.VERTICAL);
+            mBinding.recycler.setBackgroundColor(Color.TRANSPARENT);
+            if (mBinding.liveCurrent != null) mBinding.liveCurrent.setVisibility(View.VISIBLE);
+            setLiveListContainerEmbedded();
+            restoreEmbeddedMenuWidths();
+        }
+    }
+
+    private void moveLiveMenuToVideo() {
+        if (mBinding.recycler.getParent() == mBinding.video) return;
+        ViewGroup parent = (ViewGroup) mBinding.recycler.getParent();
+        if (parent != null) parent.removeView(mBinding.recycler);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        mBinding.video.addView(mBinding.recycler, params);
+    }
+
+    private void moveLiveMenuToRoot() {
+        if (mBinding.recycler.getParent() == mBinding.getRoot()) return;
+        ViewGroup parent = (ViewGroup) mBinding.recycler.getParent();
+        if (parent != null) parent.removeView(mBinding.recycler);
+        if (mBinding.getRoot() instanceof LinearLayoutCompat root) {
+            LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0);
+            params.weight = 14;
+            root.addView(mBinding.recycler, Math.min(1, root.getChildCount()), params);
+        } else if (mBinding.getRoot() instanceof FrameLayout root) {
+            root.addView(mBinding.recycler, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START));
+        }
+    }
+
+    private void setLiveListContainerOverlay() {
+        if (mBinding.recycler.getChildCount() < 2) return;
+        View view = mBinding.recycler.getChildAt(1);
+        if (!(view instanceof LinearLayoutCompat layout)) return;
+        layout.setOrientation(LinearLayoutCompat.HORIZONTAL);
+        layout.setPadding(ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8));
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        layout.setLayoutParams(params);
+    }
+
+    private void setLiveListContainerEmbedded() {
+        if (mBinding.recycler.getChildCount() < 2) return;
+        View view = mBinding.recycler.getChildAt(1);
+        if (!(view instanceof LinearLayoutCompat layout)) return;
+        layout.setOrientation(LinearLayoutCompat.HORIZONTAL);
+        layout.setPadding(ResUtil.dp2px(12), 0, ResUtil.dp2px(12), ResUtil.dp2px(10));
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0);
+        params.weight = 1;
+        layout.setLayoutParams(params);
+    }
+
+    private void updateOverlayMenuWidths() {
+        if (!liveMenuOverlay) return;
+        if (getHome() != null) setWidth(getHome());
+        if (mGroup != null) setWidth(mGroup);
+        if (mChannel != null) setWidth(mChannel.getData(mViewModel.getZoneId()));
+    }
+
+    private void restoreEmbeddedMenuWidths() {
+        setWeightedLayout(mBinding.group, 31);
+        setWeightedLayout(mBinding.channel, 57);
+        setWeightedLayout(mBinding.epgData, 0);
+    }
+
+    private void setWeightedLayout(View view, float weight) {
+        LinearLayoutCompat.LayoutParams params = new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT);
+        params.weight = weight;
+        view.setLayoutParams(params);
     }
 
     private void updateLiveMenuInsets() {
@@ -1739,11 +1824,18 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void updateVideoHeight(VideoSize size) {
         ViewGroup.LayoutParams params = mBinding.video.getLayoutParams();
-        if (!(params instanceof LinearLayoutCompat.LayoutParams layout)) return;
+        if (!(params instanceof LinearLayoutCompat.LayoutParams layout)) {
+            if (!isEmbeddedLiveUi()) {
+                params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+                mBinding.video.setLayoutParams(params);
+            }
+            return;
+        }
         if (!isEmbeddedLiveUi()) {
-            if (params.height == 0 && layout.weight == 9) return;
-            params.height = 0;
-            layout.weight = 9;
+            if (params.height == ViewGroup.LayoutParams.MATCH_PARENT && layout.weight == 0) return;
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            layout.weight = 0;
             mBinding.video.setLayoutParams(params);
             return;
         }
