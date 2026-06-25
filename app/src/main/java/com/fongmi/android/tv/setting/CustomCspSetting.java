@@ -125,7 +125,7 @@ public class CustomCspSetting {
             builder.append(c);
         }
         value = builder.toString().trim();
-        while (value.endsWith(",")) value = value.substring(0, value.length() - 1).trim();
+        while (value.endsWith(",") || value.endsWith(";") || value.endsWith("；")) value = value.substring(0, value.length() - 1).trim();
         return value;
     }
 

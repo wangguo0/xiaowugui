@@ -1661,6 +1661,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        if (shouldReloadLiveLayout(newConfig)) {
+            recreate();
+            return;
+        }
         updateSystemUI();
     }
 
@@ -1685,6 +1689,14 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             getWindow().setNavigationBarColor(Color.TRANSPARENT);
             Util.hideSystemUI(this);
         }
+    }
+
+    private boolean shouldReloadLiveLayout(Configuration config) {
+        if (mBinding == null || isInPictureInPictureMode()) return false;
+        if (config.orientation != Configuration.ORIENTATION_LANDSCAPE && config.orientation != Configuration.ORIENTATION_PORTRAIT) return false;
+        boolean landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE;
+        boolean landscapeLayout = mBinding.getRoot() instanceof FrameLayout;
+        return landscape != landscapeLayout;
     }
 
     private void updateEmbeddedUiMode() {

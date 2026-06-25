@@ -684,10 +684,12 @@ public class CustomCspDialog extends BaseAlertDialog {
     private List<CustomCspSetting.Item> recognizedItems(String text) throws Exception {
         String value = stripRecognizeText(text);
         List<String> candidates = new ArrayList<>();
-        candidates.add(value);
+        addRecognizeCandidate(candidates, value);
         String stripped = stripTrailingSeparators(value);
-        if (!TextUtils.equals(value, stripped)) candidates.add(stripped);
-        if (!stripped.startsWith("[")) candidates.add("[" + stripped + "]");
+        addRecognizeCandidate(candidates, stripped);
+        String closed = closeUnbalancedJson(stripped);
+        addRecognizeCandidate(candidates, closed);
+        if (!closed.startsWith("[")) addRecognizeCandidate(candidates, "[" + closed + "]");
         Exception failure = null;
         for (String candidate : candidates) {
             try {
@@ -703,6 +705,11 @@ public class CustomCspDialog extends BaseAlertDialog {
         return Collections.emptyList();
     }
 
+    private void addRecognizeCandidate(List<String> candidates, String value) {
+        if (TextUtils.isEmpty(value) || candidates.contains(value)) return;
+        candidates.add(value);
+    }
+
     private String stripRecognizeText(String text) {
         String value = text == null ? "" : text.trim();
         value = value.replaceAll("(?m)^```[a-zA-Z0-9_-]*\\s*$", "");
@@ -712,8 +719,38 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private String stripTrailingSeparators(String text) {
         String value = text == null ? "" : text.trim();
-        while (value.endsWith(",")) value = value.substring(0, value.length() - 1).trim();
+        while (value.endsWith(",") || value.endsWith(";") || value.endsWith("；")) value = value.substring(0, value.length() - 1).trim();
         return value;
+    }
+
+    private String closeUnbalancedJson(String text) {
+        String value = text == null ? "" : text.trim();
+        if (TextUtils.isEmpty(value)) return value;
+        List<Character> stack = new ArrayList<>();
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (inString) {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                stack.add('}');
+            } else if (c == '[') {
+                stack.add(']');
+            } else if (c == '}' || c == ']') {
+                if (stack.isEmpty() || stack.remove(stack.size() - 1) != c) return value;
+            }
+        }
+        if (inString || stack.isEmpty()) return value;
+        StringBuilder builder = new StringBuilder(value);
+        for (int i = stack.size() - 1; i >= 0; i--) builder.append(stack.get(i));
+        return builder.toString();
     }
 
     private int getInsertIndex() {
