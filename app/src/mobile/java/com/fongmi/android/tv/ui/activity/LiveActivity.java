@@ -1849,10 +1849,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private int getEmbeddedVideoHeight(VideoSize size) {
         int width = ResUtil.getScreenWidth();
         int screen = ResUtil.getScreenHeight(this);
-        int videoWidth = size == null || size.width <= 0 ? 16 : size.width;
-        int videoHeight = size == null || size.height <= 0 ? 9 : size.height;
-        float ratio = Math.max(9f / 16f, (float) videoHeight / videoWidth);
-        int height = Math.round(width * ratio);
+        int height = Math.round(width * 9f / 16f);
         int max = Math.round(screen * 0.40f);
         return Math.max(ResUtil.dp2px(180), Math.min(height, max));
     }
