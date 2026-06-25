@@ -89,6 +89,9 @@ public class PlayerManager implements ParseCallback {
     private int localProxyRetry;
     private int prepareSeq;
     private int lutApplySeq;
+    private long lutPipelineWarmupPosition;
+    private boolean lutPipelineWarmupPlayWhenReady;
+    private float lutPipelineWarmupSpeed = 1f;
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
@@ -116,6 +119,9 @@ public class PlayerManager implements ParseCallback {
         lutPipelinePrepareInProgress = false;
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
+        lutPipelineWarmupPosition = 0;
+        lutPipelineWarmupPlayWhenReady = false;
+        lutPipelineWarmupSpeed = 1f;
         currentDanmakuUrl = null;
     }
 
@@ -144,6 +150,9 @@ public class PlayerManager implements ParseCallback {
         lutPipelinePrepareInProgress = false;
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
+        lutPipelineWarmupPosition = 0;
+        lutPipelineWarmupPlayWhenReady = false;
+        lutPipelineWarmupSpeed = 1f;
     }
 
     public Player getPlayer() {
@@ -437,6 +446,9 @@ public class PlayerManager implements ParseCallback {
         lutPipelinePrepareInProgress = false;
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
+        lutPipelineWarmupPosition = 0;
+        lutPipelineWarmupPlayWhenReady = false;
+        lutPipelineWarmupSpeed = 1f;
     }
 
     public void resetTrack() {
@@ -494,6 +506,9 @@ public class PlayerManager implements ParseCallback {
         lutPipelinePrepareInProgress = false;
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
+        lutPipelineWarmupPosition = 0;
+        lutPipelineWarmupPlayWhenReady = false;
+        lutPipelineWarmupSpeed = 1f;
         callback.onPlayerRebuild(player);
     }
 
@@ -586,6 +601,9 @@ public class PlayerManager implements ParseCallback {
         lutPipelinePrepareInProgress = false;
         pendingLutPreview = false;
         dynamicLutEffect.clear();
+        lutPipelineWarmupPosition = 0;
+        lutPipelineWarmupPlayWhenReady = false;
+        lutPipelineWarmupSpeed = 1f;
         if (videoEffectsDirty) {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "rebuild clean player before media item reason=prepare spec=%s", debugSpec());
             rebuildPlayer();
@@ -785,6 +803,9 @@ public class PlayerManager implements ParseCallback {
         long position = Math.max(0, getPosition());
         boolean playWhenReady = player.getPlayWhenReady();
         float speed = getSpeed();
+        lutPipelineWarmupPosition = position;
+        lutPipelineWarmupPlayWhenReady = playWhenReady;
+        lutPipelineWarmupSpeed = speed;
         if (!safeSetVideoEffects(dynamicLutEffect.effects(), reason + "_prepare_dynamic_passthrough")) {
             lutPipelinePrepareInProgress = false;
             return true;
@@ -1015,6 +1036,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             App.removeCallbacks(runnable);
+            if (retryAfterLutWarmupSourceFailure(e)) return;
             PlayerEngine.ErrorAction action = engine.handleError(e);
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "error code=%d message=%s action=%s retry=%d spec=%s cause=%s", e.errorCode, e.getMessage(), action, retry, debugSpec(), causeChain(e));
             LocalProxyDebug.dumpIfLocalFailure(spec == null ? null : spec.getUrl(), e);
@@ -1039,6 +1061,35 @@ public class PlayerManager implements ParseCallback {
             }
         }
     };
+
+    private boolean retryAfterLutWarmupSourceFailure(PlaybackException e) {
+        if (!isSourceParsingError(e)) return false;
+        if (!videoEffectsActive || !lutPipelineReadyForItem || lutAppliedForItem || spec == null || engine == null || player == null) return false;
+        lutApplySeq++;
+        lutAppliedForItem = true;
+        lutApplyInProgress = false;
+        lutPipelineReadyForItem = false;
+        lutPipelinePrepareInProgress = false;
+        pendingLutPreview = false;
+        dynamicLutEffect.clear();
+        long position = Math.max(0, lutPipelineWarmupPosition);
+        boolean playWhenReady = lutPipelineWarmupPlayWhenReady;
+        float speed = lutPipelineWarmupSpeed;
+        clearVideoEffects("lut_warmup_source_error");
+        Notify.show(R.string.lut_apply_failed);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "retry without lut after warmup source error code=%d position=%d play=%s spec=%s cause=%s", e.errorCode, position, playWhenReady, debugSpec(), causeChain(e));
+        engine.restart(spec.checkUa(), position, playWhenReady);
+        if (speed != 1f) setSpeed(speed);
+        return true;
+    }
+
+    private boolean isSourceParsingError(PlaybackException e) {
+        return e.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+                e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ||
+                e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+                e.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ||
+                e.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED;
+    }
 
     private boolean retryLutFailure(PlaybackException e) {
         if (!LutSetting.isEnabled()) return false;

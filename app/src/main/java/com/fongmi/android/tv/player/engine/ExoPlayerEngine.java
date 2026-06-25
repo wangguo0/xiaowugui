@@ -24,10 +24,13 @@ import java.util.concurrent.TimeUnit;
 
 public class ExoPlayerEngine implements PlayerEngine {
 
+    private static final int MAX_FORMAT_RETRY = 2;
+
     private final ErrorMsgProvider provider;
     private PlaySpec spec;
     private ExoPlayer player;
     private int decode;
+    private int formatRetry;
     private boolean playWhenReady;
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
@@ -92,6 +95,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     public void start(PlaySpec spec, boolean playWhenReady) {
         this.spec = spec;
         this.playWhenReady = playWhenReady;
+        this.formatRetry = 0;
         SpiderDebug.log("player-engine", "start decode=%d format=%s play=%s headers=%s urlLen=%d", decode, spec.getFormat(), playWhenReady, spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
         startInternal(C.TIME_UNSET, playWhenReady);
     }
@@ -100,6 +104,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     public void start(PlaySpec spec, long position, boolean playWhenReady) {
         this.spec = spec;
         this.playWhenReady = playWhenReady;
+        this.formatRetry = 0;
         SpiderDebug.log("player-engine", "start decode=%d format=%s position=%d play=%s headers=%s urlLen=%d", decode, spec.getFormat(), position, playWhenReady, spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
         startInternal(position, playWhenReady);
     }
@@ -108,6 +113,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     public void restart(PlaySpec spec, long position, boolean playWhenReady) {
         this.spec = spec;
         this.playWhenReady = playWhenReady;
+        this.formatRetry = 0;
         SpiderDebug.log("player-engine", "restart decode=%d format=%s position=%d play=%s headers=%s urlLen=%d", decode, spec.getFormat(), position, playWhenReady, spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
         player.stop();
         startInternal(position, playWhenReady);
@@ -215,9 +221,12 @@ public class ExoPlayerEngine implements PlayerEngine {
     }
 
     private ErrorAction retryFormat(int errorCode) {
-        spec.setFormat(ExoUtil.getMimeType(errorCode));
+        String mimeType = ExoUtil.getMimeType(errorCode);
+        if (mimeType == null || formatRetry >= MAX_FORMAT_RETRY) return ErrorAction.FATAL;
+        formatRetry++;
+        spec.setFormat(mimeType);
         boolean play = player.getPlayWhenReady() || playWhenReady;
-        SpiderDebug.log("player-engine", "retryFormat errorCode=%d newFormat=%s position=%d play=%s", errorCode, spec.getFormat(), player.getCurrentPosition(), play);
+        SpiderDebug.log("player-engine", "retryFormat attempt=%d errorCode=%d newFormat=%s position=%d play=%s", formatRetry, errorCode, spec.getFormat(), player.getCurrentPosition(), play);
         startInternal(player.getCurrentPosition(), play);
         return ErrorAction.RECOVERED;
     }
