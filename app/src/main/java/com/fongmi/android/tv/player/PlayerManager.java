@@ -83,6 +83,7 @@ public class PlayerManager implements ParseCallback {
     private boolean lutPipelinePrepareInProgress;
     private boolean pendingLutPreview;
     private boolean waitingLutBeforePlay;
+    private boolean lutAllowed = true;
     private int playerType;
     private int retry;
     private int localProxyRetry;
@@ -267,6 +268,12 @@ public class PlayerManager implements ParseCallback {
 
     public String getLutText() {
         return LutSetting.getButtonText();
+    }
+
+    public void setLutAllowed(boolean allowed) {
+        if (lutAllowed == allowed) return;
+        lutAllowed = allowed;
+        if (!allowed) resetLutRuntimeState("lut_disallowed", true);
     }
 
     public String getLutUnavailableReason() {
@@ -602,6 +609,14 @@ public class PlayerManager implements ParseCallback {
         if (engine == null) return;
         int seq = ++lutApplySeq;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "request seq=%d notify=%s preview=%s enabled=%s preset=%s state=%s videoFormat=%s tracksEmpty=%s active=%s dirty=%s applied=%s applying=%s pendingPreview=%s", seq, notify, preview, LutSetting.isEnabled(), LutSetting.getPresetId(), stateName(player.getPlaybackState()), engine.getVideoFormat(), engine.getCurrentTracks() == null || engine.getCurrentTracks().isEmpty(), videoEffectsActive, videoEffectsDirty, lutAppliedForItem, lutApplyInProgress, pendingLutPreview);
+        if (!lutAllowed) {
+            lutAppliedForItem = true;
+            lutApplyInProgress = false;
+            pendingLutPreview = false;
+            setNeutralVideoEffects("disallowed");
+            completeLutBeforePlay("disallowed");
+            return;
+        }
         if (!LutSetting.isEnabled()) {
             if (waitingLutBeforePlay && shouldWaitForVideoFormat()) {
                 if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "wait video format before neutral start reason=off state=%s spec=%s", stateName(player.getPlaybackState()), debugSpec());
@@ -704,6 +719,15 @@ public class PlayerManager implements ParseCallback {
 
     private void applyLutForCurrentItem() {
         if (engine == null) return;
+        if (!lutAllowed) {
+            if (lutAppliedForItem && !videoEffectsActive && !waitingLutBeforePlay) return;
+            lutAppliedForItem = true;
+            lutApplyInProgress = false;
+            pendingLutPreview = false;
+            setNeutralVideoEffects("auto_disallowed");
+            completeLutBeforePlay("auto_disallowed");
+            return;
+        }
         if (!LutSetting.isEnabled()) {
             if (lutAppliedForItem && !videoEffectsActive && !waitingLutBeforePlay) return;
             lutAppliedForItem = true;
@@ -824,6 +848,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private boolean canWarmLutPipeline() {
+        if (!lutAllowed) return false;
         if (engine == null || !engine.supportsVideoEffects()) return false;
         if (spec != null && spec.getDrm() != null) return false;
         if (PlayerSetting.isTunnel()) return false;

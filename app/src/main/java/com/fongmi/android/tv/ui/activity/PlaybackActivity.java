@@ -154,6 +154,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     protected void onServiceConnected() {
     }
 
+    protected boolean isLutAllowed() {
+        return true;
+    }
+
     protected void onPrepare() {
     }
 
@@ -461,6 +465,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         mService.setSessionActivity(buildSessionIntent());
         mService.setNavigationCallback(getNavigationCallback(), getPlaybackKey());
         mService.addPlayerCallback(mPlayerCallback);
+        player().setLutAllowed(isLutAllowed());
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "service connected cost=%dms key=%s", System.currentTimeMillis() - start, getPlaybackKey());
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "service connected %s", lifecycleState());
         onServiceConnected();
