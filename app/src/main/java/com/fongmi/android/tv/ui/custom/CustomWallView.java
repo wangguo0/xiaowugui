@@ -8,6 +8,7 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.util.AttributeSet;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.FrameLayout;
 
 import androidx.activity.ComponentActivity;
@@ -142,24 +143,28 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
 
     private void loadRes(int resId) {
         if (!isReady()) return;
+        resetImageLayer();
         setWallBackground(GREEN_WALL_COLOR);
         binding.image.setImageResource(resId);
     }
 
     private void loadColor(int color) {
         if (!isReady()) return;
+        resetImageLayer();
         setWallBackground(color);
         binding.image.setImageDrawable(new ColorDrawable(color));
     }
 
     private void loadDesign(int wall) {
         if (!isReady()) return;
+        useStableDesignLayer();
         setWallBackground(Setting.getBuiltInWallColor(wall));
         binding.image.setImageDrawable(new BuiltInWallDrawable(wall));
     }
 
     private void loadImage() {
         if (!isReady()) return;
+        resetImageLayer();
         Drawable cache = cache();
         if (cache != null) binding.image.setImageDrawable(cache);
         else loadPlaceholder();
@@ -184,6 +189,14 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         setBackgroundColor(color);
         binding.getRoot().setBackgroundColor(color);
         binding.image.setBackgroundColor(color);
+    }
+
+    private void useStableDesignLayer() {
+        binding.image.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+    }
+
+    private void resetImageLayer() {
+        binding.image.setLayerType(View.LAYER_TYPE_NONE, null);
     }
 
     private void loadVideo(File file) {
@@ -290,6 +303,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
     @Override
     public void onResume(@NonNull LifecycleOwner owner) {
         if (drawable != null) drawable.start();
+        if (isReady() && isBuiltInDesign(Setting.getWall(), Setting.getWallType())) binding.image.invalidate();
         if (!hasVideo()) return;
         video.setPlayer(player);
         player.play();
