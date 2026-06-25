@@ -508,7 +508,14 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             exitFullscreenLive();
             return;
         }
-        finishPlayback();
+        finishLivePlayback();
+    }
+
+    private void finishLivePlayback() {
+        markPlaybackExiting();
+        stopPlayback();
+        if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        super.onBackInvoked();
     }
 
     private void onCast() {
@@ -766,6 +773,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private void showControl() {
         if (service() == null || isInPictureInPictureMode()) return;
         boolean embedded = isEmbeddedLiveUi();
+        if (!embedded && isVisible(mBinding.recycler)) hideUI(false);
         mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
         mBinding.control.cast.setVisibility(View.GONE);
         mBinding.control.right.rotate.setVisibility(isLock() ? View.GONE : View.VISIBLE);
@@ -778,6 +786,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (mOsd != null) mOsd.setControlsVisible(true);
         setR1Callback();
         hideInfo();
+        hideWidgetOverlay();
     }
 
     private void hideControl() {
@@ -798,6 +807,14 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.widget.infoPip.setVisibility(View.GONE);
         mBinding.widget.info.setVisibility(View.GONE);
         App.removeCallbacks(mR3);
+    }
+
+    private void hideWidgetOverlay() {
+        mBinding.widget.seek.setVisibility(View.GONE);
+        mBinding.widget.speed.clearAnimation();
+        mBinding.widget.speed.setVisibility(View.GONE);
+        mBinding.widget.bright.setVisibility(View.GONE);
+        mBinding.widget.volume.setVisibility(View.GONE);
     }
 
     private void setTraffic() {
@@ -1769,17 +1786,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected void onBackInvoked() {
-        if (isVisible(mBinding.control.getRoot())) {
-            hideControl();
-        } else if (isVisible(mBinding.widget.info)) {
-            hideInfo();
-        } else if (isVisible(mBinding.recycler) && !isEmbeddedLiveUi()) {
-            hideUI();
-        } else if (!isLock()) {
-            markPlaybackExiting();
-            stopPlayback();
-            if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-            super.onBackInvoked();
+        if (isLock()) {
+            return;
+        } else {
+            onBack();
         }
     }
 
