@@ -514,7 +514,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     private void finishLivePlayback() {
         markPlaybackExiting();
-        stopPlayback();
+        if (service() != null) service().shutdown();
+        else stopPlayback();
         if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
         finish();
     }
@@ -1100,6 +1101,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         }
         clearPendingReload();
         mPlaybackKey = realUrl;
+        updateNavigationKey();
         startPlayer(mPlaybackKey, result, false, getHome().getTimeout(), buildMetadata());
         mBinding.control.action.speed.setText(player().setSpeed(playbackCatchup ? PlayerSetting.getDefaultSpeed() : 1f));
     }
@@ -1684,10 +1686,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        if (shouldReloadLiveLayout(newConfig)) {
-            recreate();
-            return;
-        }
         updateSystemUI();
     }
 
@@ -1712,14 +1710,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
             getWindow().setNavigationBarColor(Color.TRANSPARENT);
             Util.hideSystemUI(this);
         }
-    }
-
-    private boolean shouldReloadLiveLayout(Configuration config) {
-        if (mBinding == null || isInPictureInPictureMode()) return false;
-        if (config.orientation != Configuration.ORIENTATION_LANDSCAPE && config.orientation != Configuration.ORIENTATION_PORTRAIT) return false;
-        boolean landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE;
-        boolean landscapeLayout = mBinding.getRoot() instanceof FrameLayout;
-        return landscape != landscapeLayout;
     }
 
     private void updateEmbeddedUiMode() {
