@@ -516,7 +516,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         markPlaybackExiting();
         stopPlayback();
         if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
-        super.onBackInvoked();
+        finish();
     }
 
     private void onCast() {
