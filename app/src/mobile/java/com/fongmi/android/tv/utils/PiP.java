@@ -52,6 +52,18 @@ public class PiP {
             Rect rect = new Rect();
             view.getGlobalVisibleRect(rect);
             builder.setSourceRectHint(rect);
+            setAutoEnter();
+            activity.setPictureInPictureParams(builder.build());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void update(Activity activity, int width, int height, int scale) {
+        try {
+            if (noPiP()) return;
+            setAspectRatio(width, height, scale);
+            setAutoEnter();
             activity.setPictureInPictureParams(builder.build());
         } catch (Exception e) {
             e.printStackTrace();
@@ -65,23 +77,36 @@ public class PiP {
             actions.add(buildRemoteAction(activity, com.fongmi.android.tv.R.drawable.ic_action_audio, R.string.exo_controls_hide, ActionEvent.AUDIO));
             actions.add(getPlayPauseAction(activity, play));
             actions.add(buildRemoteAction(activity, R.drawable.exo_icon_next, R.string.exo_controls_next_description, ActionEvent.NEXT));
+            setAutoEnter();
             activity.setPictureInPictureParams(builder.setActions(actions).build());
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    public void enter(Activity activity, int width, int height, int scale) {
+    public boolean enter(Activity activity, int width, int height, int scale) {
         try {
-            if (noPiP() || activity.isInPictureInPictureMode() || !PlayerSetting.isBackgroundPiP()) return;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setSeamlessResizeEnabled(true);
-            if (scale == 1) builder.setAspectRatio(new Rational(16, 9));
-            else if (scale == 2) builder.setAspectRatio(new Rational(4, 3));
-            else builder.setAspectRatio(getRational(width, height));
-            activity.enterPictureInPictureMode(builder.build());
+            if (noPiP() || activity.isInPictureInPictureMode() || !PlayerSetting.isBackgroundPiP()) return false;
+            setAspectRatio(width, height, scale);
+            setAutoEnter();
+            return activity.enterPictureInPictureMode(builder.build());
         } catch (Exception e) {
             e.printStackTrace();
+            return false;
         }
+    }
+
+    private void setAutoEnter() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(PlayerSetting.isBackgroundPiP());
+        }
+    }
+
+    private void setAspectRatio(int width, int height, int scale) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setSeamlessResizeEnabled(true);
+        if (scale == 1) builder.setAspectRatio(new Rational(16, 9));
+        else if (scale == 2) builder.setAspectRatio(new Rational(4, 3));
+        else builder.setAspectRatio(getRational(width, height));
     }
 
     private Rational getRational(int width, int height) {

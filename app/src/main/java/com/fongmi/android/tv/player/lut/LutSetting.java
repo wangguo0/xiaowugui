@@ -2,9 +2,17 @@ package com.fongmi.android.tv.player.lut;
 
 import android.text.TextUtils;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.utils.Prefers;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 public class LutSetting {
 
@@ -12,6 +20,8 @@ public class LutSetting {
     private static final String KEY_PRESET = "lut_preset";
     private static final String KEY_STRENGTH = "lut_strength";
     private static final String KEY_PREVIEW_SECONDS = "lut_preview_seconds";
+    private static final String KEY_FAVORITES = "lut_favorites";
+    private static final Type STRING_LIST = new TypeToken<List<String>>() {}.getType();
 
     public static boolean isEnabled() {
         return Prefers.getBoolean(KEY_ENABLED);
@@ -49,6 +59,42 @@ public class LutSetting {
     public static void select(LutPreset preset) {
         putEnabled(preset != null);
         putPresetId(preset == null ? "" : preset.getId());
+    }
+
+    public static boolean isFavorite(String presetId) {
+        return !TextUtils.isEmpty(presetId) && favoriteIds().contains(presetId);
+    }
+
+    public static boolean toggleFavorite(LutPreset preset) {
+        return preset != null && toggleFavorite(preset.getId());
+    }
+
+    public static boolean toggleFavorite(String presetId) {
+        if (TextUtils.isEmpty(presetId)) return false;
+        Set<String> ids = favoriteIds();
+        boolean favorite;
+        if (ids.contains(presetId)) {
+            ids.remove(presetId);
+            favorite = false;
+        } else {
+            ids.add(presetId);
+            favorite = true;
+        }
+        saveFavorites(ids);
+        return favorite;
+    }
+
+    public static Set<String> favoriteIds() {
+        try {
+            List<String> items = App.gson().fromJson(Prefers.getString(KEY_FAVORITES, "[]"), STRING_LIST);
+            return new LinkedHashSet<>(items == null ? new ArrayList<>() : items);
+        } catch (Exception e) {
+            return new LinkedHashSet<>();
+        }
+    }
+
+    private static void saveFavorites(Set<String> ids) {
+        Prefers.put(KEY_FAVORITES, App.gson().toJson(new ArrayList<>(ids)));
     }
 
     public static String getSummary() {

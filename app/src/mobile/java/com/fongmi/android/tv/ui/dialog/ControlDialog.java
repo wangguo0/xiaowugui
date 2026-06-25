@@ -214,7 +214,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.parse.setHasFixedSize(true);
         binding.parse.setItemAnimator(null);
         binding.parse.addItemDecoration(new SpaceItemDecoration(8));
-        binding.parse.setAdapter(new ParseAdapter(this, ViewType.LIGHT));
+        binding.parse.setAdapter(new ParseAdapter(this, ViewType.DARK));
     }
 
     private void setScale(View view) {
@@ -382,6 +382,8 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         void onLutSelected(LutPreset preset);
 
         void onLutImport();
+
+        void onLutDir();
 
         void onLutPanel();
 

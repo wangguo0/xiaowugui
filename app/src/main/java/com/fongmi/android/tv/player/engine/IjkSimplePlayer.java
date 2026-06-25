@@ -94,11 +94,13 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
 
     @Override
     protected State getState() {
+        int state = playbackState;
+        boolean isLoading = loading && state != Player.STATE_IDLE && state != Player.STATE_ENDED;
         State.Builder builder = new State.Builder()
                 .setAvailableCommands(COMMANDS)
                 .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
-                .setPlaybackState(playbackState)
-                .setIsLoading(loading)
+                .setPlaybackState(state)
+                .setIsLoading(isLoading)
                 .setPlayerError(playerError)
                 .setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF)
                 .setPlaybackParameters(playbackParameters)
@@ -137,6 +139,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         mediaItem = mediaItems.isEmpty() ? null : mediaItems.get(0);
         pendingSeekPositionMs = mediaItem != null && startPositionMs > 0 ? startPositionMs : C.TIME_UNSET;
         playbackState = mediaItem == null ? Player.STATE_IDLE : Player.STATE_IDLE;
+        loading = false;
         playerError = null;
         return Futures.immediateVoidFuture();
     }
@@ -157,6 +160,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
     protected ListenableFuture<?> handleRemoveMediaItems(int fromIndex, int toIndex) {
         mediaItem = null;
         playbackState = Player.STATE_IDLE;
+        loading = false;
         return Futures.immediateVoidFuture();
     }
 

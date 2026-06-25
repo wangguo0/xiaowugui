@@ -19,6 +19,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.utils.ResUtil;
 
 public class BuiltInWallDrawable extends Drawable {
 
@@ -38,14 +39,25 @@ public class BuiltInWallDrawable extends Drawable {
         this.bitmapPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG | Paint.DITHER_FLAG);
     }
 
+    public static Bitmap createBitmap(int wall, int width, int height) {
+        int safeWidth = Math.max(1, width);
+        int safeHeight = Math.max(1, height);
+        Bitmap bitmap = Bitmap.createBitmap(safeWidth, safeHeight, Bitmap.Config.ARGB_8888);
+        new BuiltInWallDrawable(wall).render(new Canvas(bitmap), safeWidth, safeHeight);
+        return bitmap;
+    }
+
     @Override
     public void draw(@NonNull Canvas canvas) {
         Rect bounds = getBounds();
         if (bounds.width() <= 0 || bounds.height() <= 0) return;
-        ensureBitmap(bounds.width(), bounds.height());
+        ensureBitmap(getRenderWidth(bounds), getRenderHeight(bounds));
         bitmapPaint.setAlpha(alpha);
         bitmapPaint.setColorFilter(colorFilter);
+        int save = canvas.save();
+        canvas.clipRect(bounds);
         canvas.drawBitmap(bitmap, bounds.left, bounds.top, bitmapPaint);
+        canvas.restoreToCount(save);
     }
 
     @Override
@@ -72,6 +84,18 @@ public class BuiltInWallDrawable extends Drawable {
         bitmapHeight = height;
         bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         render(new Canvas(bitmap), width, height);
+    }
+
+    private int getRenderWidth(Rect bounds) {
+        int screenMin = Math.min(ResUtil.getScreenWidth(), ResUtil.getScreenHeight());
+        int screenMax = Math.max(ResUtil.getScreenWidth(), ResUtil.getScreenHeight());
+        return bounds.width() <= bounds.height() ? Math.max(bounds.width(), screenMin) : Math.max(bounds.width(), screenMax);
+    }
+
+    private int getRenderHeight(Rect bounds) {
+        int screenMin = Math.min(ResUtil.getScreenWidth(), ResUtil.getScreenHeight());
+        int screenMax = Math.max(ResUtil.getScreenWidth(), ResUtil.getScreenHeight());
+        return bounds.width() <= bounds.height() ? Math.max(bounds.height(), screenMax) : Math.max(bounds.height(), screenMin);
     }
 
     private void render(Canvas canvas, int width, int height) {

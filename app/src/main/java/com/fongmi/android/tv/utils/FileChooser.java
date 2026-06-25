@@ -64,6 +64,10 @@ public class FileChooser {
         }
     }
 
+    public void showDirectory() {
+        launcher.launch(new Intent(App.get(), FileActivity.class).putExtra("select_dir", true));
+    }
+
     public static boolean isValid(Context context, Uri uri) {
         try {
             return DocumentsContract.isDocumentUri(context, uri) || ContentResolver.SCHEME_CONTENT.equals(uri.getScheme()) || ContentResolver.SCHEME_FILE.equalsIgnoreCase(uri.getScheme());

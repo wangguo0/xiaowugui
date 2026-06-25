@@ -95,8 +95,10 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
+            android:gravity="center"
             android:minHeight="40dp"
             android:minWidth="0dp"
+            android:maxLines="1"
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
             android:text="@string/setting_custom_csp_webhome"
@@ -110,8 +112,10 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
+            android:gravity="center"
             android:minHeight="40dp"
             android:minWidth="0dp"
+            android:maxLines="1"
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
             android:text="@string/setting_custom_csp_common"
@@ -125,11 +129,30 @@
             android:layout_width="0dp"
             android:layout_height="40dp"
             android:layout_weight="1"
+            android:gravity="center"
             android:minHeight="40dp"
             android:minWidth="0dp"
+            android:maxLines="1"
             android:paddingStart="10dp"
             android:paddingEnd="10dp"
             android:text="@string/setting_custom_csp_live"
+            android:textColor="@color/dialog_toggle_button_text"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/otherMode"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:minHeight="40dp"
+            android:minWidth="0dp"
+            android:maxLines="1"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/setting_custom_csp_other"
             android:textColor="@color/dialog_toggle_button_text"
             app:backgroundTint="@color/dialog_toggle_button_bg"
             app:strokeColor="@color/dialog_outlined_button_stroke" />
@@ -186,6 +209,7 @@
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/nameLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
@@ -529,6 +553,64 @@
                 android:inputType="textMultiLine|textNoSuggestions"
                 android:maxLines="6"
                 android:minLines="3"
+                android:scrollHorizontally="false"
+                android:scrollbars="vertical"
+                android:singleLine="false"
+                android:textColor="@color/black"
+                android:textColorHint="#666666" />
+
+        </com.google.android.material.textfield.TextInputLayout>
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/otherPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/setting_custom_csp_other_fields"
+            android:textColor="#5F6368"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/otherField"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:minHeight="40dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:textColor="@color/dialog_tonal_button_text"
+            app:backgroundTint="@color/dialog_tonal_button_bg" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/otherValueLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            app:boxBackgroundColor="@color/white"
+            app:boxStrokeColor="@color/dialog_outlined_button_stroke"
+            app:hintTextColor="#5F6368">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/otherValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="start|top"
+                android:imeOptions="flagNoExtractUi"
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine|textNoSuggestions"
+                android:maxLines="14"
+                android:minLines="8"
                 android:scrollHorizontally="false"
                 android:scrollbars="vertical"
                 android:singleLine="false"

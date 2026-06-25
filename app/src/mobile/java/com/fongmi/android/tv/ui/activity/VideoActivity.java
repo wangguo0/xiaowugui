@@ -8,6 +8,7 @@ import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -165,6 +166,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private String playHealthKey;
     private long detailStartTime;
     private long playerStartTime;
+    private boolean pendingLutImport;
+    private boolean skipPausePiP;
+
+    private final ActivityResultLauncher<Intent> mLutDir = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
+        LutStore.setUserDir(result.getData().getData(), result.getData().getFlags());
+        Notify.show(R.string.lut_directory_selected);
+        if (hasLutQuick()) mBinding.lutQuick.refreshList();
+        if (pendingLutImport) {
+            pendingLutImport = false;
+            chooseLutFile();
+        }
+    });
 
     private final ActivityResultLauncher<Intent> mLutFile = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
@@ -555,6 +569,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             mBinding.video.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         } else {
             mBinding.video.setLayoutParams(mFrameParams);
+            restoreContextWall();
         }
     }
 
@@ -568,7 +583,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setScale(int scale) {
         if (mHistory != null) mHistory.setScale(scale);
+        if (SiteApi.PUSH.equals(getKey())) PlayerSetting.putScale(scale);
         applyResizeMode(scale);
+        mBinding.exo.post(() -> applyResizeMode(scale));
         mBinding.control.action.scale.setText(ResUtil.getStringArray(R.array.select_scale)[scale]);
     }
 
@@ -886,7 +903,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void syncSelectedEpisode(Flag flag) {
         if (flag == null || mHistory == null) return;
-        Episode episode = flag.find(mHistory.getVodRemarks(), false);
+        Episode episode = flag.find(mHistory.getEpisode(), false);
         if (episode != null) flag.toggle(true, episode);
     }
 
@@ -895,10 +912,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void seamless(Flag flag) {
-        Episode episode = flag.find(mHistory.getVodRemarks(), getMark().isEmpty());
+        Episode episode = flag.find(mHistory.getEpisode(), getMark().isEmpty());
         setQualityVisible(episode != null && episode.isSelected() && mQualityAdapter.getItemCount() > 1);
         if (episode == null || episode.isSelected()) return;
         mHistory.setVodRemarks(episode.getName());
+        mHistory.setEpisodeUrl(episode.getUrl());
         onItemClick(episode);
     }
 
@@ -1099,7 +1117,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onLut() {
-        if (hasLutQuick()) mBinding.lutQuick.toggle(player(), mBinding.exo, this::onLutChanged, this::onLutImport);
+        if (hasLutQuick()) {
+            mBinding.lutQuick.toggle(player(), mBinding.exo, this::onLutChanged, new com.fongmi.android.tv.ui.custom.LutQuickPanel.ImportCallback() {
+                @Override
+                public void onImportLut() {
+                    onLutImport();
+                }
+
+                @Override
+                public void onSelectLutDir() {
+                    onLutDir();
+                }
+            });
+        }
         else LutPanelDialog.create().player(player()).show(this);
         setR1Callback();
     }
@@ -1120,7 +1150,28 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     public void onLutImport() {
+        if (!LutStore.hasUserDir()) {
+            pendingLutImport = true;
+            chooseLutDir();
+            return;
+        }
+        chooseLutFile();
+    }
+
+    @Override
+    public void onLutDir() {
+        pendingLutImport = false;
+        chooseLutDir();
+    }
+
+    private void chooseLutFile() {
+        skipPausePiP = true;
         FileChooser.from(mLutFile).show("*/*", new String[]{"application/octet-stream", "text/*", "image/*", "*/*"});
+    }
+
+    private void chooseLutDir() {
+        skipPausePiP = true;
+        FileChooser.from(mLutDir).showDirectory();
     }
 
     @Override
@@ -1471,6 +1522,21 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.contextWall.setAlpha(1f);
     }
 
+    private void restoreContextWall() {
+        if (!Setting.isPlaybackArtworkWall()) return;
+        String wall = getContextWall();
+        if (TextUtils.isEmpty(wall)) {
+            hideContextWall();
+        } else if (Objects.equals(mContextWallUrl, wall) && mBinding.contextWall.getDrawable() != null) {
+            resetContextWallAlpha();
+            mBinding.contextWall.setBackgroundColor(Color.TRANSPARENT);
+            mBinding.contextWall.setVisibility(View.VISIBLE);
+        } else {
+            mContextWallUrl = "";
+            setContextWall(wall);
+        }
+    }
+
     private void hideContextWall() {
         resetContextWallAlpha();
         mBinding.contextWall.setImageDrawable(null);
@@ -1572,7 +1638,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void updateHistory(Episode item) {
-        boolean sameEpisode = item.matchesName(mHistory.getEpisode());
+        boolean sameEpisode = item.matches(mHistory.getEpisode());
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), getFlag().getFlag());
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
@@ -1760,6 +1826,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onSizeChanged(VideoSize size) {
+        mPiP.update(this, size.width, size.height, getScale());
         setSizeText();
         updateVideoHeight();
         applyResizeMode(getScale());
@@ -2171,9 +2238,34 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (isRedirect() || isPlaybackExiting()) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            preparePiP("userLeaveHint");
+        } else {
+            requestPiP("userLeaveHint");
+        }
+    }
+
+    @Override
+    public boolean onPictureInPictureRequested() {
+        return requestPiP("systemRequest");
+    }
+
+    private boolean preparePiP(String reason) {
+        if (isRedirect() || isPlaybackExiting()) return false;
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
+        mPiP.update(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
+        return true;
+    }
+
+    private boolean requestPiP(String reason) {
+        if (!preparePiP(reason)) return false;
         if (isLock()) App.post(this::onLock, 500);
-        if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
+        return enterPiP(reason);
+    }
+
+    private boolean enterPiP(String reason) {
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
+        return mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
     }
 
     @Override
@@ -2186,8 +2278,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             hideSheet();
         } else {
             showDanmaku();
+            restoreContextWall();
             if (isStop()) finish();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        restoreContextWall();
     }
 
     @Override

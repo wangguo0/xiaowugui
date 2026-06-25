@@ -14,12 +14,16 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.utils.Path;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class FileActivity extends BaseActivity implements FileAdapter.OnClickListener {
 
     private ActivityFileBinding mBinding;
     private FileAdapter mAdapter;
     private File dir;
+    private boolean selectDir;
 
     private boolean isRoot() {
         return Path.root().equals(dir);
@@ -32,6 +36,7 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
 
     @Override
     protected void initView(Bundle savedInstanceState) {
+        selectDir = getIntent().getBooleanExtra("select_dir", false);
         setRecyclerView();
         checkPermission();
     }
@@ -48,8 +53,16 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
 
     private void update(File dir) {
         mBinding.recycler.setSelectedPosition(0);
-        mAdapter.addAll(Path.list(this.dir = dir));
+        mAdapter.addAll(this.dir = dir, list(dir), selectDir);
         mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
+    }
+
+    private List<File> list(File dir) {
+        if (!selectDir) return Path.list(dir);
+        File[] files = dir.listFiles(File::isDirectory);
+        if (files == null) return new ArrayList<>();
+        Path.sort(files);
+        return Arrays.asList(files);
     }
 
     @Override
@@ -60,6 +73,13 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
             setResult(RESULT_OK, new Intent().setData(Uri.fromFile(file)));
             finish();
         }
+    }
+
+    @Override
+    public void onCurrentDirClick(File dir) {
+        if (dir == null) return;
+        setResult(RESULT_OK, new Intent().setData(Uri.fromFile(dir)));
+        finish();
     }
 
     @Override

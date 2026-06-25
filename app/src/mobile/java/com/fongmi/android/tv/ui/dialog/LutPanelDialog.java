@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -28,6 +29,7 @@ import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -36,9 +38,11 @@ import com.google.android.material.textview.MaterialTextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class LutPanelDialog extends BaseBottomSheetDialog {
 
+    private static final long FAVORITE_DOUBLE_CLICK_MS = 450;
     private static final int PANEL_COLOR = 0xFF28282A;
     private static final int BUTTON_COLOR = 0xFF37373A;
     private static final int BUTTON_FOCUS_COLOR = 0xFF424247;
@@ -47,11 +51,16 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     private static final int BUTTON_ACTIVE_STROKE_COLOR = 0x33FFFFFF;
 
     private MaterialTextView title;
+    private MaterialTextView all;
     private MaterialTextView delay;
+    private MaterialTextView favorite;
     private MaterialTextView empty;
     private RecyclerView recycler;
     private PanelAdapter adapter;
     private PlayerManager player;
+    private boolean favoriteOnly;
+    private String lastClickId;
+    private long lastClickTime;
 
     public static LutPanelDialog create() {
         return new LutPanelDialog();
@@ -102,7 +111,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         recycler.setItemAnimator(null);
         recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         recycler.setAdapter(adapter);
-        refreshList();
+        refreshList(true);
     }
 
     private View createContent() {
@@ -120,6 +129,10 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         title = text(R.string.player_lut, 17, true);
         header.addView(title, new LinearLayoutCompat.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
+        MaterialTextView reset = chip(R.string.lut_reset);
+        reset.setOnClickListener(view -> select(null));
+        header.addView(reset);
+
         MaterialTextView close = chip(R.string.lut_close);
         close.setOnClickListener(view -> dismiss());
         header.addView(close);
@@ -135,9 +148,23 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         delay.setOnClickListener(view -> cycleDelay());
         tools.addView(delay);
 
-        MaterialTextView importView = chip(R.string.lut_import);
+        all = chip(R.string.lut_all);
+        all.setOnClickListener(view -> showAll());
+        all.setOnFocusChangeListener((v, focused) -> setBackground((MaterialTextView) v, !favoriteOnly, focused));
+        tools.addView(all);
+
+        favorite = chip(R.string.lut_favorite);
+        favorite.setOnClickListener(view -> toggleFavoriteOnly());
+        favorite.setOnFocusChangeListener((v, focused) -> setBackground((MaterialTextView) v, favoriteOnly, focused));
+        tools.addView(favorite);
+
+        MaterialTextView importView = chip(R.string.lut_local);
         importView.setOnClickListener(view -> ((ControlDialog.Listener) requireActivity()).onLutImport());
         tools.addView(importView);
+
+        MaterialTextView dirView = chip(R.string.lut_directory);
+        dirView.setOnClickListener(view -> ((ControlDialog.Listener) requireActivity()).onLutDir());
+        tools.addView(dirView);
 
         empty = text(R.string.lut_empty_presets, 14, false);
         empty.setGravity(Gravity.CENTER);
@@ -172,13 +199,30 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
     }
 
     private void refreshList() {
+        refreshList(false);
+    }
+
+    private void refreshList(boolean rescan) {
+        renderList(LutStore.getCachedPresets());
+        if (rescan || !LutStore.hasCache()) LutStore.refreshPresetsAsync(this::renderList);
+    }
+
+    private void renderList(List<LutPreset> presets) {
+        if (!isAdded() || adapter == null) return;
         List<Entry> items = new ArrayList<>();
-        items.add(Entry.original());
-        for (LutPreset preset : LutStore.getPresets()) items.add(Entry.preset(preset));
+        Set<String> favorites = LutSetting.favoriteIds();
+        if (!favoriteOnly) items.add(Entry.original());
+        for (LutPreset preset : presets) {
+            if (favoriteOnly && !favorites.contains(preset.getId())) continue;
+            items.add(Entry.preset(preset));
+        }
         adapter.setItems(items);
-        empty.setVisibility(items.size() <= 1 ? View.VISIBLE : View.GONE);
+        empty.setText(favoriteOnly ? R.string.lut_empty_favorites : R.string.lut_empty_presets);
+        empty.setVisibility(items.isEmpty() || (!favoriteOnly && items.size() <= 1) ? View.VISIBLE : View.GONE);
         title.setText(ResUtil.getString(R.string.lut_title_value, ResUtil.getString(R.string.player_lut), LutSetting.getSummary()));
         delay.setText(ResUtil.getString(R.string.lut_preview_delay_value, LutSetting.getPreviewSeconds()));
+        updateAllButton();
+        updateFavoriteButton();
         scrollToSelected(items);
     }
 
@@ -196,6 +240,61 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
         refreshControlDialog();
         refreshList();
         recycler.requestFocus();
+    }
+
+    private void toggleFavoriteOnly() {
+        favoriteOnly = !favoriteOnly;
+        resetClickTracking();
+        refreshList();
+        recycler.requestFocus();
+    }
+
+    private void showAll() {
+        favoriteOnly = false;
+        resetClickTracking();
+        refreshList();
+        recycler.requestFocus();
+    }
+
+    private void onEntryClick(Entry entry) {
+        if (entry.preset != null && isFavoriteDoubleClick(entry.preset)) {
+            toggleFavorite(entry.preset);
+            return;
+        }
+        select(entry.preset);
+    }
+
+    private boolean isFavoriteDoubleClick(LutPreset preset) {
+        long now = SystemClock.uptimeMillis();
+        String id = preset.getId();
+        boolean doubleClick = id.equals(lastClickId) && now - lastClickTime <= FAVORITE_DOUBLE_CLICK_MS;
+        lastClickId = id;
+        lastClickTime = now;
+        return doubleClick;
+    }
+
+    private void toggleFavorite(LutPreset preset) {
+        boolean enabled = LutSetting.toggleFavorite(preset);
+        LutStore.resortCache();
+        Notify.show(enabled ? R.string.lut_favorited : R.string.lut_unfavorited);
+        resetClickTracking();
+        refreshControlDialog();
+        refreshList();
+    }
+
+    private void resetClickTracking() {
+        lastClickId = null;
+        lastClickTime = 0;
+    }
+
+    private void updateAllButton() {
+        if (all == null) return;
+        setBackground(all, !favoriteOnly, all.hasFocus());
+    }
+
+    private void updateFavoriteButton() {
+        if (favorite == null) return;
+        setBackground(favorite, favoriteOnly, favorite.hasFocus());
     }
 
     private void refreshControlDialog() {
@@ -327,7 +426,7 @@ public class LutPanelDialog extends BaseBottomSheetDialog {
             holder.text.setText(entry.getText());
             setBackground(holder.text, entry.isSelected(), holder.text.hasFocus());
             holder.text.setOnFocusChangeListener((view, focused) -> setBackground((MaterialTextView) view, entry.isSelected(), focused));
-            holder.text.setOnClickListener(view -> select(entry.preset));
+            holder.text.setOnClickListener(view -> onEntryClick(entry));
         }
 
         @Override

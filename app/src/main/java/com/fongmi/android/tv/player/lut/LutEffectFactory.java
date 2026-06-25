@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.lut;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.net.Uri;
 import android.util.LruCache;
 
 import androidx.media3.common.Effect;
@@ -85,7 +86,13 @@ public class LutEffectFactory {
     }
 
     private static InputStream open(LutPreset preset) throws IOException {
-        return preset.isAsset() ? App.get().getAssets().open(preset.getPath()) : new FileInputStream(preset.getPath());
+        if (preset.isAsset()) return App.get().getAssets().open(preset.getPath());
+        if (preset.getPath().startsWith("content://")) {
+            InputStream stream = App.get().getContentResolver().openInputStream(Uri.parse(preset.getPath()));
+            if (stream == null) throw new IOException("Unable to open LUT uri");
+            return stream;
+        }
+        return new FileInputStream(preset.getPath());
     }
 
     private static boolean isMedia3BitmapLut(int width, int height) {

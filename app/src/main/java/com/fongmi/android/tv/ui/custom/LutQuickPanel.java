@@ -2,6 +2,7 @@ package com.fongmi.android.tv.ui.custom;
 
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,16 +18,22 @@ import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.textview.MaterialTextView;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class LutQuickPanel extends FrameLayout {
 
+    private static final long FAVORITE_DOUBLE_CLICK_MS = 450;
+
+    private MaterialTextView all;
     private MaterialTextView delay;
+    private MaterialTextView favorite;
     private MaterialTextView empty;
     private RecyclerView recycler;
     private final PanelAdapter adapter;
@@ -36,6 +43,9 @@ public class LutQuickPanel extends FrameLayout {
     private Runnable refresh;
     private ImportCallback importCallback;
     private int selectSeq;
+    private boolean favoriteOnly;
+    private String lastClickId;
+    private long lastClickTime;
 
     public LutQuickPanel(android.content.Context context, android.util.AttributeSet attrs) {
         super(context, attrs);
@@ -58,22 +68,41 @@ public class LutQuickPanel extends FrameLayout {
         this.playerView = playerView;
         this.refresh = refresh;
         this.importCallback = importCallback;
-        refreshList();
+        if (getVisibility() == VISIBLE) refreshList();
     }
 
     public void refreshList() {
+        refreshList(false);
+    }
+
+    private void refreshList(boolean rescan) {
+        if (adapter == null) return;
+        renderList(LutStore.getCachedPresets());
+        if (rescan || !LutStore.hasCache()) LutStore.refreshPresetsAsync(this::renderList);
+    }
+
+    private void renderList(List<LutPreset> presets) {
         if (adapter == null) return;
         List<Entry> items = new ArrayList<>();
-        items.add(Entry.original());
-        for (LutPreset preset : LutStore.getPresets()) items.add(Entry.preset(preset));
-        empty.setVisibility(items.size() <= 1 ? VISIBLE : GONE);
+        Set<String> favorites = LutSetting.favoriteIds();
+        if (!favoriteOnly) items.add(Entry.original());
+        for (LutPreset preset : presets) {
+            if (favoriteOnly && !favorites.contains(preset.getId())) continue;
+            items.add(Entry.preset(preset));
+        }
+        empty.setText(favoriteOnly ? R.string.lut_empty_favorites : R.string.lut_empty_presets);
+        empty.setVisibility(items.isEmpty() || (!favoriteOnly && items.size() <= 1) ? VISIBLE : GONE);
         adapter.setItems(items);
         delay.setText(ResUtil.getString(R.string.lut_preview_delay_value, LutSetting.getPreviewSeconds()));
+        updateAllButton();
+        updateFavoriteButton();
     }
 
     public void selectImported(LutPreset preset, PlayerManager player, PlayerView playerView, Runnable refresh) {
+        favoriteOnly = false;
         bind(player, playerView, refresh, importCallback);
         setVisibility(VISIBLE);
+        refreshList(true);
         select(preset);
     }
 
@@ -85,7 +114,7 @@ public class LutQuickPanel extends FrameLayout {
 
     private void show() {
         setVisibility(VISIBLE);
-        refreshList();
+        refreshList(true);
         updatePanelWidth();
         panel.post(() -> {
             panel.setTranslationX(panel.getWidth());
@@ -122,9 +151,64 @@ public class LutQuickPanel extends FrameLayout {
         adapter.notifyDataSetChanged();
     }
 
+    private void toggleFavoriteOnly() {
+        favoriteOnly = !favoriteOnly;
+        resetClickTracking();
+        refreshList();
+        recycler.requestFocus();
+    }
+
+    private void showAll() {
+        favoriteOnly = false;
+        resetClickTracking();
+        refreshList();
+        recycler.requestFocus();
+    }
+
+    private void onEntryClick(Entry entry) {
+        if (entry.preset != null && isFavoriteDoubleClick(entry.preset)) {
+            toggleFavorite(entry.preset);
+            return;
+        }
+        select(entry.preset);
+    }
+
+    private boolean isFavoriteDoubleClick(LutPreset preset) {
+        long now = SystemClock.uptimeMillis();
+        String id = preset.getId();
+        boolean doubleClick = id.equals(lastClickId) && now - lastClickTime <= FAVORITE_DOUBLE_CLICK_MS;
+        lastClickId = id;
+        lastClickTime = now;
+        return doubleClick;
+    }
+
+    private void toggleFavorite(LutPreset preset) {
+        boolean enabled = LutSetting.toggleFavorite(preset);
+        LutStore.resortCache();
+        Notify.show(enabled ? R.string.lut_favorited : R.string.lut_unfavorited);
+        resetClickTracking();
+        refreshList();
+        if (refresh != null) refresh.run();
+    }
+
+    private void resetClickTracking() {
+        lastClickId = null;
+        lastClickTime = 0;
+    }
+
+    private void updateAllButton() {
+        if (all == null) return;
+        applyBg(all, !favoriteOnly, all.hasFocus());
+    }
+
+    private void updateFavoriteButton() {
+        if (favorite == null) return;
+        applyBg(favorite, favoriteOnly, favorite.hasFocus());
+    }
+
     private View createPanel() {
         FrameLayout container = new FrameLayout(getContext());
-        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(dp(220), LayoutParams.MATCH_PARENT, Gravity.END);
+        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(dp(300), LayoutParams.MATCH_PARENT, Gravity.END);
         container.setLayoutParams(containerParams);
         container.setBackgroundColor(0xE6101118);
         container.setPadding(dp(12), dp(12), dp(12), dp(12));
@@ -139,6 +223,10 @@ public class LutQuickPanel extends FrameLayout {
 
         MaterialTextView title = text(R.string.player_lut, 16, true);
         header.addView(title, new androidx.appcompat.widget.LinearLayoutCompat.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
+        MaterialTextView reset = chip();
+        reset.setText(R.string.lut_reset);
+        reset.setOnClickListener(view -> select(null));
+        header.addView(reset);
         MaterialTextView close = chip();
         close.setText(R.string.lut_close);
         close.setOnClickListener(view -> hide());
@@ -154,12 +242,32 @@ public class LutQuickPanel extends FrameLayout {
         delay = chip();
         delay.setOnClickListener(view -> cycleDelay());
         tools.addView(delay);
+
+        all = chip();
+        all.setText(R.string.lut_all);
+        all.setOnClickListener(view -> showAll());
+        all.setOnFocusChangeListener((v, focused) -> applyBg((MaterialTextView) v, !favoriteOnly, focused));
+        tools.addView(all);
+
+        favorite = chip();
+        favorite.setText(R.string.lut_favorite);
+        favorite.setOnClickListener(view -> toggleFavoriteOnly());
+        favorite.setOnFocusChangeListener((v, focused) -> applyBg((MaterialTextView) v, favoriteOnly, focused));
+        tools.addView(favorite);
+
         MaterialTextView importView = chip();
-        importView.setText(R.string.lut_import);
+        importView.setText(R.string.lut_local);
         importView.setOnClickListener(view -> {
             if (importCallback != null) importCallback.onImportLut();
         });
         tools.addView(importView);
+
+        MaterialTextView dirView = chip();
+        dirView.setText(R.string.lut_directory);
+        dirView.setOnClickListener(view -> {
+            if (importCallback != null) importCallback.onSelectLutDir();
+        });
+        tools.addView(dirView);
 
         empty = text(R.string.lut_empty_presets, 14, false);
         empty.setGravity(Gravity.CENTER);
@@ -175,7 +283,7 @@ public class LutQuickPanel extends FrameLayout {
     private void updatePanelWidth() {
         ViewGroup.LayoutParams params = panel.getLayoutParams();
         if (params == null || getWidth() <= 0) return;
-        params.width = Math.max(dp(160), Math.min(dp(260), Math.round(getWidth() * 0.42f)));
+        params.width = Math.max(dp(280), Math.min(dp(360), Math.round(getWidth() * 0.5f)));
         panel.setLayoutParams(params);
     }
 
@@ -191,9 +299,9 @@ public class LutQuickPanel extends FrameLayout {
         view.setFocusable(true);
         view.setGravity(Gravity.CENTER);
         view.setTextColor(Color.WHITE);
-        view.setPadding(dp(8), dp(6), dp(8), dp(6));
+        view.setPadding(dp(6), dp(6), dp(6), dp(6));
         androidx.appcompat.widget.LinearLayoutCompat.LayoutParams params = new androidx.appcompat.widget.LinearLayoutCompat.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        params.setMarginStart(dp(8));
+        params.setMarginStart(dp(5));
         view.setLayoutParams(params);
         applyBg(view, false, false);
         view.setOnFocusChangeListener((v, focused) -> applyBg((MaterialTextView) v, false, focused));
@@ -223,6 +331,8 @@ public class LutQuickPanel extends FrameLayout {
 
     public interface ImportCallback {
         void onImportLut();
+
+        void onSelectLutDir();
     }
 
     private static class Entry {
@@ -282,7 +392,7 @@ public class LutQuickPanel extends FrameLayout {
             holder.text.setText(entry.getText());
             applyBg(holder.text, entry.isSelected(), holder.text.hasFocus());
             holder.text.setOnFocusChangeListener((view, focused) -> applyBg((MaterialTextView) view, entry.isSelected(), focused));
-            holder.text.setOnClickListener(view -> select(entry.preset));
+            holder.text.setOnClickListener(view -> onEntryClick(entry));
         }
 
         @Override

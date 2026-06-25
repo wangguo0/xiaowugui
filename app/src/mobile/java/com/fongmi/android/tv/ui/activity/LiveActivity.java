@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -258,6 +259,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.text.setOnClickListener(this::onTrack);
         mBinding.control.action.audio.setOnClickListener(this::onTrack);
         mBinding.control.action.video.setOnClickListener(this::onTrack);
+        mBinding.control.action.source.setOnClickListener(view -> onLiveSource());
         mBinding.control.action.home.setOnClickListener(view -> onHome());
         mBinding.control.action.line.setOnClickListener(view -> onLine());
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
@@ -1164,7 +1166,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void onLivePiPPanel() {
-        enterPiP();
+        enterPiP("panel");
     }
 
     @Override
@@ -1269,6 +1271,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected void onSizeChanged(VideoSize size) {
+        mPiP.update(this, size.width, size.height, LiveSetting.getScale());
         videoSize = size;
         updateVideoHeight(size);
         applyLiveResizeMode(LiveSetting.getScale());
@@ -1603,9 +1606,29 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (isRedirect() || isPlaybackExiting()) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            preparePiP("userLeaveHint");
+        } else {
+            requestPiP("userLeaveHint");
+        }
+    }
+
+    @Override
+    public boolean onPictureInPictureRequested() {
+        return requestPiP("systemRequest");
+    }
+
+    private boolean preparePiP(String reason) {
+        if (isRedirect() || isPlaybackExiting()) return false;
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
+        mPiP.update(this, player().getVideoWidth(), player().getVideoHeight(), LiveSetting.getScale());
+        return true;
+    }
+
+    private boolean requestPiP(String reason) {
+        if (!preparePiP(reason)) return false;
         if (isLock()) App.post(this::onLock, 500);
-        enterPiP();
+        return enterPiP(reason);
     }
 
     @Override
@@ -1622,9 +1645,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         }
     }
 
-    private void enterPiP() {
+    private boolean enterPiP(String reason) {
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
         dismissLiveControlDialog();
-        if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), LiveSetting.getScale());
+        return mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), LiveSetting.getScale());
     }
 
     private void dismissLiveControlDialog() {

@@ -1216,18 +1216,23 @@ function loadCspManage(force = false) {
     if (cspLoadedKey === activeKey() && !force) return;
     getJson('/manage/csp?' + targetQuery(), data => { cspRegistry = normalizeCspRegistry(data); cspLoadedKey = activeKey(); renderCspManage(); });
 }
-const CSP_KINDS = ['webHome', 'csp', 'live'];
+const CSP_KINDS = ['webHome', 'csp', 'live', 'other'];
+const CSP_ROOT_SKIP_FIELDS = ['enabled', 'insertIndex', 'homeKey', 'items', 'sites', 'lives', 'proxy'];
+const CSP_ROOT_OTHER_FIELDS = ['spider', 'parses', 'doh', 'hosts', 'headers', 'rules', 'ads', 'flags', 'wallpaper', 'logo', 'notice', 'home', 'parse', 'urls', 'msg'];
+const CSP_OTHER_STRING_FIELDS = ['spider', 'wallpaper', 'logo', 'notice', 'home', 'parse', 'msg'];
 function cspKind(item = {}) {
     if (CSP_KINDS.includes(item.kind)) return item.kind;
+    if (item.other && typeof item.other === 'object') return 'other';
     if (item.live && typeof item.live === 'object') return 'live';
     if (!item.site && !item.key && (item.url || item.groups || item.epg)) return 'live';
+    if (!item.site && !item.key && CSP_ROOT_OTHER_FIELDS.some(key => item[key] !== undefined)) return 'other';
     if (item.webHome === true) return 'webHome';
     if (item.webHome === false) return 'csp';
     const api = String(siteValue(item, 'api', ''));
     const home = String(siteValue(item, 'homePage', ''));
     return !api && !!home ? 'webHome' : 'csp';
 }
-function cspKindName(kind) { return kind === 'live' ? '直播' : kind === 'webHome' ? 'WebHome' : '通用 CSP'; }
+function cspKindName(kind) { return kind === 'other' ? '其他' : kind === 'live' ? '直播' : kind === 'webHome' ? 'WebHome' : '通用 CSP'; }
 function liveDefaultObject(name = '') { return { name, type: 0, playerType: 2, ua: 'okhttp' }; }
 function siteValue(item, key, fallback = '') {
     if (item[key] !== undefined && item[key] !== null && item[key] !== '') return item[key];
@@ -1239,7 +1244,7 @@ function liveValue(item, key, fallback = '') {
 }
 function rawObjectFromItem(item, drop = []) {
     const object = { ...(item || {}) };
-    ['id', 'enabled', 'kind', 'site', 'live', 'items', 'sites', 'lives', 'headerText', 'styleText', 'siteText', 'liveText', 'catchupText', 'coreText', 'groupsText', ...drop].forEach(key => delete object[key]);
+    ['id', 'enabled', 'kind', 'site', 'live', 'other', 'items', 'sites', 'lives', 'headerText', 'styleText', 'siteText', 'liveText', 'otherField', 'otherValue', 'otherText', 'catchupText', 'coreText', 'groupsText', ...drop].forEach(key => delete object[key]);
     return object;
 }
 function jsonText(value, fallback) {
@@ -1282,18 +1287,41 @@ function normalizeCspRegistry(data) {
         r.items = [];
         if (Array.isArray(r.sites)) r.sites.forEach(site => r.items.push({ kind: 'csp', site, ...site }));
         if (Array.isArray(r.lives)) r.lives.forEach(live => r.items.push({ kind: 'live', live, ...live }));
+        r.items.push(...rootOtherFromSource(source, r.items.length > 0));
         if (!r.items.length && (source.kind || source.site || source.live || source.key || source.url || source.groups || source.epg)) r.items.push(source);
     }
     delete r.sites;
     delete r.lives;
-    r.items.forEach((item, i) => normalizeCspItem(item, i));
+    r.items = normalizeCspItems(r.items);
     return r;
+}
+function rootOtherFromSource(source, rootConfig) {
+    if (!source || typeof source !== 'object') return [];
+    if (!rootConfig && !CSP_ROOT_OTHER_FIELDS.some(key => source[key] !== undefined)) return [];
+    if (!rootConfig && (source.key || source.site || source.live)) return [];
+    return Object.keys(source)
+        .filter(key => !CSP_ROOT_SKIP_FIELDS.includes(key))
+        .map(key => ({ kind: 'other', name: key, other: { [key]: source[key] } }));
+}
+function normalizeCspItems(items = []) {
+    const normalized = [];
+    (items || []).forEach((source, i) => {
+        const item = normalizeCspItem(source, i);
+        if (item.kind === 'other' && item.other && typeof item.other === 'object' && Object.keys(item.other).length > 1) {
+            Object.keys(item.other).forEach(key => normalized.push(normalizeCspItem({ kind: 'other', enabled: item.enabled, name: key, other: { [key]: item.other[key] } }, normalized.length)));
+        } else {
+            normalized.push(item);
+        }
+    });
+    return normalized;
 }
 function normalizeCspItem(item, index = 0) {
     item.kind = cspKind(item);
     item.enabled = item.enabled !== false;
     item.id = item.id || (item.kind + '_' + Date.now() + '_' + index);
+    if (item.kind === 'other') return normalizeOtherItem(item, index);
     if (item.kind === 'live') return normalizeLiveItem(item, index);
+    item.other = null;
     item.live = null;
     item.site = item.site && typeof item.site === 'object' ? item.site : rawObjectFromItem(item, ['webHome']);
     item.webHome = item.kind === 'webHome';
@@ -1324,6 +1352,20 @@ function normalizeCspItem(item, index = 0) {
     item.headerText = JSON.stringify(item.header || {}, null, 2);
     item.styleText = JSON.stringify(item.style || {}, null, 2);
     syncCspSite(item);
+    return item;
+}
+function normalizeOtherItem(item, index = 0) {
+    item.kind = 'other';
+    item.webHome = false;
+    item.site = {};
+    item.live = null;
+    item.other = item.other && typeof item.other === 'object' ? item.other : rawObjectFromItem(item, ['webHome', 'key', 'homePage', 'playUrl', 'hide', 'searchable', 'changeable', 'quickSearch', 'indexs', 'categories', 'style']);
+    const keys = Object.keys(item.other || {});
+    item.otherField = item.otherField || (keys.length ? keys[0] : '') || (CSP_ROOT_OTHER_FIELDS.includes(item.name) ? item.name : 'parses');
+    item.otherValue = item.otherValue !== undefined ? item.otherValue : (item.other[item.otherField] !== undefined ? item.other[item.otherField] : defaultOtherValue(item.otherField));
+    item.name = item.otherField;
+    item.otherText = otherInputText(item.otherField, item.otherValue);
+    syncCspOther(item);
     return item;
 }
 function normalizeLiveItem(item, index = 0) {
@@ -1360,7 +1402,7 @@ function normalizeLiveItem(item, index = 0) {
     syncCspLive(item);
     return item;
 }
-function syncCspItem(item) { return item.kind === 'live' ? syncCspLive(item) : syncCspSite(item); }
+function syncCspItem(item) { return item.kind === 'other' ? syncCspOther(item) : item.kind === 'live' ? syncCspLive(item) : syncCspSite(item); }
 function assignOptional(object, key, value) {
     if (value === undefined || value === null || value === '') delete object[key];
     else object[key] = value;
@@ -1429,6 +1471,7 @@ function syncCspLive(item) {
     assignOptionalJson(live, 'core', item.core);
     assignOptionalJson(live, 'groups', Array.isArray(item.groups) ? item.groups : []);
     item.site = {};
+    item.other = null;
     item.live = live;
     item.headerText = jsonText(live.header, {});
     item.catchupText = jsonText(live.catchup, {});
@@ -1436,12 +1479,36 @@ function syncCspLive(item) {
     item.groupsText = jsonText(live.groups, []);
     item.liveText = JSON.stringify(live || {}, null, 2);
 }
+function syncCspOther(item) {
+    item.kind = 'other';
+    item.webHome = false;
+    item.site = {};
+    item.live = null;
+    item.otherField = item.otherField || firstOtherKey(item.other) || 'parses';
+    item.otherValue = normalizeOtherValue(item.otherField, item.otherValue !== undefined ? item.otherValue : (item.other && item.other[item.otherField] !== undefined ? item.other[item.otherField] : defaultOtherValue(item.otherField)));
+    item.name = item.otherField;
+    item.other = { [item.otherField]: item.otherValue };
+    item.otherText = otherInputText(item.otherField, item.otherValue);
+}
+function firstOtherKey(other = {}) { const keys = other && typeof other === 'object' ? Object.keys(other) : []; return keys.length ? keys[0] : ''; }
+function defaultOtherValue(field) { return CSP_OTHER_STRING_FIELDS.includes(field) ? '' : []; }
+function normalizeOtherValue(field, value) {
+    if (CSP_OTHER_STRING_FIELDS.includes(field)) {
+        if (value === undefined || value === null) return '';
+        return typeof value === 'string' ? value : JSON.stringify(value);
+    }
+    return value === undefined || value === null || value === '' ? defaultOtherValue(field) : value;
+}
+function otherInputText(field, value) {
+    if (CSP_OTHER_STRING_FIELDS.includes(field)) return value === undefined || value === null ? '' : String(value);
+    return JSON.stringify(value === undefined || value === null ? defaultOtherValue(field) : value, null, 2);
+}
 function stripCspMeta(registry) {
     const copy = JSON.parse(JSON.stringify(registry || {}));
     delete copy.active;
     delete copy.enabledCount;
     delete copy.itemsCount;
-    (copy.items || []).forEach(item => { delete item.headerText; delete item.styleText; delete item.siteText; delete item.liveText; delete item.catchupText; delete item.coreText; delete item.groupsText; delete item.extensionsText; delete item.extensionsExpanded; delete item.extensionsInvalid; });
+    (copy.items || []).forEach(item => { delete item.headerText; delete item.styleText; delete item.siteText; delete item.liveText; delete item.otherField; delete item.otherValue; delete item.otherText; delete item.catchupText; delete item.coreText; delete item.groupsText; delete item.extensionsText; delete item.extensionsExpanded; delete item.extensionsInvalid; });
     return copy;
 }
 function renderCspManage() {
@@ -1454,6 +1521,7 @@ function renderCspManage() {
     updateCspModeUi();
 }
 function cspItemValid(item) {
+    if (item.kind === 'other') return !!(item.other && typeof item.other === 'object' && Object.keys(item.other).length);
     if (item.kind === 'live') return !!item.name && (!!item.url || !!(Array.isArray(item.groups) && item.groups.length) || !!(item.live && Array.isArray(item.live.groups) && item.live.groups.length));
     return item.webHome ? !!item.homePage : !!item.api;
 }
@@ -1461,15 +1529,25 @@ function buildCspCard(item, index) {
     const invalid = item.enabled && (!cspItemValid(item) || item.extensionsInvalid) ? ' invalid' : '';
     const title = item.name || cspKindName(item.kind);
     const source = item.webHome ? `<div class="source-actions"><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="chooseCspFile(${index})">文件</button><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="openCspCode(${index})">代码</button><button class="md-btn md-btn-tonal md-btn-compact" type="button" onclick="openCspLink(${index})">链接</button></div>` : '';
-    const typeButtons = `<div class="segmented csp-type-toggle"><button class="segment ${item.kind === 'webHome' ? 'active' : ''}" onclick="setCspKind(${index},'webHome')" type="button">WebHome</button><button class="segment ${item.kind === 'csp' ? 'active' : ''}" onclick="setCspKind(${index},'csp')" type="button">通用 CSP</button><button class="segment ${item.kind === 'live' ? 'active' : ''}" onclick="setCspKind(${index},'live')" type="button">直播</button></div>`;
+    const typeButtons = `<div class="segmented csp-type-toggle"><button class="segment ${item.kind === 'webHome' ? 'active' : ''}" onclick="setCspKind(${index},'webHome')" type="button">WebHome</button><button class="segment ${item.kind === 'csp' ? 'active' : ''}" onclick="setCspKind(${index},'csp')" type="button">通用 CSP</button><button class="segment ${item.kind === 'live' ? 'active' : ''}" onclick="setCspKind(${index},'live')" type="button">直播</button><button class="segment ${item.kind === 'other' ? 'active' : ''}" onclick="setCspKind(${index},'other')" type="button">其他</button></div>`;
     const nameRow = item.kind === 'live'
-        ? `<div class="field-row compact">${buildLiveTextField('name', '名称', item.name, '直播名称', true)}</div>`
-        : `<div class="field-row compact"><input class="md-input csp-field" data-key="name" value="${escHtml(item.name)}" placeholder="名称"><input class="md-input csp-field" data-key="key" value="${escHtml(item.key)}" placeholder="Key"></div>`;
+        ? `<div class="field-row compact">${buildLiveTextField('name', 'name', item.name, 'name', true)}</div>`
+        : item.kind === 'other'
+            ? ''
+            : `<div class="field-row compact"><input class="md-input csp-field" data-key="name" value="${escHtml(item.name)}" placeholder="name"><input class="md-input csp-field" data-key="key" value="${escHtml(item.key)}" placeholder="key"></div>`;
     const extensions = item.webHome ? buildCspExtensionsFields(item, index) : '';
-    const homeLine = item.kind === 'live' ? '' : `<div class="csp-home-line">${buildHomeCheck(item, index)}${source}</div>`;
-    const homePage = item.kind === 'live' ? '' : `<div class="md-field"><input class="md-input csp-field" data-key="homePage" value="${escHtml(item.homePage)}" placeholder="${item.webHome ? 'WebHome 地址' : 'WebHome 首页地址，可选'}"></div>`;
-    const fields = item.kind === 'live' ? buildLiveFields(item) : item.webHome ? buildAdvancedSiteFields(item) : buildCommonCspFields(item);
+    const homeLine = (item.kind === 'live' || item.kind === 'other') ? '' : `<div class="csp-home-line">${buildHomeCheck(item, index)}${source}</div>`;
+    const homePage = (item.kind === 'live' || item.kind === 'other') ? '' : `<div class="md-field"><input class="md-input csp-field" data-key="homePage" value="${escHtml(item.homePage)}" placeholder="homePage"></div>`;
+    const fields = item.kind === 'other' ? buildOtherFields(item, index) : item.kind === 'live' ? buildLiveFields(item) : item.webHome ? buildAdvancedSiteFields(item) : buildCommonCspFields(item);
     return `<div class="manage-card csp-card${invalid}" data-index="${index}"><div class="csp-head"><div class="csp-title-block"><label class="check-row"><input class="csp-field" data-key="enabled" type="checkbox" ${item.enabled ? 'checked' : ''}><span>${escHtml(title)}</span></label>${typeButtons}</div><div class="card-actions"><button class="file-action" type="button" onclick="moveCspItem(${index},-1)">上移</button><button class="file-action" type="button" onclick="moveCspItem(${index},1)">下移</button><button class="file-action danger" type="button" onclick="removeCspItem(${index})">删除</button></div></div>${nameRow}${extensions}${homeLine}${homePage}${fields}</div>`;
+}
+function buildOtherFields(item, index) {
+    const options = CSP_ROOT_OTHER_FIELDS.includes(item.otherField) ? CSP_ROOT_OTHER_FIELDS : [item.otherField, ...CSP_ROOT_OTHER_FIELDS];
+    const select = `<select class="md-input" onchange="setCspOtherField(${index},this.value)">${options.map(field => `<option value="${escHtml(field)}"${field === item.otherField ? ' selected' : ''}>${escHtml(field)}</option>`).join('')}</select>`;
+    const value = CSP_OTHER_STRING_FIELDS.includes(item.otherField)
+        ? `<input class="md-input csp-field" data-key="otherValue" value="${escHtml(item.otherText)}" placeholder="${escHtml(item.otherField)}">`
+        : `<textarea class="code-area csp-field compact-code" data-key="otherText" spellcheck="false" placeholder="${escHtml(item.otherField)} JSON">${escHtml(item.otherText)}</textarea>`;
+    return `<details class="advanced-panel" open><summary>other</summary><label class="form-label">field</label>${select}<label class="form-label">${escHtml(item.otherField)}${CSP_OTHER_STRING_FIELDS.includes(item.otherField) ? '' : ' JSON'}</label>${value}</details>`;
 }
 function buildHomeCheck(item, index) { return `<label class="check-row"><input class="csp-home" type="checkbox" ${cspRegistry.homeKey === item.key ? 'checked' : ''} onchange="setCspHome(${index},this.checked)"><span>设为首页</span></label>`; }
 function buildCspExtensionsFields(item, index) {
@@ -1478,17 +1556,17 @@ function buildCspExtensionsFields(item, index) {
     return `<div class="csp-extensions-panel"><div class="csp-extensions-head"><button class="toggle-pill ${item.extensionsExpanded ? 'on' : 'off'}" type="button" onclick="toggleCspExtensions(${index})">扩展</button><span>填写 extensions 数组，支持 JS 链接简写或对象配置</span></div>${detail}</div>`;
 }
 function buildCommonCspFields(item) {
-    return `<div class="field-row compact"><input class="md-input mini-input csp-field" data-key="type" type="number" value="${escHtml(item.type)}" placeholder="类型"><input class="md-input csp-field" data-key="api" value="${escHtml(item.api)}" placeholder="API / CSP 类名"></div><div class="field-row compact"><input class="md-input csp-field" data-key="jar" value="${escHtml(item.jar)}" placeholder="Jar"><input class="md-input csp-field" data-key="ext" value="${escHtml(typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext))}" placeholder="Ext"></div><div class="field-row compact"><input class="md-input csp-field" data-key="click" value="${escHtml(item.click)}" placeholder="点击脚本"><input class="md-input csp-field" data-key="playUrl" value="${escHtml(item.playUrl)}" placeholder="播放前缀"></div><div class="field-row compact"><input class="md-input mini-input csp-field" data-key="indexs" type="number" value="${escHtml(item.indexs)}" placeholder="索引"><input class="md-input mini-input csp-field" data-key="timeout" type="number" value="${escHtml(item.timeout)}" placeholder="超时秒"><input class="md-input csp-field" data-key="categories" value="${escHtml((item.categories || []).join(','))}" placeholder="分类，逗号分隔"></div><div class="flag-grid"><label class="check-row"><input class="csp-field" data-key="hide" type="checkbox" ${item.hide ? 'checked' : ''}><span>隐藏</span></label><label class="check-row"><input class="csp-field" data-key="searchable" type="checkbox" ${item.searchable ? 'checked' : ''}><span>搜索</span></label><label class="check-row"><input class="csp-field" data-key="changeable" type="checkbox" ${item.changeable ? 'checked' : ''}><span>换源</span></label><label class="check-row"><input class="csp-field" data-key="quickSearch" type="checkbox" ${item.quickSearch ? 'checked' : ''}><span>快搜</span></label></div><details class="advanced-panel"><summary>高级参数</summary><label class="form-label">Header JSON</label><textarea class="code-area csp-field compact-code" data-key="headerText" spellcheck="false" placeholder="Header JSON">${escHtml(item.headerText)}</textarea><label class="form-label">Style JSON</label><textarea class="code-area csp-field compact-code" data-key="styleText" spellcheck="false" placeholder="Style JSON">${escHtml(item.styleText)}</textarea>${buildAdvancedSiteFields(item, false)}</details>`;
+    return `<div class="field-row compact"><input class="md-input mini-input csp-field" data-key="type" type="number" value="${escHtml(item.type)}" placeholder="type"><input class="md-input csp-field" data-key="api" value="${escHtml(item.api)}" placeholder="api"></div><div class="field-row compact"><input class="md-input csp-field" data-key="jar" value="${escHtml(item.jar)}" placeholder="jar"><input class="md-input csp-field" data-key="ext" value="${escHtml(typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext))}" placeholder="ext"></div><div class="field-row compact"><input class="md-input csp-field" data-key="click" value="${escHtml(item.click)}" placeholder="click"><input class="md-input csp-field" data-key="playUrl" value="${escHtml(item.playUrl)}" placeholder="playUrl"></div><div class="field-row compact"><input class="md-input mini-input csp-field" data-key="indexs" type="number" value="${escHtml(item.indexs)}" placeholder="indexs"><input class="md-input mini-input csp-field" data-key="timeout" type="number" value="${escHtml(item.timeout)}" placeholder="timeout"><input class="md-input csp-field" data-key="categories" value="${escHtml((item.categories || []).join(','))}" placeholder="categories"></div><div class="flag-grid"><label class="check-row"><input class="csp-field" data-key="hide" type="checkbox" ${item.hide ? 'checked' : ''}><span>hide</span></label><label class="check-row"><input class="csp-field" data-key="searchable" type="checkbox" ${item.searchable ? 'checked' : ''}><span>searchable</span></label><label class="check-row"><input class="csp-field" data-key="changeable" type="checkbox" ${item.changeable ? 'checked' : ''}><span>changeable</span></label><label class="check-row"><input class="csp-field" data-key="quickSearch" type="checkbox" ${item.quickSearch ? 'checked' : ''}><span>quickSearch</span></label></div><details class="advanced-panel"><summary>advanced</summary><label class="form-label">header JSON</label><textarea class="code-area csp-field compact-code" data-key="headerText" spellcheck="false" placeholder="header JSON">${escHtml(item.headerText)}</textarea><label class="form-label">style JSON</label><textarea class="code-area csp-field compact-code" data-key="styleText" spellcheck="false" placeholder="style JSON">${escHtml(item.styleText)}</textarea>${buildAdvancedSiteFields(item, false)}</details>`;
 }
 function buildLiveFields(item) {
-    return `<div class="field-row compact live-common-row">${buildLiveTextField('url', '直播地址', item.url, 'http(s):// 或本地路径', true, 'URL/分组至少一项')}</div><div class="field-row compact">${buildLiveTextField('ua', 'UA', item.ua, 'okhttp')}${buildLiveTextField('epg', 'EPG', item.epg, 'http://...{name}...')}${buildLiveTextField('logo', 'Logo', item.logo, 'https://.../{name}.png')}</div>${buildAdvancedLiveFields(item)}`;
+    return `<div class="field-row compact live-common-row">${buildLiveTextField('url', 'url', item.url, 'url', true, 'url/groups')}</div><div class="field-row compact">${buildLiveTextField('ua', 'ua', item.ua, 'okhttp')}${buildLiveTextField('epg', 'epg', item.epg, 'http://...{name}...')}${buildLiveTextField('logo', 'logo', item.logo, 'https://.../{name}.png')}</div>${buildAdvancedLiveFields(item)}`;
 }
 function buildAdvancedSiteFields(item, wrap = true) {
-    const field = `<label class="form-label">完整 Site JSON</label><textarea class="code-area csp-field compact-code" data-key="siteText" spellcheck="false" placeholder="完整站点 JSON，可参考 webhome-devkit/docs/应用完整开发文档.md 里的其它字段">${escHtml(item.siteText)}</textarea>`;
-    return wrap ? `<details class="advanced-panel"><summary>高级 Site JSON</summary>${field}</details>` : field;
+    const field = `<label class="form-label">site JSON</label><textarea class="code-area csp-field compact-code" data-key="siteText" spellcheck="false" placeholder="site JSON">${escHtml(item.siteText)}</textarea>`;
+    return wrap ? `<details class="advanced-panel"><summary>site JSON</summary>${field}</details>` : field;
 }
 function buildAdvancedLiveFields(item) {
-    return `<details class="advanced-panel"><summary>高级直播参数（可选）</summary><div class="field-row compact advanced-field-row">${buildLiveTextField('api', 'API', item.api, 'raw 兼容字段')}${buildLiveTextField('ext', 'Ext', typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext), 'raw 兼容字段')}${buildLiveTextField('timeout', '超时秒', item.timeout, '', false, '可选', 'number', 'short')}</div><div class="field-row compact advanced-field-row">${buildLiveTextField('jar', 'Jar', item.jar, 'raw 兼容字段')}${buildLiveTextField('click', '点击脚本', item.click, '可选')}${buildLiveTextField('keep', 'Keep', item.keep, '分组@@频道@@线路，可选')}</div><div class="field-row compact advanced-field-row">${buildLiveTextField('origin', 'Origin', item.origin, '可选')}${buildLiveTextField('referer', 'Referer', item.referer, '可选')}${buildLiveTextField('timeZone', '时区', item.timeZone, 'Asia/Shanghai')}</div><div class="flag-grid live-flag-grid"><label class="check-row"><input class="csp-field" data-key="boot" type="checkbox" ${item.boot ? 'checked' : ''}><span>启动进入</span></label><label class="check-row"><input class="csp-field" data-key="pass" type="checkbox" ${item.pass ? 'checked' : ''}><span>跳过分组</span></label></div>${buildFieldLabel('Header JSON')}${buildJsonTextarea('headerText', item.headerText, 'Header JSON，例如 {"User-Agent":"okhttp"}')}${buildFieldLabel('Catchup JSON')}${buildJsonTextarea('catchupText', item.catchupText, 'Catchup JSON')}${buildFieldLabel('Core JSON')}${buildJsonTextarea('coreText', item.coreText, 'Core JSON')}${buildFieldLabel('Groups JSON')}${buildJsonTextarea('groupsText', item.groupsText, 'Groups 数组')}${buildFieldLabel('完整 Live JSON')}${buildJsonTextarea('liveText', item.liveText, '完整直播 JSON，可包含 raw JSON 的所有字段')}</details>`;
+    return `<details class="advanced-panel"><summary>advanced</summary><div class="field-row compact advanced-field-row">${buildLiveTextField('api', 'api', item.api, 'api')}${buildLiveTextField('ext', 'ext', typeof item.ext === 'string' ? item.ext : JSON.stringify(item.ext), 'ext')}${buildLiveTextField('timeout', 'timeout', item.timeout, '', false, 'optional', 'number', 'short')}</div><div class="field-row compact advanced-field-row">${buildLiveTextField('jar', 'jar', item.jar, 'jar')}${buildLiveTextField('click', 'click', item.click, 'click')}${buildLiveTextField('keep', 'keep', item.keep, 'group@@name@@line')}</div><div class="field-row compact advanced-field-row">${buildLiveTextField('origin', 'origin', item.origin, 'origin')}${buildLiveTextField('referer', 'referer', item.referer, 'referer')}${buildLiveTextField('timeZone', 'timeZone', item.timeZone, 'Asia/Shanghai')}</div><div class="flag-grid live-flag-grid"><label class="check-row"><input class="csp-field" data-key="boot" type="checkbox" ${item.boot ? 'checked' : ''}><span>boot</span></label><label class="check-row"><input class="csp-field" data-key="pass" type="checkbox" ${item.pass ? 'checked' : ''}><span>pass</span></label></div>${buildFieldLabel('header JSON')}${buildJsonTextarea('headerText', item.headerText, 'header JSON')}${buildFieldLabel('catchup JSON')}${buildJsonTextarea('catchupText', item.catchupText, 'catchup JSON')}${buildFieldLabel('core JSON')}${buildJsonTextarea('coreText', item.coreText, 'core JSON')}${buildFieldLabel('groups JSON')}${buildJsonTextarea('groupsText', item.groupsText, 'groups JSON')}${buildFieldLabel('live JSON')}${buildJsonTextarea('liveText', item.liveText, 'live JSON')}</details>`;
 }
 function updateCspGlobal() {
     if (!cspRegistry) return;
@@ -1517,13 +1595,26 @@ function updateCspModeUi() {
 }
 function parseCspRawIntoRegistry() {
     try {
-        cspRegistry = normalizeCspRegistry(JSON.parse($('#cspRaw').val().trim() || '{}'));
+        cspRegistry = normalizeCspRegistry(parseFlexibleCspJson($('#cspRaw').val()));
         cspRawDirty = false;
         return true;
     } catch (e) {
         warnToast('站点注入 JSON 格式无效');
         return false;
     }
+}
+function parseFlexibleCspJson(text) {
+    const value = trimJsonTrailingComma(text || '{}');
+    if (!value) return {};
+    try {
+        return JSON.parse(value);
+    } catch (e) {
+        if (!looksLikeCspRootFields(value)) throw e;
+        return JSON.parse(`{${value}}`);
+    }
+}
+function looksLikeCspRootFields(value) {
+    return !!value && value.startsWith('"') && value.includes('":') && !value.startsWith('{') && !value.startsWith('[');
 }
 function formatCspJson() {
     if (!parseCspRawIntoRegistry()) return;
@@ -1547,6 +1638,8 @@ function syncCspFromCards(updateRaw = true, validate = false) {
             else if (key === 'headerText') item.header = parseJsonField(this.value, {});
             else if (key === 'styleText') item.style = parseJsonField(this.value, {});
             else if (key === 'siteText') item.site = parseJsonField(this.value, item.site || {});
+            else if (key === 'otherValue') item.otherValue = this.value.trim();
+            else if (key === 'otherText') item.otherValue = parseOptionalJsonField(this.value, item.otherValue, defaultOtherValue(item.otherField || 'parses'));
             else if (key === 'extensionsText') {
                 item.extensionsText = this.value.trim();
                 try { item.extensions = item.extensionsExpanded && item.extensionsText ? parseCspExtensions(item.extensionsText) : null; }
@@ -1608,12 +1701,13 @@ function addCspItem(kind) {
     const name = cspKindName(kind) + ' ' + n;
     const seed = { kind, webHome: kind === 'webHome', name, homePage: '' };
     if (kind === 'live') seed.live = liveDefaultObject(name);
+    if (kind === 'other') seed.other = {};
     cspRegistry.items.push(normalizeCspItem(seed, cspRegistry.items.length));
     renderCspManage();
 }
-function removeCspItem(index) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (item && item.kind !== 'live' && cspRegistry.homeKey === item.key) cspRegistry.homeKey = ''; cspRegistry.items.splice(index, 1); renderCspManage(); }
+function removeCspItem(index) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (item && item.kind !== 'live' && item.kind !== 'other' && cspRegistry.homeKey === item.key) cspRegistry.homeKey = ''; cspRegistry.items.splice(index, 1); renderCspManage(); }
 function moveCspItem(index, delta) { syncCspFromCards(false); const targetIndex = index + delta; if (targetIndex < 0 || targetIndex >= cspRegistry.items.length) return; const item = cspRegistry.items.splice(index, 1)[0]; cspRegistry.items.splice(targetIndex, 0, item); renderCspManage(); }
-function setCspHome(index, checked) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (!item || item.kind === 'live') return; cspRegistry.homeKey = checked ? item.key : ''; renderCspManage(); }
+function setCspHome(index, checked) { syncCspFromCards(false); const item = cspRegistry.items[index]; if (!item || item.kind === 'live' || item.kind === 'other') return; cspRegistry.homeKey = checked ? item.key : ''; renderCspManage(); }
 function toggleCspExtensions(index) {
     syncCspFromCards(false);
     const item = cspRegistry.items[index];
@@ -1625,6 +1719,15 @@ function toggleCspExtensions(index) {
     }
     renderCspManage();
 }
+function setCspOtherField(index, field) {
+    syncCspFromCards(false);
+    const item = cspRegistry.items[index];
+    if (!item || item.kind !== 'other' || item.otherField === field) return;
+    item.otherField = field;
+    item.otherValue = defaultOtherValue(field);
+    normalizeOtherItem(item, index);
+    renderCspManage();
+}
 function setCspKind(index, kind) {
     syncCspFromCards(false);
     const item = cspRegistry.items[index];
@@ -1634,9 +1737,12 @@ function setCspKind(index, kind) {
     const oldKind = item.kind;
     const oldAuto = /^(WebHome|通用 CSP|直播) \d+$/.test(item.name || '');
     if (item.kind !== 'live' && kind === 'live' && cspRegistry.homeKey === item.key) cspRegistry.homeKey = '';
+    if (kind === 'other' && cspRegistry.homeKey === item.key) cspRegistry.homeKey = '';
     item.kind = kind;
     item.webHome = kind === 'webHome';
-    if (kind === 'webHome') {
+    if (kind === 'other') {
+        item.other = item.other && typeof item.other === 'object' ? item.other : {};
+    } else if (kind === 'webHome') {
         if (oldKind === 'live') item.type = 3;
         item.api = '';
         item.ext = '';
@@ -1938,6 +2044,31 @@ function parseProxyJson(text, notifyInvalid = true) {
 }
 function trimJsonTrailingComma(text) {
     let value = String(text || '').trim();
+    if (!value) return '';
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < value.length; i++) {
+        const c = value[i];
+        if (inString) {
+            result += c;
+            if (escaped) escaped = false;
+            else if (c === '\\') escaped = true;
+            else if (c === '"') inString = false;
+            continue;
+        }
+        if (c === '"') {
+            inString = true;
+            result += c;
+            continue;
+        }
+        if (c === ',') {
+            const next = nextNonSpaceIndex(value, i + 1);
+            if (next >= 0 && (value[next] === ']' || value[next] === '}')) continue;
+        }
+        result += c;
+    }
+    value = result.trim();
     while (value.endsWith(',')) value = value.slice(0, -1).trim();
     return value;
 }

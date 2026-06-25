@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.custom;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
@@ -27,6 +28,7 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.FileUtil;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 
 import org.greenrobot.eventbus.EventBus;
@@ -149,7 +151,7 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
 
     private void loadDesign(int wall) {
         if (!isReady()) return;
-        binding.image.setImageDrawable(new BuiltInWallDrawable(wall));
+        binding.image.setImageDrawable(createDesignDrawable(wall));
     }
 
     private void loadImage() {
@@ -165,10 +167,21 @@ public class CustomWallView extends FrameLayout implements DefaultLifecycleObser
         int type = Setting.getWallType();
         Drawable cache = cache();
         if (isBuiltInColor(wall, type)) binding.image.setImageDrawable(new ColorDrawable(Setting.getBuiltInWallColor(wall)));
-        else if (isBuiltInDesign(wall, type)) binding.image.setImageDrawable(new BuiltInWallDrawable(wall));
+        else if (isBuiltInDesign(wall, type)) binding.image.setImageDrawable(createDesignDrawable(wall));
         else if (isGreen(wall, type)) binding.image.setImageResource(R.drawable.wallpaper_1);
         else if (cache != null) binding.image.setImageDrawable(cache);
         else binding.image.setImageDrawable(new ColorDrawable(DEFAULT_WALL_COLOR));
+    }
+
+    private Drawable createDesignDrawable(int wall) {
+        try {
+            int width = Math.min(ResUtil.getScreenWidth(getContext()), ResUtil.getScreenHeight(getContext()));
+            int height = Math.max(ResUtil.getScreenWidth(getContext()), ResUtil.getScreenHeight(getContext()));
+            Bitmap bitmap = BuiltInWallDrawable.createBitmap(wall, width, height);
+            return new BitmapDrawable(getResources(), bitmap);
+        } catch (Throwable e) {
+            return new ColorDrawable(Setting.getBuiltInWallColor(wall));
+        }
     }
 
     private void loadVideo(File file) {

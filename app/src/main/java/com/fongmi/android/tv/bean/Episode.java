@@ -105,6 +105,12 @@ public class Episode implements Parcelable, Diffable<Episode> {
         return getName().equalsIgnoreCase(other.getName());
     }
 
+    public boolean matches(Episode other) {
+        if (other == null) return false;
+        if (!TextUtils.isEmpty(getUrl()) && !TextUtils.isEmpty(other.getUrl())) return getUrl().equals(other.getUrl());
+        return matchesName(other);
+    }
+
     public Episode trans() {
         if (Trans.pass()) return this;
         this.name = Trans.s2t(name);

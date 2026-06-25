@@ -396,17 +396,22 @@ public class History implements Diffable<History> {
     public void findEpisode(List<Flag> flags) {
         if (flags.isEmpty()) return;
         setVodFlag(flags.get(0).getFlag());
-        if (!flags.get(0).getEpisodes().isEmpty()) setVodRemarks(flags.get(0).getEpisodes().get(0).getName());
+        if (!flags.get(0).getEpisodes().isEmpty()) {
+            Episode episode = flags.get(0).getEpisodes().get(0);
+            setVodRemarks(episode.getName());
+            setEpisodeUrl(episode.getUrl());
+        }
         if (!canMergeByName()) return;
         for (History item : findByName(getVodName())) {
             if (getPosition() > 0) break;
             for (Flag flag : flags) {
-                Episode episode = flag.find(item.getVodRemarks(), true);
+                Episode episode = flag.find(item.getEpisode(), true);
                 if (episode == null) continue;
                 item.copyTo(this);
                 setVodFlag(flag.getFlag());
                 setPosition(item.getPosition());
                 setVodRemarks(episode.getName());
+                setEpisodeUrl(episode.getUrl());
                 break;
             }
         }

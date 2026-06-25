@@ -8,6 +8,7 @@ import android.view.MenuItem;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.Toolbar;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.databinding.ActivityFileBinding;
@@ -17,12 +18,16 @@ import com.fongmi.android.tv.utils.PermissionUtil;
 import com.github.catvod.utils.Path;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class FileActivity extends BaseActivity implements FileAdapter.OnClickListener {
 
     private ActivityFileBinding mBinding;
     private FileAdapter mAdapter;
     private File dir;
+    private boolean selectDir;
 
     private boolean isRoot() {
         return Path.root().equals(dir);
@@ -42,6 +47,7 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
 
     @Override
     protected void initView(Bundle savedInstanceState) {
+        selectDir = getIntent().getBooleanExtra("select_dir", false);
         setSupportActionBar(mBinding.toolbar);
         setRecyclerView();
         checkPermission();
@@ -50,6 +56,12 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
     private void setRecyclerView() {
         mBinding.recycler.setHasFixedSize(true);
         mBinding.recycler.setAdapter(mAdapter = new FileAdapter(this));
+        mBinding.recycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                mAdapter.scheduleWindowUpdate(recyclerView);
+            }
+        });
     }
 
     private void checkPermission() {
@@ -58,9 +70,17 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
 
     private void update(File dir) {
         mBinding.recycler.scrollToPosition(0);
-        mAdapter.addAll(Path.list(this.dir = dir));
+        mAdapter.addAll(this.dir = dir, list(dir), selectDir);
         mBinding.title.setText(dir.getAbsolutePath());
         mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
+    }
+
+    private List<File> list(File dir) {
+        if (!selectDir) return Path.list(dir);
+        File[] files = dir.listFiles(File::isDirectory);
+        if (files == null) return new ArrayList<>();
+        Path.sort(files);
+        return Arrays.asList(files);
     }
 
     @Override
@@ -71,6 +91,13 @@ public class FileActivity extends BaseActivity implements FileAdapter.OnClickLis
             setResult(RESULT_OK, new Intent().setData(Uri.fromFile(file)));
             finish();
         }
+    }
+
+    @Override
+    public void onCurrentDirClick(File dir) {
+        if (dir == null) return;
+        setResult(RESULT_OK, new Intent().setData(Uri.fromFile(dir)));
+        finish();
     }
 
     @Override

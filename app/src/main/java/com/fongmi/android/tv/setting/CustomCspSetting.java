@@ -16,8 +16,10 @@ import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -39,7 +41,12 @@ public class CustomCspSetting {
     private static final String KIND_WEB_HOME = "webHome";
     private static final String KIND_CSP = "csp";
     private static final String KIND_LIVE = "live";
+    private static final String KIND_OTHER = "other";
     private static final String API_BUILTIN = "csp_Builtin";
+    private static final Set<String> ROOT_SKIP_FIELDS = Set.of("enabled", "insertIndex", "homeKey", "items", "sites", "lives", "proxy");
+    private static final List<String> ROOT_OTHER_FIELD_LIST = List.of("spider", "parses", "doh", "hosts", "headers", "rules", "ads", "flags", "wallpaper", "logo", "notice", "home", "parse", "urls", "msg");
+    private static final Set<String> ROOT_OTHER_FIELDS = new HashSet<>(ROOT_OTHER_FIELD_LIST);
+    private static final Set<String> ROOT_OTHER_STRING_FIELDS = Set.of("spider", "wallpaper", "logo", "notice", "home", "parse", "msg");
 
     public static Registry load() {
         String text = Path.read(registryFile());
@@ -56,7 +63,7 @@ public class CustomCspSetting {
 
     public static Registry parse(String text) throws Exception {
         if (TextUtils.isEmpty(text)) return new Registry();
-        JsonElement element = JsonParser.parseString(text);
+        JsonElement element = parseFlexible(text);
         if (element.isJsonNull()) return new Registry();
         if (element.isJsonArray()) return new Registry().items(itemsFrom(element.getAsJsonArray())).normalize();
         if (!element.isJsonObject()) throw new IllegalArgumentException("Invalid custom CSP JSON");
@@ -76,12 +83,88 @@ public class CustomCspSetting {
         return registry.normalize();
     }
 
+    private static JsonElement parseFlexible(String text) {
+        String value = stripTrailingCommas(text);
+        try {
+            return JsonParser.parseString(value);
+        } catch (Exception e) {
+            if (!looksLikeRootFields(value)) throw e;
+            return JsonParser.parseString("{" + stripTrailingCommas(value) + "}");
+        }
+    }
+
+    private static boolean looksLikeRootFields(String value) {
+        if (TextUtils.isEmpty(value) || value.startsWith("{") || value.startsWith("[")) return false;
+        return value.startsWith("\"") && value.contains("\":");
+    }
+
+    private static String stripTrailingCommas(String text) {
+        String value = text == null ? "" : text.trim();
+        if (TextUtils.isEmpty(value)) return "";
+        StringBuilder builder = new StringBuilder(value.length());
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (inString) {
+                builder.append(c);
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') inString = false;
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+                builder.append(c);
+                continue;
+            }
+            if (c == ',') {
+                int next = nextNonWhitespace(value, i + 1);
+                if (next >= 0 && (value.charAt(next) == ']' || value.charAt(next) == '}')) continue;
+            }
+            builder.append(c);
+        }
+        value = builder.toString().trim();
+        while (value.endsWith(",")) value = value.substring(0, value.length() - 1).trim();
+        return value;
+    }
+
+    private static int nextNonWhitespace(String text, int start) {
+        for (int i = start; i < text.length(); i++) if (!Character.isWhitespace(text.charAt(i))) return i;
+        return -1;
+    }
+
     private static List<Item> itemsFrom(JsonObject object) {
         List<Item> items = new ArrayList<>();
         if (object.has("sites") && object.get("sites").isJsonArray()) items.addAll(itemsFrom(object.getAsJsonArray("sites"), false));
         if (object.has("lives") && object.get("lives").isJsonArray()) items.addAll(itemsFrom(object.getAsJsonArray("lives"), true));
+        items.addAll(othersFrom(object, !items.isEmpty()));
         if (items.isEmpty()) items.add(itemFrom(object, isLiveObject(object)));
         return items;
+    }
+
+    private static List<Item> othersFrom(JsonObject object, boolean rootConfig) {
+        if (!rootConfig && !hasRootOtherField(object)) return Collections.emptyList();
+        if (!rootConfig && (object.has("key") || object.has("site") || object.has("live"))) return Collections.emptyList();
+        List<Item> items = new ArrayList<>();
+        for (String key : object.keySet()) {
+            if (ROOT_SKIP_FIELDS.contains(key)) continue;
+            items.add(otherItem(key, object.get(key)));
+        }
+        return items;
+    }
+
+    private static Item otherItem(String key, JsonElement value) {
+        Item item = new Item();
+        item.setKind(KIND_OTHER);
+        item.setName(key);
+        item.setOther(key, value);
+        return item.normalize();
+    }
+
+    private static boolean hasRootOtherField(JsonObject object) {
+        for (String key : ROOT_OTHER_FIELDS) if (object.has(key)) return true;
+        return false;
     }
 
     private static List<Item> itemsFrom(JsonArray array) {
@@ -103,10 +186,28 @@ public class CustomCspSetting {
         if (live) {
             item.setKind(KIND_LIVE);
             if (!object.has("live")) item.setLive(object.deepCopy());
-        } else if (!object.has("site")) {
+        } else if (isOtherObject(object) || (!object.has("site") && !object.has("key") && hasRootOtherField(object))) {
+            item.setKind(KIND_OTHER);
+            if (!object.has("other") || !object.get("other").isJsonObject()) item.setOther(otherObjectFromItem(object));
+        } else if (!isOtherObject(object) && !object.has("site")) {
             item.setSite(object.deepCopy());
         }
         return item.normalize();
+    }
+
+    private static JsonObject otherObjectFromItem(JsonObject object) {
+        JsonObject other = new JsonObject();
+        Set<String> meta = Set.of("id", "name", "kind", "enabled", "site", "live", "other", "webHome");
+        for (String key : object.keySet()) {
+            if (meta.contains(key) || ROOT_SKIP_FIELDS.contains(key)) continue;
+            other.add(key, object.get(key).deepCopy());
+        }
+        return other;
+    }
+
+    private static boolean isOtherObject(JsonObject object) {
+        if (object.has("kind") && object.get("kind").isJsonPrimitive()) return KIND_OTHER.equals(object.get("kind").getAsString());
+        return object.has("other") && object.get("other").isJsonObject();
     }
 
     private static boolean isLiveObject(JsonObject object) {
@@ -184,6 +285,55 @@ public class CustomCspSetting {
         lives.addAll(index, items);
     }
 
+    public static void inject(JsonObject object) {
+        Registry registry = load();
+        if (!registry.isEnabled() || object == null) return;
+        for (Item item : registry.getItems()) {
+            if (!item.isEnabled() || !item.isOther() || !item.isValid()) continue;
+            mergeRoot(object, item.getOther());
+        }
+    }
+
+    private static void mergeRoot(JsonObject target, JsonObject source) {
+        for (String key : source.keySet()) {
+            if (ROOT_SKIP_FIELDS.contains(key) || "sites".equals(key) || "lives".equals(key)) continue;
+            JsonElement value = source.get(key);
+            if (value == null || value.isJsonNull()) continue;
+            if (value.isJsonArray()) mergeArray(target, key, value.getAsJsonArray());
+            else if (value.isJsonObject()) mergeObject(target, key, value.getAsJsonObject());
+            else if (!target.has(key) || target.get(key).isJsonNull() || isEmptyPrimitive(target.get(key))) target.add(key, value.deepCopy());
+        }
+    }
+
+    private static void mergeArray(JsonObject target, String key, JsonArray source) {
+        if (source.size() == 0) return;
+        JsonArray array = target.has(key) && target.get(key).isJsonArray() ? target.getAsJsonArray(key) : new JsonArray();
+        Set<String> exists = new HashSet<>();
+        for (JsonElement element : array) exists.add(App.gson().toJson(element));
+        for (JsonElement element : source) {
+            String id = App.gson().toJson(element);
+            if (exists.add(id)) array.add(element.deepCopy());
+        }
+        target.add(key, array);
+    }
+
+    private static void mergeObject(JsonObject target, String key, JsonObject source) {
+        if (source.size() == 0) return;
+        if (!target.has(key) || !target.get(key).isJsonObject()) {
+            target.add(key, source.deepCopy());
+            return;
+        }
+        JsonObject object = target.getAsJsonObject(key);
+        for (String child : source.keySet()) {
+            JsonElement value = source.get(child);
+            if (!object.has(child) || object.get(child).isJsonNull() || isEmptyPrimitive(object.get(child))) object.add(child, value.deepCopy());
+        }
+    }
+
+    private static boolean isEmptyPrimitive(JsonElement element) {
+        return element != null && element.isJsonPrimitive() && element.getAsJsonPrimitive().isString() && TextUtils.isEmpty(element.getAsString());
+    }
+
     public static boolean hasLives() {
         Registry registry = load();
         return registry.isEnabled() && registry.getItems().stream().anyMatch(item -> item.isEnabled() && item.isLive() && item.isValid());
@@ -203,8 +353,8 @@ public class CustomCspSetting {
         int active = 0;
         for (Item item : registry.getItems()) {
             if (!item.isEnabled()) continue;
-            enabled++;
-            if (registry.isEnabled() && item.isValid()) active++;
+            if (!item.isOther()) enabled++;
+            if (registry.isEnabled() && item.isInjectable()) active++;
         }
         return new Count(active, enabled);
     }
@@ -227,6 +377,22 @@ public class CustomCspSetting {
         item.setPlayerType(2);
         item.setUa("okhttp");
         return item;
+    }
+
+    public static Item createDefaultOtherItem() {
+        return otherItem(ROOT_OTHER_FIELD_LIST.get(1), defaultOtherValue(ROOT_OTHER_FIELD_LIST.get(1)));
+    }
+
+    public static List<String> otherFields() {
+        return new ArrayList<>(ROOT_OTHER_FIELD_LIST);
+    }
+
+    public static JsonElement defaultOtherValue(String key) {
+        return ROOT_OTHER_STRING_FIELDS.contains(key) ? new JsonPrimitive("") : new JsonArray();
+    }
+
+    public static boolean isOtherStringField(String key) {
+        return ROOT_OTHER_STRING_FIELDS.contains(key);
     }
 
     public record Count(int active, int enabled) {
@@ -257,6 +423,12 @@ public class CustomCspSetting {
         public Registry normalize() {
             if (items == null) items = new ArrayList<>();
             items.removeIf(Objects::isNull);
+            List<Item> expanded = new ArrayList<>();
+            for (Item item : items) {
+                item.normalize();
+                expanded.addAll(item.splitOther());
+            }
+            items = expanded;
             Set<String> ids = new HashSet<>();
             Set<String> keys = new HashSet<>();
             List<Item> unique = new ArrayList<>();
@@ -318,7 +490,7 @@ public class CustomCspSetting {
         }
 
         public List<Site> sites() {
-            return getItems().stream().filter(Item::isEnabled).filter(item -> !item.isLive()).filter(Item::isValid).map(Item::site).filter(site -> !site.isEmpty()).toList();
+            return getItems().stream().filter(Item::isEnabled).filter(item -> !item.isLive() && !item.isOther()).filter(Item::isValid).map(Item::site).filter(site -> !site.isEmpty()).toList();
         }
 
         public List<Live> lives(String spider) {
@@ -387,13 +559,17 @@ public class CustomCspSetting {
         private JsonObject site;
         @SerializedName("live")
         private JsonObject live;
+        @SerializedName("other")
+        private JsonObject other;
         private transient String extensionsText;
         private transient boolean extensionsInvalid;
         private transient Boolean extensionsExpanded;
 
         public Item normalize() {
             normalizeKind();
-            if (TextUtils.isEmpty(id)) id = Util.md5(getKey() + getName() + getApi() + getHomePage() + getUrl());
+            if (isOther()) name = TextUtils.isEmpty(getOtherKey()) ? "other" : getOtherKey();
+            if (TextUtils.isEmpty(id)) id = isOther() ? "other_" + Util.md5(App.gson().toJson(getOther())).substring(0, 8) : Util.md5(getKey() + getName() + getApi() + getHomePage() + getUrl());
+            if (isOther()) return this;
             if (!isLive() && TextUtils.isEmpty(key)) {
                 String siteKey = getSiteString("key");
                 key = TextUtils.isEmpty(siteKey) ? PREFIX + id : siteKey;
@@ -404,6 +580,8 @@ public class CustomCspSetting {
 
         private void normalizeKind() {
             if (!TextUtils.isEmpty(kind)) return;
+            if (other != null) kind = KIND_OTHER;
+            else
             if (live != null) kind = KIND_LIVE;
             else kind = inferWebHome() ? KIND_WEB_HOME : KIND_CSP;
         }
@@ -413,7 +591,7 @@ public class CustomCspSetting {
         }
 
         public boolean isWebHome() {
-            if (isLive()) return false;
+            if (isLive() || isOther()) return false;
             return KIND_WEB_HOME.equals(kind) || (webHome != null && webHome) || isWebHomeByFields();
         }
 
@@ -433,18 +611,28 @@ public class CustomCspSetting {
             return KIND_LIVE.equals(kind);
         }
 
+        public boolean isOther() {
+            normalizeKind();
+            return KIND_OTHER.equals(kind);
+        }
+
         public String getKind() {
             normalizeKind();
-            return isLive() ? KIND_LIVE : isWebHome() ? KIND_WEB_HOME : KIND_CSP;
+            return isOther() ? KIND_OTHER : isLive() ? KIND_LIVE : isWebHome() ? KIND_WEB_HOME : KIND_CSP;
         }
 
         public boolean isValid() {
+            if (isOther()) return other != null && other.size() > 0;
             if (isLive()) return !getName().isEmpty() && (!getUrl().isEmpty() || hasLiveGroups());
             return isWebHome() ? !getHomePage().isEmpty() : !getApi().isEmpty();
         }
 
+        public boolean isInjectable() {
+            return !isOther() && isValid();
+        }
+
         public String getDefaultName() {
-            return isLive() ? "直播" : isWebHome() ? "WebHome" : "通用 CSP";
+            return isOther() ? "其他" : isLive() ? "直播" : isWebHome() ? "WebHome" : "通用 CSP";
         }
 
         public void setEnabled(boolean enabled) {
@@ -458,8 +646,16 @@ public class CustomCspSetting {
 
         public void setKind(String kind) {
             boolean wasLive = isLive();
-            this.kind = KIND_LIVE.equals(kind) ? KIND_LIVE : KIND_WEB_HOME.equals(kind) ? KIND_WEB_HOME : KIND_CSP;
+            this.kind = KIND_OTHER.equals(kind) ? KIND_OTHER : KIND_LIVE.equals(kind) ? KIND_LIVE : KIND_WEB_HOME.equals(kind) ? KIND_WEB_HOME : KIND_CSP;
             this.webHome = KIND_WEB_HOME.equals(this.kind);
+            if (KIND_OTHER.equals(this.kind)) {
+                key = null;
+                site = null;
+                live = null;
+                other = other == null ? new JsonObject() : other;
+                return;
+            }
+            other = null;
             if (KIND_LIVE.equals(this.kind) && live == null) live = new JsonObject();
             if (KIND_LIVE.equals(this.kind)) {
                 key = null;
@@ -510,6 +706,7 @@ public class CustomCspSetting {
 
         public void setName(String name) {
             this.name = name;
+            if (isOther()) return;
             if (!isLive() && shouldUseNameKey(getKey())) setKey(keyFromName(getName(), getId()));
             if (isLive()) putLive("name", name);
             else putSite("name", name);
@@ -675,13 +872,64 @@ public class CustomCspSetting {
             this.live = live;
         }
 
+        public void setOther(JsonObject other) {
+            this.other = other;
+        }
+
+        public void setOther(String key, JsonElement value) {
+            String field = TextUtils.isEmpty(key) ? ROOT_OTHER_FIELD_LIST.get(1) : key.trim();
+            JsonObject object = new JsonObject();
+            object.add(field, value == null || value.isJsonNull() ? defaultOtherValue(field) : value.deepCopy());
+            this.other = object;
+            this.name = field;
+        }
+
+        public void setOtherKey(String key) {
+            String oldKey = getOtherKey();
+            JsonElement value = getOtherValue();
+            if (value == null || value.isJsonNull()) value = defaultOtherValue(key);
+            setOther(key, value);
+            if (!TextUtils.equals(oldKey, key)) id = null;
+        }
+
+        public void setOtherValue(JsonElement value) {
+            setOther(getOtherKey(), value);
+            id = null;
+        }
+
         public String getKey() {
             return !TextUtils.isEmpty(key) ? key.trim() : getSiteString("key");
         }
 
         public String getName() {
+            if (isOther()) return TextUtils.isEmpty(getOtherKey()) ? "other" : getOtherKey();
             String value = !TextUtils.isEmpty(name) ? name.trim() : isLive() ? getLiveString("name") : getSiteString("name");
             return TextUtils.isEmpty(value) ? getKey() : value;
+        }
+
+        public JsonObject getOther() {
+            return other == null ? new JsonObject() : other;
+        }
+
+        public String getOtherKey() {
+            if (other == null || other.size() == 0) return "";
+            for (String key : other.keySet()) return key;
+            return "";
+        }
+
+        public JsonElement getOtherValue() {
+            String key = getOtherKey();
+            return TextUtils.isEmpty(key) || other == null || !other.has(key) ? JsonNull.INSTANCE : other.get(key);
+        }
+
+        public String getOtherText() {
+            JsonElement value = getOtherValue();
+            return value == null || value.isJsonNull() ? "" : App.gson().toJson(value);
+        }
+
+        public String getOtherKeys() {
+            if (other == null || other.size() == 0) return "";
+            return String.join(", ", other.keySet());
         }
 
         public String getApi() {
@@ -758,7 +1006,7 @@ public class CustomCspSetting {
         }
 
         public Site site() {
-            if (isLive()) return new Site();
+            if (isLive() || isOther()) return new Site();
             normalize();
             if (site != null) return siteFromJson();
             Site site = new Site();
@@ -920,8 +1168,23 @@ public class CustomCspSetting {
             return site.get("key").getAsString().trim();
         }
 
+        private List<Item> splitOther() {
+            if (!isOther() || other == null || other.size() <= 1) return Collections.singletonList(this);
+            List<Item> items = new ArrayList<>();
+            String baseId = TextUtils.isEmpty(id) ? "other_" + Util.md5(App.gson().toJson(other)).substring(0, 8) : id;
+            for (String key : other.keySet()) {
+                Item item = new Item();
+                item.id = baseId + "_" + Util.md5(key).substring(0, 6);
+                item.enabled = enabled;
+                item.kind = KIND_OTHER;
+                item.setOther(key, other.get(key));
+                items.add(item.normalize());
+            }
+            return items;
+        }
+
         private void ensureUniqueKey(Set<String> keys) {
-            if (isLive()) return;
+            if (isLive() || isOther()) return;
             String base = getKey();
             String key = base;
             int index = 2;

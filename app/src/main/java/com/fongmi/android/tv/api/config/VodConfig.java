@@ -143,6 +143,7 @@ public class VodConfig extends BaseConfig {
     }
 
     private void parseConfig(Config config, JsonObject object) {
+        CustomCspSetting.inject(object);
         initList(object);
         initLive(config, object);
         initWall(config, object);

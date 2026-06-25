@@ -44,7 +44,7 @@ public class LutDialog extends DialogFragment {
     @NonNull
     @Override
     public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
-        presets = LutStore.getPresets();
+        presets = LutStore.refreshPresets();
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireActivity())
                 .setTitle(getTitleText())
                 .setSingleChoiceItems(getLabels(), getCheckedIndex(), this::onSelect)
