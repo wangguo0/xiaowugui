@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -1060,6 +1061,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         View focus = getCurrentFocus();
         RecyclerView recycler = findRecyclerView(mBinding.lutQuick);
         if (focus != null && isChildOf(mBinding.lutQuick, focus) && focus != recycler) return true;
+        if (mBinding.lutQuick.focusSelectedEntry()) return true;
         if (focusRecyclerItem(recycler)) return true;
         return focusFirstChild(mBinding.lutQuick);
     }
@@ -2009,7 +2011,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         RecyclerView.Adapter<?> adapter = recycler.getAdapter();
         if (adapter == null || adapter.getItemCount() <= 0) return false;
         int current = getRecyclerFocusPosition(recycler);
-        if (current == RecyclerView.NO_POSITION) return focusRecyclerItem(recycler);
+        if (current == RecyclerView.NO_POSITION) return mBinding.lutQuick.focusSelectedEntry();
         int next = current + (KeyUtil.isDownKey(event) ? 1 : -1);
         if (next < 0 || next >= adapter.getItemCount()) return false;
         return focusRecyclerPosition(recycler, next);
@@ -2032,11 +2034,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean moveLutQuickFocus(View focus, KeyEvent event) {
         List<View> focusables = new ArrayList<>();
         collectLutQuickFocusables(mBinding.lutQuick, focusables);
-        int index = focusables.indexOf(focus);
-        if (index == -1) return false;
-        int next = index + (KeyUtil.isUpKey(event) || KeyUtil.isLeftKey(event) ? -1 : 1);
-        if (next < 0 || next >= focusables.size()) return false;
-        return focusables.get(next).requestFocus();
+        View target = findLutQuickFocusTarget(focus, focusables, event);
+        return target != null && target.requestFocus();
     }
 
     private void collectLutQuickFocusables(View view, List<View> focusables) {
@@ -2050,6 +2049,46 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             return;
         }
         if (view.isFocusable()) focusables.add(view);
+    }
+
+    private View findLutQuickFocusTarget(View focus, List<View> focusables, KeyEvent event) {
+        Rect current = new Rect();
+        if (focus == null || !focus.getGlobalVisibleRect(current)) return null;
+        View target = null;
+        long bestScore = Long.MAX_VALUE;
+        for (View item : focusables) {
+            if (item == focus) continue;
+            Rect candidate = new Rect();
+            if (!item.getGlobalVisibleRect(candidate) || !isLutQuickFocusCandidate(current, candidate, event)) continue;
+            long score = scoreLutQuickFocusCandidate(current, candidate, event);
+            if (score < bestScore) {
+                bestScore = score;
+                target = item;
+            }
+        }
+        return target;
+    }
+
+    private boolean isLutQuickFocusCandidate(Rect current, Rect candidate, KeyEvent event) {
+        int dx = candidate.centerX() - current.centerX();
+        int dy = candidate.centerY() - current.centerY();
+        if (KeyUtil.isLeftKey(event)) return dx < 0 && isSameFocusRow(current, candidate);
+        if (KeyUtil.isRightKey(event)) return dx > 0 && isSameFocusRow(current, candidate);
+        if (KeyUtil.isUpKey(event)) return dy < 0;
+        if (KeyUtil.isDownKey(event)) return dy > 0;
+        return false;
+    }
+
+    private boolean isSameFocusRow(Rect current, Rect candidate) {
+        return Math.abs(candidate.centerY() - current.centerY()) <= Math.max(current.height(), candidate.height());
+    }
+
+    private long scoreLutQuickFocusCandidate(Rect current, Rect candidate, KeyEvent event) {
+        long dx = Math.abs(candidate.centerX() - current.centerX());
+        long dy = Math.abs(candidate.centerY() - current.centerY());
+        long primary = KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event) ? dx : dy;
+        long secondary = KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event) ? dy : dx;
+        return primary * 1000 + secondary;
     }
 
     private boolean dispatchLutQuickEnter(KeyEvent event) {
