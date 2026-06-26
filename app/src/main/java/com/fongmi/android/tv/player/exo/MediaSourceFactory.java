@@ -2,6 +2,8 @@ package com.fongmi.android.tv.player.exo;
 
 import static androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS;
 
+import android.net.Uri;
+
 import androidx.annotation.NonNull;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
@@ -46,6 +48,7 @@ public class MediaSourceFactory implements MediaSource.Factory {
     private static long cacheSize;
 
     private final DefaultMediaSourceFactory defaultMediaSourceFactory;
+    private DefaultMediaSourceFactory upstreamMediaSourceFactory;
     private HttpDataSource.Factory httpDataSourceFactory;
     private DataSource.Factory dataSourceFactory;
     private ExtractorsFactory extractorsFactory;
@@ -104,6 +107,17 @@ public class MediaSourceFactory implements MediaSource.Factory {
         return url != null && url.contains(CONCAT_SOURCE_SEPARATOR) && url.contains(CONCAT_DURATION_SEPARATOR);
     }
 
+    static boolean isLocalProxyUrl(String url) {
+        if (url == null || url.isEmpty()) return false;
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "::1".equals(host);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     @NonNull
     @Override
     public MediaSource.Factory setDrmSessionManagerProvider(@NonNull DrmSessionManagerProvider drmSessionManagerProvider) {
@@ -126,16 +140,23 @@ public class MediaSourceFactory implements MediaSource.Factory {
     @Override
     public MediaSource createMediaSource(@NonNull MediaItem mediaItem) {
         getHttpDataSourceFactory().setDefaultRequestProperties(ExoUtil.extractHeaders(mediaItem));
-        String url = mediaItem.requestMetadata.mediaUri != null ? mediaItem.requestMetadata.mediaUri.toString() : "";
-        if (isConcatenatingUrl(url)) return createConcatenatingMediaSource(mediaItem, url);
-        else return defaultMediaSourceFactory.createMediaSource(mediaItem);
+        String url = getMediaUrl(mediaItem);
+        DefaultMediaSourceFactory factory = isLocalProxyUrl(url) ? getUpstreamMediaSourceFactory() : defaultMediaSourceFactory;
+        if (isConcatenatingUrl(url)) return createConcatenatingMediaSource(factory, mediaItem, url);
+        else return factory.createMediaSource(mediaItem);
     }
 
-    private MediaSource createConcatenatingMediaSource(MediaItem mediaItem, String url) {
+    private String getMediaUrl(MediaItem mediaItem) {
+        if (mediaItem.requestMetadata.mediaUri != null) return mediaItem.requestMetadata.mediaUri.toString();
+        if (mediaItem.localConfiguration != null) return mediaItem.localConfiguration.uri.toString();
+        return "";
+    }
+
+    private MediaSource createConcatenatingMediaSource(DefaultMediaSourceFactory factory, MediaItem mediaItem, String url) {
         ConcatenatingMediaSource2.Builder builder = new ConcatenatingMediaSource2.Builder();
         for (String split : url.split(CONCAT_SOURCE_SEPARATOR_REGEX)) {
             String[] info = split.split(CONCAT_DURATION_SEPARATOR_REGEX);
-            if (info.length >= 2) builder.add(defaultMediaSourceFactory.createMediaSource(mediaItem.buildUpon().setUri(UrlUtil.uri(info[0])).build()), Long.parseLong(info[1]));
+            if (info.length >= 2) builder.add(factory.createMediaSource(mediaItem.buildUpon().setUri(UrlUtil.uri(info[0])).build()), Long.parseLong(info[1]));
         }
         return builder.build();
     }
@@ -151,6 +172,11 @@ public class MediaSourceFactory implements MediaSource.Factory {
             dataSourceFactory = getCache() == null ? upstreamFactory : getCacheDataSource(upstreamFactory);
         }
         return dataSourceFactory;
+    }
+
+    private DefaultMediaSourceFactory getUpstreamMediaSourceFactory() {
+        if (upstreamMediaSourceFactory == null) upstreamMediaSourceFactory = new DefaultMediaSourceFactory(new DefaultDataSource.Factory(App.get(), getHttpDataSourceFactory()), getExtractorsFactory());
+        return upstreamMediaSourceFactory;
     }
 
     private CacheDataSource.Factory getCacheDataSource(DataSource.Factory upstreamFactory) {

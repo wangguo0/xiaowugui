@@ -137,7 +137,7 @@ public class PreCache implements Player.Listener {
         MediaItem.LocalConfiguration local = mediaItem.localConfiguration;
         String scheme = local.uri.getScheme();
         String url = local.uri.toString();
-        return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) && !MediaSourceFactory.isConcatenatingUrl(url);
+        return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) && !MediaSourceFactory.isConcatenatingUrl(url) && !MediaSourceFactory.isLocalProxyUrl(url);
     }
 
     private long getStart() {
