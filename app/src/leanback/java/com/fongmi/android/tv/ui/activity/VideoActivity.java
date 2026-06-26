@@ -1050,12 +1050,44 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void focusLutQuickIfVisible() {
-        mBinding.lutQuick.postDelayed(() -> {
-            if (!isVisible(mBinding.lutQuick)) return;
-            View focus = getCurrentFocus();
-            if (focus != null && isChildOf(mBinding.lutQuick, focus)) return;
-            focusFirstChild(mBinding.lutQuick);
-        }, 220);
+        mBinding.lutQuick.post(this::focusLutQuickContent);
+        mBinding.lutQuick.postDelayed(this::focusLutQuickContent, 220);
+        mBinding.lutQuick.postDelayed(this::focusLutQuickContent, 420);
+    }
+
+    private boolean focusLutQuickContent() {
+        if (!isVisible(mBinding.lutQuick)) return false;
+        View focus = getCurrentFocus();
+        if (focus != null && isChildOf(mBinding.lutQuick, focus)) return true;
+        RecyclerView recycler = findRecyclerView(mBinding.lutQuick);
+        if (focusRecyclerItem(recycler)) return true;
+        return focusFirstChild(mBinding.lutQuick);
+    }
+
+    private RecyclerView findRecyclerView(View view) {
+        if (view instanceof RecyclerView recycler) return recycler;
+        if (!(view instanceof ViewGroup group)) return null;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            RecyclerView recycler = findRecyclerView(group.getChildAt(i));
+            if (recycler != null) return recycler;
+        }
+        return null;
+    }
+
+    private boolean focusRecyclerItem(RecyclerView recycler) {
+        if (recycler == null || recycler.getVisibility() != View.VISIBLE || !recycler.isEnabled()) return false;
+        RecyclerView.Adapter<?> adapter = recycler.getAdapter();
+        if (adapter == null || adapter.getItemCount() <= 0) return recycler.requestFocus();
+        recycler.scrollToPosition(0);
+        RecyclerView.ViewHolder holder = recycler.findViewHolderForAdapterPosition(0);
+        if (holder != null && focusFirstChild(holder.itemView)) return true;
+        if (recycler.getChildCount() > 0 && focusFirstChild(recycler.getChildAt(0))) return true;
+        recycler.post(() -> {
+            RecyclerView.ViewHolder next = recycler.findViewHolderForAdapterPosition(0);
+            if (next != null) focusFirstChild(next.itemView);
+            else if (recycler.getChildCount() > 0) focusFirstChild(recycler.getChildAt(0));
+        });
+        return recycler.requestFocus();
     }
 
     private boolean focusFirstChild(View view) {
@@ -1911,7 +1943,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionUp(event) && KeyUtil.isBackKey(event) && mBinding.lutQuick.hideIfVisible()) return true;
-        if (isVisible(mBinding.lutQuick)) return super.dispatchKeyEvent(event);
+        if (isVisible(mBinding.lutQuick)) return dispatchLutQuickKey(event);
         if (isFullscreen() && KeyUtil.isMenuKey(event)) onToggle();
         if (isVisible(mBinding.control.getRoot())) setR1Callback();
         if (isVisible(mBinding.control.getRoot())) mFocus2 = getCurrentFocus();
@@ -1920,6 +1952,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (KeyUtil.isMediaFastForward(event)) return onSeekForward();
         if (KeyUtil.isMediaRewind(event)) return onSeekBack();
         return super.dispatchKeyEvent(event);
+    }
+
+    private boolean dispatchLutQuickKey(KeyEvent event) {
+        if (KeyUtil.isActionDown(event)) focusLutQuickContent();
+        boolean handled = super.dispatchKeyEvent(event);
+        if (KeyUtil.isActionDown(event)) {
+            View focus = getCurrentFocus();
+            if (focus == null || !isChildOf(mBinding.lutQuick, focus)) focusLutQuickContent();
+        }
+        return true;
     }
 
     @Override
