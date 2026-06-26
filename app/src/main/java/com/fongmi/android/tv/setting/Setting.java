@@ -24,9 +24,9 @@ import com.github.catvod.utils.Prefers;
 public class Setting {
 
     public static final int UI_SCALE_FOLLOW_SYSTEM = 0;
-    public static final int UI_SCALE_COMPACT = 1;
-    public static final int UI_SCALE_STANDARD = 2;
-    public static final int UI_SCALE_LARGE = 3;
+    public static final int UI_SCALE_STANDARD = 1;
+    public static final int UI_SCALE_COMPACT = 2;
+    public static final int UI_SCALE_SMALLER = 3;
 
     public static final int WALL_CINEMA = 5;
     public static final int WALL_CINEMA_WARM = 6;
@@ -327,11 +327,11 @@ public class Setting {
 
     public static int getUiScale() {
         int scale = Prefers.getInt("ui_scale", UI_SCALE_STANDARD);
-        return scale >= UI_SCALE_FOLLOW_SYSTEM && scale <= UI_SCALE_LARGE ? scale : UI_SCALE_STANDARD;
+        return scale >= UI_SCALE_FOLLOW_SYSTEM && scale <= UI_SCALE_SMALLER ? scale : UI_SCALE_STANDARD;
     }
 
     public static void putUiScale(int scale) {
-        Prefers.put("ui_scale", scale >= UI_SCALE_FOLLOW_SYSTEM && scale <= UI_SCALE_LARGE ? scale : UI_SCALE_STANDARD);
+        Prefers.put("ui_scale", scale >= UI_SCALE_FOLLOW_SYSTEM && scale <= UI_SCALE_SMALLER ? scale : UI_SCALE_STANDARD);
     }
 
     public static Context wrapUiScale(Context context) {
@@ -353,7 +353,7 @@ public class Setting {
     private static float getUiScaleFactor(int scale) {
         return switch (scale) {
             case UI_SCALE_COMPACT -> 0.9f;
-            case UI_SCALE_LARGE -> 1.1f;
+            case UI_SCALE_SMALLER -> 0.8f;
             default -> 1.0f;
         };
     }

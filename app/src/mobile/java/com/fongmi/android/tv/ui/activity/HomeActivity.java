@@ -148,12 +148,9 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void restorePosition(int position) {
-        if (position <= 0) {
-            selectNavigation(0);
-        } else {
-            selectNavigation(1);
-            if (position > 1) changeFragment(position);
-        }
+        setNavigation();
+        syncNavigationSelection();
+        changeFragment(position <= 0 ? 0 : position);
     }
 
     private void initConfig() {
@@ -192,6 +189,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.live).setVisible(LiveConfig.hasUrl());
+        syncNavigationSelection();
     }
 
     private boolean openLive() {
@@ -266,6 +264,14 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         int itemId = position == 0 ? R.id.vod : R.id.setting;
         if (mBinding.navigation.getSelectedItemId() == itemId) changeFragment(position);
         else mBinding.navigation.setSelectedItemId(itemId);
+    }
+
+    private void syncNavigationSelection() {
+        int itemId = currentPosition == 0 ? R.id.vod : R.id.setting;
+        if (mBinding.navigation.getSelectedItemId() == itemId) return;
+        mBinding.navigation.setOnItemSelectedListener(null);
+        mBinding.navigation.setSelectedItemId(itemId);
+        mBinding.navigation.setOnItemSelectedListener(this);
     }
 
     private boolean changeFragment(int position) {
