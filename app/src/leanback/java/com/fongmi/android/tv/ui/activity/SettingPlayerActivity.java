@@ -15,12 +15,14 @@ import com.fongmi.android.tv.impl.SpeedListener;
 import com.fongmi.android.tv.impl.UaListener;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.dialog.BufferDialog;
 import com.fongmi.android.tv.ui.dialog.LutDialog;
 import com.fongmi.android.tv.ui.dialog.SpeedDialog;
 import com.fongmi.android.tv.ui.dialog.UaDialog;
+import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -66,6 +68,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.bufferBytesText.setText((bufferBytes = ResUtil.getStringArray(R.array.select_buffer_bytes))[PlayerSetting.getBufferBytesOption()]);
         mBinding.backBufferText.setText((backBuffer = ResUtil.getStringArray(R.array.select_back_buffer))[PlayerSetting.getBackBufferOption()]);
         mBinding.playCacheText.setText((playCache = ResUtil.getStringArray(R.array.select_play_cache))[PlayerSetting.getPlayCacheOption()]);
+        setPreloadText();
         mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
         mBinding.backgroundText.setText(getSwitch(PlayerSetting.isBackgroundOn()));
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
@@ -91,6 +94,10 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.bufferBytes.setOnClickListener(this::setBufferBytes);
         mBinding.backBuffer.setOnClickListener(this::setBackBuffer);
         mBinding.playCache.setOnClickListener(this::setPlayCache);
+        mBinding.preload.setOnClickListener(this::setPreload);
+        mBinding.preloadThread.setOnClickListener(this::setPreloadThread);
+        mBinding.preloadSize.setOnClickListener(this::setPreloadSize);
+        mBinding.preloadTime.setOnClickListener(this::setPreloadTime);
         mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.render.setOnClickListener(this::setRender);
         mBinding.tunnel.setOnClickListener(this::setTunnel);
@@ -205,6 +212,43 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         int index = (PlayerSetting.getPlayCacheOption() + 1) % playCache.length;
         mBinding.playCacheText.setText(playCache[index]);
         PlayerSetting.putPlayCacheOption(index);
+    }
+
+    private void setPreload(View view) {
+        PreloadSetting.putPreload(!PreloadSetting.isPreload());
+        setPreloadText();
+    }
+
+    private void setPreloadThread(View view) {
+        int value = PreloadSetting.getPreloadThreads() + 1;
+        if (value > PreloadSetting.MAX_THREADS) value = PreloadSetting.MIN_THREADS;
+        PreloadSetting.putPreloadThreads(value);
+        setPreloadText();
+    }
+
+    private void setPreloadSize(View view) {
+        int value = PreloadSetting.getPreloadSizeMb() + PreloadSetting.STEP_SIZE_MB;
+        if (value > PreloadSetting.MAX_SIZE_MB) value = PreloadSetting.MIN_SIZE_MB;
+        PreloadSetting.putPreloadSizeMb(value);
+        setPreloadText();
+    }
+
+    private void setPreloadTime(View view) {
+        int value = PreloadSetting.getPreloadTimeSeconds() + PreloadSetting.STEP_TIME_SECONDS;
+        if (value > PreloadSetting.MAX_TIME_SECONDS) value = PreloadSetting.MIN_TIME_SECONDS;
+        PreloadSetting.putPreloadTimeSeconds(value);
+        setPreloadText();
+    }
+
+    private void setPreloadText() {
+        boolean preload = PreloadSetting.isPreload();
+        mBinding.preloadText.setText(getSwitch(preload));
+        mBinding.preloadThread.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadSize.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadTime.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadThreadText.setText(getString(R.string.player_preload_threads_value, PreloadSetting.getPreloadThreads()));
+        mBinding.preloadSizeText.setText(FileUtil.byteCountToDisplaySize(PreloadSetting.getPreloadSizeBytes()));
+        mBinding.preloadTimeText.setText(getString(R.string.player_preload_time_value, PreloadSetting.getPreloadTimeSeconds()));
     }
 
     private void setAutoChange(View view) {

@@ -780,6 +780,12 @@
     <string name="player_buffer_bytes">缓冲容量</string>
     <string name="player_back_buffer">回退缓冲</string>
     <string name="player_cache">播放缓存</string>
+    <string name="player_preload">预载</string>
+    <string name="player_preload_threads">预载线程</string>
+    <string name="player_preload_threads_value">%1$d 条</string>
+    <string name="player_preload_size">预载容量</string>
+    <string name="player_preload_time">预载时间</string>
+    <string name="player_preload_time_value">%1$d 秒</string>
     <string name="player_auto_change">自动换源</string>
     <string name="player_speed">长按倍速</string>
     <string name="player_ua">User-Agent</string>
