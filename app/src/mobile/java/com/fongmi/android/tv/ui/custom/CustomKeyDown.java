@@ -140,7 +140,7 @@ public class CustomKeyDown extends GestureDetector.SimpleOnGestureListener imple
 
     @Override
     public boolean onSingleTapConfirmed(@NonNull MotionEvent e) {
-        if (isMultiple(e) || isEdge(e) || changeScale) return true;
+        if (isMultiple(e) || changeScale) return true;
         listener.onSingleTap();
         return true;
     }
