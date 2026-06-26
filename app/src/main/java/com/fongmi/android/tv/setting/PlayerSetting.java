@@ -204,7 +204,11 @@ public class PlayerSetting {
     }
 
     public static boolean isAudioPassThrough() {
-        return Prefers.getBoolean("audio_pass_through");
+        return Prefers.getBoolean("audio_pass_through", true);
+    }
+
+    public static void putAudioPassThrough(boolean audioPassThrough) {
+        Prefers.put("audio_pass_through", audioPassThrough);
     }
 
     public static boolean isVideoPrefer() {
