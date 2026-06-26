@@ -10,7 +10,7 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.source.preload.PreCacheHelper;
 
-import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.PreloadSetting;
 import com.github.catvod.crawler.SpiderDebug;
 
 import java.util.concurrent.Executor;
@@ -22,7 +22,6 @@ public class PreCache implements Player.Listener {
     private static final long TICK_MS = 5000;
     private static final long MIN_STEP_MS = 5000;
     private static final long MAX_STEP_MS = 30000;
-    private static final long DURATION_MS = 120_000;
     private static final int STEP_DIV = 4;
 
     private final Runnable task;
@@ -32,6 +31,7 @@ public class PreCache implements Player.Listener {
     private Handler handler;
     private HandlerThread worker;
     private Player player;
+    private int threads;
     private long lastStartMs;
     private long seekStartMs;
 
@@ -41,7 +41,7 @@ public class PreCache implements Player.Listener {
 
     public void start(Player player, MediaItem mediaItem) {
         stop();
-        if (!isEnabled() || !canPreCache(mediaItem)) return;
+        if (!PreloadSetting.isPreload() || !canPreCache(mediaItem)) return;
         this.player = player;
         this.handler = new Handler(player.getApplicationLooper());
         this.helper = createHelper(mediaItem);
@@ -75,7 +75,7 @@ public class PreCache implements Player.Listener {
     @Override
     public void onPlaybackStateChanged(int state) {
         if (state == Player.STATE_READY) check();
-        else if (isStopped(state)) stop();
+        else if (isStopped(state)) cancel();
     }
 
     @Override
@@ -93,7 +93,7 @@ public class PreCache implements Player.Listener {
 
     private boolean update() {
         if (helper == null || player == null) return false;
-        if (!isEnabled()) {
+        if (!PreloadSetting.isPreload()) {
             stop();
             return false;
         }
@@ -140,10 +140,6 @@ public class PreCache implements Player.Listener {
         return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) && !MediaSourceFactory.isConcatenatingUrl(url);
     }
 
-    private boolean isEnabled() {
-        return PlayerSetting.getPlayCacheSize() > 0;
-    }
-
     private long getStart() {
         return Math.max(0, hasSeek() ? seekStartMs : player.getCurrentPosition());
     }
@@ -161,11 +157,11 @@ public class PreCache implements Player.Listener {
     private long getLength(long startMs) {
         long durationMs = player.getDuration();
         if (durationMs <= 0) return 0;
-        return Math.min(DURATION_MS, durationMs - startMs);
+        return Math.min(PreloadSetting.getPreloadDurationMs(), durationMs - startMs);
     }
 
     private long getStep() {
-        return Math.min(Math.max(DURATION_MS / STEP_DIV, MIN_STEP_MS), MAX_STEP_MS);
+        return Math.min(Math.max(PreloadSetting.getPreloadDurationMs() / STEP_DIV, MIN_STEP_MS), MAX_STEP_MS);
     }
 
     private void markSeek(long startMs) {
@@ -181,8 +177,11 @@ public class PreCache implements Player.Listener {
     }
 
     private Executor getExecutor() {
-        if (executor != null) return executor;
-        return executor = Executors.newFixedThreadPool(1);
+        int count = PreloadSetting.getPreloadThreads();
+        if (executor != null && threads == count) return executor;
+        releaseExecutor();
+        threads = count;
+        return executor = Executors.newFixedThreadPool(count);
     }
 
     private void releaseExecutor() {
