@@ -10,6 +10,9 @@ public class PlayerSetting {
 
     public static final int EXO = 0;
     public static final int IJK = 1;
+    public static final int RENDER_SURFACE = 0;
+    public static final int RENDER_TEXTURE = 1;
+    private static final int DEFAULT_PLAY_CACHE_OPTION = 0;
 
     public static int getPlayer() {
         int player = Prefers.getInt("player", EXO);
@@ -31,11 +34,12 @@ public class PlayerSetting {
     }
 
     public static int getRender() {
-        return Prefers.getInt("render", 0);
+        return Math.min(Math.max(Prefers.getInt("render", RENDER_SURFACE), RENDER_SURFACE), RENDER_TEXTURE);
     }
 
     public static void putRender(int render) {
-        Prefers.put("render", render);
+        Prefers.put("render", Math.min(Math.max(render, RENDER_SURFACE), RENDER_TEXTURE));
+        if (isTunnel() && getRender() == RENDER_TEXTURE) Prefers.put("tunnel", false);
     }
 
     public static int getSize() {
@@ -105,7 +109,7 @@ public class PlayerSetting {
     }
 
     public static int getPlayCacheOption() {
-        return Math.min(Math.max(Prefers.getInt("play_cache"), 0), 4);
+        return Math.min(Math.max(Prefers.getInt("play_cache", DEFAULT_PLAY_CACHE_OPTION), 0), 4);
     }
 
     public static void putPlayCacheOption(int option) {
@@ -114,11 +118,11 @@ public class PlayerSetting {
 
     public static long getPlayCacheSize() {
         return switch (getPlayCacheOption()) {
-            case 1 -> 100L * 1024 * 1024;
-            case 2 -> 500L * 1024 * 1024;
+            case 1 -> 256L * 1024 * 1024;
+            case 2 -> 512L * 1024 * 1024;
             case 3 -> 1024L * 1024 * 1024;
             case 4 -> 2L * 1024 * 1024 * 1024;
-            default -> 0L;
+            default -> 128L * 1024 * 1024;
         };
     }
 
@@ -184,6 +188,11 @@ public class PlayerSetting {
 
     public static void putTunnel(boolean tunnel) {
         Prefers.put("tunnel", tunnel);
+        if (tunnel) Prefers.put("render", RENDER_SURFACE);
+    }
+
+    public static boolean isTunnelingEnabled() {
+        return isTunnel() && getRender() == RENDER_SURFACE;
     }
 
     public static boolean isAudioPrefer() {
@@ -192,6 +201,10 @@ public class PlayerSetting {
 
     public static void putAudioPrefer(boolean audioPrefer) {
         Prefers.put("audio_prefer", audioPrefer);
+    }
+
+    public static boolean isAudioPassThrough() {
+        return Prefers.getBoolean("audio_pass_through");
     }
 
     public static boolean isVideoPrefer() {

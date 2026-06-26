@@ -1046,6 +1046,35 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 onLutDir();
             }
         });
+        focusLutQuickIfVisible();
+    }
+
+    private void focusLutQuickIfVisible() {
+        mBinding.lutQuick.postDelayed(() -> {
+            if (!isVisible(mBinding.lutQuick)) return;
+            View focus = getCurrentFocus();
+            if (focus != null && isChildOf(mBinding.lutQuick, focus)) return;
+            focusFirstChild(mBinding.lutQuick);
+        }, 220);
+    }
+
+    private boolean focusFirstChild(View view) {
+        if (view == null || view.getVisibility() != View.VISIBLE || !view.isEnabled()) return false;
+        if (view.isFocusable() && view.requestFocus()) return true;
+        if (!(view instanceof ViewGroup group)) return false;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            if (focusFirstChild(group.getChildAt(i))) return true;
+        }
+        return false;
+    }
+
+    private boolean isChildOf(ViewGroup parent, View child) {
+        for (View view = child; view != null; ) {
+            if (view == parent) return true;
+            if (!(view.getParent() instanceof View next)) return false;
+            view = next;
+        }
+        return false;
     }
 
     private void onLutImport() {
@@ -1882,6 +1911,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionUp(event) && KeyUtil.isBackKey(event) && mBinding.lutQuick.hideIfVisible()) return true;
+        if (isVisible(mBinding.lutQuick)) return super.dispatchKeyEvent(event);
         if (isFullscreen() && KeyUtil.isMenuKey(event)) onToggle();
         if (isVisible(mBinding.control.getRoot())) setR1Callback();
         if (isVisible(mBinding.control.getRoot())) mFocus2 = getCurrentFocus();

@@ -76,6 +76,11 @@ public class IjkPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public void stop() {
+        player.stop();
+    }
+
+    @Override
     public void setMetadata(MediaMetadata data) {
         MediaItem current = player.getCurrentMediaItem();
         if (current != null) player.replaceMediaItem(player.getCurrentMediaItemIndex(), current.buildUpon().setMediaMetadata(data).build());

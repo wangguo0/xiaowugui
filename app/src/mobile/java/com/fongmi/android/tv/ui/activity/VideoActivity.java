@@ -1930,15 +1930,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void updateVideoHeight() {
         if (isLand() || isFullscreen() || isInPictureInPictureMode()) return;
-        int videoWidth = player().getVideoWidth();
-        int videoHeight = player().getVideoHeight();
-        int targetHeight = mFrameHeight;
-        if (videoWidth > 0 && videoHeight > videoWidth) {
-            int calculated = (int) (ResUtil.getScreenWidth() * ((float) videoHeight / videoWidth));
-            targetHeight = Math.min(ResUtil.getScreenHeight() / 2, Math.max(mFrameHeight, calculated));
-        }
-        if (targetHeight <= 0 || mFrameParams.height == targetHeight) return;
-        mFrameParams.height = targetHeight;
+        if (mFrameHeight <= 0 || mFrameParams.height == mFrameHeight) return;
+        mFrameParams.height = mFrameHeight;
         mBinding.video.setLayoutParams(mFrameParams);
     }
 

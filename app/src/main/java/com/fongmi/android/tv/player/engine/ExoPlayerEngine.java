@@ -15,6 +15,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
+import com.fongmi.android.tv.player.exo.PreCache;
 import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 public class ExoPlayerEngine implements PlayerEngine {
 
     private final ErrorMsgProvider provider;
+    private final PreCache preCache;
     private PlaySpec spec;
     private ExoPlayer player;
     private int decode;
@@ -33,6 +35,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     public ExoPlayerEngine(int decode, Player.Listener listener) {
         this.player = ExoUtil.buildPlayer(decode, listener);
         this.provider = new ErrorMsgProvider();
+        this.preCache = new PreCache();
         this.decode = decode;
     }
 
@@ -43,11 +46,13 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     @Override
     public void release() {
+        preCache.release();
         player.release();
     }
 
     @Override
     public Player rebuild(Player.Listener listener) {
+        preCache.stop();
         player.release();
         SpiderDebug.log("player-engine", "rebuild decode=%d", decode);
         return player = ExoUtil.buildPlayer(decode, listener);
@@ -109,8 +114,15 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.spec = spec;
         this.playWhenReady = playWhenReady;
         SpiderDebug.log("player-engine", "restart decode=%d format=%s position=%d play=%s headers=%s urlLen=%d", decode, spec.getFormat(), position, playWhenReady, spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
+        preCache.stop();
         player.stop();
         startInternal(position, playWhenReady);
+    }
+
+    @Override
+    public void stop() {
+        preCache.stop();
+        player.stop();
     }
 
     @Override
@@ -203,7 +215,9 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.playWhenReady = playWhenReady;
         SpiderDebug.log("player-engine", "prepare position=%d decode=%d format=%s play=%s", position, decode, spec.getFormat(), playWhenReady);
         if (!playWhenReady) player.pause();
-        player.setMediaItem(ExoUtil.getMediaItem(spec, decode), position);
+        MediaItem item = ExoUtil.getMediaItem(spec, decode);
+        player.setMediaItem(item, position);
+        preCache.start(player, item);
         player.prepare();
         if (playWhenReady) player.play();
     }
