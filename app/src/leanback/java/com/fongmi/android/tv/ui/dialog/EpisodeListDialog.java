@@ -5,6 +5,7 @@ import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -15,6 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.leanback.widget.BaseGridView;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
@@ -25,6 +27,7 @@ import com.fongmi.android.tv.databinding.DialogEpisodeListBinding;
 import com.fongmi.android.tv.ui.adapter.ArrayAdapter;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
 import com.fongmi.android.tv.ui.adapter.FlagAdapter;
+import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -90,12 +93,18 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
         binding.flag.setHorizontalSpacing(spacing);
         binding.flag.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
         binding.flag.setAdapter(flagAdapter = new FlagAdapter(this));
+        flagAdapter.setOnKeyListener((view, keyCode, event) -> onFlagKey(event));
         binding.array.setHorizontalSpacing(spacing);
         binding.array.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
         binding.array.setAdapter(arrayAdapter = new ArrayAdapter(this));
+        arrayAdapter.setOnKeyListener((view, keyCode, event) -> onArrayKey(event));
+        binding.array.setOnKeyListener((view, keyCode, event) -> onArrayKey(event));
         binding.episode.setHorizontalSpacing(spacing);
         binding.episode.setVerticalSpacing(spacing);
         binding.episode.setAdapter(episodeAdapter = new EpisodeAdapter(this, getEpisodeContentWidth()));
+        episodeAdapter.setOnKeyListener((view, keyCode, event) -> onEpisodeKey(event));
+        binding.episode.setOnKeyListener((view, keyCode, event) -> onEpisodeKey(event));
+        binding.flag.setOnKeyListener((view, keyCode, event) -> onFlagKey(event));
         binding.array.addOnChildViewHolderSelectedListener(new androidx.leanback.widget.OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
@@ -144,6 +153,80 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
         arrayAdapter.setNextFocus(R.id.flag, R.id.episode);
         episodeAdapter.setNextFocusUp(items.isEmpty() ? R.id.flag : R.id.array);
         episodeAdapter.setNextFocusDown(0);
+    }
+
+    private boolean onFlagKey(KeyEvent event) {
+        if (!KeyUtil.isActionDown(event) || !KeyUtil.isDownKey(event)) return false;
+        focusLowerFromFlag();
+        return true;
+    }
+
+    private boolean onArrayKey(KeyEvent event) {
+        if (!KeyUtil.isActionDown(event)) return false;
+        if (KeyUtil.isUpKey(event)) {
+            focusFlag();
+            return true;
+        }
+        if (KeyUtil.isDownKey(event)) {
+            focusEpisodeFromArray();
+            return true;
+        }
+        return false;
+    }
+
+    private boolean onEpisodeKey(KeyEvent event) {
+        if (!KeyUtil.isActionDown(event) || !KeyUtil.isUpKey(event)) return false;
+        int position = getFocusedPosition(binding.episode);
+        int column = Math.max(1, episodeAdapter.getColumn());
+        if (position == RecyclerView.NO_POSITION || position >= column) return false;
+        focusUpperFromEpisode();
+        return true;
+    }
+
+    private void focusUpperFromEpisode() {
+        if (isVisible(binding.array) && arrayAdapter.getItemCount() > 0) focusArray();
+        else focusFlag();
+    }
+
+    private void focusLowerFromFlag() {
+        if (isVisible(binding.array) && arrayAdapter.getItemCount() > 0) focusArray();
+        else focusPosition(binding.episode, episodeAdapter.getPosition());
+    }
+
+    private void focusEpisodeFromArray() {
+        int position = binding.array.getSelectedPosition();
+        int start = position >= 0 && position < segmentStarts.size() ? segmentStarts.get(position) : episodeAdapter.getPosition();
+        focusPosition(binding.episode, start);
+    }
+
+    private void focusFlag() {
+        focusPosition(binding.flag, flagAdapter.getPosition());
+    }
+
+    private void focusArray() {
+        int position = Math.max(0, binding.array.getSelectedPosition());
+        focusPosition(binding.array, position);
+    }
+
+    private int getFocusedPosition(RecyclerView recycler) {
+        View child = recycler.getFocusedChild();
+        return child == null ? RecyclerView.NO_POSITION : recycler.getChildAdapterPosition(child);
+    }
+
+    private void focusPosition(BaseGridView grid, int position) {
+        if (grid.getAdapter() == null || grid.getAdapter().getItemCount() == 0) return;
+        position = Math.max(0, Math.min(position, grid.getAdapter().getItemCount() - 1));
+        int target = position;
+        grid.setSelectedPosition(target);
+        grid.post(() -> {
+            RecyclerView.ViewHolder holder = grid.findViewHolderForAdapterPosition(target);
+            if (holder != null) holder.itemView.requestFocus();
+            else grid.requestFocus();
+        });
+    }
+
+    private boolean isVisible(View view) {
+        return view.getVisibility() == View.VISIBLE;
     }
 
     private int getEpisodeSegmentSize(int size) {

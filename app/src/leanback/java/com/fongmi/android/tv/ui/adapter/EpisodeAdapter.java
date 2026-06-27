@@ -21,6 +21,7 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
     private final List<Episode> mItems;
     private final int maxWidth;
     private final int spacing;
+    private View.OnKeyListener keyListener;
     private int nextFocusDown;
     private int nextFocusUp;
     private int column;
@@ -97,6 +98,11 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         notifyDataSetChanged();
     }
 
+    public void setOnKeyListener(View.OnKeyListener keyListener) {
+        this.keyListener = keyListener;
+        notifyDataSetChanged();
+    }
+
     public void setColumn(int column) {
         column = Math.max(1, column);
         if (this.column == column) return;
@@ -149,6 +155,7 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         holder.binding.text.setNextFocusDownId(position >= getItemCount() - column && nextFocusDown != 0 ? nextFocusDown : View.NO_ID);
         holder.binding.text.setSelected(item.isSelected());
         holder.binding.text.setText(item.getDisplayName());
+        holder.binding.text.setOnKeyListener(keyListener);
         holder.binding.getRoot().setOnClickListener(v -> mListener.onItemClick(item));
     }
 

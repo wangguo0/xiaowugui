@@ -22,6 +22,7 @@ public class ArrayAdapter extends RecyclerView.Adapter<ArrayAdapter.ViewHolder> 
     private final String backward;
     private final String forward;
     private final String reverse;
+    private View.OnKeyListener keyListener;
     private int nextFocusDown;
     private int nextFocusUp;
     private int segmentSize;
@@ -73,6 +74,11 @@ public class ArrayAdapter extends RecyclerView.Adapter<ArrayAdapter.ViewHolder> 
         notifyDataSetChanged();
     }
 
+    public void setOnKeyListener(View.OnKeyListener keyListener) {
+        this.keyListener = keyListener;
+        notifyDataSetChanged();
+    }
+
     @Override
     public int getItemCount() {
         return mItems.size();
@@ -90,6 +96,7 @@ public class ArrayAdapter extends RecyclerView.Adapter<ArrayAdapter.ViewHolder> 
         holder.binding.text.setText(text);
         holder.binding.text.setNextFocusUpId(nextFocusUp == 0 ? View.NO_ID : nextFocusUp);
         holder.binding.text.setNextFocusDownId(nextFocusDown == 0 ? View.NO_ID : nextFocusDown);
+        holder.binding.text.setOnKeyListener(keyListener);
         if (text.equals(reverse)) holder.binding.getRoot().setOnClickListener(view -> mListener.onRevSort());
         else if (text.equals(backward) || text.equals(forward)) holder.binding.getRoot().setOnClickListener(view -> mListener.onRevPlay(holder.binding.text));
         else holder.binding.getRoot().setOnClickListener(null);
