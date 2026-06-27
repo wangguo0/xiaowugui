@@ -169,23 +169,39 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         Window window = getDialog() == null ? null : getDialog().getWindow();
         if (window == null) return;
         window.getDecorView().setPadding(0, 0, 0, 0);
-        clearParentPadding();
-        window.setGravity(Gravity.END);
+        clearParentPaddingAndFillHeight();
+        window.setGravity(Gravity.END | Gravity.BOTTOM);
         WindowManager.LayoutParams params = window.getAttributes();
         params.width = panelWidth;
         params.height = WindowManager.LayoutParams.MATCH_PARENT;
-        params.gravity = Gravity.END;
+        params.gravity = Gravity.END | Gravity.BOTTOM;
         params.x = 0;
         params.y = 0;
         window.setAttributes(params);
         window.setLayout(panelWidth, WindowManager.LayoutParams.MATCH_PARENT);
+        binding.getRoot().post(() -> {
+            clearParentPaddingAndFillHeight();
+            window.setLayout(panelWidth, WindowManager.LayoutParams.MATCH_PARENT);
+        });
     }
 
-    private void clearParentPadding() {
+    private void clearParentPaddingAndFillHeight() {
         View view = binding.getRoot();
+        fillHeight(view);
         while (view.getParent() instanceof View parent) {
             if (parent instanceof ViewGroup group) group.setPadding(0, 0, 0, 0);
+            fillHeight(parent);
             view = parent;
         }
+    }
+
+    private void fillHeight(View view) {
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params != null) {
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            view.setLayoutParams(params);
+        }
+        view.setMinimumHeight(ResUtil.getScreenHeight(requireContext()));
     }
 }
