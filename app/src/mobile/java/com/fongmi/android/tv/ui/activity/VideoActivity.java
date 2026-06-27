@@ -445,6 +445,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }, 12f);
         setVideoView();
         setViewModel();
+        setShortDisplay();
         if (hasInitialPreview()) showInitialPreview();
         else mBinding.progressLayout.showProgress();
         showProgress();
@@ -455,6 +456,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     protected void initEvent() {
         mBinding.name.setOnClickListener(view -> onName());
         mBinding.more.setOnClickListener(view -> onMore());
+        mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
         mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.castAction.setOnClickListener(view -> onCast());
         mBinding.settingAction.setOnClickListener(view -> onSetting());
@@ -970,6 +972,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onSearch() {
         onName();
+    }
+
+    private void onShortDisplay() {
+        Setting.putCompactEpisodeTitle(!Setting.isCompactEpisodeTitle());
+        setShortDisplay();
+        refreshEpisodeTitles();
+    }
+
+    private void setShortDisplay() {
+        mBinding.shortDisplay.setSelected(Setting.isCompactEpisodeTitle());
     }
 
     private void onMore() {

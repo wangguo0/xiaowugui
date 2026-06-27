@@ -46,6 +46,7 @@
     <string name="play_config">配置</string>
     <string name="play_cast">投屏</string>
     <string name="play_change">換源</string>
+    <string name="play_short_display">短顯</string>
     <string name="play_search">搜尋</string>
     <string name="play_fullscreen">全螢幕</string>
     <string name="play_exit_fullscreen">退出全螢幕</string>
