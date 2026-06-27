@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.View;
 
 import androidx.fragment.app.FragmentActivity;
@@ -13,6 +14,7 @@ import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.MarkdownText;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -79,6 +81,8 @@ public class UpdateDialog extends BaseAlertDialog {
     protected void initEvent() {
         binding.stableItem.setOnClickListener(view -> toggle(Update.CHANNEL_STABLE));
         binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
+        binding.stableItem.setOnKeyListener((view, keyCode, event) -> onItemKey(Update.CHANNEL_STABLE, view, keyCode, event));
+        binding.betaItem.setOnKeyListener((view, keyCode, event) -> onItemKey(Update.CHANNEL_BETA, view, keyCode, event));
         binding.stableConfirm.setOnClickListener(view -> update(Update.CHANNEL_STABLE, view));
         binding.betaConfirm.setOnClickListener(view -> update(Update.CHANNEL_BETA, view));
         binding.cancel.setOnClickListener(view -> listener.onCancel(view));
@@ -97,9 +101,13 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void toggle(String channel) {
+        if (isExpanded(channel)) {
+            update(channel, getItem(channel));
+            return;
+        }
         selected = channel;
-        if (Update.CHANNEL_STABLE.equals(channel)) stableExpanded = !stableExpanded;
-        else betaExpanded = !betaExpanded;
+        stableExpanded = Update.CHANNEL_STABLE.equals(channel);
+        betaExpanded = Update.CHANNEL_BETA.equals(channel);
         if (listener != null) listener.onChannel(channel);
         render();
     }
@@ -110,8 +118,10 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void render() {
+        normalizeSelection();
+        binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE);
         renderItem(Update.CHANNEL_STABLE, stable);
-        renderItem(Update.CHANNEL_BETA, beta);
+        if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
         updateFocusLinks();
         binding.progressPanel.setVisibility(View.GONE);
     }
@@ -143,13 +153,51 @@ public class UpdateDialog extends BaseAlertDialog {
     private void updateFocusLinks() {
         boolean stableCanUpdate = stable != null && stable.hasUpdate();
         boolean betaCanUpdate = beta != null && beta.hasUpdate();
-        binding.stableItem.setNextFocusDownId(stableExpanded && stableCanUpdate ? R.id.stableConfirm : R.id.betaItem);
-        binding.stableConfirm.setNextFocusDownId(R.id.betaItem);
+        int nextAfterStable = hasBeta() ? R.id.betaItem : R.id.cancel;
+        binding.stableItem.setNextFocusDownId(stableExpanded && stableCanUpdate ? R.id.stableConfirm : nextAfterStable);
+        binding.stableConfirm.setNextFocusDownId(nextAfterStable);
         binding.betaItem.setNextFocusUpId(stableExpanded && stableCanUpdate ? R.id.stableConfirm : R.id.stableItem);
         binding.betaItem.setNextFocusDownId(betaExpanded && betaCanUpdate ? R.id.betaConfirm : R.id.cancel);
         binding.betaConfirm.setNextFocusUpId(R.id.betaItem);
         binding.betaConfirm.setNextFocusDownId(R.id.cancel);
-        binding.cancel.setNextFocusUpId(betaExpanded && betaCanUpdate ? R.id.betaConfirm : R.id.betaItem);
+        binding.cancel.setNextFocusUpId(hasBeta() ? betaExpanded && betaCanUpdate ? R.id.betaConfirm : R.id.betaItem : stableExpanded && stableCanUpdate ? R.id.stableConfirm : R.id.stableItem);
+    }
+
+    private boolean onItemKey(String channel, View view, int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN || !isExpanded(channel)) return false;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            update(channel, view);
+            return true;
+        }
+        if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN) return false;
+        if (!hasLongNotes(channel)) return false;
+        int direction = keyCode == KeyEvent.KEYCODE_DPAD_DOWN ? 1 : -1;
+        if (!binding.listScroll.canScrollVertically(direction)) return false;
+        binding.listScroll.smoothScrollBy(0, direction * ResUtil.dp2px(96));
+        return true;
+    }
+
+    private boolean hasLongNotes(String channel) {
+        return (Update.CHANNEL_BETA.equals(channel) ? binding.betaDesc : binding.stableDesc).getLineCount() > 10;
+    }
+
+    private boolean isExpanded(String channel) {
+        return Update.CHANNEL_BETA.equals(channel) ? betaExpanded : stableExpanded;
+    }
+
+    private View getItem(String channel) {
+        return Update.CHANNEL_BETA.equals(channel) ? binding.betaItem : binding.stableItem;
+    }
+
+    private boolean hasBeta() {
+        return beta != null && beta.hasManifest();
+    }
+
+    private void normalizeSelection() {
+        if (hasBeta()) return;
+        selected = Update.CHANNEL_STABLE;
+        stableExpanded = true;
+        betaExpanded = false;
     }
 
     private String getVersion(Update update) {
@@ -163,6 +211,7 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private String getBody(Update update) {
         if (update == null || !update.hasManifest()) return getString(R.string.update_channel_unavailable);
+        if (!TextUtils.isEmpty(update.getText())) return update.getText();
         if (!update.hasUpdate()) return getString(R.string.update_channel_latest);
         return update.getText();
     }

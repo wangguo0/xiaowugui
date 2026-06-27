@@ -30,6 +30,7 @@
         android:textSize="14sp" />
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/listScroll"
         android:layout_width="match_parent"
         android:layout_height="420dp"
         android:layout_marginTop="16dp"
@@ -86,28 +87,27 @@
                         tools:text="可更新" />
 
                     <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/stableVersion"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:gravity="end"
-                        android:maxLines="1"
-                        android:textColor="#5F6368"
-                        android:textSize="14sp"
-                        tools:text="5.5.5-202606281200" />
-
-                    <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/stableExpand"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:gravity="end"
                         android:textColor="#174EA6"
                         android:textSize="14sp"
                         tools:text="收起" />
 
                 </androidx.appcompat.widget.LinearLayoutCompat>
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/stableVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:maxLines="2"
+                    android:textColor="#5F6368"
+                    android:textSize="14sp"
+                    tools:text="5.5.5-202606281200" />
 
                 <androidx.appcompat.widget.LinearLayoutCompat
                     android:id="@+id/stableContent"
@@ -191,28 +191,27 @@
                         tools:text="可更新" />
 
                     <com.google.android.material.textview.MaterialTextView
-                        android:id="@+id/betaVersion"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:ellipsize="end"
-                        android:gravity="end"
-                        android:maxLines="1"
-                        android:textColor="#5F6368"
-                        android:textSize="14sp"
-                        tools:text="5.5.5-beta-202606281200" />
-
-                    <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/betaExpand"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:gravity="end"
                         android:textColor="#174EA6"
                         android:textSize="14sp"
                         tools:text="展开" />
 
                 </androidx.appcompat.widget.LinearLayoutCompat>
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/betaVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:maxLines="2"
+                    android:textColor="#5F6368"
+                    android:textSize="14sp"
+                    tools:text="5.5.5-beta-202606281200" />
 
                 <androidx.appcompat.widget.LinearLayoutCompat
                     android:id="@+id/betaContent"

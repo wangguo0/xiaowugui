@@ -133,7 +133,7 @@ public class Updater implements Download.Callback, UpdateListener {
             update.apk = object.optString("apk");
             update.size = object.optLong("size");
             update.apkUrl = getApkUrl(update, source);
-            if (TextUtils.isEmpty(update.notes) && SOURCE_GITHUB.equals(source)) update.notes = getReleaseNotes(update.name);
+            if (TextUtils.isEmpty(update.notes)) update.notes = getReleaseNotes(update.name);
         } catch (Exception e) {
             e.printStackTrace();
             update.error = e.getMessage();
@@ -163,6 +163,12 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private String getReleaseNotes(String tag) {
         if (TextUtils.isEmpty(tag)) return "";
+        String notes = readReleaseNotes(tag);
+        if (!TextUtils.isEmpty(notes) || tag.startsWith("v")) return notes;
+        return readReleaseNotes("v" + tag);
+    }
+
+    private String readReleaseNotes(String tag) {
         try {
             return new JSONObject(OkHttp.string(Github.getReleaseApi(tag))).optString("body");
         } catch (Exception ignored) {

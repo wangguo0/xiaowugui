@@ -88,7 +88,7 @@ public class UpdateDialog extends BaseAlertDialog {
     @Override
     public void onStart() {
         super.onStart();
-        setWidth(ResUtil.isLand(requireActivity()) ? 0.58f : 0.92f);
+        setWidth(ResUtil.isLand(requireActivity()) ? 0.62f : 0.92f);
     }
 
     private void select(String channel) {
@@ -110,8 +110,10 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void render() {
+        normalizeSelection();
+        binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE);
         renderItem(Update.CHANNEL_STABLE, stable);
-        renderItem(Update.CHANNEL_BETA, beta);
+        if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
         binding.progressPanel.setVisibility(View.GONE);
     }
 
@@ -150,8 +152,20 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private String getBody(Update update) {
         if (update == null || !update.hasManifest()) return getString(R.string.update_channel_unavailable);
+        if (!TextUtils.isEmpty(update.getText())) return update.getText();
         if (!update.hasUpdate()) return getString(R.string.update_channel_latest);
         return update.getText();
+    }
+
+    private boolean hasBeta() {
+        return beta != null && beta.hasManifest();
+    }
+
+    private void normalizeSelection() {
+        if (hasBeta()) return;
+        selected = Update.CHANNEL_STABLE;
+        stableExpanded = true;
+        betaExpanded = false;
     }
 
     public void setProgress(int progress) {
