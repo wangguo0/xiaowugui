@@ -887,13 +887,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private int findFocusDown(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode);
+        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode, R.id.part, R.id.quick);
         for (int i = 0; i < orders.size(); i++) if (i > index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
         return 0;
     }
 
     private int findFocusUp(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode);
+        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode, R.id.part, R.id.quick);
         for (int i = orders.size() - 1; i >= 0; i--) if (i < index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
         return 0;
     }
@@ -903,6 +903,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mEpisodeAdapter.setNextFocusUp(findFocusUp(3));
         mFlagAdapter.setNextFocusDown(findFocusDown(0));
         mEpisodeAdapter.setNextFocusDown(findFocusDown(3));
+        mPartAdapter.setNextFocus(findFocusUp(4), findFocusDown(4));
+        mQuickAdapter.setNextFocus(findFocusUp(5), findFocusDown(5));
+        int searchDown = isVisible(mBinding.quick) ? R.id.quick : findFocusDown(-1);
+        mBinding.search.setNextFocusDownId(searchDown == 0 ? View.NO_ID : searchDown);
     }
 
     private boolean onEpisodeKey(KeyEvent event) {
@@ -1460,6 +1464,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setPartAdapter() {
         mPartAdapter.clear();
         mBinding.part.setVisibility(View.GONE);
+        updateFocus();
     }
 
     private void checkFlag(Vod item) {
@@ -1841,6 +1846,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void startSearch(String keyword) {
         mQuickAdapter.clear();
+        mBinding.quick.setVisibility(View.GONE);
+        updateFocus();
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
         SiteHealthStore.sortSites(sites);
@@ -1851,14 +1858,26 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mQuickAdapter.addAll(items);
-        mBinding.quick.setVisibility(isInitAuto() ? View.GONE : View.VISIBLE);
+        mBinding.quick.setVisibility(isInitAuto() || items.isEmpty() ? View.GONE : View.VISIBLE);
+        updateFocus();
         if (revealManualSearch && !items.isEmpty()) {
             revealManualSearch = false;
-            mBinding.quick.post(() -> mBinding.quick.requestFocus());
+            focusQuickResult();
         }
         if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
+    }
+
+    private void focusQuickResult() {
+        mBinding.quick.post(() -> focusQuickResultNow());
+        mBinding.quick.postDelayed(this::focusQuickResultNow, 160);
+    }
+
+    private void focusQuickResultNow() {
+        if (!isVisible(mBinding.quick) || mQuickAdapter.getItemCount() == 0) return;
+        mBinding.quick.setSelectedPosition(0);
+        if (!focusRecyclerPosition(mBinding.quick, 0)) mBinding.quick.requestFocus();
     }
 
     @Override

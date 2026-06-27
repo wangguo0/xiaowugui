@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -19,6 +20,8 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
     private final OnClickListener mListener;
     private final List<Vod> mItems;
     private final int width;
+    private int nextFocusUp;
+    private int nextFocusDown;
 
     public QuickAdapter(OnClickListener listener) {
         mListener = listener;
@@ -40,6 +43,13 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
 
     public void clear() {
         mItems.clear();
+        notifyDataSetChanged();
+    }
+
+    public void setNextFocus(int nextFocusUp, int nextFocusDown) {
+        if (this.nextFocusUp == nextFocusUp && this.nextFocusDown == nextFocusDown) return;
+        this.nextFocusUp = nextFocusUp;
+        this.nextFocusDown = nextFocusDown;
         notifyDataSetChanged();
     }
 
@@ -74,6 +84,8 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
         holder.binding.name.setText(item.getName());
         holder.binding.site.setText(item.getSiteName());
         holder.binding.remark.setText(item.getRemarks());
+        holder.binding.getRoot().setNextFocusUpId(nextFocusUp == 0 ? View.NO_ID : nextFocusUp);
+        holder.binding.getRoot().setNextFocusDownId(nextFocusDown == 0 ? View.NO_ID : nextFocusDown);
         holder.binding.getRoot().setOnClickListener(v -> mListener.onItemClick(item));
     }
 
