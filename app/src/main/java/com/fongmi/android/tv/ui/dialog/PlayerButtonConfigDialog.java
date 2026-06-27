@@ -125,7 +125,11 @@ public class PlayerButtonConfigDialog extends BaseAlertDialog {
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             PlayerButtonSetting.Item item = items.get(position);
             holder.binding.name.setText(item.name());
-            holder.binding.visible.setText(item.visible() ? R.string.setting_show : R.string.setting_hide);
+            holder.binding.visible.setText(null);
+            holder.binding.visible.setIconResource(item.visible() ? R.drawable.ic_player_button_visible : R.drawable.ic_player_button_hidden);
+            holder.binding.visible.setContentDescription(getString(item.visible() ? R.string.setting_show : R.string.setting_hide));
+            holder.binding.up.setText(null);
+            holder.binding.down.setText(null);
             holder.binding.up.setEnabled(position > 0);
             holder.binding.down.setEnabled(position < items.size() - 1);
             holder.binding.root.setAlpha(item.visible() ? 1f : 0.55f);
