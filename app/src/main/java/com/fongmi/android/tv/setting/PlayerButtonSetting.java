@@ -103,6 +103,13 @@ public class PlayerButtonSetting {
         Prefers.put(ORDER, join(order));
     }
 
+    public static void putOrder(List<String> ids) {
+        LinkedHashSet<String> order = new LinkedHashSet<>();
+        for (String id : ids) if (contains(id)) order.add(id);
+        for (Item item : DEFAULT) order.add(item.id());
+        Prefers.put(ORDER, join(order));
+    }
+
     public static void reset() {
         Prefers.remove(ORDER);
         Prefers.remove(HIDDEN);

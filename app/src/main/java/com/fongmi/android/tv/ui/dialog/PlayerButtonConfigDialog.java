@@ -4,6 +4,7 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
@@ -11,6 +12,7 @@ import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
@@ -20,6 +22,7 @@ import com.fongmi.android.tv.databinding.AdapterPlayerButtonConfigBinding;
 import com.fongmi.android.tv.databinding.DialogPlayerButtonConfigBinding;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
@@ -82,8 +85,33 @@ public class PlayerButtonConfigDialog extends BaseAlertDialog {
         binding.recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         binding.recycler.setItemAnimator(null);
         binding.recycler.setAdapter(adapter);
+        if (Util.isMobile()) attachTouchHelper();
         adapter.reload();
         setSummary();
+    }
+
+    private void attachTouchHelper() {
+        ItemTouchHelper helper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override
+            public boolean isLongPressDragEnabled() {
+                return true;
+            }
+
+            @Override
+            public boolean isItemViewSwipeEnabled() {
+                return false;
+            }
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
+                return adapter.drag(source.getBindingAdapterPosition(), target.getBindingAdapterPosition());
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            }
+        });
+        helper.attachToRecyclerView(binding.recycler);
     }
 
     @Override
@@ -135,8 +163,8 @@ public class PlayerButtonConfigDialog extends BaseAlertDialog {
             holder.binding.root.setAlpha(item.visible() ? 1f : 0.55f);
             holder.binding.root.setOnClickListener(view -> toggle(item));
             holder.binding.visible.setOnClickListener(view -> toggle(item));
-            holder.binding.up.setOnClickListener(view -> move(item, -1, holder.getBindingAdapterPosition()));
-            holder.binding.down.setOnClickListener(view -> move(item, 1, holder.getBindingAdapterPosition()));
+            holder.binding.up.setOnClickListener(view -> move(item, -1, holder.getBindingAdapterPosition(), view.getId()));
+            holder.binding.down.setOnClickListener(view -> move(item, 1, holder.getBindingAdapterPosition(), view.getId()));
         }
 
         @Override
@@ -151,13 +179,47 @@ public class PlayerButtonConfigDialog extends BaseAlertDialog {
             notifyChanged();
         }
 
-        private void move(PlayerButtonSetting.Item item, int offset, int position) {
+        private void move(PlayerButtonSetting.Item item, int offset, int position, int focusId) {
             if (position == RecyclerView.NO_POSITION) return;
-            PlayerButtonSetting.move(item.id(), offset);
-            reload();
             int target = Math.max(0, Math.min(items.size() - 1, position + offset));
+            if (position == target) return;
+            items.remove(position);
+            items.add(target, item);
+            PlayerButtonSetting.putOrder(getIds());
+            notifyItemMoved(position, target);
+            notifyItemRangeChanged(Math.min(position, target), Math.abs(position - target) + 1);
             binding.recycler.scrollToPosition(target);
+            focus(target, focusId);
             notifyChanged();
+        }
+
+        private boolean drag(int fromPosition, int toPosition) {
+            if (fromPosition == RecyclerView.NO_POSITION || toPosition == RecyclerView.NO_POSITION) return false;
+            if (fromPosition < 0 || toPosition < 0 || fromPosition >= items.size() || toPosition >= items.size()) return false;
+            if (fromPosition == toPosition) return false;
+            PlayerButtonSetting.Item item = items.remove(fromPosition);
+            items.add(toPosition, item);
+            PlayerButtonSetting.putOrder(getIds());
+            notifyItemMoved(fromPosition, toPosition);
+            notifyItemRangeChanged(Math.min(fromPosition, toPosition), Math.abs(fromPosition - toPosition) + 1);
+            notifyChanged();
+            return true;
+        }
+
+        private void focus(int position, int focusId) {
+            binding.recycler.post(() -> {
+                RecyclerView.ViewHolder viewHolder = binding.recycler.findViewHolderForAdapterPosition(position);
+                if (!(viewHolder instanceof ViewHolder holder)) return;
+                View view = holder.itemView.findViewById(focusId);
+                if (view != null && view.isEnabled()) view.requestFocus();
+                else holder.binding.root.requestFocus();
+            });
+        }
+
+        private List<String> getIds() {
+            List<String> ids = new ArrayList<>();
+            for (PlayerButtonSetting.Item item : items) ids.add(item.id());
+            return ids;
         }
 
         private class ViewHolder extends RecyclerView.ViewHolder {
