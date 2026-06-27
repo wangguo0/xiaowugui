@@ -2344,7 +2344,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     protected void onStart() {
         super.onStart();
         mClock.stop().start();
-        if (mOsd != null) mOsd.start();
+        if (mOsd != null) {
+            mOsd.setDiagnosticsVisible(PlayerSetting.isOsdDiagnostics());
+            mOsd.start();
+        }
     }
 
     @Override

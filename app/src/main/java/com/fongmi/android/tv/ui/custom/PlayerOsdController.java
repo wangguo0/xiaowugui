@@ -97,6 +97,13 @@ public class PlayerOsdController {
         return diagnosticsVisible;
     }
 
+    public void setDiagnosticsVisible(boolean visible) {
+        boolean next = visible && PlayerSetting.isOsdDiagnostics();
+        if (diagnosticsVisible == next) return;
+        diagnosticsVisible = next;
+        if (started) render();
+    }
+
     public void toggleDiagnostics() {
         if (!PlayerSetting.isOsdDiagnostics()) return;
         diagnosticsVisible = !diagnosticsVisible;
