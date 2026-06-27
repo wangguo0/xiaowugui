@@ -27,6 +27,12 @@
             android:text="@string/play_prev" />
 
         <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/episodes"
+            style="@style/Control"
+            android:layout_marginEnd="12dp"
+            android:text="@string/play_episodes" />
+
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/reset"
             style="@style/Control"
             android:layout_marginEnd="12dp"

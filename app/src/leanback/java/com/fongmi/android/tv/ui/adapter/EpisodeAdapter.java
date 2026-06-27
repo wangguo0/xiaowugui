@@ -26,9 +26,13 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
     private int column;
 
     public EpisodeAdapter(OnClickListener listener) {
+        this(listener, ResUtil.getScreenWidth() - ResUtil.dp2px(48));
+    }
+
+    public EpisodeAdapter(OnClickListener listener, int maxWidth) {
         mListener = listener;
         mItems = new ArrayList<>();
-        maxWidth = ResUtil.getScreenWidth() - ResUtil.dp2px(48);
+        this.maxWidth = Math.max(ResUtil.dp2px(240), maxWidth);
         spacing = ResUtil.dp2px(8);
         column = 1;
     }
@@ -105,8 +109,12 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
     }
 
     public static int getColumn(List<Episode> items) {
+        return getColumn(items, ResUtil.getScreenWidth() - ResUtil.dp2px(48));
+    }
+
+    public static int getColumn(List<Episode> items, int maxWidth) {
         int maxTextWidth = 0;
-        int maxWidth = ResUtil.getScreenWidth() - ResUtil.dp2px(48);
+        maxWidth = Math.max(ResUtil.dp2px(240), maxWidth);
         int spacing = ResUtil.dp2px(8);
         int padding = ResUtil.dp2px(40);
         EpisodeTitleCompact.apply(items);
