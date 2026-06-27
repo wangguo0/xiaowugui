@@ -9,6 +9,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.databinding.AdapterEpisodeBinding;
+import com.fongmi.android.tv.utils.EpisodeTitleCompact;
 import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.ArrayList;
@@ -33,6 +34,7 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
     }
 
     public void addAll(List<Episode> items) {
+        EpisodeTitleCompact.apply(items);
         mItems.clear();
         mItems.addAll(items);
         notifyDataSetChanged();
@@ -107,7 +109,8 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         int maxWidth = ResUtil.getScreenWidth() - ResUtil.dp2px(48);
         int spacing = ResUtil.dp2px(8);
         int padding = ResUtil.dp2px(40);
-        for (Episode item : items) maxTextWidth = Math.max(maxTextWidth, ResUtil.getTextWidth(item.getDesc().concat(item.getName()), 16) + padding);
+        EpisodeTitleCompact.apply(items);
+        for (Episode item : items) maxTextWidth = Math.max(maxTextWidth, ResUtil.getTextWidth(item.getDisplayName(), 16) + padding);
         for (int candidate : new int[]{8, 6, 5, 4, 3, 2}) {
             int width = (maxWidth - spacing * (candidate - 1)) / candidate;
             if (maxTextWidth <= width) return candidate;
@@ -137,7 +140,7 @@ public class EpisodeAdapter extends RecyclerView.Adapter<EpisodeAdapter.ViewHold
         holder.binding.text.setNextFocusUpId(position < column && nextFocusUp != 0 ? nextFocusUp : View.NO_ID);
         holder.binding.text.setNextFocusDownId(position >= getItemCount() - column && nextFocusDown != 0 ? nextFocusDown : View.NO_ID);
         holder.binding.text.setSelected(item.isSelected());
-        holder.binding.text.setText(item.getDesc().concat(item.getName()));
+        holder.binding.text.setText(item.getDisplayName());
         holder.binding.getRoot().setOnClickListener(v -> mListener.onItemClick(item));
     }
 

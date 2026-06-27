@@ -86,6 +86,7 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.webHomeFullscreen.setOnClickListener(this::setWebHomeFullscreen);
         mBinding.cspWarmup.setOnClickListener(this::setCspWarmup);
         mBinding.playbackArtworkWall.setOnClickListener(this::setPlaybackArtworkWall);
+        mBinding.compactEpisodeTitle.setOnClickListener(this::setCompactEpisodeTitle);
         mBinding.playbackWebhook.setOnClickListener(view -> ViewingRecordSyncDialog.show(this, this::setText));
         mBinding.managePage.setOnClickListener(view -> ManagePageDialog.show(this));
         mBinding.remoteTrust.setOnClickListener(view -> RemoteTrustDialog.show(this, this::setText));
@@ -117,6 +118,7 @@ public class SettingEnhanceFragment extends BaseFragment {
                 mBinding.webHomeFullscreen,
                 mBinding.cspWarmup,
                 mBinding.playbackArtworkWall,
+                mBinding.compactEpisodeTitle,
                 mBinding.driveCheck,
                 mBinding.siteHealthSort,
                 mBinding.debugLog,
@@ -135,6 +137,7 @@ public class SettingEnhanceFragment extends BaseFragment {
         mBinding.webHomeFullscreenText.setText(getSwitch(Setting.isWebHomeFullscreen()));
         mBinding.cspWarmupText.setText(getSwitch(Setting.isCspWarmup()));
         mBinding.playbackArtworkWallText.setText(getSwitch(Setting.isPlaybackArtworkWall()));
+        mBinding.compactEpisodeTitleText.setText(getSwitch(Setting.isCompactEpisodeTitle()));
         mBinding.playbackWebhookText.setText(ViewingRecordSyncStore.summary(requireContext()));
         mBinding.managePageText.setText(R.string.manage_page_web);
         mBinding.remoteTrustText.setText(RemoteStore.summary(requireContext()));
@@ -164,6 +167,11 @@ public class SettingEnhanceFragment extends BaseFragment {
     private void setPlaybackArtworkWall(View view) {
         Setting.putPlaybackArtworkWall(!Setting.isPlaybackArtworkWall());
         mBinding.playbackArtworkWallText.setText(getSwitch(Setting.isPlaybackArtworkWall()));
+    }
+
+    private void setCompactEpisodeTitle(View view) {
+        Setting.putCompactEpisodeTitle(!Setting.isCompactEpisodeTitle());
+        mBinding.compactEpisodeTitleText.setText(getSwitch(Setting.isCompactEpisodeTitle()));
     }
 
     private void setWebHomeFullscreen(View view) {
