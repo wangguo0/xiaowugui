@@ -9,7 +9,7 @@ import com.google.android.material.textview.MaterialTextView;
 
 public class FastMarqueeTextView extends MaterialTextView {
 
-    private static final float SPEED_DP_PER_SECOND = 192f;
+    private static final float SPEED_DP_PER_SECOND = 96f;
     private static final long START_DELAY_MS = 150;
     private static final long END_HOLD_MS = 450;
 
