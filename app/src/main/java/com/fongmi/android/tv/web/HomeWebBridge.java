@@ -153,13 +153,15 @@ public class HomeWebBridge {
         String title = Json.safeString(payload, "title");
         String pic = Json.safeString(payload, "pic");
         String wall = wallPic(payload);
+        String content = content(payload);
         if (payload.has("headers") || "include".equals(Json.safeString(payload, "credentials"))) url = resourceUrl(url, payload.toString());
         final String playUrl = url;
         final String playTitle = TextUtils.isEmpty(title) ? playUrl : title;
         final String playPic = pic;
         final String playWall = wall;
+        final String playContent = content;
         SpiderDebug.log("webhome", "player.playUrl title=%s url=%s", playTitle, playUrl);
-        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall));
+        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall, playContent));
         return "{}";
     }
 
@@ -169,7 +171,8 @@ public class HomeWebBridge {
         String title = Json.safeString(payload, "title");
         String pic = Json.safeString(payload, "pic");
         String wall = wallPic(payload);
-        App.post(() -> VideoActivity.start(activity, siteKey, vodId, title, pic, null, wall));
+        String content = content(payload);
+        App.post(() -> VideoActivity.start(activity, siteKey, vodId, title, pic, null, wall, content));
         return "{}";
     }
 
@@ -181,12 +184,14 @@ public class HomeWebBridge {
         if (TextUtils.isEmpty(pic)) pic = Json.safeString(payload, "vod_pic");
         String mark = Json.safeString(payload, "mark");
         String wall = wallPic(payload);
+        String content = content(payload);
         final String playTitle = TextUtils.isEmpty(title) ? vodId : title;
         final String playPic = pic;
         final String playMark = mark;
         final String playWall = wall;
+        final String playContent = content;
         SpiderDebug.log("webhome", "player.playVodInline title=%s id=%s mark=%s", playTitle, vodId, playMark);
-        App.post(() -> VideoActivity.start(activity, WebHomeInlineVodStore.KEY, vodId, playTitle, playPic, playMark, playWall));
+        App.post(() -> VideoActivity.start(activity, WebHomeInlineVodStore.KEY, vodId, playTitle, playPic, playMark, playWall, playContent));
         JsonObject result = new JsonObject();
         result.addProperty("siteKey", WebHomeInlineVodStore.KEY);
         result.addProperty("vodId", vodId);
@@ -205,6 +210,14 @@ public class HomeWebBridge {
 
     private String wallPic(JsonObject payload) {
         return Json.safeString(payload, "wallPic");
+    }
+
+    private String content(JsonObject payload) {
+        String content = Json.safeString(payload, "content");
+        if (TextUtils.isEmpty(content)) content = Json.safeString(payload, "vod_content");
+        if (TextUtils.isEmpty(content)) content = Json.safeString(payload, "desc");
+        if (TextUtils.isEmpty(content)) content = Json.safeString(payload, "description");
+        return content;
     }
 
     private JsonObject resolveInlineEpisode(JsonObject payload) throws Exception {
@@ -327,13 +340,15 @@ public class HomeWebBridge {
         String type = Json.safeString(payload, "type");
         String pic = Json.safeString(payload, "pic");
         String wall = wallPic(payload);
+        String content = content(payload);
         if (TextUtils.isEmpty(url)) throw new IllegalArgumentException("url不能为空");
         final String playUrl = stripPush(url.trim());
         final String playTitle = TextUtils.isEmpty(title) ? playUrl : title;
         final String playPic = pic;
         final String playWall = wall;
+        final String playContent = content;
         SpiderDebug.log("webhome", "pan.play route=%s type=%s title=%s url=%s", SiteApi.PUSH, type, playTitle, playUrl);
-        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall));
+        App.post(() -> VideoActivity.start(activity, SiteApi.PUSH, playUrl, playTitle, playPic, null, playWall, playContent));
         return "{}";
     }
 

@@ -245,11 +245,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         start(activity, key, id, name, pic, mark, false, wallPic);
     }
 
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, String wallPic, String content) {
+        start(activity, key, id, name, pic, mark, false, wallPic, content);
+    }
+
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect) {
         start(activity, key, id, name, pic, mark, collect, null);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic) {
+        start(activity, key, id, name, pic, mark, collect, wallPic, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic, String content) {
         ImgUtil.preload(activity, pic);
         if (Setting.isPlaybackArtworkWall() && !TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
@@ -258,6 +266,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         intent.putExtra("name", name);
         intent.putExtra("pic", pic);
         intent.putExtra("wallPic", wallPic);
+        intent.putExtra("content", content);
         intent.putExtra("key", key);
         intent.putExtra("id", id);
         activity.startActivity(intent);
@@ -273,6 +282,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private String getWallPic() {
         return Objects.toString(getIntent().getStringExtra("wallPic"), "");
+    }
+
+    private String getContent() {
+        return Objects.toString(getIntent().getStringExtra("content"), "");
     }
 
     private String getMark() {
@@ -665,6 +678,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setDetail(Vod item) {
         item.checkPic(getPic());
         item.checkName(getName());
+        item.checkContent(getContent());
         mBinding.progressLayout.showContent();
         mBinding.name.setText(item.getName());
         mFlagAdapter.addAll(item.getFlags());
@@ -1619,6 +1633,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void showInitialPreview() {
         mBinding.progressLayout.showContent();
         mBinding.name.setText(getName());
+        setText(mBinding.content, 0, getContent());
         if (!getPic().isEmpty()) setArtwork(getPic());
         else if (!getWallPic().isEmpty()) setContextWall(getWallPic());
     }

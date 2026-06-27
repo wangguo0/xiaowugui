@@ -225,11 +225,19 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         start(activity, key, id, name, pic, mark, false, false, wallPic);
     }
 
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, String wallPic, String content) {
+        start(activity, key, id, name, pic, mark, false, false, wallPic, content);
+    }
+
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast) {
         start(activity, key, id, name, pic, mark, collect, cast, null);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, String wallPic) {
+        start(activity, key, id, name, pic, mark, collect, cast, wallPic, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, String wallPic, String content) {
         long launch = System.currentTimeMillis();
         SpiderDebug.log("video-flow", "launch request key=%s id=%s name=%s collect=%s cast=%s", key, id, name, collect, cast);
         ImgUtil.preload(activity, pic);
@@ -242,6 +250,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         intent.putExtra("name", name);
         intent.putExtra("pic", pic);
         intent.putExtra("wallPic", wallPic);
+        intent.putExtra("content", content);
         intent.putExtra("key", key);
         intent.putExtra("id", id);
         activity.startActivity(intent);
@@ -262,6 +271,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private String getWallPic() {
         return Objects.toString(getIntent().getStringExtra("wallPic"), "");
+    }
+
+    private String getContent() {
+        return Objects.toString(getIntent().getStringExtra("content"), "");
     }
 
     private String getMark() {
@@ -621,6 +634,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setDetail(Vod item) {
         item.checkPic(getPic());
         item.checkName(getName());
+        item.checkContent(getContent());
         mBinding.progressLayout.showContent();
         mBinding.name.setText(item.getName());
         mFlagAdapter.addAll(item.getFlags());
@@ -1524,6 +1538,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void showInitialPreview() {
         mBinding.progressLayout.showContent();
         mBinding.name.setText(getName());
+        if (!getContent().isEmpty()) mBinding.content.setTag(getContent());
         if (!getPic().isEmpty()) setArtwork(getPic());
         else if (!getWallPic().isEmpty()) setContextWall(getWallPic());
         mBinding.video.requestFocus();
