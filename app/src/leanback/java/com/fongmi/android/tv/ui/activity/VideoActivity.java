@@ -1852,6 +1852,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.quick.setVisibility(View.GONE);
         dismissQuickSearchDialog();
         quickSearchDialogClosed = false;
+        if (!isInitAuto()) {
+            revealManualSearch = false;
+            showQuickSearchDialog(new ArrayList<>());
+        }
         updateFocus();
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
@@ -1863,12 +1867,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mQuickAdapter.addAll(items);
-        mBinding.quick.setVisibility(isInitAuto() || items.isEmpty() ? View.GONE : View.VISIBLE);
+        mBinding.quick.setVisibility(View.GONE);
         updateFocus();
-        if (revealManualSearch && !items.isEmpty()) {
-            revealManualSearch = false;
-            showQuickSearchDialog(items);
-        } else if (!isInitAuto() && !items.isEmpty()) {
+        if (!isInitAuto() && !items.isEmpty()) {
             showQuickSearchDialog(items);
         }
         if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();

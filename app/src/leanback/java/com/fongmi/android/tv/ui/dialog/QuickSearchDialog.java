@@ -28,11 +28,15 @@ import java.util.List;
 
 public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.OnClickListener {
 
+    private static final int RENDER_BATCH_SIZE = 8;
+
     private final List<Vod> pending;
     private DialogQuickSearchBinding binding;
     private QuickAdapter.OnClickListener listener;
     private DialogInterface.OnDismissListener dismissListener;
     private QuickAdapter adapter;
+    private boolean firstItemFocused;
+    private boolean draining;
     private int panelWidth;
 
     public QuickSearchDialog() {
@@ -54,13 +58,14 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
     }
 
     public QuickSearchDialog items(List<Vod> items) {
-        pending.addAll(items);
+        if (!items.isEmpty()) pending.addAll(items);
         return this;
     }
 
     public void addAll(List<Vod> items) {
-        if (adapter == null) pending.addAll(items);
-        else adapter.addAll(items);
+        if (items.isEmpty()) return;
+        pending.addAll(items);
+        drainPending();
     }
 
     public void show(FragmentActivity activity) {
@@ -86,12 +91,38 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         binding.recycler.setAdapter(adapter = new QuickAdapter(this));
         adapter.setWidth(panelWidth - ResUtil.dp2px(32));
         adapter.setNextFocus(0, 0);
-        if (!pending.isEmpty()) {
-            adapter.addAll(pending);
-            pending.clear();
-        }
+        drainPending();
+        binding.recycler.requestFocus();
         binding.recycler.post(() -> focusPosition(0));
         binding.recycler.postDelayed(() -> focusPosition(0), 160);
+    }
+
+    private void drainPending() {
+        if (adapter == null || binding == null || draining) return;
+        draining = true;
+        binding.recycler.post(this::drainNextBatch);
+    }
+
+    private void drainNextBatch() {
+        if (adapter == null || binding == null) {
+            draining = false;
+            return;
+        }
+        if (pending.isEmpty()) {
+            draining = false;
+            return;
+        }
+        int start = adapter.getItemCount();
+        int count = Math.min(RENDER_BATCH_SIZE, pending.size());
+        List<Vod> items = new ArrayList<>(pending.subList(0, count));
+        pending.subList(0, count).clear();
+        adapter.addAll(items);
+        if (start == 0 && !firstItemFocused) {
+            firstItemFocused = true;
+            binding.recycler.post(() -> focusPosition(0));
+        }
+        if (pending.isEmpty()) draining = false;
+        else binding.recycler.postDelayed(this::drainNextBatch, 16);
     }
 
     private void focusPosition(int position) {
@@ -111,6 +142,8 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
     @Override
     public void onDismiss(DialogInterface dialog) {
         super.onDismiss(dialog);
+        pending.clear();
+        draining = false;
         if (dismissListener != null) dismissListener.onDismiss(dialog);
     }
 

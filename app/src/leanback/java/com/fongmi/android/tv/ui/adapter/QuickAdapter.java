@@ -31,6 +31,7 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
     }
 
     public void addAll(List<Vod> items) {
+        if (items.isEmpty()) return;
         int start = mItems.size();
         mItems.addAll(items);
         notifyItemRangeInserted(start, items.size());
