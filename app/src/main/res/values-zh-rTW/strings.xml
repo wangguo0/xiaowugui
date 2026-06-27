@@ -864,7 +864,14 @@
     <string name="update_failed">檢查更新失敗</string>
     <string name="update_downloading">正在下載 %1$d%%</string>
     <string name="update_downloading_unknown">正在下載…</string>
+    <string name="update_downloading_detail">正在下載 %1$d%% · %2$s/s · 已用 %3$s</string>
+    <string name="update_downloading_detail_unknown">正在下載 · %1$s/s · 已用 %2$s</string>
     <string name="update_confirm">更新</string>
+    <string name="update_channel_stable">穩定版</string>
+    <string name="update_channel_beta">測試版</string>
+    <string name="update_channel_latest">目前通道已是最新版本。</string>
+    <string name="update_channel_unavailable">目前通道暫無可用更新清單。</string>
+    <string name="update_no_notes">暫無更新日誌。</string>
 
     <!-- Crash -->
     <string name="crash_info">發生意外錯誤\n抱歉給您帶來不便</string>

@@ -883,7 +883,14 @@
     <string name="update_failed">Update check failed</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_downloading_unknown">Downloading…</string>
+    <string name="update_downloading_detail">Downloading %1$d%% · %2$s/s · %3$s elapsed</string>
+    <string name="update_downloading_detail_unknown">Downloading · %1$s/s · %2$s elapsed</string>
     <string name="update_confirm">Update</string>
+    <string name="update_channel_stable">Stable</string>
+    <string name="update_channel_beta">Beta</string>
+    <string name="update_channel_latest">This channel is already up to date.</string>
+    <string name="update_channel_unavailable">No update manifest is available for this channel.</string>
+    <string name="update_no_notes">No release notes.</string>
 
     <!-- Crash -->
     <string name="crash_info">An unexpected error occurred.\nSorry for the inconvenience.</string>

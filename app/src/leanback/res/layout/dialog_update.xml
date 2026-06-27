@@ -1,42 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@drawable/shape_shell_proxy_dialog"
     android:orientation="vertical"
-    android:padding="24dp">
+    android:paddingStart="24dp"
+    android:paddingTop="20dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="18dp">
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/version"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:letterSpacing="0.02"
-        android:textColor="@color/white"
-        android:textSize="18sp"
-        tools:text="@string/update_version" />
+        android:textColor="#202124"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        tools:text="发现新版本 5.5.5-beta-202606281200" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/stable"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:minHeight="42dp"
+            android:nextFocusRight="@id/beta"
+            android:nextFocusDown="@id/confirm"
+            android:text="@string/update_channel_stable"
+            android:textColor="@color/dialog_toggle_button_text"
+            android:textSize="15sp"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:cornerRadius="8dp"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/beta"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:minHeight="42dp"
+            android:nextFocusLeft="@id/stable"
+            android:nextFocusDown="@id/cancel"
+            android:text="@string/update_channel_beta"
+            android:textColor="@color/dialog_toggle_button_text"
+            android:textSize="15sp"
+            app:backgroundTint="@color/dialog_toggle_button_bg"
+            app:cornerRadius="8dp"
+            app:strokeColor="@color/dialog_outlined_button_stroke" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="16dp"
-        android:layout_marginBottom="16dp"
-        android:background="?attr/colorOutlineVariant" />
+        android:layout_marginBottom="14dp"
+        android:background="#E5E7EB" />
 
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginBottom="16dp"
-        android:layout_weight="1">
+        android:layout_height="310dp"
+        android:clipToPadding="false"
+        android:fadeScrollbars="false"
+        android:overScrollMode="never"
+        android:scrollbarStyle="outsideOverlay">
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/desc"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:letterSpacing="0.02"
-            android:lineSpacingExtra="8dp"
-            android:textColor="@color/white"
+            android:lineSpacingExtra="6dp"
+            android:textColor="#303134"
             android:textSize="16sp"
-            tools:text="1. 新增 ffmpeg 音頻軟解\n2. 詳情頁新增分詞快搜\n3. 修復搜尋閃退問題\n4. 設定支援渲染切換" />
+            tools:text="### 更新内容&#10;&#10;- 新增测试通道&#10;- 优化下载进度显示" />
 
     </androidx.core.widget.NestedScrollView>
 
@@ -44,7 +96,7 @@
         android:id="@+id/progressPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
+        android:layout_marginTop="14dp"
         android:orientation="vertical"
         android:visibility="gone"
         tools:visibility="visible">
@@ -53,9 +105,9 @@
             android:id="@+id/progressText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/white"
+            android:textColor="#5F6368"
             android:textSize="14sp"
-            tools:text="正在下载 46%" />
+            tools:text="正在下载 46% · 3.2 MB/s · 已用 00:12" />
 
         <ProgressBar
             android:id="@+id/progress"
@@ -72,32 +124,44 @@
     <androidx.appcompat.widget.LinearLayoutCompat
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <com.google.android.material.textview.MaterialTextView
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/confirm"
+            style="@style/Widget.Material3.Button"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
+            android:layout_height="46dp"
+            android:layout_marginEnd="10dp"
             android:layout_weight="1"
-            android:background="@drawable/selector_button"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:gravity="center"
+            android:minHeight="46dp"
+            android:nextFocusRight="@id/cancel"
+            android:nextFocusUp="@id/stable"
             android:text="@string/update_confirm"
-            android:textColor="@color/white" />
+            android:textColor="@color/dialog_primary_button_text"
+            android:textSize="15sp"
+            app:backgroundTint="@color/dialog_primary_button_bg"
+            app:cornerRadius="8dp" />
 
-        <com.google.android.material.textview.MaterialTextView
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/cancel"
+            style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="46dp"
             android:layout_weight="1"
-            android:background="@drawable/selector_button"
             android:focusable="true"
             android:focusableInTouchMode="true"
-            android:gravity="center"
+            android:minHeight="46dp"
+            android:nextFocusLeft="@id/confirm"
+            android:nextFocusUp="@id/beta"
             android:text="@string/dialog_negative"
-            android:textColor="@color/white" />
+            android:textColor="@color/dialog_tonal_button_text"
+            android:textSize="15sp"
+            app:backgroundTint="@color/dialog_tonal_button_bg"
+            app:cornerRadius="8dp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 </androidx.appcompat.widget.LinearLayoutCompat>
