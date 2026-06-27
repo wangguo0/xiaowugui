@@ -79,6 +79,7 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
+import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
@@ -118,6 +119,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private QuickAdapter mQuickAdapter;
     private FlagAdapter mFlagAdapter;
     private PartAdapter mPartAdapter;
+    private QuickSearchDialog mQuickSearchDialog;
     private PlayerOsdController mOsd;
     private CustomKeyDownVod mKeyDown;
     private SiteViewModel mViewModel;
@@ -127,6 +129,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean initAuto;
     private boolean autoMode;
     private boolean revealManualSearch;
+    private boolean quickSearchDialogClosed;
     private boolean useParse;
     private boolean detailRequested;
     private boolean detailHealthRecorded;
@@ -1847,6 +1850,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void startSearch(String keyword) {
         mQuickAdapter.clear();
         mBinding.quick.setVisibility(View.GONE);
+        dismissQuickSearchDialog();
+        quickSearchDialogClosed = false;
         updateFocus();
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
@@ -1862,22 +1867,35 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         updateFocus();
         if (revealManualSearch && !items.isEmpty()) {
             revealManualSearch = false;
-            focusQuickResult();
+            showQuickSearchDialog(items);
+        } else if (!isInitAuto() && !items.isEmpty()) {
+            showQuickSearchDialog(items);
         }
         if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
 
-    private void focusQuickResult() {
-        mBinding.quick.post(() -> focusQuickResultNow());
-        mBinding.quick.postDelayed(this::focusQuickResultNow, 160);
+    private void showQuickSearchDialog(List<Vod> items) {
+        if (quickSearchDialogClosed) return;
+        if (mQuickSearchDialog != null) {
+            mQuickSearchDialog.addAll(items);
+            return;
+        }
+        QuickSearchDialog dialog = QuickSearchDialog.create().listener(this).items(items);
+        dialog.dismissListener(d -> {
+            if (mQuickSearchDialog != dialog) return;
+            mQuickSearchDialog = null;
+            quickSearchDialogClosed = true;
+        });
+        mQuickSearchDialog = dialog;
+        dialog.show(this);
     }
 
-    private void focusQuickResultNow() {
-        if (!isVisible(mBinding.quick) || mQuickAdapter.getItemCount() == 0) return;
-        mBinding.quick.setSelectedPosition(0);
-        if (!focusRecyclerPosition(mBinding.quick, 0)) mBinding.quick.requestFocus();
+    private void dismissQuickSearchDialog() {
+        QuickSearchDialog dialog = mQuickSearchDialog;
+        mQuickSearchDialog = null;
+        if (dialog != null) dialog.dismissAllowingStateLoss();
     }
 
     @Override
@@ -2234,6 +2252,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mClock.release();
         saveHistory(true);
         DanmakuApi.cancel();
+        dismissQuickSearchDialog();
         RefreshEvent.keep();
         App.removeCallbacks(mR1, mR2, mR3, mR4);
         if (mOsd != null) mOsd.release();
