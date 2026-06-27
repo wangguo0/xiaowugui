@@ -769,6 +769,11 @@
     <!-- Player -->
     <string name="player">Player</string>
     <string name="player_render">Render</string>
+    <string name="player_button_config">Player buttons</string>
+    <string name="player_button_config_summary">%1$d/%2$d shown</string>
+    <string name="player_button_up">Up</string>
+    <string name="player_button_down">Down</string>
+    <string name="play_episodes">Episodes</string>
     <string name="player_exo_4k_compat">EXO enhanced mode</string>
     <string name="player_kernel">Player engine</string>
     <string name="player_scale">Scale</string>
@@ -851,6 +856,8 @@
     <string name="dialog_positive">OK</string>
     <string name="dialog_negative">Cancel</string>
     <string name="dialog_reset">Reset</string>
+    <string name="setting_show">Show</string>
+    <string name="setting_hide">Hide</string>
     <string name="dialog_select_title">Select chapter</string>
     <string name="dialog_config_hint">Please enter the config…</string>
     <string name="dialog_config_name">Please enter the name…</string>

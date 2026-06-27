@@ -767,6 +767,11 @@
     <!-- Player -->
     <string name="player">播放核心</string>
     <string name="player_render">渲染方式</string>
+    <string name="player_button_config">播放器按钮</string>
+    <string name="player_button_config_summary">显示 %1$d/%2$d</string>
+    <string name="player_button_up">上移</string>
+    <string name="player_button_down">下移</string>
+    <string name="play_episodes">选集</string>
     <string name="player_exo_4k_compat">EXO增强模式</string>
     <string name="player_kernel">播放器内核</string>
     <string name="player_scale">缩放比例</string>
@@ -848,6 +853,8 @@
     <string name="dialog_positive">确定</string>
     <string name="dialog_negative">取消</string>
     <string name="dialog_reset">重置</string>
+    <string name="setting_show">显示</string>
+    <string name="setting_hide">隐藏</string>
     <string name="dialog_select_title">选择章节</string>
     <string name="dialog_config_hint">请输入配置…</string>
     <string name="dialog_config_name">请输入名称…</string>

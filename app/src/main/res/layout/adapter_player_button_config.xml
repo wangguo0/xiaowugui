@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/selector_git_cloud_card"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="8dp">
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="#202124"
+        android:textSize="15sp"
+        tools:text="倍速" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/visible"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="72dp"
+        android:layout_height="34dp"
+        android:minWidth="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:textColor="@color/dialog_tonal_button_text"
+        tools:text="显示" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/up"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="38dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="6dp"
+        android:minWidth="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:text="@string/player_button_up"
+        android:textColor="@color/dialog_tonal_button_text"
+        app:backgroundTint="@color/dialog_tonal_button_bg" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/down"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="38dp"
+        android:layout_height="34dp"
+        android:layout_marginStart="6dp"
+        android:minWidth="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:text="@string/player_button_down"
+        android:textColor="@color/dialog_tonal_button_text"
+        app:backgroundTint="@color/dialog_tonal_button_bg" />
+
+</androidx.appcompat.widget.LinearLayoutCompat>

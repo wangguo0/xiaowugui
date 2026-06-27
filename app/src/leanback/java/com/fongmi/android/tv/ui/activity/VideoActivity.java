@@ -65,6 +65,7 @@ import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutStore;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
+import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
@@ -104,7 +105,9 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.Listener, TrackDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, Clock.Callback {
@@ -122,6 +125,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private QuickAdapter mQuickAdapter;
     private FlagAdapter mFlagAdapter;
     private PartAdapter mPartAdapter;
+    private Map<String, View> mActionButtons;
     private QuickSearchDialog mQuickSearchDialog;
     private PlayerOsdController mOsd;
     private CustomKeyDownVod mKeyDown;
@@ -554,6 +558,38 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setVideoView() {
         mBinding.control.action.danmaku.setVisibility(DanmakuSetting.isLoad() ? View.VISIBLE : View.GONE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
+        setupActionButtons();
+    }
+
+    private void setupActionButtons() {
+        mActionButtons = new HashMap<>();
+        addActionButton(PlayerButtonSetting.NEXT, mBinding.control.action.next);
+        addActionButton(PlayerButtonSetting.PREV, mBinding.control.action.prev);
+        addActionButton(PlayerButtonSetting.RESET, mBinding.control.action.reset);
+        addActionButton(PlayerButtonSetting.CHANGE, mBinding.control.action.change2);
+        addActionButton(PlayerButtonSetting.FULLSCREEN, mBinding.control.action.fullscreen);
+        addActionButton(PlayerButtonSetting.PLAYER, mBinding.control.action.player);
+        addActionButton(PlayerButtonSetting.DECODE, mBinding.control.action.decode);
+        addActionButton(PlayerButtonSetting.SPEED, mBinding.control.action.speed);
+        addActionButton(PlayerButtonSetting.SCALE, mBinding.control.action.scale);
+        addActionButton(PlayerButtonSetting.LUT, mBinding.control.action.lut);
+        addActionButton(PlayerButtonSetting.TEXT, mBinding.control.action.text);
+        addActionButton(PlayerButtonSetting.AUDIO, mBinding.control.action.audio);
+        addActionButton(PlayerButtonSetting.VIDEO, mBinding.control.action.video);
+        addActionButton(PlayerButtonSetting.OPENING, mBinding.control.action.opening);
+        addActionButton(PlayerButtonSetting.ENDING, mBinding.control.action.ending);
+        addActionButton(PlayerButtonSetting.DANMAKU, mBinding.control.action.danmaku);
+        addActionButton(PlayerButtonSetting.TITLE, mBinding.control.action.title);
+        addActionButton(PlayerButtonSetting.REPEAT, mBinding.control.action.repeat);
+        PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
+    }
+
+    private void addActionButton(String id, View view) {
+        mActionButtons.put(id, view);
+    }
+
+    private void applyActionButtonVisibility() {
+        if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
     }
 
     private int getEpisodeColumn() {
@@ -1849,10 +1885,12 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.text.setVisibility(player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod() ? View.VISIBLE : View.GONE);
         mBinding.control.action.audio.setVisibility(player().haveTrack(C.TRACK_TYPE_AUDIO) ? View.VISIBLE : View.GONE);
         mBinding.control.action.video.setVisibility(player().haveTrack(C.TRACK_TYPE_VIDEO) ? View.VISIBLE : View.GONE);
+        applyActionButtonVisibility();
     }
 
     private void setTitleVisible() {
         mBinding.control.action.title.setVisibility(player().haveTitle() ? View.VISIBLE : View.GONE);
+        applyActionButtonVisibility();
     }
 
     private MediaMetadata buildMetadata() {
@@ -2038,6 +2076,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         this.fullscreen = fullscreen;
         mBinding.control.action.fullscreen.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
         mBinding.control.action.fullscreen.setText(R.string.play_fullscreen);
+        applyActionButtonVisibility();
     }
 
     private boolean isInitAuto() {
