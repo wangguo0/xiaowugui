@@ -69,6 +69,7 @@ public class HomeWebController {
     private String documentStartKey;
     private String defaultUserAgent;
     private String homePage;
+    private String lastPageUrl;
     private WebHomeRawAdapter rawAdapter;
     private WebHomeViewport viewport = WebHomeViewport.EMPTY;
     private String lastViewportKey;
@@ -164,6 +165,7 @@ public class HomeWebController {
         if (!TextUtils.isEmpty(userAgent)) webView.getSettings().setUserAgentString(userAgent);
         else if (!TextUtils.isEmpty(defaultUserAgent)) webView.getSettings().setUserAgentString(defaultUserAgent);
         Map<String, String> requestHeaders = requestHeaders(url, headers);
+        lastPageUrl = url;
         SpiderDebug.log("webhome-webview", "load url=%s ua=%s headers=%s", url, !TextUtils.isEmpty(userAgent), requestHeaders.keySet());
         if (requestHeaders.isEmpty()) webView.loadUrl(url);
         else webView.loadUrl(url, requestHeaders);
@@ -454,6 +456,7 @@ public class HomeWebController {
 
     private void recoverAfterResume() {
         if (!isVisible()) return;
+        if (recoverEmptyDocument()) return;
         webView.setBackgroundColor(Color.TRANSPARENT);
         focusWebView("resume");
         webView.requestLayout();
@@ -463,6 +466,23 @@ public class HomeWebController {
         dispatchResume(0);
         dispatchResume(80);
         dispatchResume(260);
+    }
+
+    private boolean recoverEmptyDocument() {
+        String current = webView.getUrl();
+        if (!isEmptyDocumentUrl(current) || TextUtils.isEmpty(homePage)) return false;
+        String target = !TextUtils.isEmpty(lastPageUrl) && !isEmptyDocumentUrl(lastPageUrl) ? lastPageUrl : homePage;
+        SpiderDebug.log("webhome-webview", "restore reload reason=empty-url current=%s target=%s", current, target);
+        listener.onWebLoading();
+        sdkReady = false;
+        lastViewportKey = "";
+        injectedExtensions.clear();
+        loadUrl(reloadUrl(target, true));
+        return true;
+    }
+
+    private boolean isEmptyDocumentUrl(String url) {
+        return TextUtils.isEmpty(url) || "about:blank".equalsIgnoreCase(url);
     }
 
     private void dispatchResume(long delay) {
@@ -529,6 +549,7 @@ public class HomeWebController {
                 super.onPageStarted(view, url, favicon);
                 SpiderDebug.log("webhome-webview", "page started url=%s", url);
                 listener.onWebRequest("PAGE", url, true);
+                lastPageUrl = url;
                 sdkReady = false;
                 lastViewportKey = "";
                 injectedExtensions.clear();
@@ -540,6 +561,7 @@ public class HomeWebController {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 SpiderDebug.log("webhome-webview", "page finished url=%s title=%s", url, view.getTitle());
+                lastPageUrl = url;
                 injectSdk();
                 focusWebView("page-finished");
                 listener.onWebReady();
