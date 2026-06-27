@@ -25,8 +25,9 @@ public class Setting {
 
     public static final int UI_SCALE_FOLLOW_SYSTEM = 0;
     public static final int UI_SCALE_STANDARD = 1;
-    public static final int UI_SCALE_COMPACT = 2;
-    public static final int UI_SCALE_SMALLER = 3;
+    public static final int UI_SCALE_COMFORTABLE = 2;
+    public static final int UI_SCALE_COMPACT = 3;
+    public static final int UI_SCALE_SMALLER = 4;
 
     public static final int WALL_CINEMA = 5;
     public static final int WALL_CINEMA_WARM = 6;
@@ -352,9 +353,10 @@ public class Setting {
 
     private static float getUiScaleFactor(int scale) {
         return switch (scale) {
-            case UI_SCALE_STANDARD -> 0.9f;
-            case UI_SCALE_COMPACT -> 0.8f;
-            case UI_SCALE_SMALLER -> 0.7f;
+            case UI_SCALE_STANDARD -> 0.98f;
+            case UI_SCALE_COMFORTABLE -> 0.94f;
+            case UI_SCALE_COMPACT -> 0.9f;
+            case UI_SCALE_SMALLER -> 0.86f;
             default -> 1.0f;
         };
     }

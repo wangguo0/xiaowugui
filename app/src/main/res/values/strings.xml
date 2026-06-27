@@ -959,6 +959,7 @@
     <string-array name="select_ui_scale">
         <item>Follow system</item>
         <item>Standard</item>
+        <item>Comfort</item>
         <item>Compact</item>
         <item>Smaller</item>
     </string-array>
