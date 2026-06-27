@@ -656,10 +656,10 @@ public class GitCloudDialog extends BaseAlertDialog {
         LinearLayoutCompat.LayoutParams favoriteParams = new LinearLayoutCompat.LayoutParams(0, dp(34), 1);
         favoriteParams.leftMargin = dp(6);
         actions.addView(favorite, favoriteParams);
-        if (providerType == GitProviderType.GITHUB && !isOwnRepo(item)) {
+        if (providerType == GitProviderType.GITHUB && hasAccountToken() && !isOwnRepo(item)) {
             MaterialButton fork = outline("Fork");
             fork.setOnClickListener(view -> {
-                if (requireAccount("Fork 仓库需要先添加账号")) forkRepo(item);
+                if (requireAccountToken("Fork 仓库需要先添加账号")) forkRepo(item);
             });
             LinearLayoutCompat.LayoutParams forkParams = new LinearLayoutCompat.LayoutParams(dp(66), dp(34));
             forkParams.leftMargin = dp(6);
@@ -730,9 +730,11 @@ public class GitCloudDialog extends BaseAlertDialog {
         }
         String fullName = parseRepoFullName(keyword);
         if (isRepoAddress(keyword, fullName)) {
+            if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 浏览仓库需要先添加账号")) return;
             openRepoByFullName(fullName);
             return;
         }
+        if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 搜索需要先添加账号")) return;
         repoMode = REPO_MODE_SEARCH;
         repoSearchOwner = "";
         run("搜索仓库中", () -> {
@@ -876,6 +878,7 @@ public class GitCloudDialog extends BaseAlertDialog {
     }
 
     private void openRepo(GitRepo item) {
+        if (providerType == GitProviderType.CNB && !requireAccountToken("CNB 浏览仓库需要先添加账号")) return;
         repo = item;
         currentPath = "";
         fileTree.clear();
@@ -2018,6 +2021,21 @@ public class GitCloudDialog extends BaseAlertDialog {
         if (account != null && account.providerType == providerType) return true;
         showAccountForm(message);
         return false;
+    }
+
+    private boolean requireAccountToken(String message) {
+        if (hasAccountToken()) return true;
+        showAccountForm(message);
+        return false;
+    }
+
+    private boolean hasAccountToken() {
+        if (account == null || account.providerType != providerType) return false;
+        try {
+            return !TextUtils.isEmpty(GitCloudTokenStore.get(account.tokenKey));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void showAccountForm(String message) {
