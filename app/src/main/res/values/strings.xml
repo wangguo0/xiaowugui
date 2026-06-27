@@ -878,6 +878,8 @@
 
     <!-- Update -->
     <string name="update_version">New version <xliff:g name="name">%s</xliff:g></string>
+    <string name="update_title">Version update</string>
+    <string name="update_hint">Choose a version to view release notes and update.</string>
     <string name="update_check">Checking for updates…</string>
     <string name="update_latest">Already on the latest version</string>
     <string name="update_failed">Update check failed</string>
@@ -891,6 +893,11 @@
     <string name="update_channel_latest">This channel is already up to date.</string>
     <string name="update_channel_unavailable">No update manifest is available for this channel.</string>
     <string name="update_no_notes">No release notes.</string>
+    <string name="update_status_available">Available</string>
+    <string name="update_status_latest">Latest</string>
+    <string name="update_status_unavailable">Unavailable</string>
+    <string name="update_expand">Expand</string>
+    <string name="update_collapse">Collapse</string>
 
     <!-- Crash -->
     <string name="crash_info">An unexpected error occurred.\nSorry for the inconvenience.</string>

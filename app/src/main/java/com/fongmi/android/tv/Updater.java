@@ -65,10 +65,15 @@ public class Updater implements Download.Callback, UpdateListener {
         stable = getUpdate(Update.CHANNEL_STABLE);
         beta = getUpdate(Update.CHANNEL_BETA);
         if (!stable.hasUpdate() && !beta.hasUpdate()) {
+            if (force && (stable.hasManifest() || beta.hasManifest())) {
+                selected = stable;
+                App.post(() -> show(activity));
+                return;
+            }
             if (force) App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
             return;
         }
-        selected = selectUpdate();
+        selected = stable;
         App.post(() -> show(activity));
     }
 
@@ -109,14 +114,6 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private boolean hasErrorOnly() {
         return !stable.hasManifest() && !beta.hasManifest() && (!TextUtils.isEmpty(stable.error) || !TextUtils.isEmpty(beta.error));
-    }
-
-    private Update selectUpdate() {
-        String channel = Setting.getUpdateChannel();
-        if (Update.CHANNEL_BETA.equals(channel) && beta.hasUpdate()) return beta;
-        if (Update.CHANNEL_STABLE.equals(channel) && stable.hasUpdate()) return stable;
-        if (stable.hasUpdate()) return stable;
-        return beta;
     }
 
     private void show(FragmentActivity activity) {

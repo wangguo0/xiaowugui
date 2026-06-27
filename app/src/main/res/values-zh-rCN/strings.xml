@@ -875,6 +875,8 @@
 
     <!-- Update -->
     <string name="update_version">发现新版本 <xliff:g name="name">%s</xliff:g></string>
+    <string name="update_title">版本更新</string>
+    <string name="update_hint">选择版本查看更新内容并安装。</string>
     <string name="update_check">正在检测更新…</string>
     <string name="update_latest">已是最新版本</string>
     <string name="update_failed">检测更新失败</string>
@@ -888,6 +890,11 @@
     <string name="update_channel_latest">当前通道已是最新版本。</string>
     <string name="update_channel_unavailable">当前通道暂无可用更新清单。</string>
     <string name="update_no_notes">暂无更新日志。</string>
+    <string name="update_status_available">可更新</string>
+    <string name="update_status_latest">已最新</string>
+    <string name="update_status_unavailable">暂无</string>
+    <string name="update_expand">展开</string>
+    <string name="update_collapse">收起</string>
 
     <!-- Crash -->
     <string name="crash_info">发生意外错误\n抱歉给您带来不便</string>
