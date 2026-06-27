@@ -70,22 +70,26 @@
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/osdDiagnostics"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:layout_marginBottom="20dp"
-            android:layout_marginEnd="128dp"
+            android:layout_gravity="top|start"
+            android:background="#99000000"
             android:ellipsize="end"
             android:fontFeatureSettings="tnum"
-            android:maxLines="2"
+            android:maxWidth="560dp"
+            android:maxLines="8"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp"
             android:shadowColor="#CC000000"
             android:shadowDx="1.5"
             android:shadowDy="1.5"
             android:shadowRadius="2"
             android:textColor="@color/white"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:visibility="gone"
-            tools:text="3840x2160 59.940fps 42.0Mbps READY buf=12000ms&#10;c2.mtk.hevc.decoder drop=12 Surface tunnel=on display=59.94Hz"
+            tools:text="Video / Decoder    c2.mtk.hevc.decoder&#10;Format / FPS       3840x2160 @ 59.940fps 42.0Mbps&#10;State / Buffer     READY / 12000 ms&#10;Dropped Frames     12&#10;Render / Tunnel    Surface / on&#10;Display Refresh    59.94 Hz"
             tools:visibility="visible" />
 
         <com.google.android.material.textview.MaterialTextView

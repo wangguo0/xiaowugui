@@ -116,7 +116,7 @@ public class PlayerOsdController {
     }
 
     private void setTopLeft(PlayerManager player) {
-        if (!PlayerSetting.isOsdTitle()) {
+        if (!PlayerSetting.isOsdTitle() || PlayerSetting.isOsdDiagnostics()) {
             topLeft.setVisibility(View.GONE);
             return;
         }
@@ -206,15 +206,19 @@ public class PlayerOsdController {
         String fps = getFrameRate(format);
         String bitrate = getBitrate(format);
         String state = stateName(player.getPlaybackState());
-        String buffered = player.getBufferedDuration() > 0 ? "buf=" + player.getBufferedDuration() + "ms" : "";
-        String decoder = TextUtils.isEmpty(snapshot.decoderName()) ? "" : snapshot.decoderName();
-        String drop = "drop=" + snapshot.droppedFrames();
+        String buffered = player.getBufferedDuration() > 0 ? player.getBufferedDuration() + " ms" : "";
+        String decoder = TextUtils.isEmpty(snapshot.decoderName()) ? "-" : snapshot.decoderName();
+        String drop = String.valueOf(snapshot.droppedFrames());
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
-        String tunnel = "tunnel=" + (PlayerSetting.isTunnelingEnabled() ? "on" : "off");
+        String tunnel = PlayerSetting.isTunnelingEnabled() ? "on" : "off";
         String display = getDisplayRefreshText();
-        String first = join(" ", size, fps, bitrate, state, buffered);
-        String second = join(" ", decoder, drop, render, tunnel, display);
-        return join("\n", first, second);
+        return join("\n",
+                row("Video / Decoder", decoder),
+                row("Format / FPS", join(" ", size, TextUtils.isEmpty(fps) ? "" : "@", fps, bitrate)),
+                row("State / Buffer", join(" / ", state, buffered)),
+                row("Dropped Frames", drop),
+                row("Render / Tunnel", render + " / " + tunnel),
+                row("Display Refresh", TextUtils.isEmpty(display) ? "-" : display));
     }
 
     private String getSize(Format format, PlayerManager player) {
@@ -236,7 +240,7 @@ public class PlayerOsdController {
 
     private String getDisplayRefreshText() {
         if (root.getDisplay() == null || root.getDisplay().getRefreshRate() <= 0) return "";
-        return "display=" + refreshFormat.format(root.getDisplay().getRefreshRate()) + "Hz";
+        return refreshFormat.format(root.getDisplay().getRefreshRate()) + " Hz";
     }
 
     private String stateName(int state) {
@@ -257,6 +261,10 @@ public class PlayerOsdController {
             builder.append(value);
         }
         return builder.toString();
+    }
+
+    private String row(String label, String value) {
+        return String.format(Locale.US, "%-17s %s", label, TextUtils.isEmpty(value) ? "-" : value);
     }
 
     private void resetSpeed() {
