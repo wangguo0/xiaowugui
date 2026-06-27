@@ -414,6 +414,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         checkCast();
         SpiderDebug.log("video-flow", "initView preview ready cost=%dms", System.currentTimeMillis() - start);
         setRecyclerView();
+        setShortDisplay();
         mOsd = new PlayerOsdController(mBinding.osd.getRoot(), mBinding.osd.osdTopLeft, mBinding.osd.osdTopRight, mBinding.osd.osdBottomLeft, mBinding.osd.osdBottomRight, mBinding.osd.osdDiagnostics, mBinding.osd.osdMiniProgress, new PlayerOsdController.Source() {
             @Override
             public PlayerManager getPlayer() {
@@ -468,6 +469,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.fullscreen.setOnClickListener(view -> onFullscreen());
         mBinding.control.action.danmaku.setOnClickListener(view -> onDanmaku());
         mBinding.control.action.opening.setOnClickListener(view -> onOpening());
+        mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
         mBinding.control.action.speed.setOnKeyListener((view, keyCode, event) -> onSpeedKey(event));
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.control.action.reset.setOnLongClickListener(view -> onResetToggle());
@@ -782,6 +784,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setR2Callback();
     }
 
+    private void refreshEpisodeTitles() {
+        if (mEpisodeAdapter == null || mFlagAdapter == null || mFlagAdapter.getItemCount() == 0) return;
+        int position = mEpisodeAdapter.getSelectedPosition();
+        setEpisodeAdapter(getFlag().getEpisodes(), false);
+        if (position != RecyclerView.NO_POSITION) scrollToEpisode(position);
+    }
+
     private void seamless(Flag flag) {
         Episode episode = flag.find(mHistory.getEpisode(), getMark().isEmpty());
         setQualityVisible(episode != null && episode.isSelected() && mQualityAdapter.getItemCount() > 1);
@@ -1021,6 +1030,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         String keyword = mBinding.name.getText().toString();
         if (TextUtils.isEmpty(keyword)) return;
         initSearch(keyword, false);
+    }
+
+    private void onShortDisplay() {
+        Setting.putCompactEpisodeTitle(!Setting.isCompactEpisodeTitle());
+        setShortDisplay();
+        refreshEpisodeTitles();
+    }
+
+    private void setShortDisplay() {
+        mBinding.shortDisplay.setSelected(Setting.isCompactEpisodeTitle());
     }
 
     private void onKeep() {
