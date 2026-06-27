@@ -222,13 +222,14 @@ public class PlayerOsdController {
         String drop = String.valueOf(snapshot.droppedFrames());
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
         String tunnel = PlayerSetting.isTunnelingEnabled() ? "on" : "off";
+        String compat = PlayerSetting.isExo4KCompat() ? "on" : "off";
         String display = getDisplayRefreshText();
         return join("\n",
                 row("Video / Decoder", decoder),
                 row("Format / FPS", join(" ", size, TextUtils.isEmpty(fps) ? "" : "@", fps, bitrate)),
                 row("State / Buffer", join(" / ", state, buffered)),
                 row("Dropped Frames", drop),
-                row("Render / Tunnel", render + " / " + tunnel),
+                row("Render/Tunnel/Compat", render + " / " + tunnel + " / " + compat),
                 row("Display Refresh", TextUtils.isEmpty(display) ? "-" : display));
     }
 

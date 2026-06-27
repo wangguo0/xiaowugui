@@ -38,8 +38,10 @@ public class PlayerSetting {
     }
 
     public static void putRender(int render) {
-        Prefers.put("render", Math.min(Math.max(render, RENDER_SURFACE), RENDER_TEXTURE));
-        if (isTunnel() && getRender() == RENDER_TEXTURE) Prefers.put("tunnel", false);
+        int value = Math.min(Math.max(render, RENDER_SURFACE), RENDER_TEXTURE);
+        Prefers.put("render", value);
+        if (isTunnel() && value == RENDER_TEXTURE) Prefers.put("tunnel", false);
+        if (isExo4KCompat() && value == RENDER_TEXTURE) Prefers.put("exo_4k_compat", false);
     }
 
     public static int getSize() {
@@ -193,6 +195,15 @@ public class PlayerSetting {
 
     public static boolean isTunnelingEnabled() {
         return isTunnel() && getRender() == RENDER_SURFACE;
+    }
+
+    public static boolean isExo4KCompat() {
+        return Prefers.getBoolean("exo_4k_compat");
+    }
+
+    public static void putExo4KCompat(boolean value) {
+        Prefers.put("exo_4k_compat", value);
+        if (value) Prefers.put("render", RENDER_SURFACE);
     }
 
     public static boolean isAudioPrefer() {
