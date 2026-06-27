@@ -18,8 +18,17 @@ public final class EpisodeTitleCompact {
     private static final Pattern EXTENSION = Pattern.compile("(?i)\\.(mp4|mkv|avi|mov|flv|wmv|ts|m2ts|m3u8|rmvb|webm)$");
     private static final Pattern SIZE_SUFFIX = Pattern.compile("(?i)\\s*[\\[\\(（【]?\\s*\\d+(?:\\.\\d+)?\\s*(?:GB|G|MB|M)\\s*[\\]\\)）】]?\\s*$");
     private static final Pattern HASH_SUFFIX = Pattern.compile("(?i)\\s*[\\[\\(（【]\\s*[A-F0-9]{8,32}\\s*[\\]\\)）】]\\s*$");
-    private static final Pattern EPISODE_START = Pattern.compile("(?i)^(?:第\\s*[0-9一二三四五六七八九十百]+\\s*(?:集|话|話|期|章|回)|[0-9]{1,4}\\s*(?:集|话|話|期|章|回)|(?:EP|E)\\s*[0-9]{1,4}|S\\s*[0-9]{1,2}\\s*E\\s*[0-9]{1,4}|[0-9]{1,4}(?:\\D|$)|[上下](?:集|部)?|前篇|后篇|後篇|正片|预告|預告|花絮)");
-    private static final Pattern EPISODE_TOKEN = Pattern.compile("(?i)(S\\s*[0-9]{1,2}\\s*E\\s*[0-9]{1,4}|第\\s*[0-9一二三四五六七八九十百]+\\s*(?:集|话|話|期|章|回)|[0-9]{1,4}\\s*(?:集|话|話|期|章|回)|(?:EP|E)\\s*[0-9]{1,4}|[上下](?:集|部)?|前篇|后篇|後篇|正片|预告|預告|花絮)");
+    private static final Pattern EPISODE_START = Pattern.compile("(?i)^(?:S\\s*[0-9]{1,2}\\s*E\\s*[0-9]{1,4}(?:\\s*(?:E|[-~—–])\\s*[0-9]{1,4})?|[0-9]{1,2}\\s*x\\s*[0-9]{1,4}(?:\\s*[-~—–]\\s*[0-9]{1,4})?|第\\s*[0-9一二三四五六七八九十百]+\\s*(?:集|话|話|期|章|回)|[0-9]{1,4}\\s*(?:集|话|話|期|章|回)|(?:EP|E)\\s*[0-9]{1,4}(?:\\s*[-~—–]\\s*[0-9]{1,4})?|[0-9]{4}[-._][0-9]{1,2}[-._][0-9]{1,2}|[0-9]{1,4}(?:\\D|$)|[上下](?:集|部)?|前篇|后篇|後篇|正片|预告|預告|花絮)");
+    private static final Pattern[] EPISODE_TOKENS = {
+            Pattern.compile("(?i)S\\s*[0-9]{1,2}\\s*E\\s*[0-9]{1,4}(?:\\s*(?:E|[-~—–])\\s*[0-9]{1,4})?"),
+            Pattern.compile("(?i)[0-9]{1,2}\\s*x\\s*[0-9]{1,4}(?:\\s*[-~—–]\\s*[0-9]{1,4})?"),
+            Pattern.compile("(?i)第\\s*[0-9一二三四五六七八九十百]+\\s*(?:集|话|話|期|章|回)"),
+            Pattern.compile("(?i)[0-9]{1,4}\\s*(?:集|话|話|期|章|回)"),
+            Pattern.compile("(?i)(?:EP|E)\\s*[0-9]{1,4}(?:\\s*[-~—–]\\s*[0-9]{1,4})?"),
+            Pattern.compile("(?i)[0-9]{4}[-._][0-9]{1,2}[-._][0-9]{1,2}"),
+            Pattern.compile("(?i)(?:^|[\\s._\\-·|/\\\\:：,，;；\\[\\]()（）【】《》])([0-9]{1,4}v[0-9]+|[0-9]{1,3})(?=$|[\\s._\\-·|/\\\\:：,，;；\\[\\]()（）【】《》])"),
+            Pattern.compile("(?i)[上下](?:集|部)?|前篇|后篇|後篇|正片|预告|預告|花絮")
+    };
     private static final Pattern TECH_SUFFIX = Pattern.compile("(?i)^[\\s._\\-\\[\\]()（）【】]+(?:4K|8K|2160P|1080P|720P|HDR|HDR10|DV|DOLBY|HEVC|H265|H\\.265|H264|H\\.264|AV1|AAC|FLAC|WEB-DL|WEBRIP|BLURAY|BD|HD|国语|国配|粤语|中字|中英双字|简中|繁中|内嵌字幕|无字)(?:[\\s._\\-\\[\\]()（）【】]+(?:4K|8K|2160P|1080P|720P|HDR|HDR10|DV|DOLBY|HEVC|H265|H\\.265|H264|H\\.264|AV1|AAC|FLAC|WEB-DL|WEBRIP|BLURAY|BD|HD|国语|国配|粤语|中字|中英双字|简中|繁中|内嵌字幕|无字))*[\\s._\\-\\[\\]()（）【】]*$");
     private static final Pattern EDGE_SEPARATORS = Pattern.compile("^[\\s._\\-·|/\\\\:：,，;；\\[\\]()（）【】《》]+|[\\s._\\-·|/\\\\:：,，;；\\[\\]()（）【】《》]+$");
     private static final int MAX_COMPACT_LENGTH = 14;
@@ -170,12 +179,27 @@ public final class EpisodeTitleCompact {
     }
 
     private static String findEpisodeToken(String text) {
-        Matcher matcher = EPISODE_TOKEN.matcher(text);
-        return matcher.find() ? normalizeEpisodeToken(matcher.group()) : "";
+        for (Pattern pattern : EPISODE_TOKENS) {
+            Matcher matcher = pattern.matcher(text);
+            if (!matcher.find()) continue;
+            String token = matcher.groupCount() > 0 && matcher.group(1) != null ? matcher.group(1) : matcher.group();
+            if (isStandaloneYear(token)) continue;
+            return normalizeEpisodeToken(token);
+        }
+        return "";
     }
 
     private static String normalizeEpisodeToken(String token) {
-        return token == null ? "" : token.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+        if (token == null) return "";
+        String value = token.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+        if (value.matches("[0-9]{4}[-._][0-9]{1,2}[-._][0-9]{1,2}")) value = value.replace('.', '-').replace('_', '-');
+        return value;
+    }
+
+    private static boolean isStandaloneYear(String token) {
+        if (token == null || !token.matches("[0-9]{4}")) return false;
+        int year = Integer.parseInt(token);
+        return year >= 1900 && year <= 2099;
     }
 
     private static String cleanupEdge(String text) {
