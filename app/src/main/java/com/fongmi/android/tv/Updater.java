@@ -17,11 +17,15 @@ import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
 
 public class Updater implements Download.Callback, UpdateListener {
+
+    private static final String SOURCE_CNB = "cnb";
+    private static final String SOURCE_GITHUB = "github";
 
     private UpdateDialog dialog;
     private Download download;
@@ -43,10 +47,6 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private String getName() {
         return BuildConfig.FLAVOR_mode + "-" + BuildConfig.FLAVOR_abi;
-    }
-
-    private String getJson(String channel) {
-        return Github.getJson(getName(), channel);
     }
 
     public Updater force() {
@@ -78,9 +78,53 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
+        Update update = readUpdate(channel, Github.getCnbAsset(getManifestName(channel)), SOURCE_CNB);
+        if (update.hasManifest()) return update;
+        Update fallback = Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : readUpdate(channel, Github.getGithubLatestAsset(getManifestName(channel)), SOURCE_GITHUB);
+        return fallback.hasManifest() ? fallback : update;
+    }
+
+    private Update getGithubBetaUpdate(String channel) {
+        String manifestName = getManifestName(channel);
+        try {
+            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi()));
+            for (int i = 0; i < releases.length(); i++) {
+                JSONObject release = releases.optJSONObject(i);
+                if (release == null || !isBetaRelease(release)) continue;
+                String tag = release.optString("tag_name");
+                String url = findAssetUrl(release.optJSONArray("assets"), manifestName);
+                if (TextUtils.isEmpty(url) && !TextUtils.isEmpty(tag)) url = Github.getGithubReleaseAsset(tag, manifestName);
+                if (TextUtils.isEmpty(url)) continue;
+                Update update = readUpdate(channel, url, SOURCE_GITHUB);
+                if (update.hasManifest()) return update;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return Update.empty(channel);
+    }
+
+    private boolean isBetaRelease(JSONObject release) {
+        String tag = release.optString("tag_name");
+        return release.optBoolean("prerelease") || tag.contains("-beta-");
+    }
+
+    private String findAssetUrl(JSONArray assets, String name) {
+        if (assets == null) return "";
+        for (int i = 0; i < assets.length(); i++) {
+            JSONObject asset = assets.optJSONObject(i);
+            if (asset == null || !name.equals(asset.optString("name"))) continue;
+            return asset.optString("browser_download_url");
+        }
+        return "";
+    }
+
+    private Update readUpdate(String channel, String manifestUrl, String source) {
         Update update = Update.empty(channel);
         try {
-            JSONObject object = new JSONObject(OkHttp.string(getJson(channel)));
+            String text = OkHttp.string(manifestUrl);
+            if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
+            JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
             update.desc = object.optString("desc");
             update.notes = object.optString("notes");
@@ -88,8 +132,8 @@ public class Updater implements Download.Callback, UpdateListener {
             update.code = object.optInt("code");
             update.apk = object.optString("apk");
             update.size = object.optLong("size");
-            update.apkUrl = getApkUrl(update);
-            if (TextUtils.isEmpty(update.notes)) update.notes = getReleaseNotes(update.name);
+            update.apkUrl = getApkUrl(update, source);
+            if (TextUtils.isEmpty(update.notes) && SOURCE_GITHUB.equals(source)) update.notes = getReleaseNotes(update.name);
         } catch (Exception e) {
             e.printStackTrace();
             update.error = e.getMessage();
@@ -97,10 +141,24 @@ public class Updater implements Download.Callback, UpdateListener {
         return update;
     }
 
-    private String getApkUrl(Update update) {
-        if (TextUtils.isEmpty(update.apk)) return Github.getApk(getName(), update.channel);
-        if (update.apk.startsWith("http://") || update.apk.startsWith("https://")) return update.apk;
-        return Github.getAsset(update.apk, update.channel);
+    private String getManifestName(String channel) {
+        return getAssetName(channel, "json");
+    }
+
+    private String getDefaultApkName(String channel) {
+        return getAssetName(channel, "apk");
+    }
+
+    private String getAssetName(String channel, String ext) {
+        String suffix = Update.CHANNEL_BETA.equals(channel) ? "-beta" : "";
+        return getName() + suffix + "." + ext;
+    }
+
+    private String getApkUrl(Update update, String source) {
+        String apk = TextUtils.isEmpty(update.apk) ? getDefaultApkName(update.channel) : update.apk;
+        if (apk.startsWith("http://") || apk.startsWith("https://")) return apk;
+        if (SOURCE_GITHUB.equals(source) && !TextUtils.isEmpty(update.name)) return Github.getGithubReleaseAsset(update.name, apk);
+        return Github.getCnbAsset(apk);
     }
 
     private String getReleaseNotes(String tag) {
