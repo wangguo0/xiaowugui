@@ -16,6 +16,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.DialogQuickSearchBinding;
 import com.fongmi.android.tv.ui.adapter.QuickAdapter;
@@ -38,6 +39,9 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
     private boolean firstItemFocused;
     private boolean draining;
     private int panelWidth;
+    private int progressCurrent;
+    private int progressTotal;
+    private boolean searchFinished;
 
     public QuickSearchDialog() {
         pending = new ArrayList<>();
@@ -65,7 +69,15 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
     public void addAll(List<Vod> items) {
         if (items.isEmpty()) return;
         pending.addAll(items);
+        updateLoading();
         drainPending();
+    }
+
+    public void setProgress(int current, int total, boolean finished) {
+        progressTotal = Math.max(0, total);
+        progressCurrent = Math.max(0, Math.min(current, progressTotal));
+        searchFinished = finished || progressCurrent >= progressTotal;
+        updateProgress();
     }
 
     public void show(FragmentActivity activity) {
@@ -91,6 +103,7 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         binding.recycler.setAdapter(adapter = new QuickAdapter(this));
         adapter.setWidth(panelWidth - ResUtil.dp2px(32));
         adapter.setNextFocus(0, 0);
+        updateProgress();
         drainPending();
         binding.loading.requestFocus();
     }
@@ -108,6 +121,7 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         }
         if (pending.isEmpty()) {
             draining = false;
+            updateLoading();
             return;
         }
         int start = adapter.getItemCount();
@@ -125,6 +139,23 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         }
         if (pending.isEmpty()) draining = false;
         else binding.recycler.postDelayed(this::drainNextBatch, 16);
+        updateLoading();
+    }
+
+    private void updateProgress() {
+        if (binding == null) return;
+        binding.status.setText(getString(R.string.search_progress, progressCurrent, progressTotal));
+        updateLoading();
+    }
+
+    private void updateLoading() {
+        if (binding == null || adapter == null) return;
+        boolean empty = adapter.getItemCount() == 0 && pending.isEmpty();
+        binding.loading.setText(getString(searchFinished && empty ? R.string.search_no_result : R.string.search_loading));
+        if (empty) {
+            binding.loading.setVisibility(View.VISIBLE);
+            binding.recycler.setVisibility(View.GONE);
+        }
     }
 
     private void focusPosition(int position) {

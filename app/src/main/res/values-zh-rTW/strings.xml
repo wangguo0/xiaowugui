@@ -822,6 +822,8 @@
     <string name="search_hot_movie">電影榜</string>
     <string name="search_hot_variety">綜藝榜</string>
     <string name="search_loading">搜尋中...</string>
+    <string name="search_progress">(%1$d/%2$d)</string>
+    <string name="search_no_result">沒有搜到</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">修改</string>
