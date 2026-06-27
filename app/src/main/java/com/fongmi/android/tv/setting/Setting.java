@@ -391,6 +391,14 @@ public class Setting {
         Prefers.put("drive_check", driveCheck);
     }
 
+    public static boolean isCompactEpisodeTitle() {
+        return Prefers.getBoolean("compact_episode_title");
+    }
+
+    public static void putCompactEpisodeTitle(boolean compact) {
+        Prefers.put("compact_episode_title", compact);
+    }
+
     public static boolean isSiteHealthSort() {
         return Prefers.getBoolean("site_health_sort", true);
     }

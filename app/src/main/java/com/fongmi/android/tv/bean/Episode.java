@@ -25,6 +25,7 @@ public class Episode implements Parcelable, Diffable<Episode> {
     private int index;
     private int number;
     private boolean selected;
+    private transient String displayName;
 
     private Episode(String name, String desc, String url) {
         this.number = Util.getNumber(name);
@@ -62,6 +63,18 @@ public class Episode implements Parcelable, Diffable<Episode> {
 
     public String getDesc() {
         return TextUtils.isEmpty(desc) ? "" : desc;
+    }
+
+    public String getRawDisplayName() {
+        return getDesc().concat(getName());
+    }
+
+    public String getDisplayName() {
+        return TextUtils.isEmpty(displayName) ? getRawDisplayName() : displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public String getUrl() {

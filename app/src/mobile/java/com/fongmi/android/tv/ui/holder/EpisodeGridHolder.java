@@ -24,7 +24,7 @@ public class EpisodeGridHolder extends BaseEpisodeHolder {
     public void initView(Episode item) {
         binding.text.setActivated(item.isSelected());
         binding.text.setHorizontallyScrolling(true);
-        binding.text.setText(item.getDesc().concat(item.getName()));
+        binding.text.setText(item.getDisplayName());
         setMarquee(binding.text.hasFocus() || item.isSelected());
         binding.text.setOnFocusChangeListener((view, hasFocus) -> setMarquee(hasFocus || binding.text.isActivated()));
         binding.text.setOnClickListener(v -> {
