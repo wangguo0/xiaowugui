@@ -836,6 +836,7 @@
     <string name="search_hot_tv">电视榜</string>
     <string name="search_hot_movie">电影榜</string>
     <string name="search_hot_variety">综艺榜</string>
+    <string name="search_loading">搜索中...</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">修改</string>

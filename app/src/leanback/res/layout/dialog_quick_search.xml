@@ -1,17 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.fongmi.android.tv.ui.custom.CustomRecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/recycler"
+    android:id="@+id/root"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:background="@drawable/shape_quick_search_dialog"
     android:clipChildren="false"
     android:clipToPadding="false"
-    android:overScrollMode="never"
-    android:padding="16dp"
-    app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-    app:maxHeight="520dp"
-    app:spanCount="1"
-    tools:itemCount="6"
-    tools:listitem="@layout/adapter_quick" />
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/loading"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:gravity="center"
+        android:text="@string/search_loading"
+        android:textColor="@color/white_80"
+        android:textSize="18sp" />
+
+    <com.fongmi.android.tv.ui.custom.CustomRecyclerView
+        android:id="@+id/recycler"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        android:visibility="gone"
+        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        app:spanCount="1"
+        tools:itemCount="6"
+        tools:listitem="@layout/adapter_quick"
+        tools:visibility="visible" />
+
+</FrameLayout>

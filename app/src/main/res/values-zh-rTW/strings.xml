@@ -820,6 +820,7 @@
     <string name="search_hot_tv">電視榜</string>
     <string name="search_hot_movie">電影榜</string>
     <string name="search_hot_variety">綜藝榜</string>
+    <string name="search_loading">搜尋中...</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">修改</string>

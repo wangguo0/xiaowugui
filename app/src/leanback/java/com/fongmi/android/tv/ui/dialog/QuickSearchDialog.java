@@ -92,9 +92,7 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         adapter.setWidth(panelWidth - ResUtil.dp2px(32));
         adapter.setNextFocus(0, 0);
         drainPending();
-        binding.recycler.requestFocus();
-        binding.recycler.post(() -> focusPosition(0));
-        binding.recycler.postDelayed(() -> focusPosition(0), 160);
+        binding.loading.requestFocus();
     }
 
     private void drainPending() {
@@ -116,6 +114,10 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         int count = Math.min(RENDER_BATCH_SIZE, pending.size());
         List<Vod> items = new ArrayList<>(pending.subList(0, count));
         pending.subList(0, count).clear();
+        if (start == 0) {
+            binding.loading.setVisibility(View.GONE);
+            binding.recycler.setVisibility(View.VISIBLE);
+        }
         adapter.addAll(items);
         if (start == 0 && !firstItemFocused) {
             firstItemFocused = true;
@@ -168,15 +170,15 @@ public class QuickSearchDialog extends BaseAlertDialog implements QuickAdapter.O
         if (window == null) return;
         window.getDecorView().setPadding(0, 0, 0, 0);
         clearParentPadding();
-        window.setGravity(Gravity.BOTTOM | Gravity.END);
+        window.setGravity(Gravity.END);
         WindowManager.LayoutParams params = window.getAttributes();
         params.width = panelWidth;
-        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
-        params.gravity = Gravity.BOTTOM | Gravity.END;
+        params.height = WindowManager.LayoutParams.MATCH_PARENT;
+        params.gravity = Gravity.END;
         params.x = 0;
         params.y = 0;
         window.setAttributes(params);
-        window.setLayout(panelWidth, WindowManager.LayoutParams.WRAP_CONTENT);
+        window.setLayout(panelWidth, WindowManager.LayoutParams.MATCH_PARENT);
     }
 
     private void clearParentPadding() {
