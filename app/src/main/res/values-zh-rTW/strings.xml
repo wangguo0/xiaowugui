@@ -764,6 +764,12 @@
     <string name="player_buffer_bytes">緩衝容量</string>
     <string name="player_back_buffer">回退緩衝</string>
     <string name="player_cache">播放快取</string>
+    <string name="player_preload">預載</string>
+    <string name="player_preload_threads">預載線程</string>
+    <string name="player_preload_threads_value">%1$d 條</string>
+    <string name="player_preload_size">預載容量</string>
+    <string name="player_preload_time">預載時間</string>
+    <string name="player_preload_time_value">%1$d 秒</string>
     <string name="player_auto_change">自動換源</string>
     <string name="player_speed">長按倍速</string>
     <string name="player_ua">User-Agent</string>
@@ -814,6 +820,7 @@
     <string name="search_hot_tv">電視榜</string>
     <string name="search_hot_movie">電影榜</string>
     <string name="search_hot_variety">綜藝榜</string>
+    <string name="search_loading">搜尋中...</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">修改</string>
@@ -911,9 +918,9 @@
         <item>60秒</item>
     </string-array>
     <string-array name="select_play_cache">
-        <item>關閉</item>
-        <item>100MB</item>
-        <item>500MB</item>
+        <item>128MB</item>
+        <item>256MB</item>
+        <item>512MB</item>
         <item>1GB</item>
         <item>2GB</item>
     </string-array>

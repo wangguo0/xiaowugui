@@ -15,14 +15,16 @@ import com.fongmi.android.tv.databinding.FragmentSettingPlayerBinding;
 import com.fongmi.android.tv.impl.BufferListener;
 import com.fongmi.android.tv.impl.SpeedListener;
 import com.fongmi.android.tv.impl.UaListener;
+import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.BufferDialog;
 import com.fongmi.android.tv.ui.dialog.LutDialog;
 import com.fongmi.android.tv.ui.dialog.SpeedDialog;
 import com.fongmi.android.tv.ui.dialog.UaDialog;
-import com.fongmi.android.tv.player.lut.LutSetting;
+import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -67,6 +69,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.bufferBytesText.setText((bufferBytes = ResUtil.getStringArray(R.array.select_buffer_bytes))[PlayerSetting.getBufferBytesOption()]);
         mBinding.backBufferText.setText((backBuffer = ResUtil.getStringArray(R.array.select_back_buffer))[PlayerSetting.getBackBufferOption()]);
         mBinding.playCacheText.setText((playCache = ResUtil.getStringArray(R.array.select_play_cache))[PlayerSetting.getPlayCacheOption()]);
+        setPreloadText();
         mBinding.autoChangeText.setText(getSwitch(PlayerSetting.isAutoChange()));
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
@@ -93,6 +96,10 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.bufferBytes.setOnClickListener(this::onBufferBytes);
         mBinding.backBuffer.setOnClickListener(this::onBackBuffer);
         mBinding.playCache.setOnClickListener(this::onPlayCache);
+        mBinding.preload.setOnClickListener(this::setPreload);
+        mBinding.preloadThread.setOnClickListener(this::onPreloadThread);
+        mBinding.preloadSize.setOnClickListener(this::onPreloadSize);
+        mBinding.preloadTime.setOnClickListener(this::onPreloadTime);
         mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.render.setOnClickListener(this::setRender);
         mBinding.tunnel.setOnClickListener(this::setTunnel);
@@ -212,6 +219,83 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
             PlayerSetting.putPlayCacheOption(which);
             dialog.dismiss();
         }).show();
+    }
+
+    private void setPreload(View view) {
+        PreloadSetting.putPreload(!PreloadSetting.isPreload());
+        setPreloadText();
+    }
+
+    private void onPreloadThread(View view) {
+        String[] items = getPreloadThreadItems();
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_preload_threads).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(items, PreloadSetting.getPreloadThreads() - PreloadSetting.MIN_THREADS, (dialog, which) -> {
+            PreloadSetting.putPreloadThreads(PreloadSetting.MIN_THREADS + which);
+            setPreloadText();
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void onPreloadSize(View view) {
+        String[] items = getPreloadSizeItems();
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_preload_size).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(items, getPreloadSizeIndex(), (dialog, which) -> {
+            PreloadSetting.putPreloadSizeMb(PreloadSetting.MIN_SIZE_MB + which * PreloadSetting.STEP_SIZE_MB);
+            setPreloadText();
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void onPreloadTime(View view) {
+        String[] items = getPreloadTimeItems();
+        new MaterialAlertDialogBuilder(requireActivity()).setTitle(R.string.player_preload_time).setNegativeButton(R.string.dialog_negative, null).setSingleChoiceItems(items, getPreloadTimeIndex(), (dialog, which) -> {
+            PreloadSetting.putPreloadTimeSeconds(PreloadSetting.MIN_TIME_SECONDS + which * PreloadSetting.STEP_TIME_SECONDS);
+            setPreloadText();
+            dialog.dismiss();
+        }).show();
+    }
+
+    private void setPreloadText() {
+        boolean preload = PreloadSetting.isPreload();
+        mBinding.preloadText.setText(getSwitch(preload));
+        mBinding.preloadThread.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadSize.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadTime.setVisibility(preload ? View.VISIBLE : View.GONE);
+        mBinding.preloadThreadText.setText(getString(R.string.player_preload_threads_value, PreloadSetting.getPreloadThreads()));
+        mBinding.preloadSizeText.setText(FileUtil.byteCountToDisplaySize(PreloadSetting.getPreloadSizeBytes()));
+        mBinding.preloadTimeText.setText(getString(R.string.player_preload_time_value, PreloadSetting.getPreloadTimeSeconds()));
+    }
+
+    private String[] getPreloadThreadItems() {
+        String[] items = new String[PreloadSetting.MAX_THREADS - PreloadSetting.MIN_THREADS + 1];
+        for (int i = 0; i < items.length; i++) items[i] = getString(R.string.player_preload_threads_value, PreloadSetting.MIN_THREADS + i);
+        return items;
+    }
+
+    private String[] getPreloadSizeItems() {
+        String[] items = new String[getPreloadSizeCount()];
+        for (int i = 0; i < items.length; i++) items[i] = FileUtil.byteCountToDisplaySize((PreloadSetting.MIN_SIZE_MB + i * PreloadSetting.STEP_SIZE_MB) * 1024L * 1024L);
+        return items;
+    }
+
+    private String[] getPreloadTimeItems() {
+        String[] items = new String[getPreloadTimeCount()];
+        for (int i = 0; i < items.length; i++) items[i] = getString(R.string.player_preload_time_value, PreloadSetting.MIN_TIME_SECONDS + i * PreloadSetting.STEP_TIME_SECONDS);
+        return items;
+    }
+
+    private int getPreloadSizeIndex() {
+        return Math.min(Math.max((PreloadSetting.getPreloadSizeMb() - PreloadSetting.MIN_SIZE_MB) / PreloadSetting.STEP_SIZE_MB, 0), getPreloadSizeCount() - 1);
+    }
+
+    private int getPreloadTimeIndex() {
+        return Math.min(Math.max((PreloadSetting.getPreloadTimeSeconds() - PreloadSetting.MIN_TIME_SECONDS) / PreloadSetting.STEP_TIME_SECONDS, 0), getPreloadTimeCount() - 1);
+    }
+
+    private int getPreloadSizeCount() {
+        return (PreloadSetting.MAX_SIZE_MB - PreloadSetting.MIN_SIZE_MB) / PreloadSetting.STEP_SIZE_MB + 1;
+    }
+
+    private int getPreloadTimeCount() {
+        return (PreloadSetting.MAX_TIME_SECONDS - PreloadSetting.MIN_TIME_SECONDS) / PreloadSetting.STEP_TIME_SECONDS + 1;
     }
 
     private void setAutoChange(View view) {

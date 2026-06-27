@@ -283,6 +283,10 @@ public class Vod implements Parcelable, Diffable<Vod> {
         if (getName().isEmpty()) setName(name);
     }
 
+    public void checkContent(String content) {
+        if (getContent().isEmpty()) setContent(content);
+    }
+
     public Style getStyle(Style style) {
         return getStyle() != null ? getStyle() : style != null ? style : Style.rect();
     }

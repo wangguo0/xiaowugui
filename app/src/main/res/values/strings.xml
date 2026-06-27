@@ -782,6 +782,12 @@
     <string name="player_buffer_bytes">Buffer size</string>
     <string name="player_back_buffer">Back buffer</string>
     <string name="player_cache">Playback cache</string>
+    <string name="player_preload">Preload</string>
+    <string name="player_preload_threads">Preload threads</string>
+    <string name="player_preload_threads_value">%1$d threads</string>
+    <string name="player_preload_size">Preload size</string>
+    <string name="player_preload_time">Preload time</string>
+    <string name="player_preload_time_value">%1$d seconds</string>
     <string name="player_auto_change">Auto source change</string>
     <string name="player_speed">Press speed</string>
     <string name="player_ua">User-Agent</string>
@@ -833,6 +839,7 @@
     <string name="search_hot_tv">TV</string>
     <string name="search_hot_movie">Movie</string>
     <string name="search_hot_variety">Variety</string>
+    <string name="search_loading">Searching...</string>
 
     <!-- Dialog -->
     <string name="dialog_edit">Edit</string>
@@ -935,9 +942,9 @@
         <item>60s</item>
     </string-array>
     <string-array name="select_play_cache">
-        <item>Off</item>
-        <item>100MB</item>
-        <item>500MB</item>
+        <item>128MB</item>
+        <item>256MB</item>
+        <item>512MB</item>
         <item>1GB</item>
         <item>2GB</item>
     </string-array>

@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -78,6 +79,7 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
+import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
@@ -117,6 +119,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private QuickAdapter mQuickAdapter;
     private FlagAdapter mFlagAdapter;
     private PartAdapter mPartAdapter;
+    private QuickSearchDialog mQuickSearchDialog;
     private PlayerOsdController mOsd;
     private CustomKeyDownVod mKeyDown;
     private SiteViewModel mViewModel;
@@ -126,6 +129,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean initAuto;
     private boolean autoMode;
     private boolean revealManualSearch;
+    private boolean quickSearchDialogClosed;
     private boolean useParse;
     private boolean detailRequested;
     private boolean detailHealthRecorded;
@@ -221,11 +225,19 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         start(activity, key, id, name, pic, mark, false, false, wallPic);
     }
 
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, String wallPic, String content) {
+        start(activity, key, id, name, pic, mark, false, false, wallPic, content);
+    }
+
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast) {
         start(activity, key, id, name, pic, mark, collect, cast, null);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, String wallPic) {
+        start(activity, key, id, name, pic, mark, collect, cast, wallPic, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, String wallPic, String content) {
         long launch = System.currentTimeMillis();
         SpiderDebug.log("video-flow", "launch request key=%s id=%s name=%s collect=%s cast=%s", key, id, name, collect, cast);
         ImgUtil.preload(activity, pic);
@@ -238,6 +250,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         intent.putExtra("name", name);
         intent.putExtra("pic", pic);
         intent.putExtra("wallPic", wallPic);
+        intent.putExtra("content", content);
         intent.putExtra("key", key);
         intent.putExtra("id", id);
         activity.startActivity(intent);
@@ -258,6 +271,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private String getWallPic() {
         return Objects.toString(getIntent().getStringExtra("wallPic"), "");
+    }
+
+    private String getContent() {
+        return Objects.toString(getIntent().getStringExtra("content"), "");
     }
 
     private String getMark() {
@@ -468,7 +485,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.array.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
-                if (mEpisodeAdapter.getItemCount() > 40 && position > 1) scrollToEpisode(mArrayAdapter.getStart(position));
+                int count = mEpisodeAdapter.getItemCount();
+                if (count > getEpisodeSegmentSize(count) && position > 1) scrollToEpisode(mArrayAdapter.getStart(position));
             }
         });
     }
@@ -617,6 +635,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setDetail(Vod item) {
         item.checkPic(getPic());
         item.checkName(getName());
+        item.checkContent(getContent());
         mBinding.progressLayout.showContent();
         mBinding.name.setText(item.getName());
         mFlagAdapter.addAll(item.getFlags());
@@ -875,24 +894,30 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setArrayAdapter(int size) {
+        int segment = getEpisodeSegmentSize(size);
         List<String> items = new ArrayList<>();
         items.add(getString(R.string.play_reverse));
         items.add(getString(mHistory.getRevPlayText()));
         mBinding.array.setVisibility(size > 1 ? View.VISIBLE : View.GONE);
-        if (mHistory.isRevSort()) for (int i = size; i > 0; i -= 40) items.add(i + "-" + Math.max(i - 39, 1));
-        else for (int i = 0; i < size; i += 40) items.add((i + 1) + "-" + Math.min(i + 40, size));
+        if (mHistory.isRevSort()) for (int i = size; i > 0; i -= segment) items.add(i + "-" + Math.max(i - segment + 1, 1));
+        else for (int i = 0; i < size; i += segment) items.add((i + 1) + "-" + Math.min(i + segment, size));
+        mArrayAdapter.setSegmentSize(segment);
         mArrayAdapter.addAll(items);
         updateFocus();
     }
 
+    private int getEpisodeSegmentSize(int size) {
+        return size <= 60 ? 20 : 40;
+    }
+
     private int findFocusDown(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode);
+        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode, R.id.part, R.id.quick);
         for (int i = 0; i < orders.size(); i++) if (i > index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
         return 0;
     }
 
     private int findFocusUp(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode);
+        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.array, R.id.episode, R.id.part, R.id.quick);
         for (int i = orders.size() - 1; i >= 0; i--) if (i < index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
         return 0;
     }
@@ -902,6 +927,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mEpisodeAdapter.setNextFocusUp(findFocusUp(3));
         mFlagAdapter.setNextFocusDown(findFocusDown(0));
         mEpisodeAdapter.setNextFocusDown(findFocusDown(3));
+        mPartAdapter.setNextFocus(findFocusUp(4), findFocusDown(4));
+        mQuickAdapter.setNextFocus(findFocusUp(5), findFocusDown(5));
+        int searchDown = isVisible(mBinding.quick) ? R.id.quick : findFocusDown(-1);
+        mBinding.search.setNextFocusDownId(searchDown == 0 ? View.NO_ID : searchDown);
     }
 
     private boolean onEpisodeKey(KeyEvent event) {
@@ -1046,6 +1075,87 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 onLutDir();
             }
         });
+        focusLutQuickIfVisible();
+    }
+
+    private void focusLutQuickIfVisible() {
+        mBinding.lutQuick.post(this::focusLutQuickContent);
+        mBinding.lutQuick.postDelayed(this::focusLutQuickContent, 220);
+        mBinding.lutQuick.postDelayed(this::focusLutQuickContent, 420);
+    }
+
+    private boolean focusLutQuickContent() {
+        if (!isVisible(mBinding.lutQuick)) return false;
+        View focus = getCurrentFocus();
+        RecyclerView recycler = findRecyclerView(mBinding.lutQuick);
+        if (focus != null && isChildOf(mBinding.lutQuick, focus) && focus != recycler) return true;
+        if (mBinding.lutQuick.focusSelectedEntry()) return true;
+        if (focusRecyclerItem(recycler)) return true;
+        return focusFirstChild(mBinding.lutQuick);
+    }
+
+    private RecyclerView findRecyclerView(View view) {
+        if (view instanceof RecyclerView recycler) return recycler;
+        if (!(view instanceof ViewGroup group)) return null;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            RecyclerView recycler = findRecyclerView(group.getChildAt(i));
+            if (recycler != null) return recycler;
+        }
+        return null;
+    }
+
+    private boolean focusRecyclerItem(RecyclerView recycler) {
+        return focusRecyclerPosition(recycler, 0);
+    }
+
+    private boolean focusRecyclerPosition(RecyclerView recycler, int position) {
+        if (recycler == null || recycler.getVisibility() != View.VISIBLE || !recycler.isEnabled()) return false;
+        RecyclerView.Adapter<?> adapter = recycler.getAdapter();
+        if (adapter == null || adapter.getItemCount() <= 0) return false;
+        if (position < 0 || position >= adapter.getItemCount()) return false;
+        recycler.scrollToPosition(position);
+        RecyclerView.ViewHolder holder = recycler.findViewHolderForAdapterPosition(position);
+        if (holder != null && focusFirstChild(holder.itemView)) return true;
+        for (int i = 0; i < recycler.getChildCount(); i++) {
+            View child = recycler.getChildAt(i);
+            if (recycler.getChildAdapterPosition(child) == position && focusFirstChild(child)) return true;
+        }
+        recycler.post(() -> {
+            RecyclerView.ViewHolder next = recycler.findViewHolderForAdapterPosition(position);
+            if (next != null) {
+                focusFirstChild(next.itemView);
+                return;
+            }
+            for (int i = 0; i < recycler.getChildCount(); i++) {
+                View child = recycler.getChildAt(i);
+                if (recycler.getChildAdapterPosition(child) == position) {
+                    focusFirstChild(child);
+                    return;
+                }
+            }
+        });
+        return true;
+    }
+
+    private boolean focusFirstChild(View view) {
+        if (view == null || view.getVisibility() != View.VISIBLE || !view.isEnabled()) return false;
+        if (view instanceof RecyclerView recycler) return focusRecyclerItem(recycler);
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (focusFirstChild(group.getChildAt(i))) return true;
+            }
+        }
+        if (view.isFocusable() && view.requestFocus()) return true;
+        return false;
+    }
+
+    private boolean isChildOf(ViewGroup parent, View child) {
+        for (View view = child; view != null; ) {
+            if (view == parent) return true;
+            if (!(view.getParent() instanceof View next)) return false;
+            view = next;
+        }
+        return false;
     }
 
     private void onLutImport() {
@@ -1378,6 +1488,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void setPartAdapter() {
         mPartAdapter.clear();
         mBinding.part.setVisibility(View.GONE);
+        updateFocus();
     }
 
     private void checkFlag(Vod item) {
@@ -1434,6 +1545,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void showInitialPreview() {
         mBinding.progressLayout.showContent();
         mBinding.name.setText(getName());
+        if (!getContent().isEmpty()) mBinding.content.setTag(getContent());
         if (!getPic().isEmpty()) setArtwork(getPic());
         else if (!getWallPic().isEmpty()) setContextWall(getWallPic());
         mBinding.video.requestFocus();
@@ -1759,6 +1871,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void startSearch(String keyword) {
         mQuickAdapter.clear();
+        mBinding.quick.setVisibility(View.GONE);
+        dismissQuickSearchDialog();
+        quickSearchDialogClosed = false;
+        if (!isInitAuto()) {
+            revealManualSearch = false;
+            showQuickSearchDialog(new ArrayList<>());
+        }
+        updateFocus();
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
         SiteHealthStore.sortSites(sites);
@@ -1769,14 +1889,36 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mQuickAdapter.addAll(items);
-        mBinding.quick.setVisibility(isInitAuto() ? View.GONE : View.VISIBLE);
-        if (revealManualSearch && !items.isEmpty()) {
-            revealManualSearch = false;
-            mBinding.quick.post(() -> mBinding.quick.requestFocus());
+        mBinding.quick.setVisibility(View.GONE);
+        updateFocus();
+        if (!isInitAuto() && !items.isEmpty()) {
+            showQuickSearchDialog(items);
         }
         if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
+    }
+
+    private void showQuickSearchDialog(List<Vod> items) {
+        if (quickSearchDialogClosed) return;
+        if (mQuickSearchDialog != null) {
+            mQuickSearchDialog.addAll(items);
+            return;
+        }
+        QuickSearchDialog dialog = QuickSearchDialog.create().listener(this).items(items);
+        dialog.dismissListener(d -> {
+            if (mQuickSearchDialog != dialog) return;
+            mQuickSearchDialog = null;
+            quickSearchDialogClosed = true;
+        });
+        mQuickSearchDialog = dialog;
+        dialog.show(this);
+    }
+
+    private void dismissQuickSearchDialog() {
+        QuickSearchDialog dialog = mQuickSearchDialog;
+        mQuickSearchDialog = null;
+        if (dialog != null) dialog.dismissAllowingStateLoss();
     }
 
     @Override
@@ -1882,6 +2024,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (KeyUtil.isActionUp(event) && KeyUtil.isBackKey(event) && mBinding.lutQuick.hideIfVisible()) return true;
+        if (isVisible(mBinding.lutQuick)) return dispatchLutQuickKey(event);
         if (isFullscreen() && KeyUtil.isMenuKey(event)) onToggle();
         if (isVisible(mBinding.control.getRoot())) setR1Callback();
         if (isVisible(mBinding.control.getRoot())) mFocus2 = getCurrentFocus();
@@ -1890,6 +2033,137 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (KeyUtil.isMediaFastForward(event)) return onSeekForward();
         if (KeyUtil.isMediaRewind(event)) return onSeekBack();
         return super.dispatchKeyEvent(event);
+    }
+
+    private boolean dispatchLutQuickKey(KeyEvent event) {
+        if (KeyUtil.isEnterKey(event)) return dispatchLutQuickEnter(event);
+        if (isLutQuickDirectionKey(event)) return dispatchLutQuickDirection(event);
+        if (KeyUtil.isActionDown(event)) focusLutQuickContent();
+        boolean handled = super.dispatchKeyEvent(event);
+        if (KeyUtil.isActionDown(event)) {
+            View focus = getCurrentFocus();
+            if (focus == null || !isChildOf(mBinding.lutQuick, focus)) focusLutQuickContent();
+        }
+        return true;
+    }
+
+    private boolean isLutQuickDirectionKey(KeyEvent event) {
+        return KeyUtil.isUpKey(event) || KeyUtil.isDownKey(event) || KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event);
+    }
+
+    private boolean dispatchLutQuickDirection(KeyEvent event) {
+        if (!KeyUtil.isActionDown(event)) return true;
+        RecyclerView recycler = findRecyclerView(mBinding.lutQuick);
+        View focus = getCurrentFocus();
+        if (recycler != null && (focus == recycler || isChildOf(recycler, focus)) && moveLutQuickRecycler(recycler, event)) return true;
+        if (focus == null || !isChildOf(mBinding.lutQuick, focus) || focus == recycler) {
+            focusLutQuickContent();
+            focus = getCurrentFocus();
+        }
+        if (focus != null && isChildOf(mBinding.lutQuick, focus) && moveLutQuickFocus(focus, event)) return true;
+        if (recycler != null && KeyUtil.isDownKey(event) && focusRecyclerItem(recycler)) return true;
+        focusLutQuickContent();
+        return true;
+    }
+
+    private boolean moveLutQuickRecycler(RecyclerView recycler, KeyEvent event) {
+        if (!KeyUtil.isUpKey(event) && !KeyUtil.isDownKey(event)) return false;
+        RecyclerView.Adapter<?> adapter = recycler.getAdapter();
+        if (adapter == null || adapter.getItemCount() <= 0) return false;
+        int current = getRecyclerFocusPosition(recycler);
+        if (current == RecyclerView.NO_POSITION) return mBinding.lutQuick.focusSelectedEntry();
+        int next = current + (KeyUtil.isDownKey(event) ? 1 : -1);
+        if (next < 0 || next >= adapter.getItemCount()) return false;
+        return focusRecyclerPosition(recycler, next);
+    }
+
+    private int getRecyclerFocusPosition(RecyclerView recycler) {
+        View child = getRecyclerDirectChild(recycler, getCurrentFocus());
+        return child == null ? RecyclerView.NO_POSITION : recycler.getChildAdapterPosition(child);
+    }
+
+    private View getRecyclerDirectChild(RecyclerView recycler, View focus) {
+        for (View view = focus; view != null && view != recycler; ) {
+            if (view.getParent() == recycler) return view;
+            if (!(view.getParent() instanceof View next)) return null;
+            view = next;
+        }
+        return null;
+    }
+
+    private boolean moveLutQuickFocus(View focus, KeyEvent event) {
+        List<View> focusables = new ArrayList<>();
+        collectLutQuickFocusables(mBinding.lutQuick, focusables);
+        View target = findLutQuickFocusTarget(focus, focusables, event);
+        return target != null && target.requestFocus();
+    }
+
+    private void collectLutQuickFocusables(View view, List<View> focusables) {
+        if (view == null || view.getVisibility() != View.VISIBLE || !view.isEnabled()) return;
+        if (view instanceof RecyclerView recycler) {
+            for (int i = 0; i < recycler.getChildCount(); i++) collectLutQuickFocusables(recycler.getChildAt(i), focusables);
+            return;
+        }
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) collectLutQuickFocusables(group.getChildAt(i), focusables);
+            return;
+        }
+        if (view.isFocusable()) focusables.add(view);
+    }
+
+    private View findLutQuickFocusTarget(View focus, List<View> focusables, KeyEvent event) {
+        Rect current = new Rect();
+        if (focus == null || !focus.getGlobalVisibleRect(current)) return null;
+        View target = null;
+        long bestScore = Long.MAX_VALUE;
+        for (View item : focusables) {
+            if (item == focus) continue;
+            Rect candidate = new Rect();
+            if (!item.getGlobalVisibleRect(candidate) || !isLutQuickFocusCandidate(current, candidate, event)) continue;
+            long score = scoreLutQuickFocusCandidate(current, candidate, event);
+            if (score < bestScore) {
+                bestScore = score;
+                target = item;
+            }
+        }
+        return target;
+    }
+
+    private boolean isLutQuickFocusCandidate(Rect current, Rect candidate, KeyEvent event) {
+        int dx = candidate.centerX() - current.centerX();
+        int dy = candidate.centerY() - current.centerY();
+        if (KeyUtil.isLeftKey(event)) return dx < 0 && isSameFocusRow(current, candidate);
+        if (KeyUtil.isRightKey(event)) return dx > 0 && isSameFocusRow(current, candidate);
+        if (KeyUtil.isUpKey(event)) return dy < 0;
+        if (KeyUtil.isDownKey(event)) return dy > 0;
+        return false;
+    }
+
+    private boolean isSameFocusRow(Rect current, Rect candidate) {
+        return Math.abs(candidate.centerY() - current.centerY()) <= Math.max(current.height(), candidate.height());
+    }
+
+    private long scoreLutQuickFocusCandidate(Rect current, Rect candidate, KeyEvent event) {
+        long dx = Math.abs(candidate.centerX() - current.centerX());
+        long dy = Math.abs(candidate.centerY() - current.centerY());
+        long primary = KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event) ? dx : dy;
+        long secondary = KeyUtil.isLeftKey(event) || KeyUtil.isRightKey(event) ? dy : dx;
+        return primary * 1000 + secondary;
+    }
+
+    private boolean dispatchLutQuickEnter(KeyEvent event) {
+        if (KeyUtil.isActionDown(event)) {
+            focusLutQuickContent();
+            return true;
+        }
+        if (!KeyUtil.isActionUp(event)) return true;
+        View focus = getCurrentFocus();
+        if (focus == null || !isChildOf(mBinding.lutQuick, focus) || focus instanceof RecyclerView) {
+            if (!focusLutQuickContent()) return true;
+            focus = getCurrentFocus();
+        }
+        if (focus != null && isChildOf(mBinding.lutQuick, focus) && focus.isEnabled()) focus.performClick();
+        return true;
     }
 
     @Override
@@ -2001,6 +2275,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mClock.release();
         saveHistory(true);
         DanmakuApi.cancel();
+        dismissQuickSearchDialog();
         RefreshEvent.keep();
         App.removeCallbacks(mR1, mR2, mR3, mR4);
         if (mOsd != null) mOsd.release();
