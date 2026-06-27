@@ -137,3 +137,73 @@ tunnel + SurfaceView 约束
 ```
 
 我们当前 `third_party/maven` 里的 Media3 不包含原版源码正在调用的 `setFfmpegAudioPrefer()`、`setFfmpegVideoPrefer()`，因此不能认为硬解链路已经和原版一致。这个缺失比“FFmpeg video 软解抢 4K”更关键。
+
+## 开源项目与公开资料搜索补充
+
+本轮按“Exo 硬解能力优化”扩大搜索，覆盖 GitHub 开源播放器、官方 Media3/ExoPlayer issue、公开播放器实践和相关文章线索。重点不是收集 demo，而是找能迁移到我们播放链路的真实策略。
+
+### 已检查的参考来源
+
+| 来源 | 类型 | 相关性 | 关键发现 | 对我们的价值 |
+|---|---|---|---|---|
+| `androidx/media` | 官方 Media3 源码 | 高 | `DefaultRenderersFactory` 提供 `forceEnableMediaCodecAsynchronousQueueing()`、`forceDisableMediaCodecAsynchronousQueueing()`、`setAllowedVideoJoiningTimeMs()`、`experimentalSetLateThresholdToDropDecoderInputUs()`、`setMediaCodecSelector()` | 我们本地 `1.10.1-fongmi` AAR 已具备这些 API，可作为闭源补丁缺失后的替代优化入口 |
+| `moneytoo/Player` / Just Player | 成熟 Android 视频播放器 | 高 | 使用 `DefaultRenderersFactory`，提供 decoder priority；README 明确写 tunneling 可改善 Android TV 4K/HDR；拿到视频 format 后对 `SurfaceView` 调 `holder.setFixedSize(width, height)` | 证明“SurfaceView + tunneling + decoder priority”是成熟播放器真实使用的方向 |
+| `anilbeesetti/nextplayer` | 成熟 Android 视频播放器 | 高 | 使用 `NextRenderersFactory`，但 decoder priority 有 `DEVICE_ONLY`、`PREFER_DEVICE`、`PREFER_APP`；`DEVICE_ONLY` 对应 `EXTENSION_RENDERER_MODE_OFF` | 我们当前硬解只用 `ON`，可新增“纯系统硬解/设备优先/应用优先”区分，排除扩展 renderer fallback 干扰 |
+| `brunochanrio/DangoPlayer` | Android TV/IPTV 播放器 | 中 | 作为 TV 播放器参考，但源码中硬解专项配置不如 Just Player 明确 | 可作为 UI/TV 播放形态参考，不是主要性能依据 |
+| `AmbitiousJun/gemby` | Android TV/Emby 播放器 | 中 | 项目同时支持 MPV/Media3，未发现比 Just Player 更直接的 Exo 硬解策略 | 说明重度 4K 本地/网盘场景很多项目会保留 MPV 兜底 |
+| `androidx/media#2990` | 官方 issue/feature request | 高 | 讨论 TV 设备高质量视频播放 dropped frames；指出 `VideoFrameReleaseControl` 50ms early release window 对低端 TV 可能不足；提到异步 MediaCodec adapter 是已有优化方向 | 对“硬解但还是 PPT”很关键：问题可能不是 codec 选错，而是 render/frame release 调度跟不上 |
+| `androidx/media#2972` | 官方 issue | 中高 | Google TV Streamer 上“视频冻结、音频继续”，日志中硬解 decoder 是 `c2.mtk.avc.decoder`，证明硬解也可能出现视频 freeze | 支持继续看硬解 renderer/render loop，而不是只看网络或软解 |
+| `androidx/media#2941` | 官方 issue | 中 | 切换不同帧率流时，不 `stop()` 会保留旧 frame timing 状态导致 choppy；`stop()` 可清 renderer timing 但会黑屏 | 对 VOD 连续切源、换清晰度、换线路有参考；纯单个 VOD 播放优先级低 |
+| `androidx/media#2557` | 官方 issue | 中 | 部分 Android TV 设备 Exo 硬解 HDR10 异常，系统播放器/IJK 正常 | 支持“设备 codec 兼容/厂商 MediaCodec 路径”仍可能是根因 |
+| Just Player README 引用的 ExoPlayer tunneling 文章 | 文章线索 | 中高 | Medium 原文被 Cloudflare 拦截，但 Just Player README 直接引用并总结：tunneling 可改善 Android TV 4K/HDR，但不是所有设备可用 | 结论可采纳，但实现必须做开关和 SurfaceView 约束 |
+
+### 可借鉴策略按落地优先级排序
+
+| 优先级 | 策略 | 参考来源 | 我们当前状态 | 可落地性 | 风险 |
+|---|---|---|---|---|---|
+| P0 | 新增“纯系统硬解”模式：硬解卡顿排查时把 extension renderer mode 设为 `OFF` | NextPlayer `DEVICE_ONLY` | 当前硬解是 `EXTENSION_RENDERER_MODE_ON`，扩展 renderer 在系统后面但仍参与 fallback | 高 | 可能失去部分特殊格式的 app decoder 兜底，但对 4K 硬解排查最干净 |
+| P0 | tunnel 必须绑定 SurfaceView：`isTunnelingEnabled() = isTunnel() && render == Surface`，开启 tunnel 时强制 Surface | 原版影视、Just Player、Exo tunneling 文章线索 | 当前直接 `setTunnelingEnabled(PlayerSetting.isTunnel())` | 高 | tunnel 不是所有设备可用，需要保留开关和失败回退 |
+| P1 | 使用官方异步 MediaCodec 队列：对 Android 12+ 或 TV/低性能设备尝试 `forceEnableMediaCodecAsynchronousQueueing()` | 官方 Media3 API、`androidx/media#2990` | 当前未使用 | 中高 | 异步队列历史上有设备兼容风险，建议做开关/灰度 |
+| P1 | 对 SurfaceView 设置视频固定尺寸：拿到 `Format.width/height` 后 `SurfaceView.getHolder().setFixedSize(width, height)` | Just Player、Exo issue 8611 代码注释 | 当前未做 | 中 | 需要只对 `SurfaceView` 做，且注意旋转/切换视频后的重置 |
+| P1 | 对 TV/低性能设备放宽 video joining 或 late-drop 阈值实验：`setAllowedVideoJoiningTimeMs()`、`experimentalSetLateThresholdToDropDecoderInputUs()` | 官方 Media3 API、`androidx/media#2990` | 当前未用 | 中 | 参数过大可能增加响应延迟或掩盖真实卡顿，需要实机对比 |
+| P1 | 增加 codec selector 过滤/排序能力：优先厂商硬解，必要时屏蔽已知问题 codec | 官方 `setMediaCodecSelector()` | 当前用默认 selector | 中 | 需要设备日志和黑名单数据；不能盲目全局屏蔽 |
+| P2 | 对切源/换线路/换帧率场景强制释放重建 player 或 renderer | `androidx/media#2941` | 当前播放链路有复用 player 和 surface attach 逻辑 | 中 | 会带来黑屏或首帧延迟；对单 VOD 4K PPT 不是第一优先 |
+| P2 | 自动刷新率匹配 / frame rate strategy | Just Player README、Android TV 实践 | 当前未见明确使用 | 中低 | 主要影响 TV 端 24/25/50/60fps judder，不一定解决手机/投影 4K 解码吞吐 |
+
+### 对我们困境的判断
+
+如果用户日志始终是厂商硬解 decoder，例如 `c2.mtk.*`、`OMX.MTK.*`、`c2.qti.*`、`OMX.amlogic.*`，但画面仍像 PPT，下一步不能只盯“是否软解”。公开资料显示，硬解仍可能卡在这些层：
+
+- MediaCodec 同步队列/异步队列调度。
+- VideoFrameReleaseControl / VideoFrameReleaseHelper 的帧释放节奏。
+- SurfaceView/TextureView 输出路径。
+- tunnel 是否合法启用。
+- 设备厂商 codec 对 4K/HDR/Profile/Level 的兼容缺陷。
+- ExoPlayer renderer state 在切源/恢复/Surface 重建后的旧状态残留。
+
+所以，在拿不到原版闭源 Media3 二开产物的情况下，最现实的替代路线不是继续猜网络，而是：
+
+1. 先做“纯系统硬解”模式，彻底移除扩展 renderer fallback 干扰。
+2. 立即对齐原版 tunnel + SurfaceView 约束。
+3. 增加可开关的异步 MediaCodec 队列实验项。
+4. 给 SurfaceView 增加 fixed size 处理。
+5. 用实机日志记录 decoderName、droppedFrames、surface 类型、tunnel、async codec mode、video size、frame rate。
+6. 再根据设备日志做 codec selector 黑名单/白名单，而不是全局硬编码。
+
+### 当前推荐的修复顺序
+
+| 顺序 | 修复项 | 理由 |
+|---|---|---|
+| 1 | `PlayerSetting.isTunnelingEnabled()` 与原版一致，tunnel 强制 Surface | 低风险、直接对齐原版、硬解实际调用 |
+| 2 | 增加“纯系统硬解/设备优先/应用优先”三档，默认硬解排查可用 `EXTENSION_RENDERER_MODE_OFF` | 借鉴 NextPlayer，能确认 nextlib fallback 是否干扰 |
+| 3 | 保持主路径回归 `DefaultRenderersFactory` 风格，必要时只保留 FFmpeg audio | 更接近原版和公开 FongMi/media 行为 |
+| 4 | 增加 `forceEnableMediaCodecAsynchronousQueueing()` 实验开关 | 官方 API 已存在，针对低端 TV/4K dropped frames 有明确讨论 |
+| 5 | SurfaceView fixed size | Just Player 已实践，风险可控 |
+| 6 | 收集设备 codec 日志后做 `MediaCodecSelector` 兼容规则 | 需要真实数据，不能先拍脑袋 |
+
+### 不建议直接照搬的点
+
+- 不建议全局强制异步 MediaCodec 队列。官方也保留了 force enable/disable，说明它是兼容性敏感项。
+- 不建议全局开启 tunnel。Just Player 也把它作为用户设置，因为并非所有设备可用。
+- 不建议直接把 `setAllowedVideoJoiningTimeMs()` 或 late-drop 阈值调很大。这类参数能减少掉帧，但可能增加交互延迟或隐藏根因。
+- 不建议只因为某个设备系统播放器正常，就假设 Exo 无法解决。系统播放器可能走私有厂商路径，但 Exo 仍可通过 Surface/tunnel/async/codec selector 缓解一部分。
