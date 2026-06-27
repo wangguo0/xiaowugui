@@ -269,7 +269,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         mBinding.control.action.text.setOnClickListener(this::onTrack);
         mBinding.control.action.audio.setOnClickListener(this::onTrack);
         mBinding.control.action.video.setOnClickListener(this::onTrack);
-        mBinding.control.action.home.setOnClickListener(view -> onHome());
+        mBinding.control.action.source.setOnClickListener(view -> onFullscreenLiveSource());
         mBinding.control.action.line.setOnClickListener(view -> onLine());
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
@@ -432,7 +432,6 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void getLive() {
-        mBinding.control.action.home.setText(LiveConfig.isOnly() ? getString(R.string.live_refresh) : getHome().getName());
         renderLive(getHome());
         mViewModel.parse(getHome());
         showProgress();
@@ -586,6 +585,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private void onLiveSource() {
         refreshInjectedLives();
         LiveDialog.show(this);
+        hideControl();
+        hideInfo();
+    }
+
+    private void onFullscreenLiveSource() {
+        refreshInjectedLives();
+        LiveDialog.create().drawer().show(getSupportFragmentManager(), null);
         hideControl();
         hideInfo();
     }

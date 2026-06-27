@@ -201,7 +201,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.control.action.speed.setDownListener(this::onSpeedSub);
         mBinding.control.action.text.setUpListener(this::onSubtitleClick);
         mBinding.control.action.text.setDownListener(this::onSubtitleClick);
-        mBinding.control.action.home.setOnClickListener(view -> onHome());
+        mBinding.control.action.source.setOnClickListener(view -> onLiveSource());
         mBinding.control.action.line.setOnClickListener(view -> onLine());
         mBinding.control.action.scale.setOnClickListener(view -> onScale());
         mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
@@ -289,7 +289,6 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
     }
 
     private void getLive() {
-        mBinding.control.action.home.setText(LiveConfig.isOnly() ? getString(R.string.live_refresh) : getHome().getName());
         mViewModel.parse(getHome());
         showProgress();
     }
@@ -389,6 +388,11 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
     private void onHome() {
         if (LiveConfig.isOnly()) setLive(getHome());
         else LiveDialog.create().show(this);
+        hideControl();
+    }
+
+    private void onLiveSource() {
+        LiveDialog.create().drawer().show(this);
         hideControl();
     }
 
