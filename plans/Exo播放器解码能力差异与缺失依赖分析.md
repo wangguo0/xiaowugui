@@ -207,3 +207,83 @@ tunnel + SurfaceView 约束
 - 不建议全局开启 tunnel。Just Player 也把它作为用户设置，因为并非所有设备可用。
 - 不建议直接把 `setAllowedVideoJoiningTimeMs()` 或 late-drop 阈值调很大。这类参数能减少掉帧，但可能增加交互延迟或隐藏根因。
 - 不建议只因为某个设备系统播放器正常，就假设 Exo 无法解决。系统播放器可能走私有厂商路径，但 Exo 仍可通过 Surface/tunnel/async/codec selector 缓解一部分。
+
+## 官方底层资料与非 Exo 播放器补充
+
+本轮继续扩大到 Android 官方文档、Media3 官方 issue、IJK、mpv-android、VLC、Kodi、Nova、Just Player、NextPlayer、GSY/DKVideoPlayer 等方向。结论不是“找到一段代码照搬”，而是把成熟播放器处理 4K 卡顿时反复出现的思路抽出来。
+
+### 参考来源总表
+
+| 来源 | 类型 | 是否直接相关 | 已确认的关键点 | 对我们的启发 |
+|---|---|---:|---|---|
+| Android `MediaCodec` 官方文档 | 官方底层 API | 是 | `SurfaceView` 使用 `releaseOutputBuffer(index, renderTimestampNs)` 时按 VSYNC 调度；timestamp 必须接近 `System.nanoTime()`；多个 buffer 命中同一 VSYNC 时只显示最后一个，其余会被丢弃；最佳时机约为目标渲染前两个 VSYNC，60Hz 约 33ms | Exo 硬解已经选中后，仍可能因为帧释放节奏、SurfaceView 输出时机不稳而像 PPT |
+| Android `MediaCodec` 异步模式文档 | 官方底层 API | 是 | async callback 必须在 `configure()` 前设置；async 模式不能再走同步 dequeue；`flush()` 后必须 `start()` 才会继续收到 buffer | Media3 的 async codec queueing 是有效入口，但必须用官方/Media3 已封装 API，不能手写混用同步/异步 |
+| Android `PARAMETER_KEY_LOW_LATENCY` | 官方底层 API | 中 | API 30+ 可启用低延迟解码，减少 codec 持有 input/output 数据 | 可作为实验项或设备定向项，不适合默认全局打开 |
+| Android `VideoCapabilities.PerformancePoint` | 官方能力 API | 是 | API 29+ 提供像素数、像素率、帧率上界，`covers()` 可判断 codec 性能点是否覆盖目标视频 | 可做 4K/60 风险分类和日志，不应该作为唯一拒绝依据，因为部分设备上报不可靠 |
+| Media3 `MediaCodecVideoRenderer` | 官方播放器实现 | 是 | 内部已有 dropped input/output buffer、late-drop、operating-rate、Surface 切换判断、VideoFrameReleaseControl 等逻辑 | 闭源二开 Media3 缺失时，优先用公开 factory API 暴露的开关，而不是乱改 renderer |
+| Media3 `DefaultRenderersFactory` | 官方播放器入口 | 是 | 可配置 `forceEnableMediaCodecAsynchronousQueueing()`、`forceDisableMediaCodecAsynchronousQueueing()`、`setMediaCodecSelector()`、`setAllowedVideoJoiningTimeMs()`、`experimentalSetLateThresholdToDropDecoderInputUs()` | 这是我们能在不拿到原版闭源补丁的前提下最现实的 Exo 优化入口 |
+| Media3 issue `#2972` | 官方 issue | 是 | Google TV Streamer 上硬解 `c2.mtk.avc.decoder` 后视频冻结、音频继续；VLC 不冻结 | 证明“硬解 decoderName 正常”不等于 Exo 链路正常；同源 VLC/IJK 正常时仍要查 Exo renderer/Surface/同步 |
+| Media3 issue `#2941` | 官方 issue | 中高 | 不同帧率流切换后，不 `stop()` 会保留旧 frame timing 状态并持续 choppy；`stop()` 会恢复平滑但带黑屏 | 如果卡顿发生在换集、换源、恢复播放后，需要考虑重置 renderer/frame timing 状态 |
+| Media3 issue `#1621` | 官方 issue | 中 | 多个盒子上字幕 extraction/audio discontinuity 会导致视频 pixelating | 音频 sink、字幕解析、demux 负载也可能影响视频流畅；但带开关且未启用的功能不用优先动 |
+| Just Player | Exo 成熟播放器 | 是 | 提供 decoder priority：偏好设备、偏好 app、仅设备；tunneling 明确用于改善 Android TV 4K/HDR；`SurfaceView` 收到 format 后 `setFixedSize(width, height)`；实现 display mode/refresh rate 匹配 | 我们应补“纯系统硬解”模式、tunnel + SurfaceView 约束、SurfaceView fixed size、TV 刷新率诊断 |
+| NextPlayer | Exo/nextlib 播放器 | 是 | decoder priority 有 `DEVICE_ONLY`、`PREFER_DEVICE`、`PREFER_APP`，其中 `DEVICE_ONLY` 对应 extension renderer off | 我们当前硬解仍是 `EXTENSION_RENDERER_MODE_ON`，排查 4K PPT 时不够干净 |
+| mpv-android | 非 Exo 成熟播放器 | 是 | `hwdec=mediacodec,mediacodec-copy`；`profile=fast`；可选 `video-sync=audio/display-resample/display-vdrop`；设置 `display-fps-override`；支持 `vd-lavc-fast`、`skiploopfilter`；限制 demuxer cache；Surface 变化时设置 `android-surface-size` | 成熟播放器会把解码吞吐、显示同步、Surface 尺寸、缓存背压分开调；Exo 也应分层诊断，不只看 decoderName |
+| IJK / bilibili ijkplayer | 非 Exo 成熟播放器 | 是 | 支持 MediaCodec；有 codec selector 枚举、评分、拒绝低分 codec；播放器参数常见 `framedrop=1`、`video-pictq-size`、`mediacodec-handle-resolution-change` | IJK 同源不卡时，重点对比“codec 选择、迟到帧处理、分辨率变化、输出队列”而不是只看硬解是否开启 |
+| VLC Android / libVLC | 非 Exo 成熟播放器 | 中高 | 大型长期维护播放器，Android 端基于 libVLC，实测 issue 中常作为 Exo 冻结时的正常对照 | 可借鉴“多播放内核兜底”和“设备特例修正”思路，但不适合直接搬 VLC 内核逻辑到 Exo |
+| Kodi / XBMC | 非 Exo 家庭影院播放器 | 中 | 大型 TV/盒子媒体中心，长期处理刷新率、HDMI、音视频同步、硬解兼容 | 强化判断：TV 4K 卡顿不只是 decoder，还包括显示模式、刷新率、HDR/色彩、音频直通 |
+| Nova Video Player | 非 Exo/系统兼容经验 | 中高 | FAQ/变更长期强调 HEVC 硬解能力、Dolby Vision/HDR、HDMI 显示模式/色彩空间、自适应刷新率、音频实现差异、WebDAV/SFTP 高码率稳定性 | 对用户侧诊断很有价值：同样 4K 卡顿可能由 DV/HDR/profile/display/audio sink 触发 |
+| GSYVideoPlayer / DKVideoPlayer | 多内核封装播放器 | 中低 | 同时封装 IJK、Exo、MediaPlayer，多用于业务播放器组件 | 对底层 Exo 优化帮助有限，但证明“保留多内核切换”是 Android 播放器常见生产策略 |
+
+## IJK 同一个 4K 不卡、Exo 反而卡的判断
+
+这个现象很重要。它说明不能简单归因成“设备硬解能力不够”，因为 IJK 同样可以调用 Android MediaCodec 硬解。如果同源、同设备、同网络下 IJK 流畅，Exo 卡得像 PPT，更可能是下面这些链路差异。
+
+| 差异点 | 我们当前 IJK | 我们当前 Exo | 为什么会导致 IJK 更顺 |
+|---|---|---|---|
+| codec 选择策略 | `IjkMediaPlayer.DefaultMediaCodecSelector` 会枚举所有 codec，按 known list/rank 评分，拒绝 rank `< 600` 的 codec；MTK、qcom、Exynos、amlogic 等有显式排名 | 当前 Exo 走默认 `MediaCodecSelector`，没有本地评分/诊断/黑名单 | 同一 mime 下 Exo 和 IJK 可能选到不同硬解器；即使名字相同，IJK 会更明确地排除低可信 codec |
+| 迟到帧处理 | `framedrop=1` | Exo 迟到帧策略由 `MediaCodecVideoRenderer` 和 frame release control 决定，当前没有显式实验参数 | IJK 更倾向“丢迟到帧保播放节奏”，用户感知可能是顺；Exo 如果保留过多迟到帧，容易像 PPT |
+| 解码/显示队列 | `video-pictq-size=3`，native 播放队列较小 | Exo 由 renderer/codec adapter/Surface 调度决定，当前没有针对 4K 的队列策略开关 | 小队列能降低积压，避免越播越落后；Exo 队列和 VSYNC 释放不匹配时会积压 |
+| 分辨率变化 | `mediacodec-handle-resolution-change=decode` | Exo 支持 codec 复用/重建，但当前没有针对异常设备的强制重建策略 | 某些网盘/转封装源可能中途 format/sps 信息变化，IJK 显式处理可能更稳 |
+| Surface 绑定 | IJK 直接 `setDisplay(surfaceHolder)` / `setSurface(surface)`，Surface 回调中重新绑定 | Exo 通过 `PlayerView` + render 类型管理，之前已有 Surface attach/detach 对齐问题 | Surface 生命周期时机不同会影响硬解输出，尤其是 TextureView、全屏、恢复播放 |
+| 音频输出 | IJK 当前 `opensles=0`，音频同步由 IJK/native 管 | Exo 走 `DefaultAudioSink`，原版影视还有二开 `buildAudioSink()` override | 音频 clock 是视频释放的重要基准，音频 sink 差异可能让视频帧释放节奏不同 |
+| demux/读取 | IJK 有 `http-detect-range-support=0`、`max-buffer-size=15728640`、`fflags=fastseek` | Exo 走 MediaSource/DataSource/LoadControl，当前有自定义 buffer 倍数和 bytes | 如果日志不是 BUFFERING，而是 dropped frames，这不是主因；但同源下读包粒度仍可能影响上游背压 |
+| 扩展 renderer/fallback | IJK 是单内核配置；硬解失败就按 IJK 规则处理 | Exo 当前 `NextRenderersFactory` + `EXTENSION_RENDERER_MODE_ON`，扩展 renderer 仍在 fallback 链路 | 4K 硬解排查时应有“仅系统硬解”档，避免 fallback 行为污染判断 |
+
+### 对 IJK 不卡现象的更准确结论
+
+IJK 不卡不等于“Exo 一定无解”，但它基本排除了“这台设备绝对无法硬解这个 4K”的说法。更合理的根因范围是：
+
+1. Exo 选择的 codec、profile/level 判断或 fallback 顺序不如 IJK 稳。
+2. Exo 的 `VideoFrameReleaseControl` / `SurfaceView` timestamp / VSYNC 调度在这台设备上不如 IJK 的 native 输出路径稳。
+3. Exo 的迟到帧策略更保守，导致播放节奏落后后表现成 PPT；IJK 通过 `framedrop=1` 保住时间轴。
+4. Exo 的 audio sink 或音视频同步基准与原版影视二开 Media3 不一致。
+5. Exo 的 Surface 生命周期、tunnel、TextureView/SurfaceView 约束没有完全贴近原版。
+
+## 可迁移到我们代码的处理逻辑清单
+
+| 优先级 | 处理逻辑 | 来源依据 | 是否应默认开启 | 预期收益 | 主要风险 |
+|---|---|---|---:|---|---|
+| P0 | 增加 Exo codec 诊断日志：列出候选 codec、最终 codec、profile/level、PerformancePoint 覆盖、hardware/software、secure/tunnel 支持、operating rate、video size/fps/HDR/DV 信息 | IJK selector、Android PerformancePoint、Media3 EventLogger | 是，仅日志 | 先知道 Exo 和 IJK 是否选了同一 decoder，以及 4K 是否超上报能力 | 日志量需受调试开关控制 |
+| P0 | 增加“仅系统硬解”模式，把 extension renderer mode 设为 `OFF`，用于 4K 卡顿排查 | Just Player / NextPlayer decoder priority | 不一定默认，可作为硬解排查档 | 排除 nextlib/FFmpeg video fallback 干扰 | 少数格式失去 app decoder 兜底 |
+| P0 | tunnel 与 SurfaceView 强绑定，开启 tunnel 时强制 SurfaceView，否则不启用 tunneling | 原版影视、Just Player、Exo tunneling 实践 | 保持用户开关，但约束合法条件 | TV 4K/HDR 可能改善，且更贴近原版 | 部分设备 tunnel 不稳定，必须可关闭 |
+| P1 | 实现 Exo `MediaCodecSelector` 诊断版，再逐步加入 IJK 风格 ranking：拒绝明显 software/低可信 codec，优先厂商硬解和已知低延迟 codec | IJK `IjkMediaCodecInfo` | 初期只日志，不改变选择 | 能定位 Exo 是否选错 codec；后续可做设备白/黑名单 | 盲目改选择会误伤设备 |
+| P1 | 增加 async MediaCodec queueing 实验开关：`forceEnableMediaCodecAsynchronousQueueing()` / `forceDisableMediaCodecAsynchronousQueueing()` | Media3 API、Android async 文档、Media3 issue | 不默认全局开启 | 降低 codec 同步 dequeue 阻塞，改善部分 TV/盒子掉帧 | 厂商兼容敏感 |
+| P1 | SurfaceView 收到真实视频尺寸后 `holder.setFixedSize(width, height)`，切换视频时更新或重置 | Just Player、Android SurfaceView 输出实践 | 可对 SurfaceView 默认做，需谨慎验证 | 降低 Surface 缩放/缓冲尺寸不匹配带来的 4K 输出压力 | 旋转、竖屏短剧、全屏切换需验证 |
+| P1 | 增加 late-drop 实验参数：`experimentalSetLateThresholdToDropDecoderInputUs()`，模拟 IJK `framedrop=1` 的“保节奏”思路 | IJK framedrop、Media3 API | 不默认，作为高级/实验 | 如果 Exo PPT 是越积越落后，丢迟到帧可能明显改善体感 | 画面完整性下降，参数过激会跳帧明显 |
+| P1 | 记录并可选设置 codec operating rate / assumed minimum codec operating rate | Media3 `KEY_OPERATING_RATE` | 初期日志优先 | 让 codec 按目标帧率/倍速准备吞吐 | `DefaultRenderersFactory` 不直接暴露所有 builder 能力，可能需自定义 renderer |
+| P2 | TV 端刷新率/显示模式诊断和可选匹配：优先同分辨率、刷新率为视频 fps 整数倍或不低于 fps | Just Player、Kodi/Nova/mpv 思路 | 诊断默认，自动切换需开关 | 解决 24/25/50/60fps 与显示刷新率不匹配造成的 judder | 切换 display mode 会黑屏/闪烁，手机端不应强做 |
+| P2 | HDR/Dolby Vision/profile 风险识别：DV 不支持时尝试映射/降级 HEVC 或提示换内核 | Nova、Just Player `setMapDV7ToHevc` | 只在明确格式/设备不支持时 | 某些“4K 卡”其实是 DV/HDR/profile 兼容问题 | 错误降级可能色彩异常 |
+| P2 | 切源/换集/恢复播放后必要时重置 renderer/frame timing，而不是盲目复用旧状态 | Media3 issue `#2941` | 场景触发 | 解决换不同 fps/格式后持续 choppy | stop/rebuild 可能黑屏或首帧慢 |
+| P3 | 继续保留 IJK 作为 4K 问题源兜底内核 | GSY/DKVideoPlayer 多内核实践、用户实测 IJK 不卡 | 是 | 当 Exo 遇到设备特定 bug 时给用户可用路径 | 不是修复 Exo 本身 |
+
+## 当前最可能的突破口
+
+结合“原版影视 Exo 正常、我们 Exo 卡、我们 IJK 同源不卡”这三个条件，优先级应调整为：
+
+1. 先确认 Exo 与 IJK/原版实际选中的 decoder 是否一致。如果不同，优先做 Exo codec selector 诊断和“仅系统硬解”模式。
+2. 如果 decoder 一致但 Exo dropped frames 高，优先看 SurfaceView/tunnel/async codec queueing/late-drop，而不是网络。
+3. 如果 Exo 没有明显 dropped frames 但体感卡，查显示刷新率、frame release、HDR/DV、音频 sink 同步。
+4. 如果只在换源、换集、恢复后卡，查 renderer/frame timing 旧状态残留，必要时重建播放器或 renderer。
+5. 如果所有 Exo 公开策略都无效，而原版影视仍正常，则闭源二开 Media3 renderer/codec 补丁仍是最大缺口。
+
+因此，下一个代码改造不应该一次性大改播放逻辑。更稳的路径是先落地 P0 诊断和“仅系统硬解”排查档，再用实机日志决定是否启用 codec selector ranking、async queueing、late-drop 或刷新率匹配。
