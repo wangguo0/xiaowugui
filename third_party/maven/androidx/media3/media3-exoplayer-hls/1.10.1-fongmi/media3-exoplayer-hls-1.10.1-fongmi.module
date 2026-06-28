@@ -35,11 +35,11 @@
         {
           "name": "media3-exoplayer-hls-1.10.1-fongmi.aar",
           "url": "media3-exoplayer-hls-1.10.1-fongmi.aar",
-          "size": 253783,
-          "sha512": "6a82eddefc6f24dc94d29ef6e42b720ecfeccaa76c639d4bafd5a9568da29a99a7c45bad529c4a4cfa8b63b581d56afefc38698a11891450e903008054bd4b24",
-          "sha256": "46d972e75959eb1b4eba3e0f9fc982d39a45eb470eb11a561298606f3b8972ca",
-          "sha1": "454b115d188b2ab31eb320c49640233a93c407f3",
-          "md5": "6702d8ca3358efc9cd6699621104fc91"
+          "size": 254866,
+          "sha512": "b98ca8adcd23d48468ad3e91375f4a5ce65cc84f4e9de8963a9f3f2951981771eb59862599613c6b8592274548e209dbfe46df23c3ff969d28ff252c6b023fb0",
+          "sha256": "cfa8daee6fe88877e2f81436e9aebdd231f1dc9864588d3fe10ce3d198eea54b",
+          "sha1": "ab35c804530a3df22b6ea4ecc1b509f80c9ab4b1",
+          "md5": "26efcb2e56b0aadce7b42374d000c96f"
         }
       ]
     },
@@ -71,11 +71,11 @@
         {
           "name": "media3-exoplayer-hls-1.10.1-fongmi.aar",
           "url": "media3-exoplayer-hls-1.10.1-fongmi.aar",
-          "size": 253783,
-          "sha512": "6a82eddefc6f24dc94d29ef6e42b720ecfeccaa76c639d4bafd5a9568da29a99a7c45bad529c4a4cfa8b63b581d56afefc38698a11891450e903008054bd4b24",
-          "sha256": "46d972e75959eb1b4eba3e0f9fc982d39a45eb470eb11a561298606f3b8972ca",
-          "sha1": "454b115d188b2ab31eb320c49640233a93c407f3",
-          "md5": "6702d8ca3358efc9cd6699621104fc91"
+          "size": 254866,
+          "sha512": "b98ca8adcd23d48468ad3e91375f4a5ce65cc84f4e9de8963a9f3f2951981771eb59862599613c6b8592274548e209dbfe46df23c3ff969d28ff252c6b023fb0",
+          "sha256": "cfa8daee6fe88877e2f81436e9aebdd231f1dc9864588d3fe10ce3d198eea54b",
+          "sha1": "ab35c804530a3df22b6ea4ecc1b509f80c9ab4b1",
+          "md5": "26efcb2e56b0aadce7b42374d000c96f"
         }
       ]
     },
@@ -91,11 +91,11 @@
         {
           "name": "media3-exoplayer-hls-1.10.1-fongmi-sources.jar",
           "url": "media3-exoplayer-hls-1.10.1-fongmi-sources.jar",
-          "size": 169862,
-          "sha512": "204214a20572c1da543b58ae9e6aa902ff14a3ab5fb777c30961c7f197e714a2f6363db39a296ba13f7c620e1da60437d2bac028136be77ce6aae8834796b65b",
-          "sha256": "f19a7738b6e44c1cd38b7670f4c7963d632ce510ddb6f69470d92fa2e12fbb65",
-          "sha1": "9462a448193c99a6be3f11a2a121d640bc233131",
-          "md5": "1fc2f8bad4d7a8dbf4fa08a5748548e3"
+          "size": 170448,
+          "sha512": "64ccbc885b98e6394b313f5aa6e7ae23e21f14dd0a0bcebfba202d7939f0afc677e86ce1869ceb44bab02c68de4c5f8838b2746330953ec60885948a58de63cd",
+          "sha256": "e6a361b85cf21b35f0f6370caf09a667b36590d2c051ebe0525a52c7c85d8e59",
+          "sha1": "b954e9b25394a8e88054dd0a2616eadcad82a844",
+          "md5": "b7fc7b31b079b316f9df126bfc36b044"
         }
       ]
     }
