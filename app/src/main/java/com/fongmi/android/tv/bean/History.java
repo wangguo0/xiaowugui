@@ -28,6 +28,9 @@ import java.util.concurrent.TimeUnit;
 @Entity
 public class History implements Diffable<History> {
 
+    private static final long NEAR_END_MIN_MS = TimeUnit.SECONDS.toMillis(5);
+    private static final long NEAR_END_MAX_MS = TimeUnit.SECONDS.toMillis(30);
+
     @NonNull
     @PrimaryKey
     @SerializedName("key")
@@ -350,6 +353,18 @@ public class History implements Diffable<History> {
 
     public boolean canSave() {
         return getPosition() > 0 && getDuration() > 0;
+    }
+
+    public boolean isNearEnding() {
+        if (getPosition() <= 0 || getDuration() <= 0) return false;
+        long threshold = Math.min(NEAR_END_MAX_MS, Math.max(NEAR_END_MIN_MS, getDuration() / 100));
+        long remaining = getDuration() - getPosition();
+        return remaining >= 0 && remaining <= threshold;
+    }
+
+    public void resetPlaybackPosition() {
+        setPosition(C.TIME_UNSET);
+        setDuration(C.TIME_UNSET);
     }
 
     public boolean canSync() {

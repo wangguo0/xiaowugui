@@ -130,6 +130,7 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private void close(View view) {
         if (downloading) return;
+        if (listener != null) listener.onClose();
         dismissAllowingStateLoss();
     }
 
