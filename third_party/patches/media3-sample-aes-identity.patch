@@ -482,53 +482,53 @@ index 0000000000..f54d09bb4b
 +      }
 +
 +      byte[] output = new byte[sample.length];
-+      int outputLength = 0;
 +      int inputOffset = 0;
++      int outputOffset = 0;
 +      while (nalStartCodeOffset != C.INDEX_UNSET) {
 +        if (nalStartCodeOffset > inputOffset) {
-+          int leadingLength = nalStartCodeOffset - inputOffset;
-+          System.arraycopy(sample, inputOffset, output, outputLength, leadingLength);
-+          outputLength += leadingLength;
++          int length = nalStartCodeOffset - inputOffset;
++          System.arraycopy(sample, inputOffset, output, outputOffset, length);
++          outputOffset += length;
 +        }
 +
-+        int nalStartOffset = nalStartCodeOffset + startCodeLength(sample, nalStartCodeOffset);
++        int startCodeLength = startCodeLength(sample, nalStartCodeOffset);
++        System.arraycopy(sample, nalStartCodeOffset, output, outputOffset, startCodeLength);
++        outputOffset += startCodeLength;
++
++        int nalStartOffset = nalStartCodeOffset + startCodeLength;
 +        int nextNalStartCodeOffset = findStartCode(sample, nalStartOffset);
 +        int nalEndOffset =
 +            nextNalStartCodeOffset == C.INDEX_UNSET ? sample.length : nextNalStartCodeOffset;
-+        int startCodeLength = nalStartOffset - nalStartCodeOffset;
-+        System.arraycopy(sample, nalStartCodeOffset, output, outputLength, startCodeLength);
-+        outputLength += startCodeLength;
-+
 +        if (nalStartOffset < nalEndOffset) {
 +          int nalUnitType = sample[nalStartOffset] & 0x1F;
++          int nalLength = nalEndOffset - nalStartOffset;
 +          if ((nalUnitType == AVC_NAL_TYPE_NON_IDR || nalUnitType == AVC_NAL_TYPE_IDR)
-+              && nalEndOffset - nalStartOffset > 48) {
-+            byte[] nalUnit = Arrays.copyOfRange(sample, nalStartOffset, nalEndOffset);
-+            int nalUnitLength = removeEmulationPreventionBytes(nalUnit);
-+            decryptAvcNal(nalUnit, /* nalStartOffset= */ 0, nalUnitLength, key, iv);
-+            System.arraycopy(nalUnit, 0, output, outputLength, nalUnitLength);
-+            outputLength += nalUnitLength;
++              && nalLength > 48) {
++            byte[] nalData = Arrays.copyOfRange(sample, nalStartOffset, nalEndOffset);
++            int unescapedNalLength = unescapeNal(nalData, nalData.length);
++            decryptAvcNal(nalData, unescapedNalLength, key, iv);
++            System.arraycopy(nalData, 0, output, outputOffset, unescapedNalLength);
++            outputOffset += unescapedNalLength;
 +          } else {
-+            int nalLength = nalEndOffset - nalStartOffset;
-+            System.arraycopy(sample, nalStartOffset, output, outputLength, nalLength);
-+            outputLength += nalLength;
++            System.arraycopy(sample, nalStartOffset, output, outputOffset, nalLength);
++            outputOffset += nalLength;
 +          }
 +        }
 +        inputOffset = nalEndOffset;
 +        nalStartCodeOffset = nextNalStartCodeOffset;
 +      }
++
 +      if (inputOffset < sample.length) {
-+        int trailingLength = sample.length - inputOffset;
-+        System.arraycopy(sample, inputOffset, output, outputLength, trailingLength);
-+        outputLength += trailingLength;
++        int length = sample.length - inputOffset;
++        System.arraycopy(sample, inputOffset, output, outputOffset, length);
++        outputOffset += length;
 +      }
-+      return outputLength == output.length ? output : Arrays.copyOf(output, outputLength);
++      return outputOffset == sample.length ? output : Arrays.copyOf(output, outputOffset);
 +    }
 +
-+    private static void decryptAvcNal(
-+        byte[] sample, int nalStartOffset, int nalEndOffset, byte[] key, byte[] iv) {
++    private static void decryptAvcNal(byte[] nalData, int nalLength, byte[] key, byte[] iv) {
 +      int encryptedLength = 0;
-+      for (int offset = nalStartOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
++      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
 +        encryptedLength += AES_BLOCK_SIZE;
 +      }
 +      if (encryptedLength == 0) {
@@ -537,35 +537,35 @@ index 0000000000..f54d09bb4b
 +
 +      byte[] encryptedData = new byte[encryptedLength];
 +      int encryptedDataOffset = 0;
-+      for (int offset = nalStartOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
-+        System.arraycopy(sample, offset, encryptedData, encryptedDataOffset, AES_BLOCK_SIZE);
++      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
++        System.arraycopy(nalData, offset, encryptedData, encryptedDataOffset, AES_BLOCK_SIZE);
 +        encryptedDataOffset += AES_BLOCK_SIZE;
 +      }
 +
 +      byte[] decryptedData = decryptAesCbc(encryptedData, key, iv);
 +      int decryptedDataOffset = 0;
-+      for (int offset = nalStartOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
-+        System.arraycopy(decryptedData, decryptedDataOffset, sample, offset, AES_BLOCK_SIZE);
++      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
++        System.arraycopy(decryptedData, decryptedDataOffset, nalData, offset, AES_BLOCK_SIZE);
 +        decryptedDataOffset += AES_BLOCK_SIZE;
 +      }
 +    }
 +
-+    private static int removeEmulationPreventionBytes(byte[] data) {
-+      int readOffset = 0;
-+      int writeOffset = 0;
-+      while (readOffset < data.length) {
-+        if (readOffset <= data.length - 3
-+            && data[readOffset] == 0
-+            && data[readOffset + 1] == 0
-+            && data[readOffset + 2] == 3) {
-+          data[writeOffset++] = data[readOffset++];
-+          data[writeOffset++] = data[readOffset++];
-+          readOffset++;
++    private static int unescapeNal(byte[] nalData, int nalLength) {
++      int inputOffset = 0;
++      int outputOffset = 0;
++      while (inputOffset < nalLength) {
++        if (nalLength - inputOffset > 3
++            && nalData[inputOffset] == 0
++            && nalData[inputOffset + 1] == 0
++            && nalData[inputOffset + 2] == 3) {
++          nalData[outputOffset++] = nalData[inputOffset++];
++          nalData[outputOffset++] = nalData[inputOffset++];
++          inputOffset++;
 +        } else {
-+          data[writeOffset++] = data[readOffset++];
++          nalData[outputOffset++] = nalData[inputOffset++];
 +        }
 +      }
-+      return writeOffset;
++      return outputOffset;
 +    }
 +
 +    private static byte[] decryptAesCbc(byte[] encryptedData, byte[] key, byte[] iv) {

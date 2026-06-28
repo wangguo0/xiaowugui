@@ -133,11 +133,11 @@
         {
           "name": "media3-session-1.10.1-fongmi-sources.jar",
           "url": "media3-session-1.10.1-fongmi-sources.jar",
-          "size": 422880,
-          "sha512": "9818b374dd425d610aebdacc16fa6c836231ec4565274b6db920c7c2c11ebe3527531a966023d5c75c84a969c040e227eef2f8681d3f8c335c3fcebe3e9b9e14",
-          "sha256": "458f57fc2fe3d625afbde139858a71b8772906660dd31abffee2dc58096ca7fc",
-          "sha1": "18bbc28bce63c3e135defbd3e99d02e9c4977fe7",
-          "md5": "8f9260d24254e552474ba212e2d9e2b4"
+          "size": 422886,
+          "sha512": "6c2dfc2ea935d19b17a9a74b70fcc330d8cb3621627f04cc98381d205cfd76a7c54d765602b22526ef6f2b2bcaf0738e6f637c4075f6f2942cf64a0aadc1322d",
+          "sha256": "15ef81a174eaa4c4e2274fa9aa64655c7d595e7b98b2c9b411a8cd01d62f9595",
+          "sha1": "3bbd996d88fefb8bc9b0d82952a022b4290664c8",
+          "md5": "4aae005496ab0a806bf7357fd9adf466"
         }
       ]
     }
