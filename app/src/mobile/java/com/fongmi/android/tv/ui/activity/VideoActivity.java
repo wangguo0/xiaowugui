@@ -1714,7 +1714,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void saveHistory(boolean exit) {
         if (mHistory == null || Setting.isIncognito()) return;
-        if (exit && isOwner()) {
+        if (service() != null && isOwner()) {
             updatePlaybackHistoryPosition();
             mHistory.setCreateTime(System.currentTimeMillis());
         }
@@ -1722,7 +1722,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (!mHistory.canSave()) return;
         History history = mHistory.copy();
         Task.execute(() -> {
-            history.merge().save();
+            if (history.getDuration() > 0) history.merge().save();
+            else history.save();
             if (exit) RefreshEvent.history();
         });
     }
@@ -1969,9 +1970,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mHistory == null) return;
         long position = player().getPosition();
         long duration = player().getDuration();
-        if (position <= 0 || duration <= 0) return;
-        mHistory.setPosition(position);
-        mHistory.setDuration(duration);
+        if (position > 0) mHistory.setPosition(position);
+        if (duration > 0) mHistory.setDuration(duration);
+        else if (mHistory.getDuration() < 0) mHistory.setDuration(0);
         PlaybackEventCollector.get().updateHistory(mHistory);
     }
 

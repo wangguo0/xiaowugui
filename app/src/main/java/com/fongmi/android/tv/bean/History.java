@@ -349,7 +349,7 @@ public class History implements Diffable<History> {
     }
 
     public boolean canSave() {
-        return getPosition() > 0 && getDuration() > 0;
+        return getPosition() > 0;
     }
 
     public boolean canSync() {
