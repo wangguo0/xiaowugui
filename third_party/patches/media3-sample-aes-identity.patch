@@ -145,6 +145,14 @@ index dadbb106d1..db5d43e19e 100644
  import androidx.media3.extractor.metadata.id3.Id3Decoder;
  import androidx.media3.extractor.metadata.id3.PrivFrame;
  import com.google.common.base.Ascii;
+@@ -45,6 +46,7 @@ import java.io.EOFException;
+ import java.io.IOException;
+ import java.io.InterruptedIOException;
+ import java.math.BigInteger;
++import java.util.Arrays;
+ import java.util.List;
+ import java.util.concurrent.TimeoutException;
+ import java.util.concurrent.atomic.AtomicInteger;
 @@ -80,6 +81,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
     * @param mediaSegmentKey The media segment decryption key, if fully encrypted. Null otherwise.
     * @param initSegmentKey The initialization segment decryption key, if fully encrypted. Null
@@ -174,11 +182,12 @@ index dadbb106d1..db5d43e19e 100644
      DataSource mediaDataSource = buildDataSource(dataSource, mediaSegmentKey, mediaSegmentIv);
  
      // Init segment.
-@@ -179,6 +188,7 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -179,6 +188,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
            isSameInitData
                    && isFollowingChunk
                    && !previousChunk.extractorInvalidated
-+                  && sampleAesSegmentKey == null
++                  && canReuseExtractorForSampleAes(
++                      previousChunk, sampleAesSegmentKey, sampleAesSegmentIv)
                    && previousChunk.discontinuitySequenceNumber == discontinuitySequenceNumber
                ? previousChunk.extractor
                : null;
@@ -253,12 +262,29 @@ index dadbb106d1..db5d43e19e 100644
      }
      output.setDrmInitData(drmInitData);
      return extractorInput;
+@@ -714,4 +740,16 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+     }
+     return dataSource;
+   }
++
++  private static boolean canReuseExtractorForSampleAes(
++      HlsMediaChunk previousChunk,
++      @Nullable byte[] sampleAesSegmentKey,
++      @Nullable byte[] sampleAesSegmentIv) {
++    if (sampleAesSegmentKey == null) {
++      return previousChunk.sampleAesSegmentKey == null;
++    }
++    return previousChunk.sampleAesSegmentKey != null
++        && Arrays.equals(previousChunk.sampleAesSegmentKey, sampleAesSegmentKey)
++        && Arrays.equals(previousChunk.sampleAesSegmentIv, sampleAesSegmentIv);
++  }
+ }
 diff --git a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java
 new file mode 100644
 index 0000000000..a878966827
 --- /dev/null
 +++ b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java
-@@ -0,0 +1,367 @@
+@@ -0,0 +1,421 @@
 +/*
 + * Copyright 2026 The Android Open Source Project
 + *
@@ -345,7 +371,9 @@ index 0000000000..a878966827
 +
 +    private byte[] pendingData;
 +    private byte[] outputBuffer;
-+    private final byte[] cipherFinalBuffer;
++    private byte[] encryptedBuffer;
++    private byte[] decryptedBuffer;
++    private byte[] nalBuffer;
 +    private int pendingLength;
 +    @Nullable private String sampleMimeType;
 +    @Nullable private Cipher cipher;
@@ -359,7 +387,9 @@ index 0000000000..a878966827
 +      this.outputDataWrapper = new ParsableByteArray(new byte[0]);
 +      this.pendingData = new byte[INITIAL_PENDING_DATA_SIZE];
 +      this.outputBuffer = new byte[INITIAL_PENDING_DATA_SIZE];
-+      this.cipherFinalBuffer = new byte[AES_BLOCK_SIZE];
++      this.encryptedBuffer = new byte[INITIAL_PENDING_DATA_SIZE];
++      this.decryptedBuffer = new byte[INITIAL_PENDING_DATA_SIZE];
++      this.nalBuffer = new byte[INITIAL_PENDING_DATA_SIZE];
 +    }
 +
 +    @Override
@@ -518,10 +548,25 @@ index 0000000000..a878966827
 +          int nalLength = nalEndOffset - nalStartOffset;
 +          if ((nalUnitType == AVC_NAL_TYPE_NON_IDR || nalUnitType == AVC_NAL_TYPE_IDR)
 +              && nalLength > 48) {
++            nalBuffer = ensureScratchCapacity(nalBuffer, nalLength);
 +            int unescapedNalLength =
-+                unescapeNal(sample, nalStartOffset, nalEndOffset, outputBuffer, outputOffset);
-+            decryptAvcNal(outputBuffer, outputOffset, unescapedNalLength);
-+            outputOffset += unescapedNalLength;
++                unescapeNal(
++                    sample,
++                    nalStartOffset,
++                    nalEndOffset,
++                    nalBuffer,
++                    /* outputStartOffset= */ 0);
++            decryptAvcNal(nalBuffer, /* nalOffset= */ 0, unescapedNalLength);
++            outputBuffer =
++                ensureScratchCapacity(
++                    outputBuffer, outputOffset + getEscapedNalMaxLength(unescapedNalLength));
++            outputOffset =
++                escapeNal(
++                    nalBuffer,
++                    /* inputOffset= */ 0,
++                    unescapedNalLength,
++                    outputBuffer,
++                    outputOffset);
 +          } else {
 +            System.arraycopy(sample, nalStartOffset, outputBuffer, outputOffset, nalLength);
 +            outputOffset += nalLength;
@@ -541,26 +586,37 @@ index 0000000000..a878966827
 +    }
 +
 +    private void decryptAvcNal(byte[] nalData, int nalOffset, int nalLength) {
-+      if (nalLength <= 48) {
++      int encryptedLength = getAvcEncryptedLength(nalLength);
++      if (encryptedLength == 0) {
 +        return;
 +      }
 +
-+      try {
-+        initCipher();
-+        int nalEndOffset = nalOffset + nalLength;
-+        for (int offset = nalOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
-+          int outputLength = cipher.update(nalData, offset, AES_BLOCK_SIZE, nalData, offset);
-+          if (outputLength != AES_BLOCK_SIZE) {
-+            throw new IllegalStateException("Unexpected SAMPLE-AES AVC block output length");
-+          }
-+        }
-+        int finalLength = cipher.doFinal(cipherFinalBuffer, /* outputOffset= */ 0);
-+        if (finalLength != 0) {
-+          throw new IllegalStateException("Unexpected SAMPLE-AES AVC final output length");
-+        }
-+      } catch (GeneralSecurityException e) {
-+        throw new IllegalStateException("Failed to decrypt HLS SAMPLE-AES AVC sample", e);
++      encryptedBuffer = ensureScratchCapacity(encryptedBuffer, encryptedLength);
++      decryptedBuffer = ensureScratchCapacity(decryptedBuffer, encryptedLength);
++      int encryptedDataOffset = 0;
++      int nalEndOffset = nalOffset + nalLength;
++      for (int offset = nalOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
++        System.arraycopy(nalData, offset, encryptedBuffer, encryptedDataOffset, AES_BLOCK_SIZE);
++        encryptedDataOffset += AES_BLOCK_SIZE;
 +      }
++
++      int decryptedLength = decryptAesCbc(encryptedBuffer, 0, encryptedLength, decryptedBuffer, 0);
++      int decryptedDataOffset = 0;
++      for (int offset = nalOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
++        if (decryptedDataOffset + AES_BLOCK_SIZE > decryptedLength) {
++          return;
++        }
++        System.arraycopy(decryptedBuffer, decryptedDataOffset, nalData, offset, AES_BLOCK_SIZE);
++        decryptedDataOffset += AES_BLOCK_SIZE;
++      }
++    }
++
++    private static int getAvcEncryptedLength(int nalLength) {
++      int encryptedLength = 0;
++      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
++        encryptedLength += AES_BLOCK_SIZE;
++      }
++      return encryptedLength;
 +    }
 +
 +    private static int unescapeNal(
@@ -584,6 +640,30 @@ index 0000000000..a878966827
 +        }
 +      }
 +      return outputOffset - outputStartOffset;
++    }
++
++    private static int getEscapedNalMaxLength(int nalLength) {
++      return nalLength + (nalLength / 2) + 1;
++    }
++
++    private static int escapeNal(
++        byte[] sample,
++        int inputOffset,
++        int inputLength,
++        byte[] output,
++        int outputOffset) {
++      int inputEndOffset = inputOffset + inputLength;
++      int consecutiveZeros = 0;
++      while (inputOffset < inputEndOffset) {
++        byte value = sample[inputOffset++];
++        if (consecutiveZeros >= 2 && (value & 0xFF) <= 0x03) {
++          output[outputOffset++] = 0x03;
++          consecutiveZeros = 0;
++        }
++        output[outputOffset++] = value;
++        consecutiveZeros = value == 0 ? consecutiveZeros + 1 : 0;
++      }
++      return outputOffset;
 +    }
 +
 +    private int decryptAesCbc(
