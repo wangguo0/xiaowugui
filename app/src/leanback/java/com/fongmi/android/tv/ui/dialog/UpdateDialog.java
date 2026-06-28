@@ -1,7 +1,10 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.view.KeyEvent;
+import android.view.Window;
 import android.view.View;
 
 import androidx.fragment.app.FragmentActivity;
@@ -91,6 +94,7 @@ public class UpdateDialog extends BaseAlertDialog {
     @Override
     public void onStart() {
         super.onStart();
+        clearWindowInset();
         setWidth(0.56f);
         binding.stableItem.requestFocus();
     }
@@ -221,6 +225,11 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private String getSelectedName() {
         return getString(Update.CHANNEL_BETA.equals(selected) ? R.string.update_channel_beta : R.string.update_channel_stable);
+    }
+
+    private void clearWindowInset() {
+        Window window = getDialog() == null ? null : getDialog().getWindow();
+        if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
     }
 
     private String getVersion(Update update) {

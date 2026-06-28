@@ -72,8 +72,7 @@ public final class MarkdownText {
     }
 
     private static void appendNewLine(SpannableStringBuilder builder) {
-        if (builder.length() == 0 || builder.charAt(builder.length() - 1) == '\n') builder.append('\n');
-        else builder.append("\n\n");
+        builder.append('\n');
     }
 
     private static void trimEnd(SpannableStringBuilder builder) {

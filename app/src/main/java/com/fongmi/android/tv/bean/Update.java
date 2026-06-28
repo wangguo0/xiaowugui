@@ -36,7 +36,7 @@ public class Update {
 
     public boolean hasUpdate() {
         if (!hasManifest()) return false;
-        return code > BuildConfig.VERSION_CODE || code == BuildConfig.VERSION_CODE && !AppVersion.isCurrent(name);
+        return code != BuildConfig.VERSION_CODE || !AppVersion.isCurrent(name);
     }
 
     public String getText() {

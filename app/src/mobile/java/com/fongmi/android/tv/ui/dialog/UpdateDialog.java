@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.view.Window;
 import android.view.WindowManager;
@@ -203,6 +205,7 @@ public class UpdateDialog extends BaseAlertDialog {
         WindowManager.LayoutParams params = window.getAttributes();
         params.width = width;
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setAttributes(params);
         window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
     }

@@ -119,7 +119,7 @@
                         android:id="@+id/stableDesc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:lineSpacingExtra="5dp"
+                        android:lineSpacingExtra="2dp"
                         android:textColor="#303134"
                         android:textSize="14sp"
                         tools:text="### 更新内容&#10;&#10;- 稳定版更新说明" />
@@ -217,7 +217,7 @@
                         android:id="@+id/betaDesc"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:lineSpacingExtra="5dp"
+                        android:lineSpacingExtra="2dp"
                         android:textColor="#303134"
                         android:textSize="14sp"
                         tools:text="### 更新内容&#10;&#10;- 测试版更新说明" />
