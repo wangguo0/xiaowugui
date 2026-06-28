@@ -81,6 +81,7 @@ public class UpdateDialog extends BaseAlertDialog {
 
     @Override
     protected void initEvent() {
+        binding.close.setOnClickListener(this::close);
         binding.stableItem.setOnClickListener(view -> toggle(Update.CHANNEL_STABLE));
         binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
         binding.stableConfirm.setOnClickListener(view -> update(Update.CHANNEL_STABLE, view));
@@ -120,6 +121,11 @@ public class UpdateDialog extends BaseAlertDialog {
         else if (listener != null) listener.onCancel(view);
     }
 
+    private void close(View view) {
+        if (downloading) return;
+        dismissAllowingStateLoss();
+    }
+
     private void update(String channel, View view) {
         select(channel);
         if (listener != null) listener.onConfirm(view);
@@ -131,6 +137,7 @@ public class UpdateDialog extends BaseAlertDialog {
         renderItem(Update.CHANNEL_STABLE, stable);
         if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
         renderAction();
+        binding.close.setVisibility(View.VISIBLE);
         binding.progressPanel.setVisibility(View.GONE);
         downloading = false;
     }
@@ -230,6 +237,7 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.stableConfirm.setEnabled(false);
         binding.betaConfirm.setEnabled(false);
         binding.cancel.setEnabled(true);
+        binding.close.setVisibility(View.GONE);
         binding.progressPanel.setVisibility(View.VISIBLE);
         binding.progress.setIndeterminate(indeterminate);
         if (!indeterminate) binding.progress.setProgress(value);

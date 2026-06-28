@@ -81,6 +81,7 @@ public class UpdateDialog extends BaseAlertDialog {
 
     @Override
     protected void initEvent() {
+        binding.close.setOnClickListener(this::close);
         binding.stableItem.setOnClickListener(view -> toggle(Update.CHANNEL_STABLE));
         binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
         binding.stableItem.setOnKeyListener((view, keyCode, event) -> onItemKey(Update.CHANNEL_STABLE, view, keyCode, event));
@@ -127,6 +128,11 @@ public class UpdateDialog extends BaseAlertDialog {
         else if (listener != null) listener.onCancel(view);
     }
 
+    private void close(View view) {
+        if (downloading) return;
+        dismissAllowingStateLoss();
+    }
+
     private void update(String channel, View view) {
         select(channel);
         if (listener != null) listener.onConfirm(view);
@@ -139,6 +145,7 @@ public class UpdateDialog extends BaseAlertDialog {
         if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
         renderAction();
         updateFocusLinks();
+        binding.close.setVisibility(View.VISIBLE);
         binding.progressPanel.setVisibility(View.GONE);
         downloading = false;
     }
@@ -179,6 +186,8 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private void updateFocusLinks() {
         int nextAfterStable = hasBeta() ? R.id.betaItem : R.id.cancel;
+        binding.close.setNextFocusDownId(R.id.stableItem);
+        binding.stableItem.setNextFocusUpId(R.id.close);
         binding.stableItem.setNextFocusDownId(nextAfterStable);
         binding.stableConfirm.setNextFocusDownId(nextAfterStable);
         binding.betaItem.setNextFocusUpId(R.id.stableItem);
@@ -269,6 +278,7 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.stableConfirm.setEnabled(false);
         binding.betaConfirm.setEnabled(false);
         binding.cancel.setEnabled(true);
+        binding.close.setVisibility(View.GONE);
         binding.progressPanel.setVisibility(View.VISIBLE);
         binding.progress.setIndeterminate(indeterminate);
         if (!indeterminate) binding.progress.setProgress(value);
