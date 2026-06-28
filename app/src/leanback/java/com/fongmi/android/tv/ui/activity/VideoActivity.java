@@ -476,7 +476,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.danmaku.setOnClickListener(view -> onDanmaku());
         mBinding.control.action.opening.setOnClickListener(view -> onOpening());
         mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
-        mBinding.control.action.speed.setOnKeyListener((view, keyCode, event) -> onSpeedKey(event));
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.control.action.reset.setOnLongClickListener(view -> onResetToggle());
         mBinding.control.action.ending.setOnLongClickListener(view -> onEndingReset());
@@ -514,12 +513,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 if (hasFocus) scroll.post(() -> scroll.smoothScrollTo(Math.max(0, view.getLeft() - ResUtil.dp2px(24)), 0));
             });
         }
-    }
-
-    private boolean onSpeedKey(KeyEvent event) {
-        if (!KeyUtil.isActionUp(event) || !KeyUtil.isEnterKey(event)) return false;
-        onSpeed();
-        return true;
     }
 
     private void setRecyclerView() {
@@ -1274,21 +1267,25 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onSpeed() {
         mBinding.control.action.speed.setText(player().addSpeed());
         saveDefaultSpeed();
+        setR1Callback();
     }
 
     private void onSpeedAdd() {
         mBinding.control.action.speed.setText(player().addSpeed(0.25f));
         saveDefaultSpeed();
+        setR1Callback();
     }
 
     private void onSpeedSub() {
         mBinding.control.action.speed.setText(player().subSpeed(0.25f));
         saveDefaultSpeed();
+        setR1Callback();
     }
 
     private boolean onSpeedLong() {
         mBinding.control.action.speed.setText(player().toggleSpeed());
         saveDefaultSpeed();
+        setR1Callback();
         return true;
     }
 
@@ -2298,13 +2295,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.widget.speed.setVisibility(View.VISIBLE);
         mBinding.widget.speed.startAnimation(ResUtil.getAnim(R.anim.forward));
         mBinding.control.action.speed.setText(player().setSpeed(PlayerSetting.getSpeed()));
+        saveDefaultSpeed();
     }
 
     @Override
     public void onSpeedEnd() {
         mBinding.widget.speed.clearAnimation();
         mBinding.widget.speed.setVisibility(View.GONE);
-        mBinding.control.action.speed.setText(player().setSpeed(PlayerSetting.getDefaultSpeed()));
+        mBinding.control.action.speed.setText(player().getSpeedText());
         mHistory.setSpeed(player().getSpeed());
     }
 
