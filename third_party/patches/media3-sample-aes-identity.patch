@@ -134,7 +134,7 @@ index 193d44d843..f50ca85fce 100644
     * Sets the {@link SubtitleParser.Factory} to use for parsing subtitles during extraction. The
     * default factory value is implementation dependent.
 diff --git a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/HlsMediaChunk.java b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/HlsMediaChunk.java
-index dadbb106d1..b02830eb45 100644
+index dadbb106d1..ee653b9c0d 100644
 --- a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/HlsMediaChunk.java
 +++ b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/HlsMediaChunk.java
 @@ -80,6 +80,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
@@ -154,19 +154,24 @@ index dadbb106d1..b02830eb45 100644
        boolean shouldSpliceIn,
        boolean isIndependent,
        PlayerId playerId,
-@@ -126,6 +129,11 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -125,7 +128,16 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+         mediaSegmentEncrypted
              ? getEncryptionIvArray(checkNotNull(mediaSegment.encryptionIV))
              : null;
-     DataSource mediaDataSource = buildDataSource(dataSource, mediaSegmentKey, mediaSegmentIv);
 +    @Nullable
 +    byte[] sampleAesSegmentIv =
 +        sampleAesSegmentKey != null
 +            ? getEncryptionIvArray(checkNotNull(mediaSegment.encryptionIV))
 +            : null;
+     DataSource mediaDataSource = buildDataSource(dataSource, mediaSegmentKey, mediaSegmentIv);
++    if (sampleAesSegmentKey != null && sampleAesSegmentIv != null) {
++      mediaDataSource =
++          new SampleAesTsDataSource(mediaDataSource, sampleAesSegmentKey, sampleAesSegmentIv);
++    }
  
      // Init segment.
      HlsMediaPlaylist.Segment initSegment = mediaSegment.initializationSegment;
-@@ -179,6 +187,7 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -179,6 +191,7 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
            isSameInitData
                    && isFollowingChunk
                    && !previousChunk.extractorInvalidated
@@ -174,7 +179,7 @@ index dadbb106d1..b02830eb45 100644
                    && previousChunk.discontinuitySequenceNumber == discontinuitySequenceNumber
                ? previousChunk.extractor
                : null;
-@@ -213,6 +222,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -213,6 +226,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
          previousExtractor,
          id3Decoder,
          scratchId3Data,
@@ -183,7 +188,7 @@ index dadbb106d1..b02830eb45 100644
          shouldSpliceIn,
          isIndependent,
          playerId);
-@@ -289,6 +300,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -289,6 +304,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
    private final ParsableByteArray scratchId3Data;
    private final boolean mediaSegmentEncrypted;
    private final boolean initSegmentEncrypted;
@@ -192,7 +197,7 @@ index dadbb106d1..b02830eb45 100644
    private final PlayerId playerId;
    private final long timestampAdjusterInitializationTimeoutMs;
  
-@@ -332,6 +345,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -332,6 +349,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
        @Nullable HlsMediaChunkExtractor previousExtractor,
        Id3Decoder id3Decoder,
        ParsableByteArray scratchId3Data,
@@ -201,7 +206,7 @@ index dadbb106d1..b02830eb45 100644
        boolean shouldSpliceIn,
        boolean isIndependent,
        PlayerId playerId) {
-@@ -363,6 +378,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -363,6 +382,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
      this.previousExtractor = previousExtractor;
      this.id3Decoder = id3Decoder;
      this.scratchId3Data = scratchId3Data;
@@ -210,7 +215,19 @@ index dadbb106d1..b02830eb45 100644
      this.shouldSpliceIn = shouldSpliceIn;
      this.isIndependent = isIndependent;
      this.playerId = playerId;
-@@ -587,7 +604,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+@@ -502,7 +523,10 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
+   @RequiresNonNull("output")
+   private void loadMedia() throws IOException {
+     feedDataToExtractor(
+-        dataSource, dataSpec, mediaSegmentEncrypted, /* initializeTimestampAdjuster= */ true);
++        dataSource,
++        dataSpec,
++        mediaSegmentEncrypted || sampleAesSegmentKey != null,
++        /* initializeTimestampAdjuster= */ true);
+   }
+ 
+   /**
+@@ -587,7 +611,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
                    timestampAdjuster,
                    dataSource.getResponseHeaders(),
                    extractorInput,
@@ -220,18 +237,6 @@ index dadbb106d1..b02830eb45 100644
        if (extractor.isPackedAudioExtractor()) {
          output.setSampleOffsetUs(
              id3Timestamp != C.TIME_UNSET
-@@ -599,7 +617,10 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
-         output.setSampleOffsetUs(/* sampleOffsetUs= */ 0L);
-       }
-       output.onNewExtractor();
--      extractor.init(output);
-+      extractor.init(
-+          sampleAesSegmentKey != null && sampleAesSegmentIv != null
-+              ? new SampleAesExtractorOutput(output, sampleAesSegmentKey, sampleAesSegmentIv)
-+              : output);
-     }
-     output.setDrmInitData(drmInitData);
-     return extractorInput;
 diff --git a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java
 new file mode 100644
 index 0000000000..f54d09bb4b
@@ -573,6 +578,561 @@ index 0000000000..f54d09bb4b
 +
 +    private static int startCodeLength(byte[] data, int startCodeOffset) {
 +      return data[startCodeOffset + 2] == 1 ? 3 : 4;
++    }
++  }
++}
+diff --git a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesTsDataSource.java b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesTsDataSource.java
+new file mode 100644
+index 0000000000..9c74e87f3b
+--- /dev/null
++++ b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesTsDataSource.java
+@@ -0,0 +1,549 @@
++/*
++ * Copyright 2026 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package androidx.media3.exoplayer.hls;
++
++import static com.google.common.base.Preconditions.checkNotNull;
++
++import android.net.Uri;
++import androidx.annotation.Nullable;
++import androidx.media3.common.C;
++import androidx.media3.datasource.DataSource;
++import androidx.media3.datasource.DataSourceUtil;
++import androidx.media3.datasource.DataSpec;
++import androidx.media3.datasource.TransferListener;
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.security.GeneralSecurityException;
++import java.util.Arrays;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import javax.crypto.Cipher;
++import javax.crypto.spec.IvParameterSpec;
++import javax.crypto.spec.SecretKeySpec;
++
++/**
++ * A {@link DataSource} that decrypts HLS SAMPLE-AES identity MPEG-TS segments before extraction.
++ */
++/* package */ final class SampleAesTsDataSource implements DataSource {
++
++  private static final int TS_PACKET_SIZE = 188;
++  private static final int TS_SYNC_BYTE = 0x47;
++  private static final int AES_BLOCK_SIZE = 16;
++  private static final int STREAM_TYPE_AAC_ADTS = 0x0F;
++  private static final int STREAM_TYPE_H264 = 0x1B;
++  private static final int STREAM_TYPE_SAMPLE_AES_AAC = 0xCF;
++  private static final int STREAM_TYPE_SAMPLE_AES_H264 = 0xDB;
++  private static final int STREAM_KIND_AAC = 1;
++  private static final int STREAM_KIND_H264 = 2;
++  private static final int AVC_NAL_TYPE_NON_IDR = 1;
++  private static final int AVC_NAL_TYPE_IDR = 5;
++
++  private final DataSource upstream;
++  private final byte[] key;
++  private final byte[] iv;
++
++  @Nullable private byte[] decryptedData;
++  private int readPosition;
++
++  public SampleAesTsDataSource(DataSource upstream, byte[] key, byte[] iv) {
++    this.upstream = upstream;
++    this.key = key;
++    this.iv = iv;
++  }
++
++  @Override
++  public void addTransferListener(TransferListener transferListener) {
++    checkNotNull(transferListener);
++    upstream.addTransferListener(transferListener);
++  }
++
++  @Override
++  public long open(DataSpec dataSpec) throws IOException {
++    upstream.open(dataSpec);
++    byte[] encryptedData;
++    try {
++      encryptedData = DataSourceUtil.readToEnd(upstream);
++    } finally {
++      upstream.close();
++    }
++    decryptedData = maybeDecryptTsSegment(encryptedData, key, iv);
++    readPosition = 0;
++    return decryptedData.length;
++  }
++
++  @Override
++  public int read(byte[] buffer, int offset, int length) {
++    if (length == 0) {
++      return 0;
++    }
++    byte[] data = checkNotNull(decryptedData);
++    if (readPosition >= data.length) {
++      return C.RESULT_END_OF_INPUT;
++    }
++    int bytesToRead = Math.min(length, data.length - readPosition);
++    System.arraycopy(data, readPosition, buffer, offset, bytesToRead);
++    readPosition += bytesToRead;
++    return bytesToRead;
++  }
++
++  @Override
++  @Nullable
++  public Uri getUri() {
++    return upstream.getUri();
++  }
++
++  @Override
++  public Map<String, List<String>> getResponseHeaders() {
++    return upstream.getResponseHeaders();
++  }
++
++  @Override
++  public void close() throws IOException {
++    decryptedData = null;
++    readPosition = 0;
++    upstream.close();
++  }
++
++  private static byte[] maybeDecryptTsSegment(byte[] data, byte[] key, byte[] iv) {
++    if (!looksLikeTs(data)) {
++      return data;
++    }
++    byte[] workingData = Arrays.copyOf(data, data.length);
++    int pmtPid = findPmtPid(workingData);
++    if (pmtPid == C.INDEX_UNSET) {
++      return data;
++    }
++    Map<Integer, Integer> streamKindsByPid = parseAndPatchPmt(workingData, pmtPid);
++    if (streamKindsByPid.isEmpty()) {
++      return data;
++    }
++    return decryptPesStreams(workingData, streamKindsByPid, key, iv);
++  }
++
++  private static boolean looksLikeTs(byte[] data) {
++    if (data.length < TS_PACKET_SIZE || (data[0] & 0xFF) != TS_SYNC_BYTE) {
++      return false;
++    }
++    int packetsToCheck = Math.min(5, data.length / TS_PACKET_SIZE);
++    for (int i = 0; i < packetsToCheck; i++) {
++      if ((data[i * TS_PACKET_SIZE] & 0xFF) != TS_SYNC_BYTE) {
++        return false;
++      }
++    }
++    return true;
++  }
++
++  private static int findPmtPid(byte[] data) {
++    for (int packetStart = 0; packetStart + TS_PACKET_SIZE <= data.length; packetStart += TS_PACKET_SIZE) {
++      if ((data[packetStart] & 0xFF) != TS_SYNC_BYTE || readPid(data, packetStart) != 0) {
++        continue;
++      }
++      int payloadOffset = getPayloadOffset(data, packetStart);
++      if (payloadOffset == C.INDEX_UNSET || !payloadUnitStart(data, packetStart)) {
++        continue;
++      }
++      int sectionStart = payloadOffset + 1 + (data[payloadOffset] & 0xFF);
++      int packetEnd = packetStart + TS_PACKET_SIZE;
++      if (sectionStart + 12 > packetEnd || (data[sectionStart] & 0xFF) != 0x00) {
++        continue;
++      }
++      int sectionLength = readSectionLength(data, sectionStart);
++      int sectionEnd = sectionStart + 3 + sectionLength;
++      if (sectionEnd > packetEnd) {
++        continue;
++      }
++      int programInfoStart = sectionStart + 8;
++      int programInfoEnd = sectionEnd - 4;
++      for (int offset = programInfoStart; offset + 4 <= programInfoEnd; offset += 4) {
++        int programNumber = readUnsignedShort(data, offset);
++        int pid = readPidField(data, offset + 2);
++        if (programNumber != 0) {
++          return pid;
++        }
++      }
++    }
++    return C.INDEX_UNSET;
++  }
++
++  private static Map<Integer, Integer> parseAndPatchPmt(byte[] data, int pmtPid) {
++    Map<Integer, Integer> streamKindsByPid = new LinkedHashMap<>();
++    for (int packetStart = 0; packetStart + TS_PACKET_SIZE <= data.length; packetStart += TS_PACKET_SIZE) {
++      if ((data[packetStart] & 0xFF) != TS_SYNC_BYTE || readPid(data, packetStart) != pmtPid) {
++        continue;
++      }
++      int payloadOffset = getPayloadOffset(data, packetStart);
++      if (payloadOffset == C.INDEX_UNSET || !payloadUnitStart(data, packetStart)) {
++        continue;
++      }
++      int sectionStart = payloadOffset + 1 + (data[payloadOffset] & 0xFF);
++      int packetEnd = packetStart + TS_PACKET_SIZE;
++      if (sectionStart + 12 > packetEnd || (data[sectionStart] & 0xFF) != 0x02) {
++        continue;
++      }
++      int sectionLength = readSectionLength(data, sectionStart);
++      int sectionEnd = sectionStart + 3 + sectionLength;
++      if (sectionEnd > packetEnd) {
++        continue;
++      }
++      int programInfoLength = ((data[sectionStart + 10] & 0x0F) << 8) | (data[sectionStart + 11] & 0xFF);
++      int esInfoOffset = sectionStart + 12 + programInfoLength;
++      int esInfoEnd = sectionEnd - 4;
++      boolean patched = false;
++      while (esInfoOffset + 5 <= esInfoEnd) {
++        int streamType = data[esInfoOffset] & 0xFF;
++        int elementaryPid = readPidField(data, esInfoOffset + 1);
++        int esInfoLength = ((data[esInfoOffset + 3] & 0x0F) << 8) | (data[esInfoOffset + 4] & 0xFF);
++        if (streamType == STREAM_TYPE_SAMPLE_AES_H264) {
++          streamKindsByPid.put(elementaryPid, STREAM_KIND_H264);
++          data[esInfoOffset] = (byte) STREAM_TYPE_H264;
++          patched = true;
++        } else if (streamType == STREAM_TYPE_SAMPLE_AES_AAC) {
++          streamKindsByPid.put(elementaryPid, STREAM_KIND_AAC);
++          data[esInfoOffset] = (byte) STREAM_TYPE_AAC_ADTS;
++          patched = true;
++        }
++        esInfoOffset += 5 + esInfoLength;
++      }
++      if (patched) {
++        int crcOffset = sectionEnd - 4;
++        int crc = crc32Mpeg(data, sectionStart, crcOffset - sectionStart);
++        writeInt(data, crcOffset, crc);
++      }
++      return streamKindsByPid;
++    }
++    return streamKindsByPid;
++  }
++
++  private static byte[] decryptPesStreams(
++      byte[] data, Map<Integer, Integer> streamKindsByPid, byte[] key, byte[] iv) {
++    ByteArrayOutputStream output = new ByteArrayOutputStream(data.length);
++    Map<Integer, PesBuffer> pesBuffers = new LinkedHashMap<>();
++    for (int packetStart = 0; packetStart + TS_PACKET_SIZE <= data.length; packetStart += TS_PACKET_SIZE) {
++      if ((data[packetStart] & 0xFF) != TS_SYNC_BYTE) {
++        return data;
++      }
++      int pid = readPid(data, packetStart);
++      @Nullable Integer streamKind = streamKindsByPid.get(pid);
++      if (streamKind == null) {
++        output.write(data, packetStart, TS_PACKET_SIZE);
++        continue;
++      }
++
++      int payloadOffset = getPayloadOffset(data, packetStart);
++      if (payloadOffset == C.INDEX_UNSET) {
++        continue;
++      }
++      PesBuffer pesBuffer = pesBuffers.get(pid);
++      if (pesBuffer == null) {
++        pesBuffer = new PesBuffer(pid, streamKind);
++        pesBuffers.put(pid, pesBuffer);
++      }
++      if (payloadUnitStart(data, packetStart)) {
++        pesBuffer.flushTo(output, key, iv);
++        pesBuffer.start(readContinuityCounter(data, packetStart));
++      }
++      if (pesBuffer.started && payloadOffset < packetStart + TS_PACKET_SIZE) {
++        pesBuffer.append(data, payloadOffset, packetStart + TS_PACKET_SIZE - payloadOffset);
++      }
++    }
++    for (PesBuffer pesBuffer : pesBuffers.values()) {
++      pesBuffer.flushTo(output, key, iv);
++    }
++    if (data.length % TS_PACKET_SIZE != 0) {
++      output.write(data, data.length - (data.length % TS_PACKET_SIZE), data.length % TS_PACKET_SIZE);
++    }
++    return output.toByteArray();
++  }
++
++  private static byte[] decryptPes(byte[] pesData, int streamKind, byte[] key, byte[] iv) {
++    if (pesData.length < 9 || pesData[0] != 0 || pesData[1] != 0 || pesData[2] != 1) {
++      return pesData;
++    }
++    int pesHeaderLength = 9 + (pesData[8] & 0xFF);
++    if (pesHeaderLength >= pesData.length) {
++      return pesData;
++    }
++    byte[] payload = Arrays.copyOfRange(pesData, pesHeaderLength, pesData.length);
++    byte[] decryptedPayload =
++        streamKind == STREAM_KIND_H264
++            ? decryptAvcPayload(payload, key, iv)
++            : decryptAacPayload(payload, key, iv);
++    byte[] output = new byte[pesHeaderLength + decryptedPayload.length];
++    System.arraycopy(pesData, 0, output, 0, pesHeaderLength);
++    System.arraycopy(decryptedPayload, 0, output, pesHeaderLength, decryptedPayload.length);
++    int packetLength = readUnsignedShort(output, 4);
++    if (packetLength > 0) {
++      int newPacketLength = packetLength - (pesData.length - output.length);
++      output[4] = (byte) ((newPacketLength >> 8) & 0xFF);
++      output[5] = (byte) (newPacketLength & 0xFF);
++    }
++    return output;
++  }
++
++  private static byte[] decryptAacPayload(byte[] payload, byte[] key, byte[] iv) {
++    byte[] output = Arrays.copyOf(payload, payload.length);
++    int offset = 0;
++    while (offset + 7 <= output.length) {
++      if ((output[offset] & 0xFF) != 0xFF || (output[offset + 1] & 0xF0) != 0xF0) {
++        offset++;
++        continue;
++      }
++      int frameLength =
++          ((output[offset + 3] & 0x03) << 11)
++              | ((output[offset + 4] & 0xFF) << 3)
++              | ((output[offset + 5] & 0xE0) >> 5);
++      if (frameLength <= 0 || offset + frameLength > output.length) {
++        break;
++      }
++      int headerLength = (output[offset + 1] & 0x01) == 0 ? 9 : 7;
++      int encryptedOffset = offset + headerLength + AES_BLOCK_SIZE;
++      int encryptedLength = ((frameLength - headerLength - AES_BLOCK_SIZE) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
++      if (encryptedLength > 0) {
++        decryptAesCbcInPlace(output, encryptedOffset, encryptedLength, key, iv);
++      }
++      offset += frameLength;
++    }
++    return output;
++  }
++
++  private static byte[] decryptAvcPayload(byte[] payload, byte[] key, byte[] iv) {
++    int nalStartCodeOffset = findStartCode(payload, 0);
++    if (nalStartCodeOffset == C.INDEX_UNSET) {
++      return payload;
++    }
++    ByteArrayOutputStream output = new ByteArrayOutputStream(payload.length);
++    int inputOffset = 0;
++    while (nalStartCodeOffset != C.INDEX_UNSET) {
++      if (nalStartCodeOffset > inputOffset) {
++        output.write(payload, inputOffset, nalStartCodeOffset - inputOffset);
++      }
++      int nalStartOffset = nalStartCodeOffset + startCodeLength(payload, nalStartCodeOffset);
++      int nextNalStartCodeOffset = findStartCode(payload, nalStartOffset);
++      int nalEndOffset =
++          nextNalStartCodeOffset == C.INDEX_UNSET ? payload.length : nextNalStartCodeOffset;
++      output.write(payload, nalStartCodeOffset, nalStartOffset - nalStartCodeOffset);
++      if (nalStartOffset < nalEndOffset) {
++        int nalUnitType = payload[nalStartOffset] & 0x1F;
++        if ((nalUnitType == AVC_NAL_TYPE_NON_IDR || nalUnitType == AVC_NAL_TYPE_IDR)
++            && nalEndOffset - nalStartOffset > 48) {
++          byte[] nalUnit = Arrays.copyOfRange(payload, nalStartOffset, nalEndOffset);
++          int nalUnitLength = removeEmulationPreventionBytes(nalUnit);
++          decryptAvcNal(nalUnit, nalUnitLength, key, iv);
++          output.write(nalUnit, 0, nalUnitLength);
++        } else {
++          output.write(payload, nalStartOffset, nalEndOffset - nalStartOffset);
++        }
++      }
++      inputOffset = nalEndOffset;
++      nalStartCodeOffset = nextNalStartCodeOffset;
++    }
++    if (inputOffset < payload.length) {
++      output.write(payload, inputOffset, payload.length - inputOffset);
++    }
++    return output.toByteArray();
++  }
++
++  private static void decryptAvcNal(byte[] nalUnit, int nalUnitLength, byte[] key, byte[] iv) {
++    int encryptedLength = 0;
++    for (int offset = 32; offset < nalUnitLength - AES_BLOCK_SIZE; offset += 160) {
++      encryptedLength += AES_BLOCK_SIZE;
++    }
++    if (encryptedLength == 0) {
++      return;
++    }
++    byte[] encryptedData = new byte[encryptedLength];
++    int encryptedDataOffset = 0;
++    for (int offset = 32; offset < nalUnitLength - AES_BLOCK_SIZE; offset += 160) {
++      System.arraycopy(nalUnit, offset, encryptedData, encryptedDataOffset, AES_BLOCK_SIZE);
++      encryptedDataOffset += AES_BLOCK_SIZE;
++    }
++    byte[] decryptedData = decryptAesCbc(encryptedData, key, iv);
++    int decryptedDataOffset = 0;
++    for (int offset = 32; offset < nalUnitLength - AES_BLOCK_SIZE; offset += 160) {
++      System.arraycopy(decryptedData, decryptedDataOffset, nalUnit, offset, AES_BLOCK_SIZE);
++      decryptedDataOffset += AES_BLOCK_SIZE;
++    }
++  }
++
++  private static int removeEmulationPreventionBytes(byte[] data) {
++    int readOffset = 0;
++    int writeOffset = 0;
++    while (readOffset < data.length) {
++      if (readOffset <= data.length - 3
++          && data[readOffset] == 0
++          && data[readOffset + 1] == 0
++          && data[readOffset + 2] == 3) {
++        data[writeOffset++] = data[readOffset++];
++        data[writeOffset++] = data[readOffset++];
++        readOffset++;
++      } else {
++        data[writeOffset++] = data[readOffset++];
++      }
++    }
++    return writeOffset;
++  }
++
++  private static void writePesAsTsPackets(ByteArrayOutputStream output, int pid, int continuityCounter, byte[] pesData) {
++    int offset = 0;
++    boolean payloadUnitStart = true;
++    while (offset < pesData.length) {
++      int payloadLength = Math.min(TS_PACKET_SIZE - 4, pesData.length - offset);
++      int adaptationFieldLength = payloadLength < TS_PACKET_SIZE - 4 ? TS_PACKET_SIZE - 5 - payloadLength : C.INDEX_UNSET;
++      output.write(TS_SYNC_BYTE);
++      output.write((payloadUnitStart ? 0x40 : 0x00) | ((pid >> 8) & 0x1F));
++      output.write(pid & 0xFF);
++      output.write((adaptationFieldLength == C.INDEX_UNSET ? 0x10 : 0x30) | (continuityCounter & 0x0F));
++      continuityCounter = (continuityCounter + 1) & 0x0F;
++      if (adaptationFieldLength != C.INDEX_UNSET) {
++        output.write(adaptationFieldLength);
++        if (adaptationFieldLength > 0) {
++          output.write(0);
++          for (int i = 1; i < adaptationFieldLength; i++) {
++            output.write(0xFF);
++          }
++        }
++      }
++      output.write(pesData, offset, payloadLength);
++      offset += payloadLength;
++      payloadUnitStart = false;
++    }
++  }
++
++  private static void decryptAesCbcInPlace(byte[] data, int offset, int length, byte[] key, byte[] iv) {
++    byte[] encryptedData = Arrays.copyOfRange(data, offset, offset + length);
++    byte[] decryptedData = decryptAesCbc(encryptedData, key, iv);
++    System.arraycopy(decryptedData, 0, data, offset, decryptedData.length);
++  }
++
++  private static byte[] decryptAesCbc(byte[] encryptedData, byte[] key, byte[] iv) {
++    try {
++      Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
++      cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
++      return cipher.doFinal(encryptedData);
++    } catch (GeneralSecurityException e) {
++      throw new IllegalStateException("Failed to decrypt HLS SAMPLE-AES data", e);
++    }
++  }
++
++  private static int getPayloadOffset(byte[] data, int packetStart) {
++    int adaptationFieldControl = (data[packetStart + 3] >> 4) & 0x03;
++    if (adaptationFieldControl == 0 || adaptationFieldControl == 2) {
++      return C.INDEX_UNSET;
++    }
++    int payloadOffset = packetStart + 4;
++    if (adaptationFieldControl == 3) {
++      int adaptationFieldLength = data[payloadOffset] & 0xFF;
++      payloadOffset += 1 + adaptationFieldLength;
++    }
++    return payloadOffset <= packetStart + TS_PACKET_SIZE ? payloadOffset : C.INDEX_UNSET;
++  }
++
++  private static boolean payloadUnitStart(byte[] data, int packetStart) {
++    return (data[packetStart + 1] & 0x40) != 0;
++  }
++
++  private static int readPid(byte[] data, int packetStart) {
++    return ((data[packetStart + 1] & 0x1F) << 8) | (data[packetStart + 2] & 0xFF);
++  }
++
++  private static int readPidField(byte[] data, int offset) {
++    return ((data[offset] & 0x1F) << 8) | (data[offset + 1] & 0xFF);
++  }
++
++  private static int readContinuityCounter(byte[] data, int packetStart) {
++    return data[packetStart + 3] & 0x0F;
++  }
++
++  private static int readUnsignedShort(byte[] data, int offset) {
++    return ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
++  }
++
++  private static int readSectionLength(byte[] data, int sectionStart) {
++    return ((data[sectionStart + 1] & 0x0F) << 8) | (data[sectionStart + 2] & 0xFF);
++  }
++
++  private static int findStartCode(byte[] data, int offset) {
++    for (int i = offset; i <= data.length - 3; i++) {
++      if (data[i] == 0 && data[i + 1] == 0) {
++        if (data[i + 2] == 1) {
++          return i;
++        }
++        if (i <= data.length - 4 && data[i + 2] == 0 && data[i + 3] == 1) {
++          return i;
++        }
++      }
++    }
++    return C.INDEX_UNSET;
++  }
++
++  private static int startCodeLength(byte[] data, int startCodeOffset) {
++    return data[startCodeOffset + 2] == 1 ? 3 : 4;
++  }
++
++  private static int crc32Mpeg(byte[] data, int offset, int length) {
++    int crc = 0xFFFFFFFF;
++    for (int i = 0; i < length; i++) {
++      crc ^= (data[offset + i] & 0xFF) << 24;
++      for (int bit = 0; bit < 8; bit++) {
++        crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04C11DB7 : crc << 1;
++      }
++    }
++    return crc;
++  }
++
++  private static void writeInt(byte[] data, int offset, int value) {
++    data[offset] = (byte) ((value >> 24) & 0xFF);
++    data[offset + 1] = (byte) ((value >> 16) & 0xFF);
++    data[offset + 2] = (byte) ((value >> 8) & 0xFF);
++    data[offset + 3] = (byte) (value & 0xFF);
++  }
++
++  private static final class PesBuffer {
++    private final int pid;
++    private final int streamKind;
++    private final ByteArrayOutputStream data;
++
++    private boolean started;
++    private int continuityCounter;
++
++    private PesBuffer(int pid, int streamKind) {
++      this.pid = pid;
++      this.streamKind = streamKind;
++      this.data = new ByteArrayOutputStream();
++    }
++
++    private void start(int continuityCounter) {
++      this.continuityCounter = continuityCounter;
++      data.reset();
++      started = true;
++    }
++
++    private void append(byte[] source, int offset, int length) {
++      data.write(source, offset, length);
++    }
++
++    private void flushTo(ByteArrayOutputStream output, byte[] key, byte[] iv) {
++      if (!started || data.size() == 0) {
++        return;
++      }
++      byte[] decryptedPes = decryptPes(data.toByteArray(), streamKind, key, iv);
++      writePesAsTsPackets(output, pid, continuityCounter, decryptedPes);
++      data.reset();
++      started = false;
 +    }
 +  }
 +}
