@@ -255,10 +255,10 @@ index dadbb106d1..db5d43e19e 100644
      return extractorInput;
 diff --git a/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java
 new file mode 100644
-index 0000000000..f54d09bb4b
+index 0000000000..a878966827
 --- /dev/null
 +++ b/libraries/exoplayer_hls/src/main/java/androidx/media3/exoplayer/hls/SampleAesExtractorOutput.java
-@@ -0,0 +1,338 @@
+@@ -0,0 +1,367 @@
 +/*
 + * Copyright 2026 The Android Open Source Project
 + *
@@ -339,20 +339,27 @@ index 0000000000..f54d09bb4b
 +
 +    private final TrackOutput wrappedOutput;
 +    private final @C.TrackType int trackType;
-+    private final byte[] key;
-+    private final byte[] iv;
++    private final SecretKeySpec keySpec;
++    private final IvParameterSpec ivSpec;
++    private final ParsableByteArray outputDataWrapper;
 +
 +    private byte[] pendingData;
++    private byte[] outputBuffer;
++    private final byte[] cipherFinalBuffer;
 +    private int pendingLength;
 +    @Nullable private String sampleMimeType;
++    @Nullable private Cipher cipher;
 +
 +    public SampleAesTrackOutput(
 +        TrackOutput wrappedOutput, @C.TrackType int trackType, byte[] key, byte[] iv) {
 +      this.wrappedOutput = wrappedOutput;
 +      this.trackType = trackType;
-+      this.key = key;
-+      this.iv = iv;
++      this.keySpec = new SecretKeySpec(key, "AES");
++      this.ivSpec = new IvParameterSpec(iv);
++      this.outputDataWrapper = new ParsableByteArray(new byte[0]);
 +      this.pendingData = new byte[INITIAL_PENDING_DATA_SIZE];
++      this.outputBuffer = new byte[INITIAL_PENDING_DATA_SIZE];
++      this.cipherFinalBuffer = new byte[AES_BLOCK_SIZE];
 +    }
 +
 +    @Override
@@ -412,15 +419,16 @@ index 0000000000..f54d09bb4b
 +        discardPendingBytes(sampleStart);
 +      }
 +
-+      byte[] sampleData = Arrays.copyOf(pendingData, size);
++      int sampleLength = size;
 +      if (shouldDecryptAvc()) {
-+        sampleData = decryptAvcSample(sampleData, key, iv);
++        sampleLength = decryptAvcSample(pendingData, sampleLength);
 +      } else if (shouldDecryptAac()) {
-+        decryptAacSample(sampleData, key, iv);
++        decryptAacSample(pendingData, sampleLength);
 +      }
 +
-+      wrappedOutput.sampleData(new ParsableByteArray(sampleData), sampleData.length);
-+      wrappedOutput.sampleMetadata(timeUs, flags, sampleData.length, /* offset= */ 0, cryptoData);
++      outputDataWrapper.reset(pendingData, sampleLength);
++      wrappedOutput.sampleData(outputDataWrapper, sampleLength);
++      wrappedOutput.sampleMetadata(timeUs, flags, sampleLength, /* offset= */ 0, cryptoData);
 +
 +      if (offset > 0) {
 +        System.arraycopy(pendingData, size, pendingData, 0, offset);
@@ -456,61 +464,66 @@ index 0000000000..f54d09bb4b
 +      if (pendingLength == 0) {
 +        return;
 +      }
-+      byte[] data = Arrays.copyOf(pendingData, pendingLength);
-+      wrappedOutput.sampleData(new ParsableByteArray(data), data.length);
++      outputDataWrapper.reset(pendingData, pendingLength);
++      wrappedOutput.sampleData(outputDataWrapper, pendingLength);
 +      pendingLength = 0;
 +    }
 +
-+    private static void decryptAacSample(byte[] sample, byte[] key, byte[] iv) {
-+      if (sample.length <= AES_BLOCK_SIZE) {
++    private static byte[] ensureScratchCapacity(byte[] buffer, int requiredLength) {
++      return requiredLength <= buffer.length
++          ? buffer
++          : new byte[Math.max(requiredLength, buffer.length * 2)];
++    }
++
++    private void decryptAacSample(byte[] sample, int sampleLength) {
++      if (sampleLength <= AES_BLOCK_SIZE) {
 +        return;
 +      }
-+      int encryptedLength = ((sample.length - AES_BLOCK_SIZE) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
++      int encryptedLength = ((sampleLength - AES_BLOCK_SIZE) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
 +      if (encryptedLength == 0) {
 +        return;
 +      }
-+      byte[] encryptedData =
-+          Arrays.copyOfRange(sample, AES_BLOCK_SIZE, AES_BLOCK_SIZE + encryptedLength);
-+      byte[] decryptedData = decryptAesCbc(encryptedData, key, iv);
-+      System.arraycopy(decryptedData, 0, sample, AES_BLOCK_SIZE, decryptedData.length);
++      outputBuffer = ensureScratchCapacity(outputBuffer, encryptedLength);
++      int decryptedLength =
++          decryptAesCbc(sample, AES_BLOCK_SIZE, encryptedLength, outputBuffer, /* outputOffset= */ 0);
++      System.arraycopy(outputBuffer, 0, sample, AES_BLOCK_SIZE, decryptedLength);
 +    }
 +
-+    private static byte[] decryptAvcSample(byte[] sample, byte[] key, byte[] iv) {
-+      int nalStartCodeOffset = findStartCode(sample, /* offset= */ 0);
++    private int decryptAvcSample(byte[] sample, int sampleLength) {
++      int nalStartCodeOffset = findStartCode(sample, /* offset= */ 0, sampleLength);
 +      if (nalStartCodeOffset == C.INDEX_UNSET) {
-+        return sample;
++        return sampleLength;
 +      }
 +
-+      byte[] output = new byte[sample.length];
++      outputBuffer = ensureScratchCapacity(outputBuffer, sampleLength);
 +      int inputOffset = 0;
 +      int outputOffset = 0;
 +      while (nalStartCodeOffset != C.INDEX_UNSET) {
 +        if (nalStartCodeOffset > inputOffset) {
 +          int length = nalStartCodeOffset - inputOffset;
-+          System.arraycopy(sample, inputOffset, output, outputOffset, length);
++          System.arraycopy(sample, inputOffset, outputBuffer, outputOffset, length);
 +          outputOffset += length;
 +        }
 +
 +        int startCodeLength = startCodeLength(sample, nalStartCodeOffset);
-+        System.arraycopy(sample, nalStartCodeOffset, output, outputOffset, startCodeLength);
++        System.arraycopy(sample, nalStartCodeOffset, outputBuffer, outputOffset, startCodeLength);
 +        outputOffset += startCodeLength;
 +
 +        int nalStartOffset = nalStartCodeOffset + startCodeLength;
-+        int nextNalStartCodeOffset = findStartCode(sample, nalStartOffset);
++        int nextNalStartCodeOffset = findStartCode(sample, nalStartOffset, sampleLength);
 +        int nalEndOffset =
-+            nextNalStartCodeOffset == C.INDEX_UNSET ? sample.length : nextNalStartCodeOffset;
++            nextNalStartCodeOffset == C.INDEX_UNSET ? sampleLength : nextNalStartCodeOffset;
 +        if (nalStartOffset < nalEndOffset) {
 +          int nalUnitType = sample[nalStartOffset] & 0x1F;
 +          int nalLength = nalEndOffset - nalStartOffset;
 +          if ((nalUnitType == AVC_NAL_TYPE_NON_IDR || nalUnitType == AVC_NAL_TYPE_IDR)
 +              && nalLength > 48) {
-+            byte[] nalData = Arrays.copyOfRange(sample, nalStartOffset, nalEndOffset);
-+            int unescapedNalLength = unescapeNal(nalData, nalData.length);
-+            decryptAvcNal(nalData, unescapedNalLength, key, iv);
-+            System.arraycopy(nalData, 0, output, outputOffset, unescapedNalLength);
++            int unescapedNalLength =
++                unescapeNal(sample, nalStartOffset, nalEndOffset, outputBuffer, outputOffset);
++            decryptAvcNal(outputBuffer, outputOffset, unescapedNalLength);
 +            outputOffset += unescapedNalLength;
 +          } else {
-+            System.arraycopy(sample, nalStartOffset, output, outputOffset, nalLength);
++            System.arraycopy(sample, nalStartOffset, outputBuffer, outputOffset, nalLength);
 +            outputOffset += nalLength;
 +          }
 +        }
@@ -518,73 +531,89 @@ index 0000000000..f54d09bb4b
 +        nalStartCodeOffset = nextNalStartCodeOffset;
 +      }
 +
-+      if (inputOffset < sample.length) {
-+        int length = sample.length - inputOffset;
-+        System.arraycopy(sample, inputOffset, output, outputOffset, length);
++      if (inputOffset < sampleLength) {
++        int length = sampleLength - inputOffset;
++        System.arraycopy(sample, inputOffset, outputBuffer, outputOffset, length);
 +        outputOffset += length;
 +      }
-+      return outputOffset == sample.length ? output : Arrays.copyOf(output, outputOffset);
-+    }
-+
-+    private static void decryptAvcNal(byte[] nalData, int nalLength, byte[] key, byte[] iv) {
-+      int encryptedLength = 0;
-+      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
-+        encryptedLength += AES_BLOCK_SIZE;
-+      }
-+      if (encryptedLength == 0) {
-+        return;
-+      }
-+
-+      byte[] encryptedData = new byte[encryptedLength];
-+      int encryptedDataOffset = 0;
-+      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
-+        System.arraycopy(nalData, offset, encryptedData, encryptedDataOffset, AES_BLOCK_SIZE);
-+        encryptedDataOffset += AES_BLOCK_SIZE;
-+      }
-+
-+      byte[] decryptedData = decryptAesCbc(encryptedData, key, iv);
-+      int decryptedDataOffset = 0;
-+      for (int offset = 32; offset < nalLength - AES_BLOCK_SIZE; offset += 160) {
-+        System.arraycopy(decryptedData, decryptedDataOffset, nalData, offset, AES_BLOCK_SIZE);
-+        decryptedDataOffset += AES_BLOCK_SIZE;
-+      }
-+    }
-+
-+    private static int unescapeNal(byte[] nalData, int nalLength) {
-+      int inputOffset = 0;
-+      int outputOffset = 0;
-+      while (inputOffset < nalLength) {
-+        if (nalLength - inputOffset > 3
-+            && nalData[inputOffset] == 0
-+            && nalData[inputOffset + 1] == 0
-+            && nalData[inputOffset + 2] == 3) {
-+          nalData[outputOffset++] = nalData[inputOffset++];
-+          nalData[outputOffset++] = nalData[inputOffset++];
-+          inputOffset++;
-+        } else {
-+          nalData[outputOffset++] = nalData[inputOffset++];
-+        }
-+      }
++      System.arraycopy(outputBuffer, 0, sample, 0, outputOffset);
 +      return outputOffset;
 +    }
 +
-+    private static byte[] decryptAesCbc(byte[] encryptedData, byte[] key, byte[] iv) {
++    private void decryptAvcNal(byte[] nalData, int nalOffset, int nalLength) {
++      if (nalLength <= 48) {
++        return;
++      }
++
 +      try {
-+        Cipher cipher = Cipher.getInstance("AES/CBC/NoPadding");
-+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(iv));
-+        return cipher.doFinal(encryptedData);
++        initCipher();
++        int nalEndOffset = nalOffset + nalLength;
++        for (int offset = nalOffset + 32; offset < nalEndOffset - AES_BLOCK_SIZE; offset += 160) {
++          int outputLength = cipher.update(nalData, offset, AES_BLOCK_SIZE, nalData, offset);
++          if (outputLength != AES_BLOCK_SIZE) {
++            throw new IllegalStateException("Unexpected SAMPLE-AES AVC block output length");
++          }
++        }
++        int finalLength = cipher.doFinal(cipherFinalBuffer, /* outputOffset= */ 0);
++        if (finalLength != 0) {
++          throw new IllegalStateException("Unexpected SAMPLE-AES AVC final output length");
++        }
++      } catch (GeneralSecurityException e) {
++        throw new IllegalStateException("Failed to decrypt HLS SAMPLE-AES AVC sample", e);
++      }
++    }
++
++    private static int unescapeNal(
++        byte[] sample,
++        int nalStartOffset,
++        int nalEndOffset,
++        byte[] output,
++        int outputStartOffset) {
++      int inputOffset = nalStartOffset;
++      int outputOffset = outputStartOffset;
++      while (inputOffset < nalEndOffset) {
++        if (nalEndOffset - inputOffset > 3
++            && sample[inputOffset] == 0
++            && sample[inputOffset + 1] == 0
++            && sample[inputOffset + 2] == 3) {
++          output[outputOffset++] = sample[inputOffset++];
++          output[outputOffset++] = sample[inputOffset++];
++          inputOffset++;
++        } else {
++          output[outputOffset++] = sample[inputOffset++];
++        }
++      }
++      return outputOffset - outputStartOffset;
++    }
++
++    private int decryptAesCbc(
++        byte[] encryptedData,
++        int encryptedOffset,
++        int encryptedLength,
++        byte[] decryptedData,
++        int decryptedOffset) {
++      try {
++        initCipher();
++        return cipher.doFinal(encryptedData, encryptedOffset, encryptedLength, decryptedData, decryptedOffset);
 +      } catch (GeneralSecurityException e) {
 +        throw new IllegalStateException("Failed to decrypt HLS SAMPLE-AES sample", e);
 +      }
 +    }
 +
-+    private static int findStartCode(byte[] data, int offset) {
-+      for (int i = offset; i <= data.length - 3; i++) {
++    private void initCipher() throws GeneralSecurityException {
++      if (cipher == null) {
++        cipher = Cipher.getInstance("AES/CBC/NoPadding");
++      }
++      cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
++    }
++
++    private static int findStartCode(byte[] data, int offset, int limit) {
++      for (int i = offset; i <= limit - 3; i++) {
 +        if (data[i] == 0 && data[i + 1] == 0) {
 +          if (data[i + 2] == 1) {
 +            return i;
 +          }
-+          if (i <= data.length - 4 && data[i + 2] == 0 && data[i + 3] == 1) {
++          if (i <= limit - 4 && data[i + 2] == 0 && data[i + 3] == 1) {
 +            return i;
 +          }
 +        }
