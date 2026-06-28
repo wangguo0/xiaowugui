@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.text.TextUtils;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.View;
 
 import androidx.fragment.app.FragmentActivity;
@@ -67,7 +69,7 @@ public class UpdateDialog extends BaseAlertDialog {
 
     @Override
     protected MaterialAlertDialogBuilder getBuilder() {
-        return builder().setView(getBinding().getRoot()).setCancelable(false);
+        return new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog).setView(getBinding().getRoot()).setCancelable(false);
     }
 
     @Override
@@ -82,13 +84,13 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
         binding.stableConfirm.setOnClickListener(view -> update(Update.CHANNEL_STABLE, view));
         binding.betaConfirm.setOnClickListener(view -> update(Update.CHANNEL_BETA, view));
-        binding.cancel.setOnClickListener(view -> listener.onCancel(view));
+        binding.cancel.setOnClickListener(this::action);
     }
 
     @Override
     public void onStart() {
         super.onStart();
-        setWidth(ResUtil.isLand(requireActivity()) ? 0.62f : 0.92f);
+        setDialogWidth(ResUtil.isLand(requireActivity()) ? 0.62f : 0.92f);
     }
 
     private void select(String channel) {
@@ -97,11 +99,18 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void toggle(String channel) {
+        if (!hasBeta()) return;
         selected = channel;
-        if (Update.CHANNEL_STABLE.equals(channel)) stableExpanded = !stableExpanded;
-        else betaExpanded = !betaExpanded;
+        stableExpanded = Update.CHANNEL_STABLE.equals(channel);
+        betaExpanded = Update.CHANNEL_BETA.equals(channel);
         if (listener != null) listener.onChannel(channel);
         render();
+    }
+
+    private void action(View view) {
+        Update update = getSelected();
+        if (update != null && update.hasUpdate()) update(selected, view);
+        else listener.onCancel(view);
     }
 
     private void update(String channel, View view) {
@@ -114,6 +123,7 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE);
         renderItem(Update.CHANNEL_STABLE, stable);
         if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
+        renderAction();
         binding.progressPanel.setVisibility(View.GONE);
     }
 
@@ -127,18 +137,28 @@ public class UpdateDialog extends BaseAlertDialog {
         if (stableChannel) {
             binding.stableVersion.setText(getVersion(update));
             binding.stableStatus.setText(getStatus(update));
-            binding.stableExpand.setText(expanded ? R.string.update_collapse : R.string.update_expand);
+            binding.stableExpand.setVisibility(hasBeta() && !expanded ? View.VISIBLE : View.GONE);
+            binding.stableExpand.setText(R.string.update_expand);
             binding.stableDesc.setText(MarkdownText.render(getBody(update), getString(R.string.update_no_notes)));
             binding.stableConfirm.setEnabled(update != null && update.hasUpdate());
             binding.stableConfirm.setText(R.string.update_confirm);
+            binding.stableConfirm.setVisibility(View.GONE);
         } else {
             binding.betaVersion.setText(getVersion(update));
             binding.betaStatus.setText(getStatus(update));
-            binding.betaExpand.setText(expanded ? R.string.update_collapse : R.string.update_expand);
+            binding.betaExpand.setVisibility(!expanded ? View.VISIBLE : View.GONE);
+            binding.betaExpand.setText(R.string.update_expand);
             binding.betaDesc.setText(MarkdownText.render(getBody(update), getString(R.string.update_no_notes)));
             binding.betaConfirm.setEnabled(update != null && update.hasUpdate());
             binding.betaConfirm.setText(R.string.update_confirm);
+            binding.betaConfirm.setVisibility(View.GONE);
         }
+    }
+
+    private void renderAction() {
+        Update update = getSelected();
+        if (update == null || !update.hasUpdate()) binding.cancel.setText(R.string.about_acknowledge);
+        else binding.cancel.setText(hasBeta() ? getString(R.string.update_confirm_channel, getSelectedName()) : getString(R.string.update_confirm));
     }
 
     private String getVersion(Update update) {
@@ -168,6 +188,25 @@ public class UpdateDialog extends BaseAlertDialog {
         betaExpanded = false;
     }
 
+    private Update getSelected() {
+        return Update.CHANNEL_BETA.equals(selected) ? beta : stable;
+    }
+
+    private String getSelectedName() {
+        return getString(Update.CHANNEL_BETA.equals(selected) ? R.string.update_channel_beta : R.string.update_channel_stable);
+    }
+
+    private void setDialogWidth(float factor) {
+        Window window = getDialog() == null ? null : getDialog().getWindow();
+        if (window == null) return;
+        int width = (int) (ResUtil.getScreenWidth(requireActivity()) * factor);
+        WindowManager.LayoutParams params = window.getAttributes();
+        params.width = width;
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        window.setAttributes(params);
+        window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+    }
+
     public void setProgress(int progress) {
         setProgress(progress, 0, 0, 0, 0);
     }
@@ -179,6 +218,7 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.betaItem.setEnabled(false);
         binding.stableConfirm.setEnabled(false);
         binding.betaConfirm.setEnabled(false);
+        binding.cancel.setEnabled(false);
         binding.progressPanel.setVisibility(View.VISIBLE);
         binding.progress.setIndeterminate(indeterminate);
         if (!indeterminate) binding.progress.setProgress(value);
@@ -187,7 +227,7 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private com.google.android.material.button.MaterialButton getSelectedButton() {
-        return Update.CHANNEL_BETA.equals(selected) ? binding.betaConfirm : binding.stableConfirm;
+        return binding.cancel;
     }
 
     private String getProgressText(boolean indeterminate, int value, long speed, long elapsed) {

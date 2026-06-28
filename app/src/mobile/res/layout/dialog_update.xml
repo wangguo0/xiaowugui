@@ -274,15 +274,15 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/cancel"
-        style="@style/Widget.Material3.Button.TonalButton"
+        style="@style/Widget.Material3.Button"
         android:layout_width="match_parent"
         android:layout_height="44dp"
         android:layout_marginTop="18dp"
         android:minHeight="44dp"
-        android:text="@string/dialog_negative"
-        android:textColor="@color/dialog_tonal_button_text"
+        android:text="@string/about_acknowledge"
+        android:textColor="@color/dialog_primary_button_text"
         android:textSize="14sp"
-        app:backgroundTint="@color/dialog_tonal_button_bg"
+        app:backgroundTint="@color/dialog_primary_button_bg"
         app:cornerRadius="8dp" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>
