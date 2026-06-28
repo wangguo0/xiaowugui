@@ -182,7 +182,7 @@ jobs:
           import os
 
           tag = "${{ steps.meta.outputs.tag }}"
-          notes = os.environ.get("RELEASE_NOTES", "").strip() or "手动触发 GitHub Actions 构建发布。"
+          notes = os.environ.get("RELEASE_NOTES", "").strip()
           for apk in glob.glob("dist/*.apk"):
               base = os.path.splitext(os.path.basename(apk))[0]
               with open(apk, "rb") as fh:
@@ -195,8 +195,9 @@ jobs:
                   "apk": f"{base}.apk",
                   "size": len(content),
                   "sha256": hashlib.sha256(content).hexdigest(),
-                  "notes": notes,
               }
+              if notes:
+                  data["notes"] = notes
               with open(f"dist/{base}.json", "w", encoding="utf-8") as fh:
                   json.dump(data, fh, ensure_ascii=False, indent=2)
                   fh.write("\n")
