@@ -1992,7 +1992,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setPosition() {
-        if (mHistory != null) player().seekTo(Math.max(mHistory.getOpening(), mHistory.getPosition()));
+        if (mHistory == null) return;
+        if (mHistory.isNearEnding()) {
+            SpiderDebug.log("video-flow", "reset near-end history position=%d duration=%d key=%s", mHistory.getPosition(), mHistory.getDuration(), getHistoryKey());
+            mHistory.resetPlaybackPosition();
+            syncHistory();
+        }
+        long position = Math.max(mHistory.getOpening(), mHistory.getPosition());
+        if (position > 0) player().seekTo(position);
     }
 
     private void checkOrientation() {
