@@ -5,6 +5,7 @@ import static android.view.View.VISIBLE;
 
 import android.content.DialogInterface;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 
@@ -39,7 +40,10 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
 
     private final DanmakuAdapter adapter;
     private DialogDanmakuSearchBinding binding;
+    private CharSequence keyword;
     private PlayerManager player;
+    private boolean autoSearch;
+    private boolean hideKeyword;
     private boolean restoreParent;
 
     public static DanmakuSearchDialog create() {
@@ -60,6 +64,21 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
         return this;
     }
 
+    public DanmakuSearchDialog keyword(CharSequence keyword) {
+        this.keyword = keyword;
+        return this;
+    }
+
+    public DanmakuSearchDialog autoSearch(boolean autoSearch) {
+        this.autoSearch = autoSearch;
+        return this;
+    }
+
+    public DanmakuSearchDialog hideKeyword(boolean hideKeyword) {
+        this.hideKeyword = hideKeyword;
+        return this;
+    }
+
     public void show(FragmentActivity activity) {
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof DanmakuSearchDialog) return;
         show(activity.getSupportFragmentManager(), null);
@@ -76,8 +95,10 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
         binding.recycler.setItemAnimator(null);
         binding.recycler.setHasFixedSize(false);
         binding.recycler.addItemDecoration(new SpaceItemDecoration(1, 16));
-        setKeyword(player.getMetadata().title);
-        Util.showKeyboard(binding.keyword);
+        setKeyword(keyword == null ? player.getMetadata().title : keyword);
+        if (hideKeyword && binding.keyword.getParent() instanceof View) ((View) binding.keyword.getParent()).setVisibility(GONE);
+        if (autoSearch) binding.getRoot().post(this::search);
+        else Util.showKeyboard(binding.keyword);
     }
 
     @Override
@@ -140,6 +161,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "search failed error=%s", e.getMessage());
         hideProgress(true);
         Notify.show(e.getMessage());
+        if (hideKeyword) dismissAllowingStateLoss();
     }
 
     @Override

@@ -21,6 +21,7 @@ import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.ui.adapter.DanmakuAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.FileChooser;
+import com.fongmi.android.tv.utils.Util;
 
 public final class DanmakuDialog extends BaseBottomSheetDialog implements DanmakuAdapter.OnClickListener {
 
@@ -73,7 +74,8 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
         FragmentActivity activity = getActivity();
         if (activity == null) return;
         dismissAllowingStateLoss();
-        DanmakuSearchDialog.create().player(player).restoreParent(true).show(activity);
+        if (Util.isMobile() && !Util.isFullscreen(activity)) DanmakuSearchInputDialog.create().player(player).restoreParent(true).show(activity);
+        else DanmakuSearchDialog.create().player(player).restoreParent(true).show(activity);
     }
 
     private void onChoose(View view) {
