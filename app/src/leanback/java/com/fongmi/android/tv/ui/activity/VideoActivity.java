@@ -1677,7 +1677,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void updateHistory(Episode item) {
-        boolean sameEpisode = item.matches(mHistory.getEpisode());
+        boolean sameEpisode = item.matchesName(mHistory.getEpisode());
         boolean sameFlag = TextUtils.equals(mHistory.getVodFlag(), getFlag().getFlag());
         if ((!sameEpisode || !sameFlag) && service() != null) {
             updatePlaybackHistoryPosition();
