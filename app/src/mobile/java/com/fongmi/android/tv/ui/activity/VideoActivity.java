@@ -681,8 +681,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.scroll.scrollTo(0, 0);
         mClock.setCallback(null);
         updateNavigationKey();
-        player().reset();
-        player().stop();
+        if (service() != null) {
+            player().reset();
+            player().stop();
+        }
         getDetail();
     }
 
