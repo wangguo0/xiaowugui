@@ -194,8 +194,37 @@ public class DanmakuSetting {
         Prefers.put("danmaku_max_bottom_lines", clampFixedLines(value));
     }
 
+    public static boolean isFixedTop() {
+        return isShowTop() || !isShowBottom();
+    }
+
+    public static void putFixedTop(boolean top) {
+        putShowTop(top);
+        putShowBottom(!top);
+    }
+
+    public static int getDisplayLines() {
+        int top = getMaxTopLines();
+        int bottom = getMaxBottomLines();
+        int selected = isFixedTop() ? top : bottom;
+        if (selected > 0) return selected;
+        int legacy = Math.max(top, bottom);
+        return legacy > 0 ? legacy : 3;
+    }
+
+    public static void putDisplayLines(int value) {
+        value = clampDisplayLines(value);
+        putMaxScrollLines(value);
+        putMaxTopLines(value);
+        putMaxBottomLines(value);
+    }
+
     private static int clampFixedLines(int value) {
         return Math.max(0, Math.min(5, value));
+    }
+
+    private static int clampDisplayLines(int value) {
+        return Math.max(1, Math.min(5, value));
     }
 
     public static float getLineSpacing() {
@@ -330,17 +359,12 @@ public class DanmakuSetting {
     }
 
     public static void resetDisplay() {
-        DanmakuConfig config = DanmakuConfig.DEFAULT;
-        putShowScroll(config.showScroll);
-        putShowTop(config.showTop);
-        putShowBottom(config.showBottom);
-        putShowReverse(config.showReverse);
-        putShowPositioned(config.showPositioned);
-        putShowSubtitle(config.showSubtitle);
-        putShowSpecial(config.showSpecial);
+        putFixedTop(true);
+        putDisplayLines(3);
     }
 
     public static DanmakuConfig getConfig() {
+        DanmakuConfig defaults = DanmakuConfig.DEFAULT;
         return new DanmakuConfig.Builder()
                 .setTextScale(getTextScale())
                 .setTransparency(getTransparency())
@@ -355,20 +379,20 @@ public class DanmakuSetting {
                 .setDurationMs(getDurationMs())
                 .setFixedDurationMs(getFixedDurationMs())
                 .setTimeOffsetMs(getTimeOffsetMs())
-                .setMaxOnScreen(getMaxOnScreen())
-                .setScrollAreaRatio(getScrollAreaRatio())
-                .setScrollGapRatio(getScrollGapRatio())
-                .setLineSpacing(getLineSpacing())
-                .setMaxScrollLines(getMaxScrollLines())
-                .setMaxTopLines(getMaxTopLines())
-                .setMaxBottomLines(getMaxBottomLines())
-                .setShowScroll(isShowScroll())
-                .setShowTop(isShowTop())
-                .setShowBottom(isShowBottom())
-                .setShowReverse(isShowReverse())
-                .setShowPositioned(isShowPositioned())
-                .setShowSubtitle(isShowSubtitle())
-                .setShowSpecial(isShowSpecial())
+                .setMaxOnScreen(defaults.maxOnScreen)
+                .setScrollAreaRatio(defaults.scrollAreaRatio)
+                .setScrollGapRatio(defaults.scrollGapRatio)
+                .setLineSpacing(defaults.lineSpacing)
+                .setMaxScrollLines(getDisplayLines())
+                .setMaxTopLines(getDisplayLines())
+                .setMaxBottomLines(getDisplayLines())
+                .setShowScroll(defaults.showScroll)
+                .setShowTop(isFixedTop())
+                .setShowBottom(!isFixedTop())
+                .setShowReverse(defaults.showReverse)
+                .setShowPositioned(defaults.showPositioned)
+                .setShowSubtitle(defaults.showSubtitle)
+                .setShowSpecial(defaults.showSpecial)
                 .build();
     }
 }

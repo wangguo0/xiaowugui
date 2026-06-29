@@ -101,6 +101,10 @@
     <string name="danmaku_max_bottom_lines">最大底部行數</string>
     <string name="danmaku_top_rows">頂部行數</string>
     <string name="danmaku_bottom_rows">底部行數</string>
+    <string name="danmaku_fixed_position">固定彈幕位置</string>
+    <string name="danmaku_position_top">頂部</string>
+    <string name="danmaku_position_bottom">底部</string>
+    <string name="danmaku_display_rows">顯示行數</string>
     <string name="danmaku_rows_1">1行</string>
     <string name="danmaku_rows_2">2行</string>
     <string name="danmaku_rows_3">3行</string>

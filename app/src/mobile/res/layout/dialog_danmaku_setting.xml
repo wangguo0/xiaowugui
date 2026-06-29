@@ -71,18 +71,6 @@
             android:textSize="14sp" />
 
         <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/tabDensity"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_marginEnd="7dp"
-            android:layout_weight="1"
-            android:background="@drawable/selector_control_sheet_button"
-            android:gravity="center"
-            android:text="@string/danmaku_section_density"
-            android:textColor="@color/selector_control_sheet_text"
-            android:textSize="14sp" />
-
-        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/tabDisplay"
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -117,13 +105,6 @@
             <include
                 android:id="@+id/timing"
                 layout="@layout/view_danmaku_timing"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone" />
-
-            <include
-                android:id="@+id/density"
-                layout="@layout/view_danmaku_density"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:visibility="gone" />

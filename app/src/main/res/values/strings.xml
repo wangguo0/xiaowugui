@@ -102,6 +102,10 @@
     <string name="danmaku_max_bottom_lines">Max bottom rows</string>
     <string name="danmaku_top_rows">Top rows</string>
     <string name="danmaku_bottom_rows">Bottom rows</string>
+    <string name="danmaku_fixed_position">Pinned position</string>
+    <string name="danmaku_position_top">Top</string>
+    <string name="danmaku_position_bottom">Bottom</string>
+    <string name="danmaku_display_rows">Display rows</string>
     <string name="danmaku_rows_1">1 row</string>
     <string name="danmaku_rows_2">2 rows</string>
     <string name="danmaku_rows_3">3 rows</string>
