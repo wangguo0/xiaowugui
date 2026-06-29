@@ -26,6 +26,7 @@ import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
+import com.github.catvod.crawler.SpiderDebug;
 
 import java.io.IOException;
 import java.util.List;
@@ -94,6 +95,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     @Override
     public void onItemClick(Danmaku item) {
         restoreParent = false;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "search item click selected=%s name=%s url=%s", item.isSelected(), item.getName(), item.getUrl());
         player.setDanmaku(item.isSelected() ? Danmaku.empty() : item);
         dismiss();
     }
@@ -111,6 +113,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     private void hideProgress(boolean empty) {
         binding.progress.setVisibility(GONE);
         binding.recycler.setVisibility(empty ? GONE : VISIBLE);
+        binding.getRoot().requestLayout();
     }
 
     private void search() {
@@ -127,12 +130,14 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     }
 
     private void onSuccess(List<Danmaku> items) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "search success count=%d", items.size());
         adapter.addAll(items);
         hideProgress(items.isEmpty());
         binding.recycler.requestFocus();
     }
 
     private void onError(Exception e) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "search failed error=%s", e.getMessage());
         hideProgress(true);
         Notify.show(e.getMessage());
     }
@@ -140,7 +145,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     @Override
     public void onResponse(@NonNull Call call, @NonNull Response response) {
         try {
-            List<Danmaku> items = Danmaku.arrayFrom(response.body().string());
+            List<Danmaku> items = DanmakuApi.arrayFrom(response.body().string());
             if (items.isEmpty()) throw new Exception(ResUtil.getString(R.string.error_empty));
             else App.post(() -> onSuccess(items));
         } catch (Exception e) {

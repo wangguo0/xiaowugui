@@ -77,6 +77,8 @@ public abstract class BaseBottomSheetDialog extends BottomSheetDialogFragment {
     protected void setBehavior(BottomSheetDialog dialog) {
         FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
         if (sheet == null) return;
+        sheet.setClickable(true);
+        sheet.setFocusable(true);
         if (transparent()) {
             int color = ResUtil.getColor(R.color.transparent);
             sheet.setBackgroundColor(color);
