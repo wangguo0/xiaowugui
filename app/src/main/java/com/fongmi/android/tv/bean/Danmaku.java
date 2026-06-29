@@ -25,6 +25,10 @@ public class Danmaku {
     private String name;
     @SerializedName("url")
     private String url;
+    @SerializedName(value = "source", alternate = {"from", "site", "provider", "platform"})
+    private String source;
+    @SerializedName(value = "apiSourceName", alternate = {"apiSource", "api_source", "api_source_name"})
+    private String apiSourceName;
 
     private boolean selected;
 
@@ -91,6 +95,88 @@ public class Danmaku {
 
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    public String getSourceName() {
+        String explicit = getExplicitSourceName();
+        return TextUtils.isEmpty(explicit) ? getFallbackSourceName() : explicit;
+    }
+
+    private String getExplicitSourceName() {
+        String api = cleanSource(apiSourceName);
+        String from = cleanSource(source);
+        if (!TextUtils.isEmpty(api) && !TextUtils.isEmpty(from) && !api.equals(from)) return api + " · " + from;
+        if (!TextUtils.isEmpty(from)) return from;
+        return api;
+    }
+
+    private String getFallbackSourceName() {
+        String text = getName();
+        String from = sourceAfterKeyword(text, "来源");
+        if (!TextUtils.isEmpty(from)) return from;
+        from = sourceAfterKeyword(text, "from");
+        if (!TextUtils.isEmpty(from)) return from;
+        String bracket = sourceInBracket(text);
+        if (!TextUtils.isEmpty(bracket)) return bracket;
+        String prefix = sourcePrefix(text);
+        return TextUtils.isEmpty(prefix) ? "默认" : prefix;
+    }
+
+    private static String sourceAfterKeyword(String text, String keyword) {
+        if (TextUtils.isEmpty(text)) return "";
+        String lower = text.toLowerCase();
+        int index = lower.indexOf(keyword.toLowerCase());
+        if (index == -1) return "";
+        String source = text.substring(index + keyword.length()).trim();
+        if (source.startsWith(":") || source.startsWith("：")) source = source.substring(1).trim();
+        return cleanSource(trimSourceTail(source));
+    }
+
+    private static String sourceInBracket(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        String value = text.trim();
+        if (!value.startsWith("[") && !value.startsWith("【")) return "";
+        int end = value.startsWith("[") ? value.indexOf(']') : value.indexOf('】');
+        if (end <= 1 || end > 18) return "";
+        return cleanSource(value.substring(1, end));
+    }
+
+    private static String sourcePrefix(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        String value = text.trim();
+        for (String delimiter : new String[]{"|", "｜", " · ", " / ", "：", ":"}) {
+            int index = value.indexOf(delimiter);
+            if (index <= 0 || index > 18) continue;
+            String prefix = cleanSource(value.substring(0, index));
+            if (looksLikeSource(prefix)) return prefix;
+        }
+        return "";
+    }
+
+    private static boolean looksLikeSource(String text) {
+        if (TextUtils.isEmpty(text)) return false;
+        String lower = text.toLowerCase();
+        for (String key : new String[]{"源", "弹幕", "danmaku", "dandan", "bilibili", "b站", "哔哩", "腾讯", "爱奇艺", "优酷", "芒果", "acfun", "a站", "央视", "cctv"}) {
+            if (lower.contains(key)) return true;
+        }
+        return false;
+    }
+
+    private static String trimSourceTail(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        String value = text.trim();
+        for (String delimiter : new String[]{" · ", " - ", "|", "｜", "/", "，", ",", "；", ";"}) {
+            int index = value.indexOf(delimiter);
+            if (index > 0) value = value.substring(0, index).trim();
+        }
+        return value;
+    }
+
+    private static String cleanSource(String text) {
+        if (TextUtils.isEmpty(text)) return "";
+        String value = text.trim();
+        if ("null".equalsIgnoreCase(value) || "unknown".equalsIgnoreCase(value)) return "";
+        return value.length() > 18 ? value.substring(0, 18) : value;
     }
 
     public boolean isSelected() {
