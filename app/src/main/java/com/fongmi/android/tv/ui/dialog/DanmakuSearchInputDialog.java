@@ -166,8 +166,11 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         edit.setMaxLines(1);
         edit.setBackground(null);
         edit.setPadding(0, 0, 0, 0);
+        edit.setGravity(Gravity.CENTER_VERTICAL);
         edit.setTextColor(Color.parseColor("#202124"));
+        edit.setHintTextColor(Color.parseColor("#6F7782"));
         edit.setTextSize(18);
+        edit.setHint(R.string.search_keyword);
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT | InputType.TYPE_TEXT_FLAG_AUTO_COMPLETE);
         edit.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         CharSequence title = player == null || player.getMetadata() == null ? "" : player.getMetadata().title;
@@ -237,19 +240,12 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
     }
 
     private LinearLayout createSearchRow() {
-        MaterialTextView label = new MaterialTextView(requireContext());
-        label.setText(R.string.search_keyword);
-        label.setTextColor(Color.parseColor("#6F7782"));
-        label.setTextSize(12);
-        label.setGravity(Gravity.CENTER_VERTICAL);
-
         LinearLayout inputBox = new LinearLayout(requireContext());
-        inputBox.setOrientation(LinearLayout.VERTICAL);
+        inputBox.setOrientation(LinearLayout.HORIZONTAL);
         inputBox.setGravity(Gravity.CENTER_VERTICAL);
-        inputBox.setPadding(dp(12), dp(6), dp(12), dp(6));
+        inputBox.setPadding(dp(14), 0, dp(14), 0);
         inputBox.setBackground(round(Color.parseColor("#F8FAFD"), 12, Color.parseColor("#DADCE0")));
-        inputBox.addView(label, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(16)));
-        inputBox.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        inputBox.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
 
         search = actionButton(getString(R.string.play_search), true);
         search.setIconResource(R.drawable.ic_action_search);
