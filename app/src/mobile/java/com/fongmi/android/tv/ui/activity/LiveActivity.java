@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.activity;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
@@ -226,6 +227,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        setRequestedOrientation(getLaunchOrient());
         super.onCreate(savedInstanceState);
         updateSystemUI();
     }
@@ -534,6 +536,10 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private void onBack() {
+        if (ResUtil.isPad() && !isEmbeddedLiveUi()) {
+            finishLivePlayback();
+            return;
+        }
         if (!isEmbeddedLiveUi()) {
             exitFullscreenLive();
             return;
@@ -577,11 +583,13 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         hideUI();
         updateEmbeddedUiMode();
         Util.hideSystemUI(this);
-        setRequestedOrientation(PlaybackOrientation.getEnterFullscreenOrientation(false));
+        setRequestedOrientation(getFullscreenOrient());
     }
 
     private void enterFullscreenLiveOnPad() {
         if (!ResUtil.isPad() || isRotate() || isInPictureInPictureMode()) return;
+        setRequestedOrientation(getFullscreenOrient());
+        if (!ResUtil.isLand(this)) return;
         enterFullscreenLive();
     }
 
@@ -589,7 +597,19 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         setRotate(false);
         hideInfo();
         hideControl();
-        setRequestedOrientation(PlaybackOrientation.getPortraitVideoSizeOrientation());
+        setRequestedOrientation(getEmbeddedOrient());
+    }
+
+    private int getLaunchOrient() {
+        return ResUtil.isPad() ? ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE : PlaybackOrientation.getPortraitVideoSizeOrientation();
+    }
+
+    private int getFullscreenOrient() {
+        return ResUtil.isPad() ? ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE : PlaybackOrientation.getEnterFullscreenOrientation(false);
+    }
+
+    private int getEmbeddedOrient() {
+        return ResUtil.isPad() ? ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE : PlaybackOrientation.getPortraitVideoSizeOrientation();
     }
 
     private void checkPlay() {
@@ -730,6 +750,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     private int getLockOrient() {
+        if (ResUtil.isPad() && !isLock()) return ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE;
         return PlaybackOrientation.getLockOrientation(this, isLock(), isRotate());
     }
 
@@ -817,7 +838,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         if (!embedded && isVisible(mBinding.recycler)) hideUI(false);
         mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
         mBinding.control.cast.setVisibility(View.GONE);
-        mBinding.control.right.rotate.setVisibility(isLock() ? View.GONE : View.VISIBLE);
+        mBinding.control.right.rotate.setVisibility(isLock() || ResUtil.isPad() ? View.GONE : View.VISIBLE);
         mBinding.control.center.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.bottom.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.action.getRoot().setVisibility(embedded ? View.GONE : View.VISIBLE);
@@ -1730,6 +1751,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         updateSystemUI();
+        enterFullscreenLiveOnPad();
     }
 
     @Override
