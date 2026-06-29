@@ -29,6 +29,11 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
     private DialogDanmakuBinding binding;
     private PlayerManager player;
 
+    public interface Host {
+
+        boolean isDanmakuFullscreen();
+    }
+
     public static DanmakuDialog create() {
         return new DanmakuDialog();
     }
@@ -74,8 +79,12 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
         FragmentActivity activity = getActivity();
         if (activity == null) return;
         dismissAllowingStateLoss();
-        if (Util.isMobile() && !Util.isFullscreen(activity)) DanmakuSearchInputDialog.create().player(player).restoreParent(true).show(activity);
+        if (shouldUseInputDialog(activity)) DanmakuSearchInputDialog.create().player(player).restoreParent(true).show(activity);
         else DanmakuSearchDialog.create().player(player).restoreParent(true).show(activity);
+    }
+
+    private boolean shouldUseInputDialog(FragmentActivity activity) {
+        return Util.isMobile() && (!(activity instanceof Host) || !((Host) activity).isDanmakuFullscreen());
     }
 
     private void onChoose(View view) {
