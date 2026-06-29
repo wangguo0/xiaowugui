@@ -208,7 +208,7 @@
         android:layout_marginHorizontal="12dp"
         android:stepSize="1"
         android:valueFrom="0"
-        android:valueTo="10"
+        android:valueTo="5"
         app:tickVisible="false" />
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -243,7 +243,7 @@
         android:layout_marginHorizontal="12dp"
         android:stepSize="1"
         android:valueFrom="0"
-        android:valueTo="10"
+        android:valueTo="5"
         app:tickVisible="false" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

@@ -48,6 +48,96 @@
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/topLinesLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="4dp"
+        android:text="@string/danmaku_top_rows"
+        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/topLinesGroup"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLinesAuto"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_auto"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLines1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_1"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLines2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_2"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLines3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_3"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLines4"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_4"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/topLines5"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_5"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
     <androidx.appcompat.widget.LinearLayoutCompat
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -67,6 +157,96 @@
             android:id="@+id/showBottomSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/bottomLinesLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="4dp"
+        android:text="@string/danmaku_bottom_rows"
+        android:textAppearance="?attr/textAppearanceBodyLarge" />
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/bottomLinesGroup"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLinesAuto"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_auto"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLines1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_1"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLines2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_2"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLines3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_3"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLines4"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_4"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/bottomLines5"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/selector_control_sheet_button"
+            android:gravity="center"
+            android:text="@string/danmaku_rows_5"
+            android:textColor="@color/selector_control_sheet_text"
+            android:textSize="13sp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 

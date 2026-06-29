@@ -179,19 +179,23 @@ public class DanmakuSetting {
     }
 
     public static int getMaxTopLines() {
-        return Prefers.getInt("danmaku_max_top_lines", 0);
+        return clampFixedLines(Prefers.getInt("danmaku_max_top_lines", 0));
     }
 
     public static void putMaxTopLines(int value) {
-        Prefers.put("danmaku_max_top_lines", value);
+        Prefers.put("danmaku_max_top_lines", clampFixedLines(value));
     }
 
     public static int getMaxBottomLines() {
-        return Prefers.getInt("danmaku_max_bottom_lines", 0);
+        return clampFixedLines(Prefers.getInt("danmaku_max_bottom_lines", 0));
     }
 
     public static void putMaxBottomLines(int value) {
-        Prefers.put("danmaku_max_bottom_lines", value);
+        Prefers.put("danmaku_max_bottom_lines", clampFixedLines(value));
+    }
+
+    private static int clampFixedLines(int value) {
+        return Math.max(0, Math.min(5, value));
     }
 
     public static float getLineSpacing() {

@@ -87,10 +87,13 @@ final class DanmakuSettingPanel {
         setupSwitch(display.showScrollSwitch, DanmakuSetting.isShowScroll(), DanmakuSetting::putShowScroll, this::updateDependentControls);
         setupSwitch(display.showTopSwitch, DanmakuSetting.isShowTop(), DanmakuSetting::putShowTop, this::updateDependentControls);
         setupSwitch(display.showBottomSwitch, DanmakuSetting.isShowBottom(), DanmakuSetting::putShowBottom, this::updateDependentControls);
+        setupLineChoice(DanmakuSetting.getMaxTopLines(), DanmakuSetting::putMaxTopLines, display.topLinesAuto, display.topLines1, display.topLines2, display.topLines3, display.topLines4, display.topLines5);
+        setupLineChoice(DanmakuSetting.getMaxBottomLines(), DanmakuSetting::putMaxBottomLines, display.bottomLinesAuto, display.bottomLines1, display.bottomLines2, display.bottomLines3, display.bottomLines4, display.bottomLines5);
         setupSwitch(display.showReverseSwitch, DanmakuSetting.isShowReverse(), DanmakuSetting::putShowReverse, this::updateDependentControls);
         setupSwitch(display.showPositionedSwitch, DanmakuSetting.isShowPositioned(), DanmakuSetting::putShowPositioned, null);
         setupSwitch(display.showSubtitleSwitch, DanmakuSetting.isShowSubtitle(), DanmakuSetting::putShowSubtitle, null);
         setupSwitch(display.showSpecialSwitch, DanmakuSetting.isShowSpecial(), DanmakuSetting::putShowSpecial, null);
+        updateDependentControls();
     }
 
     private void bindTabs() {
@@ -218,11 +221,22 @@ final class DanmakuSettingPanel {
         applyEnabled(density.maxScrollLinesRow, density.maxScrollLinesSlider, DanmakuSetting.isShowScroll());
         applyEnabled(density.maxTopLinesRow, density.maxTopLinesSlider, DanmakuSetting.isShowTop());
         applyEnabled(density.maxBottomLinesRow, density.maxBottomLinesSlider, DanmakuSetting.isShowBottom());
+
+        var display = binding.display;
+        applyEnabled(display.topLinesLabel, display.topLinesGroup, DanmakuSetting.isShowTop());
+        applyEnabled(display.bottomLinesLabel, display.bottomLinesGroup, DanmakuSetting.isShowBottom());
     }
 
-    private void applyEnabled(View row, Slider slider, boolean enabled) {
+    private void applyEnabled(View row, View control, boolean enabled) {
         row.setAlpha(enabled ? 1f : 0.38f);
-        slider.setEnabled(enabled);
+        control.setAlpha(enabled ? 1f : 0.38f);
+        setEnabledRecursive(control, enabled);
+    }
+
+    private void setEnabledRecursive(View view, boolean enabled) {
+        view.setEnabled(enabled);
+        if (!(view instanceof ViewGroup group)) return;
+        for (int i = 0; i < group.getChildCount(); i++) setEnabledRecursive(group.getChildAt(i), enabled);
     }
 
     private void applyConfig() {
@@ -299,16 +313,35 @@ final class DanmakuSettingPanel {
         setupSwitch(button, value, setter, null);
     }
 
+    private void setupLineChoice(int initialLines, IntConsumer setter, TextView... choices) {
+        int selected = Math.max(0, Math.min(5, initialLines));
+        for (int i = 0; i < choices.length; i++) {
+            int value = i;
+            TextView choice = choices[i];
+            setChoiceSelected(choice, value == selected);
+            choice.setOnClickListener(view -> {
+                for (TextView item : choices) setChoiceSelected(item, item == view);
+                setter.accept(value);
+                applyConfig();
+            });
+        }
+    }
+
     private void setupChoice(int initialMode, IntUnaryOperator viewForMode, IntUnaryOperator modeForView, IntConsumer onChange, TextView... choices) {
         int selectedId = viewForMode.applyAsInt(initialMode);
         for (TextView choice : choices) {
-            choice.setSelected(choice.getId() == selectedId);
+            setChoiceSelected(choice, choice.getId() == selectedId);
             choice.setOnClickListener(view -> {
-                for (TextView item : choices) item.setSelected(item == view);
+                for (TextView item : choices) setChoiceSelected(item, item == view);
                 onChange.accept(modeForView.applyAsInt(view.getId()));
                 applyConfig();
             });
         }
+    }
+
+    private void setChoiceSelected(TextView choice, boolean selected) {
+        choice.setSelected(selected);
+        if (choice instanceof CompoundButton button) button.setChecked(selected);
     }
 
     private String linesText(int value) {

@@ -221,7 +221,7 @@
         android:focusableInTouchMode="true"
         android:stepSize="1"
         android:valueFrom="0"
-        android:valueTo="10"
+        android:valueTo="5"
         app:tickVisible="false" />
 
     <androidx.appcompat.widget.LinearLayoutCompat
@@ -258,7 +258,7 @@
         android:focusableInTouchMode="true"
         android:stepSize="1"
         android:valueFrom="0"
-        android:valueTo="10"
+        android:valueTo="5"
         app:tickVisible="false" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>
