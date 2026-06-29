@@ -54,7 +54,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:focusable="true"
-            android:text="@string/danmaku_section_appearance" />
+            android:text="@string/danmaku_section_display" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/tabTiming"
@@ -64,15 +64,6 @@
             android:layout_weight="1"
             android:focusable="true"
             android:text="@string/danmaku_section_timing" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/tabDisplay"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:focusable="true"
-            android:text="@string/danmaku_section_display" />
 
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
@@ -98,13 +89,6 @@
             <include
                 android:id="@+id/timing"
                 layout="@layout/view_danmaku_timing"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone" />
-
-            <include
-                android:id="@+id/display"
-                layout="@layout/view_danmaku_display"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:visibility="gone" />

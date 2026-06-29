@@ -194,22 +194,11 @@ public class DanmakuSetting {
         Prefers.put("danmaku_max_bottom_lines", clampFixedLines(value));
     }
 
-    public static boolean isFixedTop() {
-        return isShowTop() || !isShowBottom();
-    }
-
-    public static void putFixedTop(boolean top) {
-        putShowTop(top);
-        putShowBottom(!top);
-    }
-
     public static int getDisplayLines() {
-        int top = getMaxTopLines();
-        int bottom = getMaxBottomLines();
-        int selected = isFixedTop() ? top : bottom;
-        if (selected > 0) return selected;
-        int legacy = Math.max(top, bottom);
-        return legacy > 0 ? legacy : 3;
+        int scroll = getMaxScrollLines();
+        if (scroll > 0) return clampDisplayLines(scroll);
+        int legacy = Math.max(getMaxTopLines(), getMaxBottomLines());
+        return legacy > 0 ? clampDisplayLines(legacy) : 3;
     }
 
     public static void putDisplayLines(int value) {
@@ -359,7 +348,6 @@ public class DanmakuSetting {
     }
 
     public static void resetDisplay() {
-        putFixedTop(true);
         putDisplayLines(3);
     }
 
@@ -387,8 +375,8 @@ public class DanmakuSetting {
                 .setMaxTopLines(getDisplayLines())
                 .setMaxBottomLines(getDisplayLines())
                 .setShowScroll(defaults.showScroll)
-                .setShowTop(isFixedTop())
-                .setShowBottom(!isFixedTop())
+                .setShowTop(defaults.showTop)
+                .setShowBottom(defaults.showBottom)
                 .setShowReverse(defaults.showReverse)
                 .setShowPositioned(defaults.showPositioned)
                 .setShowSubtitle(defaults.showSubtitle)
