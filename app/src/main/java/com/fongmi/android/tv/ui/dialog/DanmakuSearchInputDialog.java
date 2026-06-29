@@ -6,8 +6,8 @@ import android.text.TextUtils;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
-import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -103,7 +103,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment {
         TextInputLayout layout = new TextInputLayout(requireContext());
         layout.setHint(getString(R.string.search_keyword));
         layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
-        layout.addView(input, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        layout.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         FrameLayout frame = new FrameLayout(requireContext());
         int horizontal = ResUtil.dp2px(20);
