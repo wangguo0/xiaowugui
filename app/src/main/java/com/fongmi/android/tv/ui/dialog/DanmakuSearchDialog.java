@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.dialog;
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
+import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -38,6 +39,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     private final DanmakuAdapter adapter;
     private DialogDanmakuSearchBinding binding;
     private PlayerManager player;
+    private boolean restoreParent;
 
     public static DanmakuSearchDialog create() {
         return new DanmakuSearchDialog();
@@ -49,6 +51,11 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
 
     public DanmakuSearchDialog player(PlayerManager player) {
         this.player = player;
+        return this;
+    }
+
+    public DanmakuSearchDialog restoreParent(boolean restoreParent) {
+        this.restoreParent = restoreParent;
         return this;
     }
 
@@ -86,6 +93,7 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
 
     @Override
     public void onItemClick(Danmaku item) {
+        restoreParent = false;
         player.setDanmaku(item.isSelected() ? Danmaku.empty() : item);
         dismiss();
     }
@@ -149,6 +157,14 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
     public void onDestroyView() {
         super.onDestroyView();
         DanmakuApi.cancel();
+    }
+
+    @Override
+    public void onDismiss(@NonNull DialogInterface dialog) {
+        super.onDismiss(dialog);
+        FragmentActivity activity = getActivity();
+        if (!restoreParent || activity == null || activity.isFinishing()) return;
+        DanmakuDialog.create().player(player).show(activity);
     }
 
     @Override

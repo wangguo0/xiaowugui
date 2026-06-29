@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Dialog;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
@@ -30,6 +31,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 public final class DanmakuSettingDialog {
 
     private PlayerManager player;
+    private boolean restoreParent;
 
     public static DanmakuSettingDialog create() {
         return new DanmakuSettingDialog();
@@ -40,11 +42,16 @@ public final class DanmakuSettingDialog {
         return this;
     }
 
+    public DanmakuSettingDialog restoreParent(boolean restoreParent) {
+        this.restoreParent = restoreParent;
+        return this;
+    }
+
     public void show(FragmentActivity activity) {
         FragmentManager manager = activity.getSupportFragmentManager();
         for (Fragment fragment : manager.getFragments()) if (fragment instanceof BottomSheet || fragment instanceof SideSheet) return;
-        if (Util.isFullscreenLand(activity) || Util.isLeanback()) new SideSheet(player).show(manager, null);
-        else new BottomSheet(player).show(manager, null);
+        if (Util.isFullscreenLand(activity) || Util.isLeanback()) new SideSheet(player, restoreParent).show(manager, null);
+        else new BottomSheet(player, restoreParent).show(manager, null);
     }
 
     private static DialogDanmakuSettingBinding inflate(LayoutInflater inflater, ViewGroup container) {
@@ -55,9 +62,11 @@ public final class DanmakuSettingDialog {
 
         private DialogDanmakuSettingBinding binding;
         private final PlayerManager player;
+        private final boolean restoreParent;
 
-        BottomSheet(PlayerManager player) {
+        BottomSheet(PlayerManager player, boolean restoreParent) {
             this.player = player;
+            this.restoreParent = restoreParent;
         }
 
         @NonNull
@@ -82,6 +91,12 @@ public final class DanmakuSettingDialog {
         @Override
         protected void initView() {
             new DanmakuSettingPanel(binding, player).bind();
+        }
+
+        @Override
+        public void onDismiss(@NonNull DialogInterface dialog) {
+            super.onDismiss(dialog);
+            DanmakuSettingDialog.restoreParent(this, player, restoreParent);
         }
 
         @Override
@@ -137,9 +152,11 @@ public final class DanmakuSettingDialog {
 
         private DialogDanmakuSettingBinding binding;
         private final PlayerManager player;
+        private final boolean restoreParent;
 
-        SideSheet(PlayerManager player) {
+        SideSheet(PlayerManager player, boolean restoreParent) {
             this.player = player;
+            this.restoreParent = restoreParent;
         }
 
         @Override
@@ -158,6 +175,12 @@ public final class DanmakuSettingDialog {
         }
 
         @Override
+        public void onDismiss(@NonNull DialogInterface dialog) {
+            super.onDismiss(dialog);
+            DanmakuSettingDialog.restoreParent(this, player, restoreParent);
+        }
+
+        @Override
         public void onStart() {
             super.onStart();
             Dialog dialog = getDialog();
@@ -170,5 +193,11 @@ public final class DanmakuSettingDialog {
                 if (sheet.getParent() instanceof View) ((View) sheet.getParent()).setBackgroundColor(color);
             }
         }
+    }
+
+    private static void restoreParent(Fragment fragment, PlayerManager player, boolean restoreParent) {
+        FragmentActivity activity = fragment.getActivity();
+        if (!restoreParent || activity == null || activity.isFinishing()) return;
+        DanmakuDialog.create().player(player).show(activity);
     }
 }
