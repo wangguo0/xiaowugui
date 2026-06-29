@@ -1064,7 +1064,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onBack() {
         if (isFullscreen()) exitFullscreen();
-        else finishPlayback();
+        else finishVideoPlayback();
+    }
+
+    private void finishVideoPlayback() {
+        saveHistory(true);
+        finishPlayback();
     }
 
     private void onCast() {
@@ -2451,6 +2456,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             exitFullscreen();
         } else if (!isLock()) {
             mViewModel.stopSearch();
+            saveHistory(true);
             markPlaybackExiting();
             stopPlayback();
             if (isTaskRoot()) startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
