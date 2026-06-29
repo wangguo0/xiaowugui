@@ -7,12 +7,17 @@ import androidx.annotation.Nullable;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.utils.UrlUtil;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Danmaku {
 
@@ -24,9 +29,41 @@ public class Danmaku {
     private boolean selected;
 
     public static List<Danmaku> arrayFrom(String str) {
+        if (TextUtils.isEmpty(str)) return Collections.emptyList();
         Type listType = TypeToken.getParameterized(List.class, Danmaku.class).getType();
-        List<Danmaku> items = App.gson().fromJson(str, listType);
-        return items == null ? Collections.emptyList() : items;
+        str = str.trim();
+        try {
+            return arrayFrom(JsonParser.parseString(str), listType);
+        } catch (Exception e) {
+            return filter(List.of(Danmaku.from(str)));
+        }
+    }
+
+    private static List<Danmaku> arrayFrom(JsonElement element, Type listType) {
+        if (element == null || element.isJsonNull()) return Collections.emptyList();
+        if (element.isJsonArray()) return filter(App.gson().fromJson(element, listType));
+        if (element.isJsonPrimitive()) return arrayFromPrimitive(element.getAsString(), listType);
+        if (!element.isJsonObject()) return Collections.emptyList();
+        JsonObject object = element.getAsJsonObject();
+        for (String key : new String[]{"data", "list", "result", "results", "items", "danmakus", "danmaku"}) {
+            if (object.has(key)) {
+                List<Danmaku> items = arrayFrom(object.get(key), listType);
+                if (!items.isEmpty()) return items;
+            }
+        }
+        return filter(List.of(App.gson().fromJson(object, Danmaku.class)));
+    }
+
+    private static List<Danmaku> arrayFromPrimitive(String text, Type listType) {
+        text = TextUtils.isEmpty(text) ? "" : text.trim();
+        if (text.isEmpty()) return Collections.emptyList();
+        if (text.startsWith("[") || text.startsWith("{")) return arrayFrom(JsonParser.parseString(text), listType);
+        return filter(List.of(Danmaku.from(text)));
+    }
+
+    private static List<Danmaku> filter(List<Danmaku> items) {
+        if (items == null) return Collections.emptyList();
+        return items.stream().filter(item -> item != null && !item.isEmpty()).collect(Collectors.toCollection(ArrayList::new));
     }
 
     public static Danmaku from(String path) {
