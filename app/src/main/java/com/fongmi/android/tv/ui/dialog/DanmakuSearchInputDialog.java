@@ -29,7 +29,6 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
@@ -42,7 +41,6 @@ import com.fongmi.android.tv.api.DanmakuApi;
 import com.fongmi.android.tv.bean.Danmaku;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.ui.custom.CustomRecyclerView;
-import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
@@ -179,7 +177,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         LinearLayout root = new LinearLayout(requireContext());
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(18), dp(16), dp(18), dp(16));
-        root.setBackground(round(Color.parseColor("#F8FAFD"), 24, Color.TRANSPARENT));
+        root.setBackground(round(Color.WHITE, 24, Color.TRANSPARENT));
         root.addView(createHeader(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)));
         root.addView(createSearchRow(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
@@ -249,6 +247,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         search.setIconResource(R.drawable.ic_action_search);
         search.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
         search.setIconPadding(dp(4));
+        search.setIconTint(ColorStateList.valueOf(Color.parseColor("#174EA6")));
         search.setMinHeight(dp(52));
         search.setMinimumHeight(dp(52));
 
@@ -271,7 +270,6 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         recycler.setItemAnimator(null);
         recycler.setHasFixedSize(false);
         recycler.setMaxHeight(dp(304));
-        recycler.addItemDecoration(new SpaceItemDecoration(1, 8));
         recycler.setAdapter(adapter);
         recycler.setVisibility(GONE);
         frame.addView(recycler, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
@@ -415,15 +413,27 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         button.setPadding(dp(10), 0, dp(10), 0);
         button.setCornerRadius(dp(8));
         if (primary) {
-            button.setBackgroundTintList(ContextCompat.getColorStateList(requireContext(), R.color.dialog_primary_button_bg));
-            button.setTextColor(ContextCompat.getColorStateList(requireContext(), R.color.dialog_primary_button_text));
+            button.setBackgroundTintList(buttonBackground("#DCEAFF", "#EDF4FF", "#F3F6FA"));
+            button.setTextColor(buttonText("#174EA6", "#8AA8D8"));
         } else {
-            button.setBackgroundTintList(ContextCompat.getColorStateList(requireContext(), R.color.dialog_outlined_button_bg));
-            button.setTextColor(ContextCompat.getColorStateList(requireContext(), R.color.dialog_outlined_button_text));
-            button.setStrokeColor(ContextCompat.getColorStateList(requireContext(), R.color.dialog_outlined_button_stroke));
+            button.setBackgroundTintList(buttonBackground("#F1F4F8", "#FFFFFF", "#F3F6FA"));
+            button.setTextColor(buttonText("#202124", "#9AA0A6"));
+            button.setStrokeColor(buttonText("#DADCE0", "#E8EAED"));
             button.setStrokeWidth(dp(1));
         }
         return button;
+    }
+
+    private ColorStateList buttonBackground(String pressed, String normal, String disabled) {
+        return new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_pressed}, new int[]{android.R.attr.state_focused}, new int[]{-android.R.attr.state_enabled}, new int[]{}},
+                new int[]{Color.parseColor(pressed), Color.parseColor(pressed), Color.parseColor(disabled), Color.parseColor(normal)});
+    }
+
+    private ColorStateList buttonText(String normal, String disabled) {
+        return new ColorStateList(
+                new int[][]{new int[]{-android.R.attr.state_enabled}, new int[]{}},
+                new int[]{Color.parseColor(disabled), Color.parseColor(normal)});
     }
 
     private GradientDrawable round(int color, int radius, int stroke) {
@@ -488,7 +498,11 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            return new ViewHolder(new MaterialButton(parent.getContext()));
+            MaterialButton button = new MaterialButton(parent.getContext());
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(parent.getContext(), 42));
+            params.setMargins(0, 0, 0, dp(parent.getContext(), 8));
+            button.setLayoutParams(params);
+            return new ViewHolder(button);
         }
 
         @Override
@@ -540,8 +554,8 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         }
 
         private static Drawable rowBackground(Context context, boolean selected) {
-            int color = selected ? Color.parseColor("#E8F0FE") : Color.WHITE;
-            int stroke = selected ? Color.parseColor("#AECBFA") : Color.parseColor("#E8EAED");
+            int color = selected ? Color.parseColor("#EAF2FF") : Color.parseColor("#F8FAFD");
+            int stroke = selected ? Color.parseColor("#AECBFA") : Color.parseColor("#E3E7EE");
             GradientDrawable content = new GradientDrawable();
             content.setColor(color);
             content.setCornerRadius(dp(context, 8));
