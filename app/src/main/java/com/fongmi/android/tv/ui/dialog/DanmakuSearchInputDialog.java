@@ -49,7 +49,6 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
 import com.google.android.material.textview.MaterialTextView;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -165,6 +164,10 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         TextInputEditText edit = new TextInputEditText(requireContext());
         edit.setSingleLine(true);
         edit.setMaxLines(1);
+        edit.setBackground(null);
+        edit.setPadding(0, 0, 0, 0);
+        edit.setTextColor(Color.parseColor("#202124"));
+        edit.setTextSize(18);
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT | InputType.TYPE_TEXT_FLAG_AUTO_COMPLETE);
         edit.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
         CharSequence title = player == null || player.getMetadata() == null ? "" : player.getMetadata().title;
@@ -234,30 +237,37 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
     }
 
     private LinearLayout createSearchRow() {
-        TextInputLayout layout = new TextInputLayout(requireContext());
-        layout.setHint(getString(R.string.search_keyword));
-        layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
-        layout.setBoxCornerRadii(dp(10), dp(10), dp(10), dp(10));
-        layout.setBoxBackgroundColor(Color.WHITE);
-        layout.setBoxStrokeColor(Color.parseColor("#DADCE0"));
-        layout.setHintTextColor(ColorStateList.valueOf(Color.parseColor("#5F6368")));
-        layout.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        MaterialTextView label = new MaterialTextView(requireContext());
+        label.setText(R.string.search_keyword);
+        label.setTextColor(Color.parseColor("#6F7782"));
+        label.setTextSize(12);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout inputBox = new LinearLayout(requireContext());
+        inputBox.setOrientation(LinearLayout.VERTICAL);
+        inputBox.setGravity(Gravity.CENTER_VERTICAL);
+        inputBox.setPadding(dp(12), dp(6), dp(12), dp(6));
+        inputBox.setBackground(round(Color.parseColor("#F8FAFD"), 12, Color.parseColor("#DADCE0")));
+        inputBox.addView(label, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(16)));
+        inputBox.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
         search = actionButton(getString(R.string.play_search), true);
         search.setIconResource(R.drawable.ic_action_search);
         search.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
         search.setIconPadding(dp(4));
-        search.setIconTint(ColorStateList.valueOf(Color.parseColor("#174EA6")));
-        search.setMinHeight(dp(52));
-        search.setMinimumHeight(dp(52));
+        search.setIconTint(ColorStateList.valueOf(Color.WHITE));
+        search.setMinHeight(dp(56));
+        search.setMinimumHeight(dp(56));
+        search.setCornerRadius(dp(12));
+        styleSearchButton(search);
 
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, dp(56), 1);
         inputParams.setMargins(0, 0, dp(8), 0);
-        row.addView(layout, inputParams);
-        row.addView(search, new LinearLayout.LayoutParams(dp(94), dp(52)));
+        row.addView(inputBox, inputParams);
+        row.addView(search, new LinearLayout.LayoutParams(dp(96), dp(56)));
         return row;
     }
 
@@ -424,6 +434,11 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         return button;
     }
 
+    private void styleSearchButton(MaterialButton button) {
+        button.setBackgroundTintList(buttonBackground("#0B57D0", "#174EA6", "#E8EAED"));
+        button.setTextColor(buttonText("#FFFFFF", "#9AA0A6"));
+    }
+
     private ColorStateList buttonBackground(String pressed, String normal, String disabled) {
         return new ColorStateList(
                 new int[][]{new int[]{android.R.attr.state_pressed}, new int[]{android.R.attr.state_focused}, new int[]{-android.R.attr.state_enabled}, new int[]{}},
@@ -498,7 +513,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
         @NonNull
         @Override
         public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            MaterialButton button = new MaterialButton(parent.getContext());
+            MaterialTextView button = new MaterialTextView(parent.getContext());
             RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(parent.getContext(), 42));
             params.setMargins(0, 0, 0, dp(parent.getContext(), 8));
             button.setLayoutParams(params);
@@ -518,22 +533,19 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Ca
 
         private final class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
-            private final MaterialButton button;
+            private final MaterialTextView button;
 
-            private ViewHolder(@NonNull MaterialButton button) {
+            private ViewHolder(@NonNull MaterialTextView button) {
                 super(button);
                 this.button = button;
-                this.button.setAllCaps(false);
                 this.button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-                this.button.setMinWidth(0);
                 this.button.setMinHeight(dp(button.getContext(), 42));
                 this.button.setMinimumHeight(dp(button.getContext(), 42));
-                this.button.setInsetTop(0);
-                this.button.setInsetBottom(0);
                 this.button.setPadding(dp(button.getContext(), 12), 0, dp(button.getContext(), 12), 0);
                 this.button.setSingleLine(true);
                 this.button.setEllipsize(TextUtils.TruncateAt.END);
                 this.button.setTextSize(14);
+                this.button.setClickable(true);
                 this.button.setFocusable(true);
                 this.button.setOnClickListener(this);
             }
