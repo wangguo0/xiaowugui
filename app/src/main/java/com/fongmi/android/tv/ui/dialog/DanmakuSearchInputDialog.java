@@ -4,12 +4,21 @@ import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
 import android.app.Dialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
@@ -20,19 +29,18 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.DanmakuApi;
 import com.fongmi.android.tv.bean.Danmaku;
 import com.fongmi.android.tv.player.PlayerManager;
-import com.fongmi.android.tv.ui.adapter.DanmakuAdapter;
 import com.fongmi.android.tv.ui.custom.CustomRecyclerView;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.Notify;
@@ -40,8 +48,8 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.button.MaterialButton;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.progressindicator.CircularProgressIndicator;
+import com.google.android.material.textview.MaterialTextView;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -55,9 +63,9 @@ import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Response;
 
-public final class DanmakuSearchInputDialog extends DialogFragment implements DanmakuAdapter.OnClickListener, Callback {
+public final class DanmakuSearchInputDialog extends DialogFragment implements Callback {
 
-    private final DanmakuAdapter adapter;
+    private final ResultAdapter adapter;
     private final Map<String, List<Danmaku>> groups;
     private TextInputEditText input;
     private MaterialButton search;
@@ -78,7 +86,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
     }
 
     public DanmakuSearchInputDialog() {
-        this.adapter = new DanmakuAdapter(this);
+        this.adapter = new ResultAdapter(this::onItemClick);
         this.groups = new LinkedHashMap<>();
     }
 
@@ -101,11 +109,10 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
     @Override
     public Dialog onCreateDialog(@Nullable android.os.Bundle savedInstanceState) {
         input = createInput();
-        AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.play_search)
-                .setView(createContentView())
-                .setNegativeButton(R.string.dialog_negative, null)
-                .create();
+        Dialog dialog = new Dialog(requireContext());
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(createContentView());
+        dialog.setCanceledOnTouchOutside(true);
         dialog.setOnShowListener(d -> {
             input.setOnEditorActionListener((textView, actionId, event) -> {
                 if (actionId != EditorInfo.IME_ACTION_SEARCH) return false;
@@ -124,11 +131,12 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         Dialog dialog = getDialog();
         Window window = dialog == null ? null : dialog.getWindow();
         if (window == null) return;
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
         params.copyFrom(window.getAttributes());
-        params.width = Math.max(dp(280), Math.min(metrics.widthPixels - dp(32), dp(560)));
+        params.width = Math.max(dp(300), Math.min(metrics.widthPixels - dp(32), dp(560)));
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         window.setAttributes(params);
     }
@@ -148,8 +156,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         DanmakuApi.cancel();
     }
 
-    @Override
-    public void onItemClick(Danmaku item) {
+    private void onItemClick(Danmaku item) {
         selected = true;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "search dialog item click selected=%s name=%s url=%s", item.isSelected(), item.getName(), item.getUrl());
         player.setDanmaku(item.isSelected() ? Danmaku.empty() : item);
@@ -171,7 +178,9 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
     private LinearLayout createContentView() {
         LinearLayout root = new LinearLayout(requireContext());
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(8), dp(20), 0);
+        root.setPadding(dp(18), dp(16), dp(18), dp(16));
+        root.setBackground(round(Color.parseColor("#F8FAFD"), 24, Color.TRANSPARENT));
+        root.addView(createHeader(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)));
         root.addView(createSearchRow(), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         sourceTabs = new LinearLayout(requireContext());
@@ -183,8 +192,8 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         sourceScroll.setOverScrollMode(HorizontalScrollView.OVER_SCROLL_NEVER);
         sourceScroll.setVisibility(GONE);
         sourceScroll.addView(sourceTabs, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(42));
-        tabParams.setMargins(0, dp(12), 0, 0);
+        LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40));
+        tabParams.setMargins(0, dp(10), 0, 0);
         root.addView(sourceScroll, tabParams);
 
         resultFrame = createResultFrame();
@@ -195,15 +204,53 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         return root;
     }
 
+    private LinearLayout createHeader() {
+        MaterialTextView title = new MaterialTextView(requireContext());
+        title.setText(R.string.play_search);
+        title.setTextColor(Color.parseColor("#202124"));
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        title.setSingleLine(true);
+
+        MaterialButton close = new MaterialButton(requireContext());
+        close.setText("X");
+        close.setTextSize(15);
+        close.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        close.setGravity(Gravity.CENTER);
+        close.setMinWidth(0);
+        close.setMinHeight(dp(34));
+        close.setMinimumHeight(dp(34));
+        close.setPadding(0, 0, 0, 0);
+        close.setCornerRadius(dp(17));
+        close.setBackgroundTintList(ColorStateList.valueOf(Color.TRANSPARENT));
+        close.setTextColor(Color.parseColor("#5F6368"));
+        close.setOnClickListener(v -> dismiss());
+
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1));
+        row.addView(close, new LinearLayout.LayoutParams(dp(34), dp(34)));
+        return row;
+    }
+
     private LinearLayout createSearchRow() {
         TextInputLayout layout = new TextInputLayout(requireContext());
         layout.setHint(getString(R.string.search_keyword));
         layout.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
+        layout.setBoxCornerRadii(dp(10), dp(10), dp(10), dp(10));
+        layout.setBoxBackgroundColor(Color.WHITE);
+        layout.setBoxStrokeColor(Color.parseColor("#DADCE0"));
+        layout.setHintTextColor(ColorStateList.valueOf(Color.parseColor("#5F6368")));
         layout.addView(input, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         search = actionButton(getString(R.string.play_search), true);
-        search.setMinHeight(dp(56));
-        search.setMinimumHeight(dp(56));
+        search.setIconResource(R.drawable.ic_action_search);
+        search.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
+        search.setIconPadding(dp(4));
+        search.setMinHeight(dp(52));
+        search.setMinimumHeight(dp(52));
 
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -211,7 +258,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         inputParams.setMargins(0, 0, dp(8), 0);
         row.addView(layout, inputParams);
-        row.addView(search, new LinearLayout.LayoutParams(dp(82), dp(56)));
+        row.addView(search, new LinearLayout.LayoutParams(dp(94), dp(52)));
         return row;
     }
 
@@ -223,8 +270,8 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         recycler.setItemAnimator(null);
         recycler.setHasFixedSize(false);
-        recycler.setMaxHeight(dp(260));
-        recycler.addItemDecoration(new SpaceItemDecoration(1, 10));
+        recycler.setMaxHeight(dp(304));
+        recycler.addItemDecoration(new SpaceItemDecoration(1, 8));
         recycler.setAdapter(adapter);
         recycler.setVisibility(GONE);
         frame.addView(recycler, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));
@@ -333,7 +380,7 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
                 renderSourceTabs();
                 showSourceItems();
             });
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(36));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34));
             params.setMargins(0, 0, dp(8), 0);
             sourceTabs.addView(tab, params);
         }
@@ -363,6 +410,8 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
         button.setMinWidth(0);
         button.setMinHeight(dp(32));
         button.setMinimumHeight(dp(32));
+        button.setInsetTop(0);
+        button.setInsetBottom(0);
         button.setPadding(dp(10), 0, dp(10), 0);
         button.setCornerRadius(dp(8));
         if (primary) {
@@ -375,6 +424,14 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
             button.setStrokeWidth(dp(1));
         }
         return button;
+    }
+
+    private GradientDrawable round(int color, int radius, int stroke) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radius));
+        if (stroke != Color.TRANSPARENT) drawable.setStroke(dp(1), stroke);
+        return drawable;
     }
 
     @Override
@@ -398,5 +455,102 @@ public final class DanmakuSearchInputDialog extends DialogFragment implements Da
 
     private int dp(int value) {
         return ResUtil.dp2px(value);
+    }
+
+    private static final class ResultAdapter extends RecyclerView.Adapter<ResultAdapter.ViewHolder> {
+
+        private final OnClickListener listener;
+        private final List<Danmaku> items;
+
+        private interface OnClickListener {
+
+            void onItemClick(Danmaku item);
+        }
+
+        private ResultAdapter(OnClickListener listener) {
+            this.listener = listener;
+            this.items = new ArrayList<>();
+        }
+
+        private void clear() {
+            int size = items.size();
+            items.clear();
+            notifyItemRangeRemoved(0, size);
+        }
+
+        private void addAll(List<Danmaku> values) {
+            if (values == null) return;
+            int start = items.size();
+            items.addAll(values);
+            notifyItemRangeInserted(start, values.size());
+        }
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            return new ViewHolder(new MaterialButton(parent.getContext()));
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            Danmaku item = items.get(position);
+            holder.bind(item);
+        }
+
+        @Override
+        public int getItemCount() {
+            return items.size();
+        }
+
+        private final class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
+
+            private final MaterialButton button;
+
+            private ViewHolder(@NonNull MaterialButton button) {
+                super(button);
+                this.button = button;
+                this.button.setAllCaps(false);
+                this.button.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+                this.button.setMinWidth(0);
+                this.button.setMinHeight(dp(button.getContext(), 42));
+                this.button.setMinimumHeight(dp(button.getContext(), 42));
+                this.button.setInsetTop(0);
+                this.button.setInsetBottom(0);
+                this.button.setPadding(dp(button.getContext(), 12), 0, dp(button.getContext(), 12), 0);
+                this.button.setSingleLine(true);
+                this.button.setEllipsize(TextUtils.TruncateAt.END);
+                this.button.setTextSize(14);
+                this.button.setFocusable(true);
+                this.button.setOnClickListener(this);
+            }
+
+            private void bind(Danmaku item) {
+                button.setText(item.getName());
+                button.setTextColor(item.isSelected() ? Color.parseColor("#174EA6") : Color.parseColor("#202124"));
+                button.setTypeface(Typeface.DEFAULT, item.isSelected() ? Typeface.BOLD : Typeface.NORMAL);
+                button.setBackground(rowBackground(button.getContext(), item.isSelected()));
+            }
+
+            @Override
+            public void onClick(View view) {
+                int position = getBindingAdapterPosition();
+                if (position == RecyclerView.NO_POSITION) return;
+                listener.onItemClick(items.get(position));
+            }
+        }
+
+        private static Drawable rowBackground(Context context, boolean selected) {
+            int color = selected ? Color.parseColor("#E8F0FE") : Color.WHITE;
+            int stroke = selected ? Color.parseColor("#AECBFA") : Color.parseColor("#E8EAED");
+            GradientDrawable content = new GradientDrawable();
+            content.setColor(color);
+            content.setCornerRadius(dp(context, 8));
+            content.setStroke(dp(context, 1), stroke);
+            return new RippleDrawable(ColorStateList.valueOf(Color.parseColor("#1A0B57D0")), content, null);
+        }
+
+        private static int dp(Context context, int value) {
+            return Math.round(value * context.getResources().getDisplayMetrics().density);
+        }
     }
 }
