@@ -153,11 +153,11 @@ public final class DanmakuSearchDialog extends BaseBottomSheetDialog implements 
 
     @Override
     protected boolean transparent() {
-        return !Util.isLeanback();
+        return true;
     }
 
     @Override
     protected boolean stableOverlay() {
-        return !Util.isLeanback();
+        return true;
     }
 }

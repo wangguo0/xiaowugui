@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Dialog;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
@@ -145,6 +147,16 @@ public final class DanmakuSettingDialog {
         @Override
         protected void initView() {
             new DanmakuSettingPanel(binding, player).bind();
+        }
+
+        @Override
+        public void onStart() {
+            super.onStart();
+            Dialog dialog = getDialog();
+            Window window = dialog == null ? null : dialog.getWindow();
+            if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            FrameLayout sheet = dialog == null ? null : dialog.findViewById(com.google.android.material.R.id.m3_side_sheet);
+            if (sheet != null) sheet.setBackgroundColor(ResUtil.getColor(R.color.transparent));
         }
     }
 }

@@ -21,7 +21,6 @@ import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.ui.adapter.DanmakuAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
 import com.fongmi.android.tv.utils.FileChooser;
-import com.fongmi.android.tv.utils.Util;
 
 public final class DanmakuDialog extends BaseBottomSheetDialog implements DanmakuAdapter.OnClickListener {
 
@@ -71,7 +70,10 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
     }
 
     private void onSearch(View view) {
-        DanmakuSearchDialog.create().player(player).show(getActivity());
+        FragmentActivity activity = getActivity();
+        if (activity == null) return;
+        dismissAllowingStateLoss();
+        DanmakuSearchDialog.create().player(player).show(activity);
     }
 
     private void onChoose(View view) {
@@ -80,7 +82,10 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
     }
 
     private void onSetting(View view) {
-        DanmakuSettingDialog.create().player(player).show(getActivity());
+        FragmentActivity activity = getActivity();
+        if (activity == null) return;
+        dismissAllowingStateLoss();
+        DanmakuSettingDialog.create().player(player).show(activity);
     }
 
     @Override
@@ -91,12 +96,12 @@ public final class DanmakuDialog extends BaseBottomSheetDialog implements Danmak
 
     @Override
     protected boolean transparent() {
-        return !Util.isLeanback();
+        return true;
     }
 
     @Override
     protected boolean stableOverlay() {
-        return !Util.isLeanback();
+        return true;
     }
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
