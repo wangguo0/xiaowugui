@@ -266,6 +266,14 @@ public class PlayerManager implements ParseCallback {
         return Math.max(0, player.getBufferedPosition() - getPosition());
     }
 
+    public int getBufferedPercentage() {
+        return player.getBufferedPercentage();
+    }
+
+    public boolean isLoading() {
+        return player.isLoading();
+    }
+
     public String getSizeText() {
         int width = getVideoWidth();
         int height = getVideoHeight();
