@@ -1593,14 +1593,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void checkHistory(Vod item) {
         mHistory = History.find(getHistoryKey());
         mHistory = mHistory == null ? createHistory(item) : mHistory;
+        mHistory.setVodName(item.getName());
+        if (!TextUtils.isEmpty(getMark()) && !mHistory.findEpisode(item.getFlags(), getMark())) mHistory.setVodRemarks(getMark());
         if (!TextUtils.isEmpty(getWallPic())) mHistory.setWallPic(getWallPic());
-        if (!TextUtils.isEmpty(getMark())) mHistory.setVodRemarks(getMark());
         if (Setting.isIncognito() && mHistory.getKey().equals(getHistoryKey())) mHistory.delete();
         mBinding.control.action.opening.setText(mHistory.getOpening() <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
         mBinding.control.action.ending.setText(mHistory.getEnding() <= 0 ? getString(R.string.play_ed) : Util.timeMs(mHistory.getEnding()));
         mBinding.control.action.speed.setText(player().setSpeed(PlayerSetting.getDefaultSpeed()));
         mHistory.setSpeed(player().getSpeed());
-        mHistory.setVodName(item.getName());
         PlaybackEventCollector.get().updateHistory(mHistory);
         setArtwork(getInitialArtwork(item));
         setScale(getScale());
@@ -1646,7 +1646,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         history.setVodName(item.getName());
         history.setVodPic(getInitialArtwork(item));
         history.setWallPic(getWallPic());
-        history.findEpisode(item.getFlags());
+        history.findEpisode(item.getFlags(), getMark());
         return history;
     }
 
