@@ -8,6 +8,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.gitcloud.GitCloudException;
 import com.fongmi.android.tv.gitcloud.GitHttpException;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -163,10 +164,16 @@ abstract class BaseGitProvider implements GitCloudProvider {
     }
 
     private void debug(String method, String url, int code, String message) {
-        if (!BuildConfig.DEBUG) return;
         String text = method + " " + url + " -> " + code;
         if (!TextUtils.isEmpty(message)) text += " " + abbreviate(message);
+        debug(text);
+    }
+
+    protected void debug(String message) {
+        if (!BuildConfig.DEBUG) return;
+        String text = message == null ? "" : message;
         Log.d(TAG, text);
+        SpiderDebug.log("git-cloud", text);
     }
 
     private String abbreviate(String value) {
