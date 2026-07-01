@@ -90,7 +90,8 @@ public class CustomCspDialog extends BaseAlertDialog {
     private ItemTouchHelper sortTouchHelper;
     private CustomCspSetting.Item pendingImport;
     private boolean pendingExtensionImport;
-    private boolean pendingExtImport;
+    private boolean pendingFilesImport;
+    private TextInputEditText pendingFileTarget;
     private Set<String> initialItemIds = new HashSet<>();
     private final Set<String> pendingDeleteIds = new HashSet<>();
     private CspEditor editor;
@@ -792,28 +793,34 @@ public class CustomCspDialog extends BaseAlertDialog {
         if (!TextUtils.equals(view.getText(), text)) view.setText(text);
     }
 
+    private void clearPendingFlags() {
+        pendingExtensionImport = false;
+        pendingFilesImport = false;
+        pendingFileTarget = null;
+    }
+
     private void chooseFile(CustomCspSetting.Item item) {
         syncAllVisibleRows();
         pendingImport = item;
-        pendingExtensionImport = false;
-        pendingExtImport = false;
+        clearPendingFlags();
         FileChooser.from(launcher).show("text/html", new String[]{"text/html", "text/*", "application/octet-stream"});
     }
 
     private void chooseExtensionFile(CustomCspSetting.Item item) {
         syncAllVisibleRows();
         pendingImport = item;
+        clearPendingFlags();
         pendingExtensionImport = true;
-        pendingExtImport = false;
         FileChooser.from(launcher).show("text/*", new String[]{"text/javascript", "application/javascript", "application/json", "text/css", "text/*", "application/octet-stream"});
     }
 
-    private void chooseExtFile(CustomCspSetting.Item item) {
+    private void chooseLocalFiles(CustomCspSetting.Item item) {
         syncAllVisibleRows();
         pendingImport = item;
-        pendingExtensionImport = false;
-        pendingExtImport = true;
-        FileChooser.from(launcher).show("text/*", new String[]{"text/javascript", "application/javascript", "application/json", "text/*", "application/octet-stream"});
+        clearPendingFlags();
+        pendingFilesImport = true;
+        pendingFileTarget = editor == null ? null : editor.getFileTarget();
+        FileChooser.from(launcher).show("*/*", new String[]{"text/javascript", "application/javascript", "application/json", "application/java-archive", "application/octet-stream", "text/*", "*/*"}, true);
     }
 
     private void editCode(CustomCspSetting.Item item) {
@@ -998,17 +1005,18 @@ public class CustomCspDialog extends BaseAlertDialog {
     }
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null || pendingImport == null) return;
-        String path = FileChooser.getPathFromUri(result.getData().getData());
-        if (TextUtils.isEmpty(path)) return;
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || pendingImport == null) return;
+        List<String> paths = FileChooser.getPathsFromIntent(result.getData());
+        if (paths.isEmpty()) return;
+        String path = paths.get(0);
         try {
             if (pendingExtensionImport) {
                 importExtensionFile(pendingImport, path);
                 clearPendingImport();
                 return;
             }
-            if (pendingExtImport) {
-                importExtFile(pendingImport, path);
+            if (pendingFilesImport) {
+                importLocalFiles(pendingImport, paths);
                 clearPendingImport();
                 return;
             }
@@ -1027,16 +1035,26 @@ public class CustomCspDialog extends BaseAlertDialog {
 
     private void clearPendingImport() {
         pendingImport = null;
-        pendingExtensionImport = false;
-        pendingExtImport = false;
+        clearPendingFlags();
     }
 
-    private void importExtFile(CustomCspSetting.Item item, String path) {
-        item.setExt(CustomCspSetting.localFileUrl(Path.local(path)));
+    private void importLocalFiles(CustomCspSetting.Item item, List<String> paths) {
+        List<String> urls = new ArrayList<>();
+        for (String path : paths) {
+            String url = CustomCspSetting.copyFile(Path.local(path), item.getId());
+            urls.add(url);
+            SettingClipboardOverlay.record(url);
+        }
+        if (!urls.isEmpty() && pendingFileTarget != null) {
+            setText(pendingFileTarget, urls.get(0));
+            pendingFileTarget.setSelection(pendingFileTarget.length());
+            pendingFileTarget.requestFocus();
+            if (editor != null) editor.sync();
+        }
         markJsonDirty();
-        boolean editingImport = editMode && editor != null && item == editingItem;
-        if (editingImport) editor.updateExt();
+        if (editMode && editor != null && item == editingItem) editor.updateValidity();
         else adapter.notifyDataSetChanged();
+        Notify.show("已加入快捷粘贴板 " + urls.size() + " 条");
     }
 
     private void importExtensionFile(CustomCspSetting.Item item, String path) throws Exception {
@@ -1495,6 +1513,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         private boolean autoName;
         private boolean autoKey;
         private boolean otherInvalid;
+        private TextInputEditText fileTarget;
 
         CspEditor(@NonNull AdapterCustomCspBinding binding) {
             this.binding = binding;
@@ -1526,12 +1545,13 @@ public class CustomCspDialog extends BaseAlertDialog {
             binding.changeable.setOnCheckedChangeListener((button, checked) -> sync());
             binding.quickSearch.setOnCheckedChangeListener((button, checked) -> sync());
             binding.importFile.setOnClickListener(view -> chooseFile(item));
-            binding.extFile.setOnClickListener(view -> chooseExtFile(item));
+            binding.localFiles.setOnClickListener(view -> chooseLocalFiles(item));
             binding.code.setOnClickListener(view -> editCode(item));
             binding.link.setOnClickListener(view -> editLink(item));
             binding.extensionsToggle.setOnClickListener(view -> toggleExtensions());
             binding.extensionsFile.setOnClickListener(view -> chooseExtensionFile(item));
             binding.otherField.setOnClickListener(view -> showOtherFieldMenu());
+            trackFileTarget(binding.api, binding.ext, binding.jar, binding.homePage, binding.liveUrl, binding.logo, binding.epg, binding.click, binding.playUrl, binding.ua, binding.referer, binding.origin);
             binding.home.setVisibility(View.GONE);
             binding.up.setVisibility(View.GONE);
             binding.down.setVisibility(View.GONE);
@@ -1583,10 +1603,6 @@ public class CustomCspDialog extends BaseAlertDialog {
 
         void updateHomePage() {
             if (item != null) setText(binding.homePage, item.getHomePage());
-        }
-
-        void updateExt() {
-            if (item != null) setText(binding.ext, item.getExt());
         }
 
         void updateExtensions() {
@@ -1682,8 +1698,23 @@ public class CustomCspDialog extends BaseAlertDialog {
             binding.liveTunePanel.setVisibility(live ? View.VISIBLE : View.GONE);
             binding.flagsPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.advancedPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
+            binding.cspFilePanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.playPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.playUrlLayout.setVisibility(live || other ? View.GONE : View.VISIBLE);
+        }
+
+        TextInputEditText getFileTarget() {
+            if (fileTarget != null && fileTarget.isShown() && fileTarget.isEnabled()) return fileTarget;
+            View focus = binding.getRoot().findFocus();
+            return focus instanceof TextInputEditText input ? input : null;
+        }
+
+        private void trackFileTarget(TextInputEditText... inputs) {
+            for (TextInputEditText input : inputs) {
+                input.setOnFocusChangeListener((view, hasFocus) -> {
+                    if (hasFocus) fileTarget = (TextInputEditText) view;
+                });
+            }
         }
 
         void sync() {
