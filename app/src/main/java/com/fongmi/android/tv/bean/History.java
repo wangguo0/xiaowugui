@@ -408,60 +408,27 @@ public class History implements Diffable<History> {
     }
 
     public void findEpisode(List<Flag> flags) {
-        findEpisode(flags, "");
-    }
-
-    public boolean findEpisode(List<Flag> flags, String remarks) {
-        if (flags.isEmpty()) return false;
-        if (findExplicitEpisode(flags, remarks)) return true;
-        setEpisode(flags.get(0), flags.get(0).getEpisodes().isEmpty() ? null : flags.get(0).getEpisodes().get(0));
-        if (!canMergeByName()) return false;
+        if (flags.isEmpty()) return;
+        setVodFlag(flags.get(0).getFlag());
+        if (!flags.get(0).getEpisodes().isEmpty()) {
+            Episode episode = flags.get(0).getEpisodes().get(0);
+            setVodRemarks(episode.getName());
+            setEpisodeUrl(episode.getUrl());
+        }
+        if (!canMergeByName()) return;
         for (History item : findByName(getVodName())) {
             if (getPosition() > 0) break;
             for (Flag flag : flags) {
                 Episode episode = flag.find(item.getEpisode(), true);
                 if (episode == null) continue;
                 item.copyTo(this);
+                setVodFlag(flag.getFlag());
                 setPosition(item.getPosition());
-                setEpisode(flag, episode, false);
+                setVodRemarks(episode.getName());
+                setEpisodeUrl(episode.getUrl());
                 break;
             }
         }
-        return false;
-    }
-
-    private boolean findExplicitEpisode(List<Flag> flags, String remarks) {
-        if (TextUtils.isEmpty(remarks)) return false;
-        for (Flag flag : flags) {
-            Episode episode = findExactEpisode(flag, remarks);
-            if (episode == null) continue;
-            setEpisode(flag, episode);
-            return true;
-        }
-        for (Flag flag : flags) {
-            Episode episode = flag.find(remarks, true);
-            if (episode == null) continue;
-            setEpisode(flag, episode);
-            return true;
-        }
-        return false;
-    }
-
-    private Episode findExactEpisode(Flag flag, String remarks) {
-        for (Episode episode : flag.getEpisodes()) if (episode.getName().equalsIgnoreCase(remarks)) return episode;
-        return null;
-    }
-
-    private void setEpisode(Flag flag, Episode episode) {
-        setEpisode(flag, episode, true);
-    }
-
-    private void setEpisode(Flag flag, Episode episode, boolean resetPosition) {
-        setVodFlag(flag.getFlag());
-        if (episode == null) return;
-        if (resetPosition && !episode.matches(getEpisode())) resetPlaybackPosition();
-        setVodRemarks(episode.getName());
-        setEpisodeUrl(episode.getUrl());
     }
 
     @Override

@@ -980,7 +980,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void seamless(Flag flag) {
-        Episode episode = flag.find(mHistory.getEpisode(), getMark().isEmpty());
+        Episode episode = getMark().isEmpty() ? flag.find(mHistory.getEpisode(), true) : flag.find(mHistory.getVodRemarks(), false);
         setQualityVisible(episode != null && episode.isSelected() && mQualityAdapter.getItemCount() > 1);
         if (episode == null || episode.isSelected()) return;
         mHistory.setVodRemarks(episode.getName());
@@ -1663,14 +1663,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void checkHistory(Vod item) {
         mHistory = History.find(getHistoryKey());
         mHistory = mHistory == null ? createHistory(item) : mHistory;
-        mHistory.setVodName(item.getName());
-        if (!TextUtils.isEmpty(getMark()) && !mHistory.findEpisode(item.getFlags(), getMark())) mHistory.setVodRemarks(getMark());
         if (!TextUtils.isEmpty(getWallPic())) mHistory.setWallPic(getWallPic());
+        if (!TextUtils.isEmpty(getMark())) mHistory.setVodRemarks(getMark());
         if (Setting.isIncognito() && mHistory.getKey().equals(getHistoryKey())) mHistory.delete();
         mBinding.control.action.opening.setText(mHistory.getOpening() <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
         mBinding.control.action.ending.setText(mHistory.getEnding() <= 0 ? getString(R.string.play_ed) : Util.timeMs(mHistory.getEnding()));
         mBinding.control.action.speed.setText(player().setSpeed(PlayerSetting.getDefaultSpeed()));
         mHistory.setSpeed(player().getSpeed());
+        mHistory.setVodName(item.getName());
         PlaybackEventCollector.get().updateHistory(mHistory);
         setArtwork(getInitialArtwork(item));
         setScale(getScale());
@@ -1714,7 +1714,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         history.setVodName(item.getName());
         history.setVodPic(getInitialArtwork(item));
         history.setWallPic(getWallPic());
-        history.findEpisode(item.getFlags(), getMark());
+        history.findEpisode(item.getFlags());
         return history;
     }
 
