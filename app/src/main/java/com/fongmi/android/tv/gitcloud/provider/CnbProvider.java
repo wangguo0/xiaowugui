@@ -11,6 +11,7 @@ import com.fongmi.android.tv.gitcloud.GitBranch;
 import com.fongmi.android.tv.gitcloud.GitCloudException;
 import com.fongmi.android.tv.gitcloud.GitFile;
 import com.fongmi.android.tv.gitcloud.GitFileContent;
+import com.fongmi.android.tv.gitcloud.GitHttpException;
 import com.fongmi.android.tv.gitcloud.GitProviderType;
 import com.fongmi.android.tv.gitcloud.GitRepo;
 import com.fongmi.android.tv.gitcloud.ProviderCapabilities;
@@ -110,7 +111,9 @@ public class CnbProvider extends BaseGitProvider {
         payload.addProperty("description", request.description == null ? "" : request.description);
         payload.addProperty("private", request.privateRepo);
         payload.addProperty("visibility", request.privateRepo ? "private" : "public");
-        return repo(account, post(api() + "/user/repos", token, payload));
+        GitRepo repo = repo(account, post(api() + "/user/repos", token, payload));
+        if (TextUtils.isEmpty(repo.defaultBranch)) repo.defaultBranch = "main";
+        return repo;
     }
 
     @Override
@@ -133,17 +136,22 @@ public class CnbProvider extends BaseGitProvider {
 
     @Override
     public List<GitFile> listFiles(GitAccount account, String token, GitRepo repo, String ref, String path) throws GitCloudException {
-        String branch = branch(account, token, repo, ref);
-        String url = repoApi(repo) + "/-/git/contents";
-        if (!TextUtils.isEmpty(path)) url += "/" + encPath(path);
-        if (!TextUtils.isEmpty(branch)) url += "?ref=" + enc(branch);
-        JsonObject object = get(url, token);
-        JsonArray array = "tree".equals(str(object, "type")) ? array(object, "entries") : new JsonArray();
-        if (!"tree".equals(str(object, "type"))) array.add(object);
-        List<GitFile> files = new ArrayList<>();
-        for (JsonElement element : array) if (element.isJsonObject()) files.add(file(account, repo, branch, element.getAsJsonObject()));
-        files.sort((a, b) -> a.directory == b.directory ? a.name.compareToIgnoreCase(b.name) : a.directory ? -1 : 1);
-        return files;
+        try {
+            String branch = branch(account, token, repo, ref);
+            String url = repoApi(repo) + "/-/git/contents";
+            if (!TextUtils.isEmpty(path)) url += "/" + encPath(path);
+            if (!TextUtils.isEmpty(branch)) url += "?ref=" + enc(branch);
+            JsonObject object = get(url, token);
+            JsonArray array = "tree".equals(str(object, "type")) ? array(object, "entries") : new JsonArray();
+            if (!"tree".equals(str(object, "type"))) array.add(object);
+            List<GitFile> files = new ArrayList<>();
+            for (JsonElement element : array) if (element.isJsonObject()) files.add(file(account, repo, branch, element.getAsJsonObject()));
+            files.sort((a, b) -> a.directory == b.directory ? a.name.compareToIgnoreCase(b.name) : a.directory ? -1 : 1);
+            return files;
+        } catch (GitHttpException e) {
+            if (e.code == 404 && TextUtils.isEmpty(path)) return new ArrayList<>();
+            throw e;
+        }
     }
 
     @Override
@@ -228,8 +236,18 @@ public class CnbProvider extends BaseGitProvider {
     private String branch(GitAccount account, String token, GitRepo repo, String ref) throws GitCloudException {
         if (!TextUtils.isEmpty(ref)) return ref;
         if (!TextUtils.isEmpty(repo.defaultBranch)) return repo.defaultBranch;
-        List<GitBranch> branches = listBranches(account, token, repo);
-        if (branches.isEmpty()) return "";
+        List<GitBranch> branches;
+        try {
+            branches = listBranches(account, token, repo);
+        } catch (GitHttpException e) {
+            if (e.code != 404) throw e;
+            repo.defaultBranch = "main";
+            return repo.defaultBranch;
+        }
+        if (branches.isEmpty()) {
+            repo.defaultBranch = "main";
+            return repo.defaultBranch;
+        }
         repo.defaultBranch = branches.get(0).name;
         return repo.defaultBranch;
     }
