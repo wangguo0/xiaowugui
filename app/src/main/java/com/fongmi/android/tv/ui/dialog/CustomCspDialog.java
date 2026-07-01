@@ -1698,7 +1698,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             binding.liveTunePanel.setVisibility(live ? View.VISIBLE : View.GONE);
             binding.flagsPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.advancedPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
-            binding.cspFilePanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
+            binding.localFiles.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.playPanel.setVisibility(!webHome && !live && !other ? View.VISIBLE : View.GONE);
             binding.playUrlLayout.setVisibility(live || other ? View.GONE : View.VISIBLE);
         }
