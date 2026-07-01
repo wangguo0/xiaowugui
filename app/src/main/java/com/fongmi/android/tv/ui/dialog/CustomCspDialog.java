@@ -71,7 +71,9 @@ import com.google.gson.JsonPrimitive;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class CustomCspDialog extends BaseAlertDialog {
 
@@ -88,6 +90,9 @@ public class CustomCspDialog extends BaseAlertDialog {
     private ItemTouchHelper sortTouchHelper;
     private CustomCspSetting.Item pendingImport;
     private boolean pendingExtensionImport;
+    private boolean pendingExtImport;
+    private Set<String> initialItemIds = new HashSet<>();
+    private final Set<String> pendingDeleteIds = new HashSet<>();
     private CspEditor editor;
     private TextInputEditText recognizeInput;
     private CustomCspSetting.Item editingItem;
@@ -169,6 +174,7 @@ public class CustomCspDialog extends BaseAlertDialog {
     @Override
     protected void initView() {
         registry = CustomCspSetting.load();
+        initialItemIds = itemIds(registry.getItems());
         adapter = new CspAdapter(new ArrayList<>(registry.getItems()));
         enabled = registry.isEnabled();
         updateEnabledText();
@@ -547,6 +553,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         registry.setItems(new ArrayList<>(adapter.getItems()));
         try {
             CustomCspSetting.save(registry);
+            cleanupDeletedFiles(registry);
         } catch (Exception e) {
             Notify.show(e.getMessage());
             return false;
@@ -789,6 +796,7 @@ public class CustomCspDialog extends BaseAlertDialog {
         syncAllVisibleRows();
         pendingImport = item;
         pendingExtensionImport = false;
+        pendingExtImport = false;
         FileChooser.from(launcher).show("text/html", new String[]{"text/html", "text/*", "application/octet-stream"});
     }
 
@@ -796,7 +804,16 @@ public class CustomCspDialog extends BaseAlertDialog {
         syncAllVisibleRows();
         pendingImport = item;
         pendingExtensionImport = true;
+        pendingExtImport = false;
         FileChooser.from(launcher).show("text/*", new String[]{"text/javascript", "application/javascript", "application/json", "text/css", "text/*", "application/octet-stream"});
+    }
+
+    private void chooseExtFile(CustomCspSetting.Item item) {
+        syncAllVisibleRows();
+        pendingImport = item;
+        pendingExtensionImport = false;
+        pendingExtImport = true;
+        FileChooser.from(launcher).show("text/*", new String[]{"text/javascript", "application/javascript", "application/json", "text/*", "application/octet-stream"});
     }
 
     private void editCode(CustomCspSetting.Item item) {
@@ -987,23 +1004,40 @@ public class CustomCspDialog extends BaseAlertDialog {
         try {
             if (pendingExtensionImport) {
                 importExtensionFile(pendingImport, path);
-                pendingImport = null;
-                pendingExtensionImport = false;
+                clearPendingImport();
+                return;
+            }
+            if (pendingExtImport) {
+                importExtFile(pendingImport, path);
+                clearPendingImport();
                 return;
             }
             CustomCspSetting.copyPage(Path.local(path), pendingImport.getId());
             pendingImport.setHomePage(CustomCspSetting.localUrl(pendingImport.getId(), "index.html"));
             markJsonDirty();
             boolean editingImport = editMode && editor != null && pendingImport == editingItem;
-            pendingImport = null;
-            pendingExtensionImport = false;
+            clearPendingImport();
             if (editingImport) editor.updateHomePage();
             else adapter.notifyDataSetChanged();
         } catch (Exception e) {
-            pendingExtensionImport = false;
+            clearPendingImport();
             Notify.show(e.getMessage());
         }
     });
+
+    private void clearPendingImport() {
+        pendingImport = null;
+        pendingExtensionImport = false;
+        pendingExtImport = false;
+    }
+
+    private void importExtFile(CustomCspSetting.Item item, String path) {
+        item.setExt(CustomCspSetting.localFileUrl(Path.local(path)));
+        markJsonDirty();
+        boolean editingImport = editMode && editor != null && item == editingItem;
+        if (editingImport) editor.updateExt();
+        else adapter.notifyDataSetChanged();
+    }
 
     private void importExtensionFile(CustomCspSetting.Item item, String path) throws Exception {
         String content = Path.read(Path.local(path));
@@ -1042,6 +1076,22 @@ public class CustomCspDialog extends BaseAlertDialog {
         String base = (item == null ? "" : item.getKey()) + "-" + name;
         String value = base.toLowerCase().replaceAll("[^a-z0-9_-]+", "-").replaceAll("^-+|-+$", "");
         return TextUtils.isEmpty(value) ? "local-extension" : value;
+    }
+
+    private Set<String> itemIds(List<CustomCspSetting.Item> items) {
+        Set<String> ids = new HashSet<>();
+        if (items == null) return ids;
+        for (CustomCspSetting.Item item : items) if (item != null && !TextUtils.isEmpty(item.getId())) ids.add(item.getId());
+        return ids;
+    }
+
+    private void cleanupDeletedFiles(CustomCspSetting.Registry current) {
+        Set<String> currentIds = itemIds(current.getItems());
+        Set<String> deleted = new HashSet<>(pendingDeleteIds);
+        for (String id : initialItemIds) if (!currentIds.contains(id)) deleted.add(id);
+        for (String id : deleted) CustomCspSetting.deleteFiles(id);
+        initialItemIds = currentIds;
+        pendingDeleteIds.clear();
     }
 
     private String pretty(JsonElement element) {
@@ -1284,6 +1334,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             focusBeforeRemove(removed);
             CustomCspSetting.Item item = items.remove(index);
             if (!item.isLive() && item.site().getKey().equals(registry.getHomeKey())) registry.setHomeKey("");
+            if (!TextUtils.isEmpty(item.getId())) pendingDeleteIds.add(item.getId());
             markJsonDirty();
             notifyDataSetChanged();
         }
@@ -1475,6 +1526,7 @@ public class CustomCspDialog extends BaseAlertDialog {
             binding.changeable.setOnCheckedChangeListener((button, checked) -> sync());
             binding.quickSearch.setOnCheckedChangeListener((button, checked) -> sync());
             binding.importFile.setOnClickListener(view -> chooseFile(item));
+            binding.extFile.setOnClickListener(view -> chooseExtFile(item));
             binding.code.setOnClickListener(view -> editCode(item));
             binding.link.setOnClickListener(view -> editLink(item));
             binding.extensionsToggle.setOnClickListener(view -> toggleExtensions());
@@ -1531,6 +1583,10 @@ public class CustomCspDialog extends BaseAlertDialog {
 
         void updateHomePage() {
             if (item != null) setText(binding.homePage, item.getHomePage());
+        }
+
+        void updateExt() {
+            if (item != null) setText(binding.ext, item.getExt());
         }
 
         void updateExtensions() {

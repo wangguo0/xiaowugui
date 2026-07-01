@@ -242,6 +242,37 @@ public class CustomCspSetting {
         if (!source.exists() || !file.exists() || !Arrays.equals(Path.readToByte(source), Path.readToByte(file))) throw new IllegalStateException(App.get().getString(R.string.setting_custom_csp_save_failed, file.getAbsolutePath()));
     }
 
+    public static void deleteFiles(String id) {
+        if (TextUtils.isEmpty(id)) return;
+        try {
+            File root = dir().getCanonicalFile();
+            File target = new File(root, id).getCanonicalFile();
+            if (!isInside(root, target)) return;
+            Path.clear(target);
+        } catch (Throwable e) {
+            SpiderDebug.log("custom-csp", "delete files failed id=%s error=%s", id, e.toString());
+        }
+    }
+
+    public static String localFileUrl(File file) {
+        if (file == null) return "";
+        try {
+            String path = file.getCanonicalPath();
+            String root = Path.root().getCanonicalPath();
+            String prefix = root.endsWith(File.separator) ? root : root + File.separator;
+            if (path.startsWith(prefix)) path = path.substring(prefix.length());
+            return "file://" + path.replace(File.separatorChar, '/');
+        } catch (Exception e) {
+            return "file://" + file.getAbsolutePath().replace(File.separatorChar, '/');
+        }
+    }
+
+    private static boolean isInside(File root, File target) throws Exception {
+        String rootPath = root.getCanonicalPath();
+        String targetPath = target.getCanonicalPath();
+        return targetPath.equals(rootPath) || targetPath.startsWith(rootPath + File.separator);
+    }
+
     private static void ensureFileAccess() {
         if (!Setting.hasFileAccess()) throw new IllegalStateException(App.get().getString(R.string.setting_custom_csp_permission_required));
     }
