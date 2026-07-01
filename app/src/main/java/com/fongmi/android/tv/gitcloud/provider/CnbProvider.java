@@ -76,12 +76,10 @@ public class CnbProvider extends BaseGitProvider {
     @Override
     public List<GitRepo> searchRepos(GitAccount account, String token, String keyword) throws GitCloudException {
         if (TextUtils.isEmpty(keyword)) throw new GitCloudException("搜索关键词为空");
-        if (TextUtils.isEmpty(token)) throw new GitCloudException("CNB 暂不支持匿名全网搜索，请输入完整仓库地址打开");
+        if (TextUtils.isEmpty(token)) throw new GitCloudException("CNB 搜索需要 token 权限 repo-basic-info:r");
         List<GitRepo> result = new ArrayList<>();
-        String needle = keyword.toLowerCase();
-        for (GitRepo item : listRepos(account, token)) {
-            if (item.displayName().toLowerCase().contains(needle)) result.add(item);
-        }
+        JsonArray array = getArray(api() + "/search/public-repos?key=" + enc(keyword) + "&topN=100", token);
+        for (JsonElement element : array) if (element.isJsonObject()) result.add(repo(account, element.getAsJsonObject()));
         return result;
     }
 
@@ -113,9 +111,11 @@ public class CnbProvider extends BaseGitProvider {
         payload.addProperty("visibility", request.privateRepo ? "private" : "public");
         JsonObject object = post(api() + "/" + encPath(account.username) + "/-/repos", token, payload);
         GitRepo repo = repo(account, object);
+        GitRepo found = findCreatedRepo(account, token, request.name);
+        if (found != null) repo = found;
         normalizeCreatedRepo(account, request, repo);
         if (TextUtils.isEmpty(repo.defaultBranch)) repo.defaultBranch = "main";
-        debug("CNB create parsed keys=" + object.keySet() + " owner=" + repo.owner + " name=" + repo.name + " fullName=" + repo.fullName + " branch=" + repo.defaultBranch + " cloneUrl=" + repo.cloneUrl);
+        debug("CNB create parsed keys=" + object.keySet() + " requestName=" + request.name + " owner=" + repo.owner + " name=" + repo.name + " fullName=" + repo.fullName + " branch=" + repo.defaultBranch + " cloneUrl=" + repo.cloneUrl);
         return repo;
     }
 
@@ -145,6 +145,7 @@ public class CnbProvider extends BaseGitProvider {
             if (!TextUtils.isEmpty(path)) url += "/" + encPath(path);
             if (!TextUtils.isEmpty(branch)) url += "?ref=" + enc(branch);
             JsonObject object = get(url, token);
+            if (TextUtils.isEmpty(path) && "empty".equals(str(object, "type"))) return new ArrayList<>();
             JsonArray array = "tree".equals(str(object, "type")) ? array(object, "entries") : new JsonArray();
             if (!"tree".equals(str(object, "type"))) array.add(object);
             List<GitFile> files = new ArrayList<>();
@@ -207,6 +208,18 @@ public class CnbProvider extends BaseGitProvider {
         repo.privateRepo = bool(object, "private") || "private".equalsIgnoreCase(first(object, "visibility", "visibility_level"));
         repo.sizeKb = integer(object, "size");
         return repo;
+    }
+
+    private GitRepo findCreatedRepo(GitAccount account, String token, String name) {
+        try {
+            for (GitRepo item : listRepos(account, token)) {
+                if (TextUtils.equals(item.owner, account.username) && TextUtils.equals(item.name, name)) return item;
+                if (TextUtils.equals(item.fullName, account.username + "/" + name)) return item;
+            }
+        } catch (Throwable e) {
+            debug("CNB create lookup failed: " + e.getMessage());
+        }
+        return null;
     }
 
     private void normalizeCreatedRepo(GitAccount account, CreateRepoRequest request, GitRepo repo) {
