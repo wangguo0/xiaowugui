@@ -25,14 +25,10 @@ public class ParseTypeAdapter implements JsonDeserializer<Integer> {
 
     private int parse(String value) {
         if (TextUtils.isEmpty(value)) return 0;
-        for (String part : value.split(",")) {
-            String text = part.trim();
-            if (TextUtils.isEmpty(text)) continue;
-            try {
-                return Integer.parseInt(text);
-            } catch (NumberFormatException ignored) {
-            }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ignored) {
+            return 0;
         }
-        return 0;
     }
 }
