@@ -109,9 +109,8 @@ public class CnbProvider extends BaseGitProvider {
         JsonObject payload = new JsonObject();
         payload.addProperty("name", request.name);
         payload.addProperty("description", request.description == null ? "" : request.description);
-        payload.addProperty("private", request.privateRepo);
         payload.addProperty("visibility", request.privateRepo ? "private" : "public");
-        JsonObject object = post(api() + "/user/repos", token, payload);
+        JsonObject object = post(api() + "/" + encPath(account.username) + "/-/repos", token, payload);
         GitRepo repo = repo(account, object);
         if (TextUtils.isEmpty(repo.defaultBranch)) repo.defaultBranch = "main";
         debug("CNB create parsed keys=" + object.keySet() + " owner=" + repo.owner + " name=" + repo.name + " fullName=" + repo.fullName + " branch=" + repo.defaultBranch + " cloneUrl=" + repo.cloneUrl);
