@@ -221,10 +221,12 @@ public class CustomCspSetting {
 
     public static void save(Registry registry) {
         ensureFileAccess();
+        Set<String> before = itemIds(load());
         File file = registryFile();
         String text = App.gson().toJson(registry.normalize());
         Path.write(file, text.getBytes(StandardCharsets.UTF_8));
         ensureWritten(file, text);
+        cleanupRemovedFiles(before, itemIds(registry));
     }
 
     public static void writePage(String id, String code) {
@@ -271,6 +273,17 @@ public class CustomCspSetting {
         String rootPath = root.getCanonicalPath();
         String targetPath = target.getCanonicalPath();
         return targetPath.equals(rootPath) || targetPath.startsWith(rootPath + File.separator);
+    }
+
+    private static Set<String> itemIds(Registry registry) {
+        Set<String> ids = new HashSet<>();
+        if (registry == null) return ids;
+        for (Item item : registry.getItems()) if (item != null && !TextUtils.isEmpty(item.getId())) ids.add(item.getId());
+        return ids;
+    }
+
+    private static void cleanupRemovedFiles(Set<String> before, Set<String> after) {
+        for (String id : before) if (!after.contains(id)) deleteFiles(id);
     }
 
     private static void ensureFileAccess() {
