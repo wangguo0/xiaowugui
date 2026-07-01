@@ -106,12 +106,14 @@ public class CnbProvider extends BaseGitProvider {
 
     @Override
     public GitRepo createRepo(GitAccount account, String token, CreateRepoRequest request) throws GitCloudException {
+        if (TextUtils.isEmpty(account.username)) throw new GitCloudException("CNB 创建仓库需要先校验账号");
         JsonObject payload = new JsonObject();
         payload.addProperty("name", request.name);
         payload.addProperty("description", request.description == null ? "" : request.description);
         payload.addProperty("visibility", request.privateRepo ? "private" : "public");
         JsonObject object = post(api() + "/" + encPath(account.username) + "/-/repos", token, payload);
         GitRepo repo = repo(account, object);
+        normalizeCreatedRepo(account, request, repo);
         if (TextUtils.isEmpty(repo.defaultBranch)) repo.defaultBranch = "main";
         debug("CNB create parsed keys=" + object.keySet() + " owner=" + repo.owner + " name=" + repo.name + " fullName=" + repo.fullName + " branch=" + repo.defaultBranch + " cloneUrl=" + repo.cloneUrl);
         return repo;
@@ -205,6 +207,16 @@ public class CnbProvider extends BaseGitProvider {
         repo.privateRepo = bool(object, "private") || "private".equalsIgnoreCase(first(object, "visibility", "visibility_level"));
         repo.sizeKb = integer(object, "size");
         return repo;
+    }
+
+    private void normalizeCreatedRepo(GitAccount account, CreateRepoRequest request, GitRepo repo) {
+        if (TextUtils.isEmpty(repo.name)) repo.name = request.name;
+        if (TextUtils.isEmpty(repo.owner)) repo.owner = account.username;
+        if (TextUtils.isEmpty(repo.fullName) || repo.fullName.endsWith("/")) repo.fullName = repo.owner + "/" + repo.name;
+        if (TextUtils.isEmpty(repo.cloneUrl) || repo.cloneUrl.endsWith("/.git")) repo.cloneUrl = web(account) + "/" + repo.fullName + ".git";
+        if (TextUtils.isEmpty(repo.webUrl) || repo.webUrl.endsWith("/")) repo.webUrl = web(account) + "/" + repo.fullName;
+        if (TextUtils.isEmpty(repo.defaultBranch)) repo.defaultBranch = "main";
+        repo.privateRepo = repo.privateRepo || request.privateRepo;
     }
 
     private GitFile file(GitAccount account, GitRepo repo, String ref, JsonObject object) {
