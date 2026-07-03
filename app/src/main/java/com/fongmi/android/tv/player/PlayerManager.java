@@ -78,7 +78,9 @@ public class PlayerManager implements ParseCallback {
     private Player player;
     private String currentDanmakuUrl;
     private String currentDanmakuKey;
+    private String loadingDanmakuKey;
     private long danmakuLoadStartedAtMs;
+    private boolean danmakuLoadInProgress;
 
     private boolean initTrack;
     private boolean exoFallbackTried;
@@ -130,9 +132,7 @@ public class PlayerManager implements ParseCallback {
         waitingLutBeforePlay = false;
         lutWarmupReloadPreviewPending = false;
         clearLutWarmupRecovery();
-        currentDanmakuUrl = null;
-        currentDanmakuKey = null;
-        danmakuLoadStartedAtMs = 0;
+        clearDanmakuState();
     }
 
     private void onPlaybackTimeout() {
@@ -375,11 +375,13 @@ public class PlayerManager implements ParseCallback {
             @Override
             public void onLoadCompleted(Uri uri, int count) {
                 logDanmakuLoad("completed", uri, count, null);
+                finishDanmakuLoad(uri);
             }
 
             @Override
             public void onLoadError(Uri uri, IOException error) {
                 logDanmakuLoad("error", uri, -1, error);
+                finishDanmakuLoad(uri);
             }
         });
     }
@@ -485,9 +487,7 @@ public class PlayerManager implements ParseCallback {
         prepareSeq++;
         lutApplySeq++;
         spec = null;
-        currentDanmakuUrl = null;
-        currentDanmakuKey = null;
-        danmakuLoadStartedAtMs = 0;
+        clearDanmakuState();
         lutAppliedForItem = false;
         lutApplyInProgress = false;
         lutPipelineReadyForItem = false;
@@ -572,7 +572,7 @@ public class PlayerManager implements ParseCallback {
         exoFallbackTried = false;
         realtimeFallbackTried = false;
         localProxyRetry = 0;
-        currentDanmakuUrl = null;
+        clearDanmakuState();
         setMediaItem(timeout);
     }
 
@@ -583,7 +583,7 @@ public class PlayerManager implements ParseCallback {
         exoFallbackTried = false;
         realtimeFallbackTried = false;
         localProxyRetry = 0;
-        currentDanmakuUrl = null;
+        clearDanmakuState();
         parseJob = ParseJob.create(this).start(result, useParse);
     }
 
@@ -997,9 +997,7 @@ public class PlayerManager implements ParseCallback {
             if (spec != null) spec.setDanmaku(item);
             if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear current=%s", summarizeUrl(currentDanmakuUrl));
             if (currentDanmakuUrl != null) danmakuController.clearItems();
-            currentDanmakuUrl = null;
-            currentDanmakuKey = null;
-            danmakuLoadStartedAtMs = 0;
+            clearDanmakuState();
             return;
         }
         String url = item.getRealUrl();
@@ -1016,15 +1014,33 @@ public class PlayerManager implements ParseCallback {
         if (force && currentDanmakuUrl != null) danmakuController.clearItems();
         currentDanmakuUrl = url;
         currentDanmakuKey = key;
+        loadingDanmakuKey = key;
         danmakuLoadStartedAtMs = SystemClock.elapsedRealtime();
+        danmakuLoadInProgress = true;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "%s name=%s url=%s key=%s", force ? "reload" : "load", item.getName(), summarizeUrl(url), summarizeUrl(key));
         danmakuController.setDataSource(Uri.parse(url));
     }
 
     private boolean shouldSkipForcedDanmakuReload(String key) {
         if (TextUtils.isEmpty(key) || !TextUtils.equals(currentDanmakuKey, key) || danmakuLoadStartedAtMs <= 0) return false;
+        if (danmakuLoadInProgress && (TextUtils.isEmpty(loadingDanmakuKey) || TextUtils.equals(loadingDanmakuKey, key))) return true;
         long elapsed = SystemClock.elapsedRealtime() - danmakuLoadStartedAtMs;
         return elapsed >= 0 && elapsed < DANMAKU_FORCE_RELOAD_DEBOUNCE_MS;
+    }
+
+    private void finishDanmakuLoad(Uri uri) {
+        String key = normalizeDanmakuKey(uri == null ? "" : uri.toString());
+        if (!TextUtils.isEmpty(loadingDanmakuKey) && !TextUtils.equals(loadingDanmakuKey, key)) return;
+        danmakuLoadInProgress = false;
+        loadingDanmakuKey = null;
+    }
+
+    private void clearDanmakuState() {
+        currentDanmakuUrl = null;
+        currentDanmakuKey = null;
+        loadingDanmakuKey = null;
+        danmakuLoadStartedAtMs = 0;
+        danmakuLoadInProgress = false;
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
