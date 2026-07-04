@@ -47,6 +47,8 @@
     <string name="live_control_action">操作</string>
     <string name="live_control_pip">悬窗</string>
     <string name="live_control_preference">偏好</string>
+    <string name="live_control_list_glass">列表: 当前</string>
+    <string name="live_control_list_classic">列表: 经典</string>
     <string name="live_control_player">播放</string>
     <string name="live_source_select">选择直播源</string>
     <string name="live_epg_select">选择EPG源</string>

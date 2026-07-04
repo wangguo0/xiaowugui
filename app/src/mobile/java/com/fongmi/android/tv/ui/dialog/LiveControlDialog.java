@@ -84,6 +84,7 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         binding.across.setSelected(parent.control.action.across.isSelected());
         binding.change.setSelected(parent.control.action.change.isSelected());
         setTrackVisible();
+        setListStyleText();
         setScaleText();
         binding.controlScroll.post(() -> binding.controlScroll.scrollTo(0, 0));
     }
@@ -111,6 +112,10 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         binding.invert.setOnClickListener(v -> active(binding.invert, parent.control.action.invert));
         binding.across.setOnClickListener(v -> active(binding.across, parent.control.action.across));
         binding.change.setOnClickListener(v -> active(binding.change, parent.control.action.change));
+        binding.listStyle.setOnClickListener(v -> {
+            listener().onLiveListStylePanel();
+            setListStyleText();
+        });
         binding.player.setOnClickListener(v -> click(binding.player, parent.control.action.player));
         binding.player.setOnLongClickListener(v -> longClick(binding.player, parent.control.action.player));
         binding.decode.setOnClickListener(v -> click(binding.decode, parent.control.action.decode));
@@ -142,6 +147,11 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
             scales.get(i).setText(scale[i]);
             scales.get(i).setSelected(i == LiveSetting.getScale());
         }
+    }
+
+    private void setListStyleText() {
+        binding.listStyle.setText(LiveSetting.isListStyleClassic() ? R.string.live_control_list_classic : R.string.live_control_list_glass);
+        binding.listStyle.setSelected(!LiveSetting.isListStyleClassic());
     }
 
     public void setPlayer() {
@@ -227,6 +237,8 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         void onLivePiPPanel();
 
         void onLiveBackgroundPanel();
+
+        void onLiveListStylePanel();
 
         void onLiveScalePanel(int scale);
 
