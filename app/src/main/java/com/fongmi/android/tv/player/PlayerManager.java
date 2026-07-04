@@ -306,6 +306,10 @@ public class PlayerManager implements ParseCallback {
         return engine.getDecodeText();
     }
 
+    public boolean isHardDecode() {
+        return engine.isHard();
+    }
+
     public String getPlayerText() {
         return ResUtil.getStringArray(R.array.select_player_kernel)[playerType];
     }
@@ -1210,10 +1214,8 @@ public class PlayerManager implements ParseCallback {
             }
             if (action == PlayerEngine.ErrorAction.FATAL) {
                 callback.onError(engine.getErrorMessage(e));
-            } else if (++retry > 1) {
-                callback.onError(engine.getErrorMessage(e));
             } else {
-                toggleDecode();
+                callback.onError(engine.getErrorMessage(e));
             }
         }
     };
