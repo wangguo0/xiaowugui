@@ -265,6 +265,7 @@ public class Updater implements Download.Callback, UpdateListener {
         if (activity.getSupportFragmentManager().isStateSaved()) return;
         bind(activity);
         dismiss();
+        Notify.dismissToast();
         String channel = selected == null ? Update.CHANNEL_STABLE : selected.channel;
         dialog = UpdateDialog.create().stable(stable).beta(beta).selected(channel).listener(this).show(activity);
     }
