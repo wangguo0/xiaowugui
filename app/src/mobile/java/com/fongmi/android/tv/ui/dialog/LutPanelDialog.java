@@ -43,7 +43,7 @@ import java.util.Set;
 public class LutPanelDialog extends BaseBottomSheetDialog {
 
     private static final long FAVORITE_DOUBLE_CLICK_MS = 450;
-    private static final int[] PANEL_COLORS = new int[]{0xB22F315E, 0x96282955, 0x82303463};
+    private static final int[] PANEL_COLORS = new int[]{0xE62F315E, 0xD6282955, 0xCC303463};
     private static final int BUTTON_COLOR = 0x1FFFFFFF;
     private static final int BUTTON_FOCUS_COLOR = 0x2EFFFFFF;
     private static final int BUTTON_SELECTED_COLOR = 0x3DFFFFFF;
