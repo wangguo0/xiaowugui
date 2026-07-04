@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
@@ -171,7 +172,13 @@ public final class DanmakuSettingDialog {
 
         @Override
         protected void initView() {
+            binding.getRoot().setBackgroundResource(R.drawable.shape_dialog_glass_panel);
             new DanmakuSettingPanel(binding, player).bind();
+        }
+
+        @Override
+        protected boolean edgeToEdgeOnFullscreen() {
+            return true;
         }
 
         @Override
@@ -185,13 +192,28 @@ public final class DanmakuSettingDialog {
             super.onStart();
             Dialog dialog = getDialog();
             Window window = dialog == null ? null : dialog.getWindow();
-            if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            FrameLayout sheet = dialog == null ? null : dialog.findViewById(com.google.android.material.R.id.m3_side_sheet);
-            if (sheet != null) {
-                int color = ResUtil.getColor(R.color.transparent);
-                sheet.setBackgroundColor(color);
-                if (sheet.getParent() instanceof View) ((View) sheet.getParent()).setBackgroundColor(color);
+            if (window != null) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(0f);
+                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+                clearBackground(window.getDecorView());
+                clearBackground(window.findViewById(android.R.id.content));
             }
+            FrameLayout sheet = dialog == null ? null : dialog.findViewById(com.google.android.material.R.id.m3_side_sheet);
+            clearBackgroundChain(sheet);
+        }
+
+        private void clearBackgroundChain(View view) {
+            while (view != null) {
+                clearBackground(view);
+                ViewParent parent = view.getParent();
+                view = parent instanceof View ? (View) parent : null;
+            }
+        }
+
+        private void clearBackground(View view) {
+            if (view != null) view.setBackgroundColor(Color.TRANSPARENT);
         }
     }
 
