@@ -1821,7 +1821,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         } else {
             moveLiveMenuToRoot();
             mBinding.recycler.setOrientation(LinearLayoutCompat.VERTICAL);
-            mBinding.recycler.setBackgroundColor(Color.TRANSPARENT);
+            mBinding.recycler.setBackgroundResource(R.drawable.shape_live_embedded_list);
             if (mBinding.liveCurrent != null) mBinding.liveCurrent.setVisibility(View.VISIBLE);
             setLiveListContainerEmbedded();
             restoreEmbeddedMenuWidths();
