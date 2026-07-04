@@ -84,7 +84,7 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         binding.across.setSelected(parent.control.action.across.isSelected());
         binding.change.setSelected(parent.control.action.change.isSelected());
         setTrackVisible();
-        setListStyleText();
+        setListStyleSelected();
         setScaleText();
         binding.controlScroll.post(() -> binding.controlScroll.scrollTo(0, 0));
     }
@@ -112,10 +112,8 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         binding.invert.setOnClickListener(v -> active(binding.invert, parent.control.action.invert));
         binding.across.setOnClickListener(v -> active(binding.across, parent.control.action.across));
         binding.change.setOnClickListener(v -> active(binding.change, parent.control.action.change));
-        binding.listStyle.setOnClickListener(v -> {
-            listener().onLiveListStylePanel();
-            setListStyleText();
-        });
+        binding.listTransparent.setOnClickListener(v -> setListStyle(true));
+        binding.listReadable.setOnClickListener(v -> setListStyle(false));
         binding.player.setOnClickListener(v -> click(binding.player, parent.control.action.player));
         binding.player.setOnLongClickListener(v -> longClick(binding.player, parent.control.action.player));
         binding.decode.setOnClickListener(v -> click(binding.decode, parent.control.action.decode));
@@ -149,9 +147,15 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
         }
     }
 
-    private void setListStyleText() {
-        binding.listStyle.setText(LiveSetting.isListStyleClassic() ? R.string.live_control_list_classic : R.string.live_control_list_glass);
-        binding.listStyle.setSelected(!LiveSetting.isListStyleClassic());
+    private void setListStyleSelected() {
+        boolean classic = LiveSetting.isListStyleClassic();
+        binding.listTransparent.setSelected(classic);
+        binding.listReadable.setSelected(!classic);
+    }
+
+    private void setListStyle(boolean classic) {
+        listener().onLiveListStylePanel(classic);
+        setListStyleSelected();
     }
 
     public void setPlayer() {
@@ -238,7 +242,7 @@ public class LiveControlDialog extends BaseBottomSheetDialog {
 
         void onLiveBackgroundPanel();
 
-        void onLiveListStylePanel();
+        void onLiveListStylePanel(boolean classic);
 
         void onLiveScalePanel(int scale);
 

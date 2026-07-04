@@ -48,7 +48,7 @@ public class LiveSetting {
     }
 
     public static int getListStyle() {
-        int style = Prefers.getInt("live_list_style", LIST_STYLE_GLASS);
+        int style = Prefers.getInt("live_list_style", LIST_STYLE_CLASSIC);
         return style == LIST_STYLE_CLASSIC ? LIST_STYLE_CLASSIC : LIST_STYLE_GLASS;
     }
 
@@ -58,6 +58,10 @@ public class LiveSetting {
 
     public static void putListStyle(int style) {
         Prefers.put("live_list_style", style == LIST_STYLE_CLASSIC ? LIST_STYLE_CLASSIC : LIST_STYLE_GLASS);
+    }
+
+    public static void putListStyleClassic(boolean classic) {
+        putListStyle(classic ? LIST_STYLE_CLASSIC : LIST_STYLE_GLASS);
     }
 
     public static void toggleListStyle() {

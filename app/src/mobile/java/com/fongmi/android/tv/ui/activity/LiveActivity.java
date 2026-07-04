@@ -1281,8 +1281,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     }
 
     @Override
-    public void onLiveListStylePanel() {
-        LiveSetting.toggleListStyle();
+    public void onLiveListStylePanel(boolean classic) {
+        LiveSetting.putListStyleClassic(classic);
         applyLiveListStyle();
     }
 
