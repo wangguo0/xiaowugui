@@ -34,6 +34,7 @@ import androidx.fragment.app.FragmentActivity;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Config;
+import com.fongmi.android.tv.databinding.DialogRemoteTrustAddDeviceBinding;
 import com.fongmi.android.tv.remote.RemoteAgent;
 import com.fongmi.android.tv.remote.RemoteAgentService;
 import com.fongmi.android.tv.remote.RemoteClient;
@@ -274,6 +275,22 @@ public final class RemoteTrustDialog {
         params.gravity = Gravity.CENTER;
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+        window.setAttributes(params);
+        window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
+    }
+
+    private static void configureSmallModalWindow(Context context, AlertDialog dialog) {
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        WindowManager.LayoutParams params = window.getAttributes();
+        boolean land = ResUtil.isLand(context);
+        int width = Math.min(Math.round(ResUtil.getScreenWidth(context) * (land ? 0.58f : 0.92f)), dp(context, 560));
+        params.width = Math.max(width, dp(context, 320));
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        params.gravity = Gravity.CENTER;
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.clearFlags(WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM);
+        window.getDecorView().setPadding(0, 0, 0, 0);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }
@@ -913,26 +930,31 @@ public final class RemoteTrustDialog {
             Notify.show(R.string.remote_trust_no_profile);
             return;
         }
-        LinearLayoutCompat root = dialogRoot(activity);
-        TextInputEditText code = input(activity, InputType.TYPE_CLASS_NUMBER, true);
-        TextInputEditText alias = input(activity, InputType.TYPE_CLASS_TEXT, true);
-        root.addView(inputLayout(activity, R.string.remote_trust_bind_code, code), matchWrap());
-        root.addView(inputLayout(activity, R.string.remote_trust_device_alias, alias), topMargin(matchWrap(), 8));
+        DialogRemoteTrustAddDeviceBinding dialogBinding = DialogRemoteTrustAddDeviceBinding.inflate(LayoutInflater.from(activity));
         AlertDialog dialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
-                .setTitle(R.string.remote_trust_add_device_title)
-                .setView(root)
-                .setNegativeButton(R.string.dialog_cancel, null)
-                .setPositiveButton(R.string.remote_trust_add_device, null)
+                .setView(dialogBinding.getRoot())
                 .create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String value = textOf(code);
+        dialogBinding.negative.setOnClickListener(v -> dialog.dismiss());
+        dialogBinding.positive.setOnClickListener(v -> {
+            String value = textOf(dialogBinding.code);
             if (TextUtils.isEmpty(value)) {
                 Notify.show(R.string.remote_trust_code_required);
                 return;
             }
             dialog.dismiss();
-            addDevice(activity, binding, value, textOf(alias));
-        }));
+            addDevice(activity, binding, value, textOf(dialogBinding.alias));
+        });
+        dialogBinding.alias.setOnEditorActionListener((textView, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                dialogBinding.positive.performClick();
+                return true;
+            }
+            return false;
+        });
+        dialog.setOnShowListener(d -> {
+            configureSmallModalWindow(activity, dialog);
+            dialogBinding.code.requestFocus();
+        });
         showModal(dialog);
     }
 
