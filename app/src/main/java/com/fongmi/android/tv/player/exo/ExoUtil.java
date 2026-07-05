@@ -76,6 +76,9 @@ public class ExoUtil {
     private static final int ENHANCED_DROPPED_FRAMES_PER_SECOND_THRESHOLD = 4;
     private static final int ENHANCED_BANDWIDTH_SAFETY_NUMERATOR = 4;
     private static final int ENHANCED_BANDWIDTH_SAFETY_DENOMINATOR = 5;
+    private static final int FFMPEG_VIDEO_INPUT_BUFFERS = 6;
+    private static final int FFMPEG_VIDEO_OUTPUT_BUFFERS = 6;
+    private static final int FFMPEG_VIDEO_MAX_THREADS = 8;
     private static volatile EnhancedVideoProfile enhancedVideoProfile;
 
     public static void setPlayerView(PlayerView view) {
@@ -376,6 +379,12 @@ public class ExoUtil {
         return new MediaSourceFactory();
     }
 
+    private static FfmpegVideoRenderer buildFfmpegVideoRenderer(long allowedVideoJoiningTimeMs, Handler eventHandler, VideoRendererEventListener eventListener, int maxDroppedFramesToNotify) {
+        int threads = Math.max(2, Math.min(Runtime.getRuntime().availableProcessors(), FFMPEG_VIDEO_MAX_THREADS));
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-enhance", "ffmpeg video threads=%d inputBuffers=%d outputBuffers=%d", threads, FFMPEG_VIDEO_INPUT_BUFFERS, FFMPEG_VIDEO_OUTPUT_BUFFERS);
+        return new FfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener, maxDroppedFramesToNotify, threads, FFMPEG_VIDEO_INPUT_BUFFERS, FFMPEG_VIDEO_OUTPUT_BUFFERS);
+    }
+
     private static MediaItem.RequestMetadata buildRequestMetadata(PlaySpec spec) {
         return new MediaItem.RequestMetadata.Builder().setMediaUri(spec.getUri()).setExtras(PlayerHelper.toBundle(spec.getHeaders())).build();
     }
@@ -424,7 +433,7 @@ public class ExoUtil {
             super.buildVideoRenderers(context, videoRenderMode, getVideoCodecSelector(mediaCodecSelector), enableDecoderFallback, eventHandler, eventListener, allowedVideoJoiningTimeMs, out);
             if (videoRenderMode == EXTENSION_RENDERER_MODE_OFF) return;
             try {
-                out.add(getExtensionRendererIndex(videoRenderMode, videoPrefer, out), new FfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY));
+                out.add(getExtensionRendererIndex(videoRenderMode, videoPrefer, out), buildFfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener, MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY));
             } catch (Throwable ignored) {
             }
         }
