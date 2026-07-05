@@ -2,9 +2,14 @@ package com.fongmi.android.tv.player.exo;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Range;
+import android.view.Display;
 import android.view.accessibility.CaptioningManager;
 
 import androidx.annotation.NonNull;
@@ -43,6 +48,7 @@ import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.track.LangUtil;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.github.catvod.crawler.SpiderDebug;
 
@@ -63,6 +69,7 @@ public class ExoUtil {
     private static final int ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000;
     private static final int ENHANCED_TARGET_BUFFER_BYTES = 256 * 1024 * 1024;
     private static final long ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US = 5_000L;
+    private static volatile EnhancedVideoProfile enhancedVideoProfile;
 
     public static void setPlayerView(PlayerView view) {
         view.setRender(PlayerSetting.getRender());
@@ -131,9 +138,145 @@ public class ExoUtil {
         if (PlayerSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
-        builder.setForceHighestSupportedBitrate(true);
+        if (PlayerSetting.isExoEnhanced()) {
+            EnhancedVideoProfile profile = getEnhancedVideoProfile();
+            builder.setMaxVideoSize(profile.width(), profile.height());
+            builder.setViewportSize(profile.width(), profile.height(), true);
+            builder.setMaxVideoBitrate(profile.bitrate());
+            builder.setMaxVideoFrameRate(profile.frameRate());
+            builder.setExceedVideoConstraintsIfNecessary(true);
+            builder.setAllowVideoNonSeamlessAdaptiveness(true);
+            builder.setAllowVideoMixedMimeTypeAdaptiveness(true);
+            builder.setForceHighestSupportedBitrate(false);
+        } else {
+            builder.setForceHighestSupportedBitrate(true);
+        }
         trackSelector.setParameters(builder.build());
         return trackSelector;
+    }
+
+    public static EnhancedVideoProfile getEnhancedVideoProfile() {
+        EnhancedVideoProfile profile = enhancedVideoProfile;
+        if (profile != null) return profile;
+        synchronized (ExoUtil.class) {
+            profile = enhancedVideoProfile;
+            if (profile == null) enhancedVideoProfile = profile = detectEnhancedVideoProfile(App.get());
+        }
+        return profile;
+    }
+
+    private static EnhancedVideoProfile detectEnhancedVideoProfile(Context context) {
+        DisplayProfile display = getDisplayProfile(context);
+        CodecVideoProfile codec = chooseCodecVideoProfile(MediaFormat.MIMETYPE_VIDEO_HEVC, display);
+        EnhancedVideoProfile profile = codec.supported() ? codec.profile() : EnhancedVideoProfile.low();
+        return logEnhancedVideoProfile(profile, display, codec);
+    }
+
+    private static CodecVideoProfile chooseCodecVideoProfile(String mimeType, DisplayProfile display) {
+        for (EnhancedVideoProfile target : EnhancedVideoProfile.targets()) {
+            if (!display.supports(target)) continue;
+            CodecVideoProfile codec = getBestCodecVideoProfile(mimeType, target);
+            if (codec.supported()) return codec;
+        }
+        return CodecVideoProfile.unsupported();
+    }
+
+    private static CodecVideoProfile getBestCodecVideoProfile(String mimeType, EnhancedVideoProfile target) {
+        CodecVideoProfile best = CodecVideoProfile.unsupported();
+        for (android.media.MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
+            if (info.isEncoder() || !isHardwareCodec(info)) continue;
+            android.media.MediaCodecInfo.VideoCapabilities caps = getVideoCapabilities(info, mimeType);
+            if (caps == null) continue;
+            EnhancedVideoProfile supported = getSupportedProfile(caps, target);
+            if (supported == null) continue;
+            CodecVideoProfile profile = new CodecVideoProfile(info.getName(), supported, hasPerformancePoint(caps, supported));
+            if (profile.compareTo(best) > 0) best = profile;
+        }
+        return best;
+    }
+
+    private static EnhancedVideoProfile getSupportedProfile(android.media.MediaCodecInfo.VideoCapabilities caps, EnhancedVideoProfile target) {
+        if (!supportsSize(caps, target.width(), target.height())) return null;
+        if (supportsPerformance(caps, target) || supportsRate(caps, target)) return target.withBitrate(getSupportedBitrate(caps, target.bitrate()));
+        return target.withFrameRate(30).withBitrate(getSupportedBitrate(caps, target.bitrate()));
+    }
+
+    private static android.media.MediaCodecInfo.VideoCapabilities getVideoCapabilities(android.media.MediaCodecInfo info, String mimeType) {
+        try {
+            return info.getCapabilitiesForType(mimeType).getVideoCapabilities();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean supportsSize(android.media.MediaCodecInfo.VideoCapabilities caps, int width, int height) {
+        try {
+            return caps.isSizeSupported(width, height) || caps.isSizeSupported(height, width);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean supportsRate(android.media.MediaCodecInfo.VideoCapabilities caps, EnhancedVideoProfile profile) {
+        try {
+            return caps.areSizeAndRateSupported(profile.width(), profile.height(), profile.frameRate()) || caps.areSizeAndRateSupported(profile.height(), profile.width(), profile.frameRate());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean supportsPerformance(android.media.MediaCodecInfo.VideoCapabilities caps, EnhancedVideoProfile profile) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && hasPerformancePoint(caps, profile);
+    }
+
+    private static boolean hasPerformancePoint(android.media.MediaCodecInfo.VideoCapabilities caps, EnhancedVideoProfile profile) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
+        try {
+            android.media.MediaCodecInfo.VideoCapabilities.PerformancePoint target = new android.media.MediaCodecInfo.VideoCapabilities.PerformancePoint(profile.width(), profile.height(), profile.frameRate());
+            for (android.media.MediaCodecInfo.VideoCapabilities.PerformancePoint point : caps.getSupportedPerformancePoints()) {
+                if (point.covers(target)) return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    private static int getSupportedBitrate(android.media.MediaCodecInfo.VideoCapabilities caps, int bitrate) {
+        try {
+            Range<Integer> range = caps.getBitrateRange();
+            return range == null ? bitrate : Math.max(1_000_000, Math.min(bitrate, range.getUpper()));
+        } catch (Exception e) {
+            return bitrate;
+        }
+    }
+
+    private static boolean isHardwareCodec(android.media.MediaCodecInfo info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return info.isHardwareAccelerated();
+        String name = info.getName().toLowerCase();
+        return !name.contains("google") && !name.contains("android") && !name.contains("ffmpeg") && !name.contains("software") && !name.startsWith("c2.android");
+    }
+
+    private static DisplayProfile getDisplayProfile(Context context) {
+        int width = ResUtil.getScreenWidth(context);
+        int height = ResUtil.getScreenHeight(context);
+        Display display = ResUtil.getDisplay(context);
+        if (display != null) {
+            Display.Mode mode = display.getMode();
+            if (mode != null) {
+                width = Math.max(width, Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight()));
+                height = Math.max(height, Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight()));
+            }
+            for (Display.Mode supported : display.getSupportedModes()) {
+                width = Math.max(width, Math.max(supported.getPhysicalWidth(), supported.getPhysicalHeight()));
+                height = Math.max(height, Math.min(supported.getPhysicalWidth(), supported.getPhysicalHeight()));
+            }
+        }
+        return new DisplayProfile(Math.max(width, height), Math.min(width, height));
+    }
+
+    private static EnhancedVideoProfile logEnhancedVideoProfile(EnhancedVideoProfile profile, DisplayProfile display, CodecVideoProfile codec) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-enhance", "profile=%dx%d@%d bitrate=%d display=%dx%d codec=%s codecProfile=%s performancePoint=%s", profile.width(), profile.height(), profile.frameRate(), profile.bitrate(), display.width(), display.height(), codec.name(), codec.profileText(), codec.performancePoint());
+        return profile;
     }
 
     private static DefaultLoadControl buildEnhancedLoadControl() {
@@ -244,6 +387,64 @@ public class ExoUtil {
             int index = out.size();
             if (index > 0 && (extensionRendererMode == EXTENSION_RENDERER_MODE_PREFER || prefer)) index--;
             return index;
+        }
+    }
+
+    public record EnhancedVideoProfile(int width, int height, int bitrate, int frameRate) {
+
+        private static List<EnhancedVideoProfile> targets() {
+            return List.of(
+                    new EnhancedVideoProfile(3840, 2160, 20_000_000, 60),
+                    new EnhancedVideoProfile(2560, 1440, 12_000_000, 60),
+                    new EnhancedVideoProfile(1920, 1080, 8_000_000, 60),
+                    new EnhancedVideoProfile(1280, 720, 4_000_000, 30),
+                    low()
+            );
+        }
+
+        private static EnhancedVideoProfile low() {
+            return new EnhancedVideoProfile(854, 480, 1_500_000, 30);
+        }
+
+        private EnhancedVideoProfile withFrameRate(int frameRate) {
+            return new EnhancedVideoProfile(width, height, bitrate, frameRate);
+        }
+
+        private EnhancedVideoProfile withBitrate(int bitrate) {
+            return new EnhancedVideoProfile(width, height, bitrate, frameRate);
+        }
+    }
+
+    private record DisplayProfile(int width, int height) {
+
+        private boolean supports(EnhancedVideoProfile profile) {
+            return width >= profile.width() && height >= profile.height();
+        }
+    }
+
+    private record CodecVideoProfile(String name, EnhancedVideoProfile profile, boolean performancePoint) implements Comparable<CodecVideoProfile> {
+
+        private static CodecVideoProfile unsupported() {
+            return new CodecVideoProfile("none", new EnhancedVideoProfile(0, 0, 0, 0), false);
+        }
+
+        private boolean supported() {
+            return !"none".equals(name);
+        }
+
+        private String profileText() {
+            return supported() ? profile.width() + "x" + profile.height() + "@" + profile.frameRate() : "unsupported";
+        }
+
+        @Override
+        public int compareTo(CodecVideoProfile other) {
+            int pixels = Integer.compare(profile.width() * profile.height(), other.profile.width() * other.profile.height());
+            if (pixels != 0) return pixels;
+            int frameRate = Integer.compare(profile.frameRate(), other.profile.frameRate());
+            if (frameRate != 0) return frameRate;
+            int bitrate = Integer.compare(profile.bitrate(), other.profile.bitrate());
+            if (bitrate != 0) return bitrate;
+            return Boolean.compare(performancePoint, other.performancePoint);
         }
     }
 }

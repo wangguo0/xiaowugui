@@ -314,6 +314,12 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         int width = size != null && size.width > 0 ? size.width : player().getVideoWidth();
         int height = size != null && size.height > 0 ? size.height : player().getVideoHeight();
         if (width <= 0 || height <= 0) return;
+        ExoUtil.EnhancedVideoProfile profile = ExoUtil.getEnhancedVideoProfile();
+        float scale = Math.min((float) profile.width() / width, (float) profile.height() / height);
+        if (scale < 1f) {
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+        }
         surfaceView.getHolder().setFixedSize(width, height);
     }
 
