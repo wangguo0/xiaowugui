@@ -98,7 +98,7 @@ public class ExoUtil {
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
         player.addAnalyticsListener(new PlaybackAnalyticsListener());
-        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles));
+        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles, decode != PlayerEngine.SOFT));
         if (BuildConfig.DEBUG) player.addAnalyticsListener(new EventLogger());
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);
         player.setHandleAudioBecomingNoisy(true);
@@ -152,7 +152,7 @@ public class ExoUtil {
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
         if (PlayerSetting.isExoEnhanced()) {
-            applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode));
+            applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode), decode != PlayerEngine.SOFT);
         } else {
             builder.setForceHighestSupportedBitrate(true);
         }
@@ -160,12 +160,12 @@ public class ExoUtil {
         return trackSelector;
     }
 
-    private static void applyEnhancedVideoProfile(DefaultTrackSelector.Parameters.Builder builder, EnhancedVideoProfile profile) {
+    private static void applyEnhancedVideoProfile(DefaultTrackSelector.Parameters.Builder builder, EnhancedVideoProfile profile, boolean exceedConstraints) {
         builder.setMaxVideoSize(profile.width(), profile.height());
         builder.setViewportSize(profile.width(), profile.height(), true);
         builder.setMaxVideoBitrate(profile.bitrate());
         builder.setMaxVideoFrameRate(profile.frameRate());
-        builder.setExceedVideoConstraintsIfNecessary(true);
+        builder.setExceedVideoConstraintsIfNecessary(exceedConstraints);
         builder.setAllowVideoNonSeamlessAdaptiveness(true);
         builder.setAllowVideoMixedMimeTypeAdaptiveness(true);
         builder.setForceHighestSupportedBitrate(false);
@@ -451,14 +451,16 @@ public class ExoUtil {
 
         private final DefaultTrackSelector trackSelector;
         private final List<EnhancedVideoProfile> profiles;
+        private final boolean exceedConstraints;
         private EnhancedVideoProfile profile;
         private int profileIndex;
         private boolean everReady;
         private long lastAdaptMs;
 
-        AdaptiveVideoProfileController(DefaultTrackSelector trackSelector, EnhancedVideoProfile profile, List<EnhancedVideoProfile> profiles) {
+        AdaptiveVideoProfileController(DefaultTrackSelector trackSelector, EnhancedVideoProfile profile, List<EnhancedVideoProfile> profiles, boolean exceedConstraints) {
             this.trackSelector = trackSelector;
             this.profiles = profiles;
+            this.exceedConstraints = exceedConstraints;
             this.profile = profile;
             this.profileIndex = getProfileIndex(profile);
         }
@@ -507,7 +509,7 @@ public class ExoUtil {
         private void apply(EnhancedVideoProfile profile) {
             this.profile = profile;
             DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
-            applyEnhancedVideoProfile(builder, profile);
+            applyEnhancedVideoProfile(builder, profile, exceedConstraints);
             trackSelector.setParameters(builder.build());
         }
 
