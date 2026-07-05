@@ -88,16 +88,17 @@ public class ExoUtil {
     }
 
     public static ExoPlayer buildPlayer(int decode, Player.Listener listener) {
-        DefaultTrackSelector trackSelector = buildTrackSelector();
+        EnhancedVideoProfile profile = getEnhancedVideoProfile(decode);
+        List<EnhancedVideoProfile> profiles = getEnhancedVideoProfiles(decode);
+        DefaultTrackSelector trackSelector = buildTrackSelector(decode);
         ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get()).setTrackSelector(trackSelector).setRenderersFactory(buildPlaybackRenderersFactory(decode)).setMediaSourceFactory(buildMediaSourceFactory());
         if (PlayerSetting.isExoEnhanced()) {
-            EnhancedVideoProfile profile = getEnhancedVideoProfile();
             builder.setLoadControl(buildEnhancedLoadControl()).setBandwidthMeter(buildEnhancedBandwidthMeter(profile)).experimentalSetDynamicSchedulingEnabled(true);
         }
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
         player.addAnalyticsListener(new PlaybackAnalyticsListener());
-        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, getEnhancedVideoProfile()));
+        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles));
         if (BuildConfig.DEBUG) player.addAnalyticsListener(new EventLogger());
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);
         player.setHandleAudioBecomingNoisy(true);
@@ -144,14 +145,14 @@ public class ExoUtil {
         return PlayerSetting.isCaption() ? CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle()) : new CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, null);
     }
 
-    private static DefaultTrackSelector buildTrackSelector() {
+    private static DefaultTrackSelector buildTrackSelector(int decode) {
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(App.get());
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
         if (PlayerSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
         if (PlayerSetting.isExoEnhanced()) {
-            applyEnhancedVideoProfile(builder, getEnhancedVideoProfile());
+            applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode));
         } else {
             builder.setForceHighestSupportedBitrate(true);
         }
@@ -171,6 +172,11 @@ public class ExoUtil {
     }
 
     public static EnhancedVideoProfile getEnhancedVideoProfile() {
+        return getEnhancedVideoProfile(PlayerEngine.HARD);
+    }
+
+    private static EnhancedVideoProfile getEnhancedVideoProfile(int decode) {
+        if (decode == PlayerEngine.SOFT) return detectSoftVideoProfile(App.get());
         EnhancedVideoProfile profile = enhancedVideoProfile;
         if (profile != null) return profile;
         synchronized (ExoUtil.class) {
@@ -180,11 +186,28 @@ public class ExoUtil {
         return profile;
     }
 
+    private static List<EnhancedVideoProfile> getEnhancedVideoProfiles(int decode) {
+        return decode == PlayerEngine.SOFT ? EnhancedVideoProfile.softTargets() : EnhancedVideoProfile.targets();
+    }
+
     private static EnhancedVideoProfile detectEnhancedVideoProfile(Context context) {
         DisplayProfile display = getDisplayProfile(context);
         CodecVideoProfile codec = chooseCodecVideoProfile(MediaFormat.MIMETYPE_VIDEO_HEVC, display);
         EnhancedVideoProfile profile = codec.supported() ? codec.profile() : EnhancedVideoProfile.low();
         return logEnhancedVideoProfile(profile, display, codec);
+    }
+
+    private static EnhancedVideoProfile detectSoftVideoProfile(Context context) {
+        DisplayProfile display = getDisplayProfile(context);
+        for (EnhancedVideoProfile target : EnhancedVideoProfile.softTargets()) {
+            if (display.supports(target)) return logSoftVideoProfile(target, display);
+        }
+        return logSoftVideoProfile(EnhancedVideoProfile.low(), display);
+    }
+
+    private static EnhancedVideoProfile logSoftVideoProfile(EnhancedVideoProfile profile, DisplayProfile display) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-enhance", "soft profile=%dx%d@%d bitrate=%d display=%dx%d", profile.width(), profile.height(), profile.frameRate(), profile.bitrate(), display.width(), display.height());
+        return profile;
     }
 
     private static CodecVideoProfile chooseCodecVideoProfile(String mimeType, DisplayProfile display) {
@@ -427,13 +450,15 @@ public class ExoUtil {
     private static class AdaptiveVideoProfileController implements AnalyticsListener {
 
         private final DefaultTrackSelector trackSelector;
+        private final List<EnhancedVideoProfile> profiles;
         private EnhancedVideoProfile profile;
         private int profileIndex;
         private boolean everReady;
         private long lastAdaptMs;
 
-        AdaptiveVideoProfileController(DefaultTrackSelector trackSelector, EnhancedVideoProfile profile) {
+        AdaptiveVideoProfileController(DefaultTrackSelector trackSelector, EnhancedVideoProfile profile, List<EnhancedVideoProfile> profiles) {
             this.trackSelector = trackSelector;
+            this.profiles = profiles;
             this.profile = profile;
             this.profileIndex = getProfileIndex(profile);
         }
@@ -466,8 +491,8 @@ public class ExoUtil {
 
         private void maybeDowngrade(String reason, EventTime eventTime, long bitrateEstimate) {
             long now = android.os.SystemClock.elapsedRealtime();
-            if (profileIndex >= EnhancedVideoProfile.targets().size() - 1 || now - lastAdaptMs < ENHANCED_ADAPT_COOLDOWN_MS) return;
-            EnhancedVideoProfile next = EnhancedVideoProfile.targets().get(++profileIndex);
+            if (profileIndex >= profiles.size() - 1 || now - lastAdaptMs < ENHANCED_ADAPT_COOLDOWN_MS) return;
+            EnhancedVideoProfile next = profiles.get(++profileIndex);
             if (bitrateEstimate > 0) next = capByBandwidth(next, bitrateEstimate);
             apply(next);
             lastAdaptMs = now;
@@ -487,12 +512,11 @@ public class ExoUtil {
         }
 
         private int getProfileIndex(EnhancedVideoProfile profile) {
-            List<EnhancedVideoProfile> targets = EnhancedVideoProfile.targets();
-            for (int i = 0; i < targets.size(); i++) {
-                EnhancedVideoProfile target = targets.get(i);
+            for (int i = 0; i < profiles.size(); i++) {
+                EnhancedVideoProfile target = profiles.get(i);
                 if (profile.width() >= target.width() && profile.height() >= target.height()) return i;
             }
-            return targets.size() - 1;
+            return profiles.size() - 1;
         }
     }
 
@@ -504,6 +528,14 @@ public class ExoUtil {
                     new EnhancedVideoProfile(2560, 1440, 12_000_000, 60),
                     new EnhancedVideoProfile(1920, 1080, 8_000_000, 60),
                     new EnhancedVideoProfile(1280, 720, 4_000_000, 30),
+                    low()
+            );
+        }
+
+        private static List<EnhancedVideoProfile> softTargets() {
+            return List.of(
+                    new EnhancedVideoProfile(1920, 1080, 6_000_000, 30),
+                    new EnhancedVideoProfile(1280, 720, 3_000_000, 30),
                     low()
             );
         }
