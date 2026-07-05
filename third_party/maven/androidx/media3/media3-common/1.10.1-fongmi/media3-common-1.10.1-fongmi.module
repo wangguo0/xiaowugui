@@ -68,11 +68,11 @@
         {
           "name": "media3-common-1.10.1-fongmi.aar",
           "url": "media3-common-1.10.1-fongmi.aar",
-          "size": 611760,
-          "sha512": "de8044543a9f21c5c6ffd1f243a72a4a60cf36da4f8265dbe51dc7d5068d1e596fa05763295df3ce74774c5a9225a9fad299737da9f7772bc14d70df9cda9cc4",
-          "sha256": "234b8879339d7c3c71cf7c41bc3168a4a413e9effff6896dc8e130a7e32c5383",
-          "sha1": "9386e7cd1f4669ddec5fbbcdfb2d3612800f11c8",
-          "md5": "3823b43550a426496a31dbb7037a828d"
+          "size": 621410,
+          "sha512": "048978f3d0f285dde3edf8cb7d880f1f3cc3f33aaa2fa0abf32bf79ab927e7beb617c46b7e5f4ea7022e3ee4c5456ec0386a5d286e2335c7440f47ec4a91876f",
+          "sha256": "587e65febd95da9fa9811b3dec7249931bcfca3e7fc16ead8ce31fd0647b1d58",
+          "sha1": "06831a54874a4b8f324e4e12cb3a2f9208c54eba",
+          "md5": "da1c5415a723ddd976c2c7669d267b63"
         }
       ]
     },
@@ -374,11 +374,11 @@
         {
           "name": "media3-common-1.10.1-fongmi.aar",
           "url": "media3-common-1.10.1-fongmi.aar",
-          "size": 611760,
-          "sha512": "de8044543a9f21c5c6ffd1f243a72a4a60cf36da4f8265dbe51dc7d5068d1e596fa05763295df3ce74774c5a9225a9fad299737da9f7772bc14d70df9cda9cc4",
-          "sha256": "234b8879339d7c3c71cf7c41bc3168a4a413e9effff6896dc8e130a7e32c5383",
-          "sha1": "9386e7cd1f4669ddec5fbbcdfb2d3612800f11c8",
-          "md5": "3823b43550a426496a31dbb7037a828d"
+          "size": 621410,
+          "sha512": "048978f3d0f285dde3edf8cb7d880f1f3cc3f33aaa2fa0abf32bf79ab927e7beb617c46b7e5f4ea7022e3ee4c5456ec0386a5d286e2335c7440f47ec4a91876f",
+          "sha256": "587e65febd95da9fa9811b3dec7249931bcfca3e7fc16ead8ce31fd0647b1d58",
+          "sha1": "06831a54874a4b8f324e4e12cb3a2f9208c54eba",
+          "md5": "da1c5415a723ddd976c2c7669d267b63"
         }
       ]
     },
@@ -394,11 +394,11 @@
         {
           "name": "media3-common-1.10.1-fongmi-sources.jar",
           "url": "media3-common-1.10.1-fongmi-sources.jar",
-          "size": 497115,
-          "sha512": "335a30b4b7c82054377dbc358e1e0d464d01e9ce71f7e06de25dd69e224ada526b3bb475bdbcbcf87c1a66c7a45548fae1a040e84c2fcfa83b3cddd3f43752ff",
-          "sha256": "3cbdd76805313f574c2ac1e4caa0fcd0791a2595a0ea81f6007ea9e2656f2536",
-          "sha1": "223fd2ce9914423d0f4271b12dce1116106e1a00",
-          "md5": "e5806aaa2e1d01f172a7363bc7bea584"
+          "size": 502305,
+          "sha512": "deb62e531d34d3342590bbeff3edd77375efbc779baf96c60b8210e55544851bc1acc1283c7bcc497d9d319a360e2fe2e72c212994ce0315ef0bac258f683c3c",
+          "sha256": "082b09a2293b2418826093b23c529d75abbd1b090e32b65c53e2274e1d07e4d2",
+          "sha1": "17b4696d351cb7341052cf506e0548947e217be9",
+          "md5": "3b2bc714f553b9f6dc34817e19b1e957"
         }
       ]
     }

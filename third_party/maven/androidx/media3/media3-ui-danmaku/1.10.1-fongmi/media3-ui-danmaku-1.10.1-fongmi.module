@@ -56,11 +56,11 @@
         {
           "name": "media3-ui-danmaku-1.10.1-fongmi.aar",
           "url": "media3-ui-danmaku-1.10.1-fongmi.aar",
-          "size": 59862,
-          "sha512": "fbd6fca88f2d481cb0c1a206490121b847eebadfec0b0954d47e01dc06b79b57de54261bc119353c59a7b6b1a98bf9ddb479de77dea0a63ae5a695ff7e91338b",
-          "sha256": "54b6a60e9a77fe5884b211910aadb08f58b5950f7722b0e101110f70770e7bd8",
-          "sha1": "30242a65a699e947c84c0fd5eb48469080570a7d",
-          "md5": "c2941451fb3da50490632c832f5ca123"
+          "size": 84829,
+          "sha512": "3a29383026f0b62622537e99498efe81d8076410b18de05f08240f5ce6e66080b47883ddf97f0bd6a4c9e02c51beb884be7fb9c7a3ed04683e66ec2cea6ea4d0",
+          "sha256": "9b8abf97c50e4e72118a5d6f15c4a257b9517b64b188cd3afb0debaa6cd1d1b9",
+          "sha1": "fdfe7525f66ac7f3f3c4084c9206a5d665da4ad7",
+          "md5": "08d0a2c5156630f58080352e13d623ee"
         }
       ]
     },
@@ -120,11 +120,11 @@
         {
           "name": "media3-ui-danmaku-1.10.1-fongmi.aar",
           "url": "media3-ui-danmaku-1.10.1-fongmi.aar",
-          "size": 59862,
-          "sha512": "fbd6fca88f2d481cb0c1a206490121b847eebadfec0b0954d47e01dc06b79b57de54261bc119353c59a7b6b1a98bf9ddb479de77dea0a63ae5a695ff7e91338b",
-          "sha256": "54b6a60e9a77fe5884b211910aadb08f58b5950f7722b0e101110f70770e7bd8",
-          "sha1": "30242a65a699e947c84c0fd5eb48469080570a7d",
-          "md5": "c2941451fb3da50490632c832f5ca123"
+          "size": 84829,
+          "sha512": "3a29383026f0b62622537e99498efe81d8076410b18de05f08240f5ce6e66080b47883ddf97f0bd6a4c9e02c51beb884be7fb9c7a3ed04683e66ec2cea6ea4d0",
+          "sha256": "9b8abf97c50e4e72118a5d6f15c4a257b9517b64b188cd3afb0debaa6cd1d1b9",
+          "sha1": "fdfe7525f66ac7f3f3c4084c9206a5d665da4ad7",
+          "md5": "08d0a2c5156630f58080352e13d623ee"
         }
       ]
     },
@@ -140,11 +140,11 @@
         {
           "name": "media3-ui-danmaku-1.10.1-fongmi-sources.jar",
           "url": "media3-ui-danmaku-1.10.1-fongmi-sources.jar",
-          "size": 34036,
-          "sha512": "da77f8f6b199640753202a6ed96d4db65e6917c2b97c59f23238cb08447884377f35d64f16b20c95b9b5705886b9969cd79bbeecb8d06c4fc80607fce70c869d",
-          "sha256": "463bc0e8a4e072c5e0d7c5821bb4e593240ac5712eb7219d1ed3edff92f95438",
-          "sha1": "aedff44707e9476246e279c1bfa3fb4c538e8cac",
-          "md5": "5009276c28d8b62868f0cc1a05b51483"
+          "size": 46341,
+          "sha512": "cb33abe3164f21df735abeff1dca89227e8ab0714a0310b426e76772b5194e31e3a2814f511800b52d7c8b44f85e91179bdcaee21ed6d6bd499838f978779fbc",
+          "sha256": "0afcf33c3ec30628e1c22e15a547766fdb57107e164587735b5836ed947cb37e",
+          "sha1": "6c7726fa28dfb1bb62c5a729ced912ada97f82e6",
+          "md5": "e18a4cf1ffc95cb202ae40ac3ddb3fdf"
         }
       ]
     }

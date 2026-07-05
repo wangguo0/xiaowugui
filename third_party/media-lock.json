@@ -2,7 +2,7 @@
   "fongmi_media": {
     "repo": "https://github.com/FongMi/media.git",
     "branch": "release-1.10.1-fongmi",
-    "commit": "4d26e566e2d291356216b58124ce3c489ca2a4d3",
+    "commit": "c8a183b8ca7e57f43213c55f418d89fe45965db8",
     "version": "1.10.1-fongmi"
   },
   "fongmi_nextlib": {

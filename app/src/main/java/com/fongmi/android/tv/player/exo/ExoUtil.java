@@ -82,7 +82,7 @@ public class ExoUtil {
 
     public static ExoPlayer buildPlayer(int decode, Player.Listener listener) {
         ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get()).setTrackSelector(buildTrackSelector()).setRenderersFactory(buildPlaybackRenderersFactory(decode)).setMediaSourceFactory(buildMediaSourceFactory());
-        if (PlayerSetting.isExoEnhanced()) builder.setLoadControl(buildEnhancedLoadControl());
+        if (PlayerSetting.isExoEnhanced()) builder.setLoadControl(buildEnhancedLoadControl()).experimentalSetDynamicSchedulingEnabled(true);
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
         player.addAnalyticsListener(new PlaybackAnalyticsListener());
@@ -304,6 +304,7 @@ public class ExoUtil {
         };
         if (PlayerSetting.isExoEnhanced()) {
             factory.forceEnableMediaCodecAsynchronousQueueing();
+            factory.setEnableMediaCodecVideoRendererDurationToProgressUs(true);
             factory.experimentalSetLateThresholdToDropDecoderInputUs(ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US);
         }
         return factory.setEnableDecoderFallback(true).setExtensionRendererMode(Math.max(audioRenderMode, videoRenderMode));

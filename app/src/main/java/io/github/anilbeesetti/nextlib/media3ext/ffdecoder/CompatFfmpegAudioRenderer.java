@@ -68,7 +68,7 @@ public final class CompatFfmpegAudioRenderer extends DecoderAudioRenderer<Ffmpeg
     private static Format normalizeDecodeFormat(Format format) {
         String sampleMimeType = format.sampleMimeType;
         if (sampleMimeType == null) return format;
-        if (sampleMimeType.startsWith(MimeTypes.AUDIO_DTS_HD + ";") || MimeTypes.AUDIO_DTS_X.equals(sampleMimeType)) return format.buildUpon().setSampleMimeType(MimeTypes.AUDIO_DTS_HD).build();
+        if (sampleMimeType.startsWith(MimeTypes.AUDIO_DTS_HD + ";") || MimeTypes.AUDIO_MEDIA3_DTS_HD_MA_CORELESS.equals(sampleMimeType)) return format.buildUpon().setSampleMimeType(MimeTypes.AUDIO_DTS_HD).build();
         if (MimeTypes.AUDIO_AMR.equals(sampleMimeType)) return format.buildUpon().setSampleMimeType(MimeTypes.AUDIO_AMR_NB).build();
         return format;
     }

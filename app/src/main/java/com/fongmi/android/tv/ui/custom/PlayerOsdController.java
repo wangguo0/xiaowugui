@@ -390,8 +390,9 @@ public class PlayerOsdController {
     private String getAudioMime(Format format) {
         if (format == null) return "";
         String mime = format.sampleMimeType;
-        if (MimeTypes.AUDIO_DTS_X.equals(mime)) return "DTS:X";
-        if (MimeTypes.AUDIO_DTS_MA.equals(mime)) return "DTS-HD MA";
+        if (isCodec(format, MimeTypes.CODEC_DTS_HD_MA_X_IMAX)) return "DTS:X IMAX";
+        if (isCodec(format, MimeTypes.CODEC_DTS_HD_MA_X)) return "DTS:X";
+        if (MimeTypes.AUDIO_DTS_HD_MA.equals(mime) || MimeTypes.AUDIO_MEDIA3_DTS_HD_MA_CORELESS.equals(mime)) return "DTS-HD MA";
         if (MimeTypes.AUDIO_DTS_EXPRESS.equals(mime)) return "DTS-HD LBR";
         if (MimeTypes.AUDIO_DTS_UHD_P2.equals(mime)) return "DTS-UHD P2";
         if (MimeTypes.AUDIO_DTS_HD.equals(mime)) return "DTS-HD";
@@ -407,6 +408,10 @@ public class PlayerOsdController {
         if (MimeTypes.AUDIO_AMR.equals(mime) || MimeTypes.AUDIO_AMR_NB.equals(mime)) return "AMR-NB";
         if (MimeTypes.AUDIO_AMR_WB.equals(mime)) return "AMR-WB";
         return getMime(format);
+    }
+
+    private boolean isCodec(Format format, String codec) {
+        return !TextUtils.isEmpty(format.codecs) && format.codecs.contains(codec);
     }
 
     private String formatBitrate(long bitrate) {
