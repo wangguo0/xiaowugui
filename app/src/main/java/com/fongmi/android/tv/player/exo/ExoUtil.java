@@ -32,7 +32,9 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
-import androidx.media3.exoplayer.trackselection.TrackSelector;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
+import androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime;
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.exoplayer.util.EventLogger;
 import androidx.media3.exoplayer.video.VideoRendererEventListener;
 import androidx.media3.ui.CaptionStyleCompat;
@@ -69,6 +71,11 @@ public class ExoUtil {
     private static final int ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000;
     private static final int ENHANCED_TARGET_BUFFER_BYTES = 256 * 1024 * 1024;
     private static final long ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US = 5_000L;
+    private static final long ENHANCED_ADAPT_COOLDOWN_MS = 15_000L;
+    private static final int ENHANCED_DROPPED_FRAMES_THRESHOLD = 24;
+    private static final int ENHANCED_DROPPED_FRAMES_PER_SECOND_THRESHOLD = 4;
+    private static final int ENHANCED_BANDWIDTH_SAFETY_NUMERATOR = 4;
+    private static final int ENHANCED_BANDWIDTH_SAFETY_DENOMINATOR = 5;
     private static volatile EnhancedVideoProfile enhancedVideoProfile;
 
     public static void setPlayerView(PlayerView view) {
@@ -81,11 +88,16 @@ public class ExoUtil {
     }
 
     public static ExoPlayer buildPlayer(int decode, Player.Listener listener) {
-        ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get()).setTrackSelector(buildTrackSelector()).setRenderersFactory(buildPlaybackRenderersFactory(decode)).setMediaSourceFactory(buildMediaSourceFactory());
-        if (PlayerSetting.isExoEnhanced()) builder.setLoadControl(buildEnhancedLoadControl()).experimentalSetDynamicSchedulingEnabled(true);
+        DefaultTrackSelector trackSelector = buildTrackSelector();
+        ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get()).setTrackSelector(trackSelector).setRenderersFactory(buildPlaybackRenderersFactory(decode)).setMediaSourceFactory(buildMediaSourceFactory());
+        if (PlayerSetting.isExoEnhanced()) {
+            EnhancedVideoProfile profile = getEnhancedVideoProfile();
+            builder.setLoadControl(buildEnhancedLoadControl()).setBandwidthMeter(buildEnhancedBandwidthMeter(profile)).experimentalSetDynamicSchedulingEnabled(true);
+        }
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
         player.addAnalyticsListener(new PlaybackAnalyticsListener());
+        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, getEnhancedVideoProfile()));
         if (BuildConfig.DEBUG) player.addAnalyticsListener(new EventLogger());
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);
         player.setHandleAudioBecomingNoisy(true);
@@ -132,27 +144,30 @@ public class ExoUtil {
         return PlayerSetting.isCaption() ? CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle()) : new CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, null);
     }
 
-    private static TrackSelector buildTrackSelector() {
+    private static DefaultTrackSelector buildTrackSelector() {
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(App.get());
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
         if (PlayerSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
         if (PlayerSetting.isExoEnhanced()) {
-            EnhancedVideoProfile profile = getEnhancedVideoProfile();
-            builder.setMaxVideoSize(profile.width(), profile.height());
-            builder.setViewportSize(profile.width(), profile.height(), true);
-            builder.setMaxVideoBitrate(profile.bitrate());
-            builder.setMaxVideoFrameRate(profile.frameRate());
-            builder.setExceedVideoConstraintsIfNecessary(true);
-            builder.setAllowVideoNonSeamlessAdaptiveness(true);
-            builder.setAllowVideoMixedMimeTypeAdaptiveness(true);
-            builder.setForceHighestSupportedBitrate(false);
+            applyEnhancedVideoProfile(builder, getEnhancedVideoProfile());
         } else {
             builder.setForceHighestSupportedBitrate(true);
         }
         trackSelector.setParameters(builder.build());
         return trackSelector;
+    }
+
+    private static void applyEnhancedVideoProfile(DefaultTrackSelector.Parameters.Builder builder, EnhancedVideoProfile profile) {
+        builder.setMaxVideoSize(profile.width(), profile.height());
+        builder.setViewportSize(profile.width(), profile.height(), true);
+        builder.setMaxVideoBitrate(profile.bitrate());
+        builder.setMaxVideoFrameRate(profile.frameRate());
+        builder.setExceedVideoConstraintsIfNecessary(true);
+        builder.setAllowVideoNonSeamlessAdaptiveness(true);
+        builder.setAllowVideoMixedMimeTypeAdaptiveness(true);
+        builder.setForceHighestSupportedBitrate(false);
     }
 
     public static EnhancedVideoProfile getEnhancedVideoProfile() {
@@ -287,6 +302,24 @@ public class ExoUtil {
                 .build();
     }
 
+    private static DefaultBandwidthMeter buildEnhancedBandwidthMeter(EnhancedVideoProfile profile) {
+        return new DefaultBandwidthMeter.Builder(App.get())
+                .setSlidingWindowMaxWeight(4_000)
+                .setInitialBitrateSupplier(networkType -> getInitialBitrateEstimate(profile, networkType))
+                .build();
+    }
+
+    private static long getInitialBitrateEstimate(EnhancedVideoProfile profile, int networkType) {
+        return switch (networkType) {
+            case C.NETWORK_TYPE_ETHERNET, C.NETWORK_TYPE_WIFI -> Math.max(profile.bitrate() * 2L, 20_000_000L);
+            case C.NETWORK_TYPE_5G_SA, C.NETWORK_TYPE_5G_NSA -> Math.max(profile.bitrate() * 3L / 2L, 15_000_000L);
+            case C.NETWORK_TYPE_4G -> Math.max(profile.bitrate(), 8_000_000L);
+            case C.NETWORK_TYPE_3G -> 4_000_000L;
+            case C.NETWORK_TYPE_2G -> 512_000L;
+            default -> Math.max(profile.bitrate(), 8_000_000L);
+        };
+    }
+
     private static RenderersFactory buildPlaybackRenderersFactory(int decode) {
         return buildRenderersFactory(getAudioRenderMode(decode), getVideoRenderMode(decode), PlayerSetting.isAudioPrefer(), PlayerSetting.isVideoPrefer());
     }
@@ -388,6 +421,78 @@ public class ExoUtil {
             int index = out.size();
             if (index > 0 && (extensionRendererMode == EXTENSION_RENDERER_MODE_PREFER || prefer)) index--;
             return index;
+        }
+    }
+
+    private static class AdaptiveVideoProfileController implements AnalyticsListener {
+
+        private final DefaultTrackSelector trackSelector;
+        private EnhancedVideoProfile profile;
+        private int profileIndex;
+        private boolean everReady;
+        private long lastAdaptMs;
+
+        AdaptiveVideoProfileController(DefaultTrackSelector trackSelector, EnhancedVideoProfile profile) {
+            this.trackSelector = trackSelector;
+            this.profile = profile;
+            this.profileIndex = getProfileIndex(profile);
+        }
+
+        @Override
+        public void onPlaybackStateChanged(EventTime eventTime, @Player.State int state) {
+            if (state == Player.STATE_READY) {
+                everReady = true;
+            } else if (state == Player.STATE_BUFFERING && everReady) {
+                maybeDowngrade("rebuffer", eventTime, 0);
+            }
+        }
+
+        @Override
+        public void onDroppedVideoFrames(EventTime eventTime, int droppedFrames, long elapsedMs) {
+            if (droppedFrames < ENHANCED_DROPPED_FRAMES_THRESHOLD && getDroppedFramesPerSecond(droppedFrames, elapsedMs) < ENHANCED_DROPPED_FRAMES_PER_SECOND_THRESHOLD) return;
+            maybeDowngrade("droppedFrames=" + droppedFrames + "/" + elapsedMs + "ms", eventTime, 0);
+        }
+
+        @Override
+        public void onBandwidthEstimate(EventTime eventTime, int totalLoadTimeMs, long totalBytesLoaded, long bitrateEstimate) {
+            if (bitrateEstimate <= 0 || bitrateEstimate * ENHANCED_BANDWIDTH_SAFETY_NUMERATOR >= (long) profile.bitrate() * ENHANCED_BANDWIDTH_SAFETY_DENOMINATOR) return;
+            maybeDowngrade("bandwidth=" + bitrateEstimate, eventTime, bitrateEstimate);
+        }
+
+        private int getDroppedFramesPerSecond(int droppedFrames, long elapsedMs) {
+            if (elapsedMs <= 0) return droppedFrames;
+            return (int) (droppedFrames * 1000L / elapsedMs);
+        }
+
+        private void maybeDowngrade(String reason, EventTime eventTime, long bitrateEstimate) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (profileIndex >= EnhancedVideoProfile.targets().size() - 1 || now - lastAdaptMs < ENHANCED_ADAPT_COOLDOWN_MS) return;
+            EnhancedVideoProfile next = EnhancedVideoProfile.targets().get(++profileIndex);
+            if (bitrateEstimate > 0) next = capByBandwidth(next, bitrateEstimate);
+            apply(next);
+            lastAdaptMs = now;
+            SpiderDebug.log("exo-enhance", "adaptive downgrade reason=%s profile=%dx%d@%d bitrate=%d position=%d", reason, next.width(), next.height(), next.frameRate(), next.bitrate(), eventTime.currentPlaybackPositionMs);
+        }
+
+        private EnhancedVideoProfile capByBandwidth(EnhancedVideoProfile profile, long bitrateEstimate) {
+            int bitrate = (int) Math.max(1_000_000L, bitrateEstimate * ENHANCED_BANDWIDTH_SAFETY_NUMERATOR / ENHANCED_BANDWIDTH_SAFETY_DENOMINATOR);
+            return profile.withBitrate(Math.min(profile.bitrate(), bitrate));
+        }
+
+        private void apply(EnhancedVideoProfile profile) {
+            this.profile = profile;
+            DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
+            applyEnhancedVideoProfile(builder, profile);
+            trackSelector.setParameters(builder.build());
+        }
+
+        private int getProfileIndex(EnhancedVideoProfile profile) {
+            List<EnhancedVideoProfile> targets = EnhancedVideoProfile.targets();
+            for (int i = 0; i < targets.size(); i++) {
+                EnhancedVideoProfile target = targets.get(i);
+                if (profile.width() >= target.width() && profile.height() >= target.height()) return i;
+            }
+            return targets.size() - 1;
         }
     }
 
