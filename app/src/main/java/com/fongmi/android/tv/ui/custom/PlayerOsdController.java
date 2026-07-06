@@ -90,6 +90,7 @@ public class PlayerOsdController {
         this.source = source;
         this.root = root;
         this.update = this::update;
+        updateDiagnosticsWidth();
     }
 
     public void start() {
@@ -282,21 +283,22 @@ public class PlayerOsdController {
         String error = getErrorText(player, snapshot);
         return join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
-                row("播放", playerText),
-                row("网络", network),
-                row("状态", playback),
+                TextUtils.isEmpty(error) ? "" : row("错误", error),
                 gap(),
                 row("视频", videoText),
+                row("HEVC硬解", getHevcDecoderText()),
                 row("音频", audioText),
+                gap(),
+                row("网络", network),
+                row("状态", playback),
+                row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())),
                 gap(),
                 row("设备", getDeviceText()),
                 row("系统", getSystemText()),
                 row("WebView", getWebViewText()),
                 row("屏幕", getDisplayText()),
-                row("网络环境", getNetworkEnvironmentText()),
-                row("HEVC硬解", getHevcDecoderText()),
-                TextUtils.isEmpty(error) ? "" : row("错误", error));
+                row("网络环境", getNetworkEnvironmentText()));
     }
 
     private String getDiagnosis(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot, Format video, AudioTrackState audioTrack) {
@@ -545,9 +547,7 @@ public class PlayerOsdController {
         if (value != null) return value;
         return cachedDeviceText = join(" / ",
                 join(" ", emptyDash(Build.MANUFACTURER), emptyDash(Build.MODEL)),
-                "brand " + emptyDash(Build.BRAND),
                 "device " + emptyDash(Build.DEVICE),
-                "product " + emptyDash(Build.PRODUCT),
                 "abi " + String.join(",", Build.SUPPORTED_ABIS));
     }
 

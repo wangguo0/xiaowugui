@@ -73,6 +73,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|start"
+            android:layout_marginStart="-14dp"
+            android:layout_marginTop="-14dp"
             android:background="@drawable/shape_player_osd_diagnostics"
             android:fontFeatureSettings="tnum"
             android:includeFontPadding="false"
