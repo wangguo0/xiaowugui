@@ -337,7 +337,7 @@ public class PlayerOsdController {
                 total++;
                 int support = group.getTrackSupport(i);
                 boolean isSelected = group.isTrackSelected(i);
-                if (support == C.FORMAT_HANDLED || support == C.FORMAT_EXCEEDS_CAPABILITIES) supported++;
+                if (support == C.FORMAT_HANDLED) supported++;
                 AudioTrackCandidate candidate = new AudioTrackCandidate(group.getTrackFormat(i), support, isSelected);
                 if (first == null) first = candidate;
                 if (isSelected) selected = candidate;
@@ -366,7 +366,7 @@ public class PlayerOsdController {
                 total++;
                 int support = group.getTrackSupport(i);
                 boolean isSelected = group.isTrackSelected(i);
-                if (support == C.FORMAT_HANDLED || support == C.FORMAT_EXCEEDS_CAPABILITIES) supported++;
+                if (support == C.FORMAT_HANDLED) supported++;
                 VideoTrackCandidate candidate = new VideoTrackCandidate(group.getTrackFormat(i), support, isSelected);
                 if (first == null) first = candidate;
                 if (isSelected) selected = candidate;
@@ -386,7 +386,7 @@ public class PlayerOsdController {
     private String supportText(int support) {
         return switch (support) {
             case C.FORMAT_HANDLED -> "支持";
-            case C.FORMAT_EXCEEDS_CAPABILITIES -> "支持但超规格: EXCEEDS_CAPABILITIES";
+            case C.FORMAT_EXCEEDS_CAPABILITIES -> "超出设备声明能力: EXCEEDS_CAPABILITIES，不应判定为可硬解";
             case C.FORMAT_UNSUPPORTED_DRM -> "不支持: NO_UNSUPPORTED_DRM";
             case C.FORMAT_UNSUPPORTED_SUBTYPE -> "不支持: NO_UNSUPPORTED_SUBTYPE";
             case C.FORMAT_UNSUPPORTED_TYPE -> "不支持: NO_UNSUPPORTED_TYPE";
