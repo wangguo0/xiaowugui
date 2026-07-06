@@ -204,6 +204,7 @@ public class PlayerOsdController {
         }
         String text = getDiagnostics(player);
         updateDiagnosticsWidth();
+        diagnostics.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
         diagnostics.setText(text);
         diagnostics.setVisibility(TextUtils.isEmpty(text) ? View.GONE : View.VISIBLE);
     }
@@ -213,13 +214,23 @@ public class PlayerOsdController {
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : App.get().getResources().getDisplayMetrics().heightPixels;
         if (rootWidth <= 0) return;
         boolean land = rootWidth >= rootHeight;
-        int width = Math.round(rootWidth * (land ? 0.66f : 0.94f));
+        int width = Math.round(rootWidth * (land ? 0.76f : 0.98f));
         ViewGroup.LayoutParams params = diagnostics.getLayoutParams();
         if (params != null && params.width != width) {
             params.width = width;
             diagnostics.setLayoutParams(params);
         }
         diagnostics.setMaxWidth(width);
+        if (rootHeight > 0) diagnostics.setMaxHeight(rootHeight);
+        diagnostics.setTextScaleX(land ? 0.90f : 0.92f);
+    }
+
+    private float getDiagnosticsSp() {
+        int rootWidth = root.getWidth() > 0 ? root.getWidth() : App.get().getResources().getDisplayMetrics().widthPixels;
+        int rootHeight = root.getHeight() > 0 ? root.getHeight() : App.get().getResources().getDisplayMetrics().heightPixels;
+        boolean land = rootWidth >= rootHeight;
+        float target = land && rootHeight > 0 && rootHeight < 760 ? 7.4f : land ? 8.2f : 8.0f;
+        return Math.min(miniSp, target);
     }
 
     private void setMiniProgress(PlayerManager player) {
@@ -241,7 +252,7 @@ public class PlayerOsdController {
         topRight.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         bottomLeft.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         bottomRight.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        diagnostics.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        diagnostics.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
     }
 
     private void updateSpeed() {
@@ -291,7 +302,9 @@ public class PlayerOsdController {
                 row("状态", playback),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())),
-                row("设备", join(" / ", getDeviceText(), getSystemText())),
+                row("设备", getDeviceText()),
+                row("系统", getSystemText()),
+                row("芯片", getChipText()),
                 row("屏幕", getDisplayText()),
                 row("WebView", getWebViewText()),
                 row("网络环境", getNetworkEnvironmentText()));
@@ -554,6 +567,13 @@ public class PlayerOsdController {
                 "Android " + emptyDash(Build.VERSION.RELEASE),
                 "SDK " + Build.VERSION.SDK_INT,
                 "incremental " + emptyDash(Build.VERSION.INCREMENTAL));
+    }
+
+    private String getChipText() {
+        return join(" / ",
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? "soc " + emptyDash(Build.SOC_MANUFACTURER) + " " + emptyDash(Build.SOC_MODEL) : "",
+                "hardware " + emptyDash(Build.HARDWARE),
+                "board " + emptyDash(Build.BOARD));
     }
 
     private String getWebViewText() {

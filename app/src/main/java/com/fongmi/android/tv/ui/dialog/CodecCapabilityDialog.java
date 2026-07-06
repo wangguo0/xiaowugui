@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.text.SpannableStringBuilder;
 import android.text.Editable;
 import android.text.Spanned;
@@ -73,7 +74,7 @@ public final class CodecCapabilityDialog {
         root.setOrientation(LinearLayout.VERTICAL);
 
         MaterialTextView note = new MaterialTextView(activity);
-        note.setText("视频只列硬件 decoder；音频列系统 decoder，包含平台软件 decoder。当前媒体页会按轨道逐条判断。");
+        note.setText("芯片 " + chipText() + "\n视频只列硬件 decoder；音频列系统 decoder，包含平台软件 decoder。当前媒体页显示轨道选中状态；视频/音频页高亮表示该 decoder 可解当前轨道。");
         note.setTextColor(Color.parseColor("#5F6368"));
         note.setTextSize(12);
         note.setLineSpacing(0, 1.12f);
@@ -167,6 +168,25 @@ public final class CodecCapabilityDialog {
         return button;
     }
 
+    private String chipText() {
+        String soc = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? join(" ", Build.SOC_MANUFACTURER, Build.SOC_MODEL) : "";
+        return join(" / ", soc, "hardware " + empty(Build.HARDWARE), "board " + empty(Build.BOARD));
+    }
+
+    private String join(String separator, String... values) {
+        StringBuilder builder = new StringBuilder();
+        for (String value : values) {
+            if (TextUtils.isEmpty(value)) continue;
+            if (builder.length() > 0) builder.append(separator);
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
+    private String empty(String value) {
+        return TextUtils.isEmpty(value) ? "-" : value;
+    }
+
     private int getReportHeight() {
         int screen = ResUtil.getScreenHeight(activity);
         if (Util.isLeanback()) return Math.min(ResUtil.dp2px(430), Math.round(screen * 0.58f));
@@ -224,8 +244,8 @@ public final class CodecCapabilityDialog {
 
     private SpannableStringBuilder highlightDecoderMatches(String text) {
         SpannableStringBuilder builder = new SpannableStringBuilder(text);
-        highlightDecoderMarker(builder, text, "当前媒体 ", false);
-        highlightDecoderMarker(builder, text, "当前选中 ", true);
+        highlightDecoderMarker(builder, text, "可解当前媒体", false);
+        highlightDecoderMarker(builder, text, "可解当前选中", true);
         return builder;
     }
 

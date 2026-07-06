@@ -413,8 +413,8 @@ public final class CodecCapabilityInspector {
             }
             if (all.isEmpty()) return "";
             StringBuilder builder = new StringBuilder();
-            builder.append("\n当前媒体 ").append(TextUtils.join(" / ", all));
-            if (!selected.isEmpty()) builder.append("\n当前选中 ").append(TextUtils.join(" / ", selected));
+            builder.append("\n可解当前媒体").append(entry.kind).append("轨 ").append(TextUtils.join(" / ", all));
+            if (!selected.isEmpty()) builder.append("\n可解当前选中").append(entry.kind).append("轨 ").append(TextUtils.join(" / ", selected));
             return builder.toString();
         }
     }
