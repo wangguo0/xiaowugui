@@ -8,14 +8,9 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
-import android.text.SpannableStringBuilder;
 import android.text.Editable;
-import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.text.style.BackgroundColorSpan;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -44,13 +39,14 @@ public final class CodecCapabilityDialog {
 
     private final FragmentActivity activity;
     private final PlayerManager player;
-    private MaterialTextView content;
+    private LinearLayout list;
     private MaterialButton current;
     private MaterialButton all;
     private MaterialButton video;
     private MaterialButton audio;
     private EditText search;
     private Dialog dialog;
+    private String reportText = "";
     private int mode = MODE_CURRENT;
 
     private CodecCapabilityDialog(FragmentActivity activity, PlayerManager player) {
@@ -133,14 +129,10 @@ public final class CodecCapabilityDialog {
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        content = new MaterialTextView(activity);
-        content.setTextColor(Color.parseColor("#202124"));
-        content.setTextSize(12);
-        content.setLineSpacing(ResUtil.dp2px(2), 1.0f);
-        content.setTypeface(Typeface.MONOSPACE);
-        content.setTextIsSelectable(true);
-        content.setPadding(ResUtil.dp2px(12), ResUtil.dp2px(12), ResUtil.dp2px(12), ResUtil.dp2px(12));
-        scroll.addView(content, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        list = new LinearLayout(activity);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8));
+        scroll.addView(list, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         report.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return root;
     }
@@ -158,8 +150,10 @@ public final class CodecCapabilityDialog {
         button.setInsetTop(0);
         button.setInsetBottom(0);
         button.setPadding(ResUtil.dp2px(4), 0, ResUtil.dp2px(4), 0);
+        button.setCornerRadius(ResUtil.dp2px(6));
         button.setFocusable(true);
         button.setFocusableInTouchMode(Util.isLeanback());
+        button.setOnFocusChangeListener((view, hasFocus) -> styleTab(button, button.isSelected()));
         button.setOnClickListener(listener);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
         params.leftMargin = ResUtil.dp2px(4);
@@ -204,7 +198,7 @@ public final class CodecCapabilityDialog {
     private GradientDrawable reportBackground() {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(Color.parseColor("#F8F9FA"));
-        drawable.setCornerRadius(ResUtil.dp2px(8));
+        drawable.setCornerRadius(ResUtil.dp2px(6));
         drawable.setStroke(ResUtil.dp2px(1), Color.parseColor("#E0E3E7"));
         return drawable;
     }
@@ -215,74 +209,108 @@ public final class CodecCapabilityDialog {
     }
 
     private void update() {
-        if (content == null) return;
+        if (list == null) return;
         setSelected(current, mode == MODE_CURRENT);
         setSelected(all, mode == CodecCapabilityInspector.TYPE_ALL);
         setSelected(video, mode == CodecCapabilityInspector.TYPE_VIDEO);
         setSelected(audio, mode == CodecCapabilityInspector.TYPE_AUDIO);
         String keyword = search == null || search.getText() == null ? "" : search.getText().toString();
-        if (mode == MODE_CURRENT) content.setText(highlightTrackBlocks(CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword)));
-        else content.setText(highlightDecoderMatches(CodecCapabilityInspector.buildDeviceReport(activity, player, keyword, mode)));
+        reportText = mode == MODE_CURRENT ? CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword) : CodecCapabilityInspector.buildDeviceReport(activity, player, keyword, mode);
+        renderReport(reportText);
     }
 
-    private SpannableStringBuilder highlightTrackBlocks(String text) {
-        SpannableStringBuilder builder = new SpannableStringBuilder(text);
-        int cursor = 0;
-        while (cursor < text.length()) {
-            int start = text.indexOf("轨 ", cursor);
-            if (start < 0) break;
-            int lineStart = text.lastIndexOf('\n', start);
-            lineStart = lineStart < 0 ? 0 : lineStart + 1;
-            int end = text.indexOf("\n\n", start);
-            end = end < 0 ? text.length() : end;
-            boolean selected = text.substring(lineStart, end).contains(" / 已选中");
-            applyBlockHighlight(builder, lineStart, end, selected);
-            cursor = end + 2;
+    private void renderReport(String text) {
+        list.removeAllViews();
+        if (TextUtils.isEmpty(text)) {
+            addItem("无内容", false, false);
+            return;
         }
-        return builder;
-    }
-
-    private SpannableStringBuilder highlightDecoderMatches(String text) {
-        SpannableStringBuilder builder = new SpannableStringBuilder(text);
-        highlightDecoderMarker(builder, text, "可解当前媒体", false);
-        highlightDecoderMarker(builder, text, "可解当前选中", true);
-        return builder;
-    }
-
-    private void highlightDecoderMarker(SpannableStringBuilder builder, String text, String marker, boolean selected) {
-        int index = text.indexOf(marker);
-        while (index >= 0) {
-            int start = text.lastIndexOf("\n\n", index);
-            start = start < 0 ? 0 : start + 2;
-            int end = text.indexOf("\n\n", index);
-            end = end < 0 ? text.length() : end;
-            applyBlockHighlight(builder, start, end, selected);
-            int lineEnd = text.indexOf('\n', index);
-            lineEnd = lineEnd < 0 || lineEnd > end ? end : lineEnd;
-            builder.setSpan(new StyleSpan(Typeface.BOLD), index, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            index = text.indexOf(marker, end);
+        String[] blocks = text.split("\\n\\n");
+        for (int i = 0; i < blocks.length; i++) {
+            String block = blocks[i].trim();
+            if (TextUtils.isEmpty(block)) continue;
+            if (i == 0 && blocks.length > 1 && !block.contains("\n")) addHeader(block);
+            else addItem(block, isSelectedBlock(block), isMatchedBlock(block));
         }
     }
 
-    private void applyBlockHighlight(SpannableStringBuilder builder, int start, int end, boolean selected) {
-        builder.setSpan(new BackgroundColorSpan(Color.parseColor(selected ? "#E8F0FE" : "#FFF7D6")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        builder.setSpan(new ForegroundColorSpan(Color.parseColor(selected ? "#174EA6" : "#5F4211")), start, Math.min(end, start + 40), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        if (selected) builder.setSpan(new StyleSpan(Typeface.BOLD), start, Math.min(end, start + 80), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    private void addHeader(String text) {
+        MaterialTextView header = new MaterialTextView(activity);
+        header.setText(text);
+        header.setTextColor(Color.parseColor("#5F6368"));
+        header.setTextSize(13);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setSingleLine(true);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(28));
+        list.addView(header, params);
+    }
+
+    private void addItem(String text, boolean selected, boolean matched) {
+        MaterialButton item = new MaterialButton(activity);
+        item.setAllCaps(false);
+        item.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        item.setText(text);
+        item.setTextSize(Util.isLeanback() ? 14 : 12);
+        item.setTypeface(Typeface.MONOSPACE);
+        item.setSingleLine(false);
+        item.setMinWidth(0);
+        item.setMinimumWidth(0);
+        item.setMinHeight(ResUtil.dp2px(Util.isLeanback() ? 72 : 58));
+        item.setInsetTop(0);
+        item.setInsetBottom(0);
+        item.setPadding(ResUtil.dp2px(12), ResUtil.dp2px(8), ResUtil.dp2px(12), ResUtil.dp2px(8));
+        item.setCornerRadius(ResUtil.dp2px(6));
+        item.setFocusable(true);
+        item.setFocusableInTouchMode(Util.isLeanback());
+        item.setOnFocusChangeListener((view, hasFocus) -> styleItem(item, selected, matched, hasFocus));
+        item.setOnClickListener(view -> copyText(text));
+        styleItem(item, selected, matched, false);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = ResUtil.dp2px(8);
+        list.addView(item, params);
+    }
+
+    private boolean isSelectedBlock(String block) {
+        return block.contains("已选中") || block.contains("可解当前选中");
+    }
+
+    private boolean isMatchedBlock(String block) {
+        return block.contains("可解当前媒体");
+    }
+
+    private void styleItem(MaterialButton item, boolean selected, boolean matched, boolean focused) {
+        int textColor = focused || selected ? Color.parseColor("#174EA6") : matched ? Color.parseColor("#5F4211") : Color.parseColor("#202124");
+        int bgColor = focused ? Color.parseColor("#E8F0FE") : selected ? Color.parseColor("#D2E3FC") : matched ? Color.parseColor("#FFF7D6") : Color.WHITE;
+        int strokeColor = focused || selected ? Color.parseColor("#1A73E8") : matched ? Color.parseColor("#E0B429") : Color.parseColor("#DADCE0");
+        item.setTextColor(textColor);
+        item.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bgColor));
+        item.setStrokeColor(android.content.res.ColorStateList.valueOf(strokeColor));
+        item.setStrokeWidth(ResUtil.dp2px(focused || selected ? 2 : 1));
     }
 
     private void setSelected(@NonNull MaterialButton button, boolean selected) {
         button.setSelected(selected);
-        button.setTextColor(ContextCompat.getColorStateList(activity, selected ? R.color.dialog_primary_button_text : R.color.dialog_outlined_button_text));
-        button.setBackgroundTintList(ContextCompat.getColorStateList(activity, selected ? R.color.dialog_primary_button_bg : R.color.dialog_outlined_button_bg));
+        styleTab(button, selected);
+    }
+
+    private void styleTab(@NonNull MaterialButton button, boolean selected) {
+        boolean focused = button.isFocused();
+        button.setTextColor(ContextCompat.getColorStateList(activity, selected || focused ? R.color.dialog_primary_button_text : R.color.dialog_outlined_button_text));
+        button.setBackgroundTintList(ContextCompat.getColorStateList(activity, selected || focused ? R.color.dialog_primary_button_bg : R.color.dialog_outlined_button_bg));
         button.setStrokeColor(ContextCompat.getColorStateList(activity, R.color.dialog_outlined_button_stroke));
-        button.setStrokeWidth(selected ? 0 : ResUtil.dp2px(1));
+        button.setStrokeWidth(selected || focused ? 0 : ResUtil.dp2px(1));
     }
 
     private void copy() {
-        if (content == null || TextUtils.isEmpty(content.getText())) return;
+        copyText(reportText);
+    }
+
+    private void copyText(String text) {
+        if (TextUtils.isEmpty(text)) return;
         ClipboardManager manager = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
         if (manager == null) return;
-        manager.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.codec_capability_title), content.getText()));
+        manager.setPrimaryClip(ClipData.newPlainText(activity.getString(R.string.codec_capability_title), text));
         Notify.show(R.string.copied);
     }
 

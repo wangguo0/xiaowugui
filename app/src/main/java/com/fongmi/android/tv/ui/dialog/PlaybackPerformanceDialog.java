@@ -259,6 +259,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         button.setTextSize(14);
         button.setTextColor(Color.parseColor("#202124"));
         button.setBackgroundColor(Color.WHITE);
+        button.setCornerRadius(dp(6));
         button.setStrokeColorResource(R.color.dialog_outlined_button_stroke);
         button.setStrokeWidth(dp(1));
         button.setFocusable(true);
