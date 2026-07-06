@@ -91,7 +91,11 @@ public class ExoUtil {
         EnhancedVideoProfile profile = getEnhancedVideoProfile(decode);
         List<EnhancedVideoProfile> profiles = getEnhancedVideoProfiles(decode);
         DefaultTrackSelector trackSelector = buildTrackSelector(decode);
-        ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get()).setTrackSelector(trackSelector).setRenderersFactory(buildPlaybackRenderersFactory(decode)).setMediaSourceFactory(buildMediaSourceFactory());
+        ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get())
+                .setTrackSelector(trackSelector)
+                .setRenderersFactory(buildPlaybackRenderersFactory(decode))
+                .setMediaSourceFactory(buildMediaSourceFactory())
+                .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS);
         if (PlayerSetting.isExoEnhanced()) {
             builder.setLoadControl(buildEnhancedLoadControl()).setBandwidthMeter(buildEnhancedBandwidthMeter(profile)).experimentalSetDynamicSchedulingEnabled(true);
         }

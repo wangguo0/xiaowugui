@@ -16,6 +16,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.utils.Util;
 
 import java.text.DecimalFormat;
@@ -241,7 +242,10 @@ public class PlayerOsdController {
         String tunnel = switchText(PlayerSetting.isTunnelingEnabled());
         String enhance = switchText(PlayerSetting.isExoEnhanced());
         String passThrough = switchText(PlayerSetting.isAudioPassThrough());
-        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道 " + tunnel, "EXO增强 " + enhance, "音频直通 " + passThrough, player.isIjk() ? "" : "FFmpeg音频兜底 开");
+        String preload = "预载 " + switchText(PreloadSetting.isPreload());
+        String frameRateMatch = player.isIjk() ? "" : "帧率匹配 开";
+        String softTune = getSoftDecodeTuneText(player);
+        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道 " + tunnel, "EXO增强 " + enhance, frameRateMatch, preload, "音频直通 " + passThrough, softTune, player.isIjk() ? "" : "FFmpeg音频兜底 开");
         String error = getErrorText(player, snapshot);
         String display = getDisplayRefreshText();
         return join("\n",
@@ -287,6 +291,12 @@ public class PlayerOsdController {
         if (isDecodeError(snapshot) && player.isHardDecode()) return "中文说明：硬解失败，设备硬件解码器可能不支持当前视频规格；不会自动切软解";
         if (isDecodeError(snapshot)) return "中文说明：软解/解码流程失败，请尝试切回硬解或更换资源";
         return "";
+    }
+
+    private String getSoftDecodeTuneText(PlayerManager player) {
+        if (player.isHardDecode()) return "";
+        if (player.isIjk()) return "软解降负载 IJK跳帧/滤波";
+        return "软解降负载 EXO待接入";
     }
 
     private boolean isDecodeError(PlaybackAnalyticsListener.Snapshot snapshot) {
