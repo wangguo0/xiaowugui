@@ -47,6 +47,7 @@ public final class ChoiceDialog extends DialogFragment {
     private boolean dismissOnChoice = true;
     private OnChoice choice;
     private OnApply apply;
+    private OnItemEnabled itemEnabled;
     private OnNeutral neutralAction;
     private Runnable positiveAction;
 
@@ -56,6 +57,10 @@ public final class ChoiceDialog extends DialogFragment {
 
     public interface OnApply {
         void onApply(boolean[] checked);
+    }
+
+    public interface OnItemEnabled {
+        boolean isEnabled(int which, boolean[] checked);
     }
 
     public interface OnNeutral {
@@ -101,12 +106,17 @@ public final class ChoiceDialog extends DialogFragment {
     }
 
     public static void showMulti(FragmentManager manager, CharSequence title, CharSequence[] items, boolean[] checked, OnApply apply) {
+        showMulti(manager, title, items, checked, null, apply);
+    }
+
+    public static void showMulti(FragmentManager manager, CharSequence title, CharSequence[] items, boolean[] checked, OnItemEnabled itemEnabled, OnApply apply) {
         ChoiceDialog dialog = new ChoiceDialog();
         dialog.title = title;
         dialog.items = items == null ? new CharSequence[0] : Arrays.copyOf(items, items.length);
         dialog.checked = checked == null ? new boolean[dialog.items.length] : Arrays.copyOf(checked, dialog.items.length);
         dialog.multi = true;
         dialog.apply = apply;
+        dialog.itemEnabled = itemEnabled;
         dialog.positive = ResUtil.getString(R.string.dialog_positive);
         dialog.negative = ResUtil.getString(R.string.dialog_negative);
         dialog.show(manager, ChoiceDialog.class.getSimpleName());
@@ -231,8 +241,7 @@ public final class ChoiceDialog extends DialogFragment {
         button.setInsetTop(0);
         button.setInsetBottom(0);
         button.setStrokeWidth(dp(1));
-        button.setFocusable(true);
-        button.setFocusableInTouchMode(Util.isLeanback());
+        setItemEnabled(button, position);
         button.setText(itemText(position));
         styleItem(button, position);
         button.setOnFocusChangeListener((view, hasFocus) -> styleItem(button, position));
@@ -251,7 +260,24 @@ public final class ChoiceDialog extends DialogFragment {
         return multi ? position < checked.length && checked[position] : position == selected;
     }
 
+    private boolean itemEnabled(int position) {
+        return itemEnabled == null || itemEnabled.isEnabled(position, Arrays.copyOf(checked, checked.length));
+    }
+
+    private void setItemEnabled(MaterialButton button, int position) {
+        boolean enabled = itemEnabled(position);
+        button.setEnabled(enabled);
+        button.setFocusable(enabled);
+        button.setFocusableInTouchMode(enabled && Util.isLeanback());
+    }
+
     private void styleItem(MaterialButton button, int position) {
+        if (!itemEnabled(position)) {
+            button.setTextColor(ColorStateList.valueOf(Color.parseColor("#9AA0A6")));
+            button.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#F1F3F4")));
+            button.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#E0E0E0")));
+            return;
+        }
         boolean on = itemSelected(position);
         boolean focused = button.isFocused();
         int text = on || focused ? Color.parseColor("#174EA6") : Color.parseColor("#202124");
@@ -263,6 +289,7 @@ public final class ChoiceDialog extends DialogFragment {
     }
 
     private void onItemClick(int position) {
+        if (!itemEnabled(position)) return;
         if (multi) {
             if (position >= 0 && position < checked.length) checked[position] = !checked[position];
             View root = viewRoot();
@@ -289,6 +316,7 @@ public final class ChoiceDialog extends DialogFragment {
         for (int i = 0; i < list.getChildCount(); i++) {
             View child = list.getChildAt(i);
             if (child instanceof MaterialButton button) {
+                setItemEnabled(button, i);
                 button.setText(itemText(i));
                 styleItem(button, i);
             }
