@@ -25,6 +25,7 @@ import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Tracks;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.setting.PlayerSetting;
@@ -58,6 +59,8 @@ public class PlayerOsdController {
     private final TextView bottomLeft;
     private final TextView bottomRight;
     private final TextView diagnostics;
+    private final TextView diagnosticsExtra;
+    private final View diagnosticsPanel;
     private final MiniProgressView miniProgress;
     private final Runnable update;
     private final Source source;
@@ -84,12 +87,15 @@ public class PlayerOsdController {
         this.bottomRight = bottomRight;
         this.bottomLeft = bottomLeft;
         this.diagnostics = diagnostics;
+        this.diagnosticsExtra = root.findViewById(R.id.osdDiagnosticsExtra);
+        this.diagnosticsPanel = root.findViewById(R.id.osdDiagnosticsPanel);
         this.topRight = topRight;
         this.topLeft = topLeft;
         this.miniSp = miniSp;
         this.source = source;
         this.root = root;
         this.update = this::update;
+        diagnosticsExtra.setVisibility(View.GONE);
         updateDiagnosticsWidth();
     }
 
@@ -199,14 +205,18 @@ public class PlayerOsdController {
 
     private void setDiagnosticsPanel(PlayerManager player) {
         if (controlsVisible || !PlayerSetting.isOsdDiagnostics() || !diagnosticsVisible || player == null) {
-            diagnostics.setVisibility(View.GONE);
+            diagnosticsPanel.setVisibility(View.GONE);
             return;
         }
-        String text = getDiagnostics(player);
+        DiagnosticsText text = getDiagnostics(player);
+        boolean land = isLandscape();
         updateDiagnosticsWidth();
         diagnostics.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
-        diagnostics.setText(text);
-        diagnostics.setVisibility(TextUtils.isEmpty(text) ? View.GONE : View.VISIBLE);
+        diagnosticsExtra.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
+        diagnostics.setText(land ? text.main() : text.all());
+        diagnosticsExtra.setText(text.extra());
+        diagnosticsExtra.setVisibility(land && !TextUtils.isEmpty(text.extra()) ? View.VISIBLE : View.GONE);
+        diagnosticsPanel.setVisibility(TextUtils.isEmpty(text.all()) ? View.GONE : View.VISIBLE);
     }
 
     private void updateDiagnosticsWidth() {
@@ -214,23 +224,35 @@ public class PlayerOsdController {
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : App.get().getResources().getDisplayMetrics().heightPixels;
         if (rootWidth <= 0) return;
         boolean land = rootWidth >= rootHeight;
-        int width = Math.round(rootWidth * (land ? 0.76f : 0.98f));
-        ViewGroup.LayoutParams params = diagnostics.getLayoutParams();
+        int width = Math.round(rootWidth * (land ? 0.98f : 0.98f));
+        ViewGroup.LayoutParams params = diagnosticsPanel.getLayoutParams();
         if (params != null && params.width != width) {
             params.width = width;
-            diagnostics.setLayoutParams(params);
+            params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            diagnosticsPanel.setLayoutParams(params);
         }
+        diagnosticsPanel.setPadding(dp(land ? 8 : 5), dp(land ? 7 : 5), dp(land ? 8 : 7), dp(land ? 7 : 5));
         diagnostics.setMaxWidth(width);
-        if (rootHeight > 0) diagnostics.setMaxHeight(rootHeight);
-        diagnostics.setTextScaleX(land ? 0.90f : 0.92f);
+        diagnosticsExtra.setMaxWidth(width);
+        if (rootHeight > 0) {
+            int maxHeight = Math.round(rootHeight * (land ? 0.84f : 1.0f));
+            diagnostics.setMaxHeight(maxHeight);
+            diagnosticsExtra.setMaxHeight(maxHeight);
+        }
+        diagnostics.setTextScaleX(land ? 0.96f : 0.92f);
+        diagnosticsExtra.setTextScaleX(land ? 0.96f : 0.92f);
     }
 
     private float getDiagnosticsSp() {
+        boolean land = isLandscape();
+        float target = land ? 10.2f : 8.0f;
+        return Math.min(miniSp, target);
+    }
+
+    private boolean isLandscape() {
         int rootWidth = root.getWidth() > 0 ? root.getWidth() : App.get().getResources().getDisplayMetrics().widthPixels;
         int rootHeight = root.getHeight() > 0 ? root.getHeight() : App.get().getResources().getDisplayMetrics().heightPixels;
-        boolean land = rootWidth >= rootHeight;
-        float target = land && rootHeight > 0 && rootHeight < 760 ? 7.4f : land ? 8.2f : 8.0f;
-        return Math.min(miniSp, target);
+        return rootWidth >= rootHeight;
     }
 
     private void setMiniProgress(PlayerManager player) {
@@ -253,6 +275,7 @@ public class PlayerOsdController {
         bottomLeft.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         bottomRight.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         diagnostics.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
+        diagnosticsExtra.setTextSize(TypedValue.COMPLEX_UNIT_SP, getDiagnosticsSp());
     }
 
     private void updateSpeed() {
@@ -271,7 +294,7 @@ public class PlayerOsdController {
         lastSpeedText = formatSpeed(lastSpeedKBps);
     }
 
-    private String getDiagnostics(PlayerManager player) {
+    private DiagnosticsText getDiagnostics(PlayerManager player) {
         PlaybackAnalyticsListener.Snapshot snapshot = player.isIjk() ? PlaybackAnalyticsListener.Snapshot.empty() : PlaybackAnalyticsListener.getSnapshot();
         Format video = snapshot.videoFormat() != null ? snapshot.videoFormat() : snapshot.errorFormat() != null ? snapshot.errorFormat() : player.getVideoFormat();
         Format audio = snapshot.audioFormat();
@@ -292,22 +315,24 @@ public class PlayerOsdController {
         String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "增强" + enhance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isIjk() ? "" : "兜底开");
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
         String error = getErrorText(player, snapshot);
-        return join("\n",
+        String main = join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
                 TextUtils.isEmpty(error) ? "" : row("错误", error),
                 row("视频", videoText),
-                row("HEVC硬解", getHevcDecoderText()),
+                row("设备HEVC能力", getHevcDecoderText()),
                 row("音频", audioText),
                 row("网络", network),
                 row("状态", playback),
                 row("播放", playerText),
-                row("来源", summarizeSource(player.getUrl())),
+                row("来源", summarizeSource(player.getUrl())));
+        String extra = join("\n",
                 row("设备", getDeviceText()),
                 row("系统", getSystemText()),
                 row("芯片", getChipText()),
                 row("屏幕", getDisplayText()),
                 row("WebView", getWebViewText()),
                 row("网络环境", getNetworkEnvironmentText()));
+        return new DiagnosticsText(main, extra);
     }
 
     private String getDiagnosis(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot, Format video, AudioTrackState audioTrack) {
@@ -358,13 +383,20 @@ public class PlayerOsdController {
         String size = getSize(format, player);
         String fps = getFrameRate(format);
         String bitrate = getBitrate(format);
-        String codecs = format == null || TextUtils.isEmpty(format.codecs) ? "" : "codecs " + format.codecs;
-        String color = getColor(format);
+        String codec = format == null || TextUtils.isEmpty(format.codecs) ? "codec -" : "codec " + format.codecs;
+        String color = getColor(format).replace("color ", "色彩 ");
         String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
-        String main = join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate);
-        String codec = TextUtils.isEmpty(codecs) ? "" : codecs.replace("codecs ", "codec ");
-        String decode = TextUtils.isEmpty(decoder) ? "" : "dec " + decoder;
-        return join(" / ", main, codec, color, decode, support, videoTrack.supportSummary());
+        String decode = "decoder " + emptyDash(decoder);
+        return join(" / ",
+                "格式 " + emptyDash(getMime(format)),
+                "分辨率 " + emptyDash(size),
+                "帧率 " + emptyDash(fps),
+                "码率 " + emptyDash(bitrate),
+                codec,
+                TextUtils.isEmpty(color) ? "色彩 -" : color,
+                decode,
+                support,
+                videoTrack.supportSummary());
     }
 
     private String summarizeAudio(Format format, AudioTrackState audioTrack, String decoder) {
@@ -688,7 +720,13 @@ public class PlayerOsdController {
                 if (range != null && range.getUpper() > 0) bitrate = "bitrate<=" + formatBitrate(range.getUpper());
             } catch (Throwable ignored) {
             }
-            String text = join(" / ", info.getName(), join(" ", "4K60", yesNo(uhd60), "4K30", yesNo(uhd30), "1440p60", yesNo(qhd60), "1080p60", yesNo(fhd60)), bitrate);
+            String text = join(" / ",
+                    "decoder " + info.getName(),
+                    "4K60=" + yesNo(uhd60),
+                    "4K30=" + yesNo(uhd30),
+                    "1440p60=" + yesNo(qhd60),
+                    "1080p60=" + yesNo(fhd60),
+                    TextUtils.isEmpty(bitrate) ? "" : bitrate.replace("bitrate<=", "码率上限 "));
             return new HevcDecoderSummary(score, text);
         } catch (Throwable ignored) {
             return null;
@@ -791,6 +829,10 @@ public class PlayerOsdController {
         return TextUtils.isEmpty(value) ? "-" : value;
     }
 
+    private int dp(int value) {
+        return Math.round(value * App.get().getResources().getDisplayMetrics().density);
+    }
+
     private String shortText(String value, int max) {
         if (TextUtils.isEmpty(value) || value.length() <= max) return value;
         return value.substring(0, Math.max(0, max - 1)) + "...";
@@ -811,6 +853,13 @@ public class PlayerOsdController {
     }
 
     private record HevcDecoderSummary(int score, String text) {
+    }
+
+    private record DiagnosticsText(String main, String extra) {
+
+        String all() {
+            return TextUtils.isEmpty(extra) ? main : main + "\n" + extra;
+        }
     }
 
     private record AudioTrackState(Format format, int support, boolean selected, int total, int supported) {
