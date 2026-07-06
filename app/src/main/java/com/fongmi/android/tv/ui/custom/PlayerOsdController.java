@@ -262,18 +262,18 @@ public class PlayerOsdController {
         String frameRateMatch = player.isIjk() ? "" : "帧率匹配 开";
         String softTune = getSoftDecodeTuneText(player);
         String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道 " + tunnel, "EXO增强 " + enhance, frameRateMatch, preload, "音频直通 " + passThrough, softTune, player.isIjk() ? "" : "FFmpeg音频兜底 开");
+        String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
+        String device = join(" / ", getDeviceText(), getSystemText());
         String error = getErrorText(player, snapshot);
         return join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
+                row("播放", playerText),
                 row("网络", network),
-                row("缓冲", join(" / ", state, buffer, "重缓冲 " + rebuffer)),
+                row("状态", playback),
                 row("视频", videoText),
                 row("音频", audioText),
-                row("掉帧", String.valueOf(snapshot.droppedFrames())),
-                row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())),
-                row("设备", getDeviceText()),
-                row("系统", getSystemText()),
+                row("设备", device),
                 row("WebView", getWebViewText()),
                 row("屏幕", getDisplayText()),
                 row("网络环境", getNetworkEnvironmentText()),
@@ -332,7 +332,7 @@ public class PlayerOsdController {
         String codecs = format == null || TextUtils.isEmpty(format.codecs) ? "" : "codecs " + format.codecs;
         String color = getColor(format);
         String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
-        return join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate, codecs, color, TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support, videoTrack.supportSummary());
+        return join(" / ", join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate), codecs, color, TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support, videoTrack.supportSummary());
     }
 
     private String summarizeAudio(Format format, AudioTrackState audioTrack, String decoder) {
@@ -341,7 +341,7 @@ public class PlayerOsdController {
             return join(" / ", summarizeAudioFormat(audioTrack.format()), supportText(audioTrack.support()), audioTrack.supportSummary(), audioTrack.selected() ? "已选中" : "未选中");
         }
         String support = audioTrack.hasTracks() && !audioTrack.isHandled() ? supportText(audioTrack.support()) : "";
-        return join(" ", summarizeAudioFormat(format), getBitrate(format), TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support);
+        return join(" / ", join(" ", summarizeAudioFormat(format), getBitrate(format)), TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support);
     }
 
     private String summarizeAudioFormat(Format format) {
