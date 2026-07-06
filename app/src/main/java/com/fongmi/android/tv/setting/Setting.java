@@ -519,14 +519,18 @@ public class Setting {
     public static void putCspWarmup(boolean warmup) {
         if (warmup) {
             Prefers.put("csp_warmup", true);
-            if (Prefers.getInt("csp_warmup_mode", CSP_WARMUP_DEFAULT) == CSP_WARMUP_DISABLED) Prefers.put("csp_warmup_mode", CSP_WARMUP_DEFAULT);
+            if (getCspWarmupSelectedMode() == CSP_WARMUP_DISABLED) Prefers.put("csp_warmup_mode", CSP_WARMUP_DEFAULT);
         } else {
-            putCspWarmupMode(CSP_WARMUP_DISABLED);
+            Prefers.put("csp_warmup", false);
         }
     }
 
     public static int getCspWarmupMode() {
         if (!Prefers.getBoolean("csp_warmup")) return CSP_WARMUP_DISABLED;
+        return getCspWarmupSelectedMode();
+    }
+
+    public static int getCspWarmupSelectedMode() {
         int mode = Prefers.getInt("csp_warmup_mode", CSP_WARMUP_DEFAULT);
         return mode == CSP_WARMUP_CUSTOM ? CSP_WARMUP_CUSTOM : CSP_WARMUP_DEFAULT;
     }
@@ -534,7 +538,6 @@ public class Setting {
     public static void putCspWarmupMode(int mode) {
         if (mode == CSP_WARMUP_DISABLED) {
             Prefers.put("csp_warmup", false);
-            Prefers.put("csp_warmup_mode", CSP_WARMUP_DISABLED);
         } else {
             Prefers.put("csp_warmup", true);
             Prefers.put("csp_warmup_mode", mode == CSP_WARMUP_CUSTOM ? CSP_WARMUP_CUSTOM : CSP_WARMUP_DEFAULT);
