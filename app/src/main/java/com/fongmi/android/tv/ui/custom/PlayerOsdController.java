@@ -228,13 +228,13 @@ public class PlayerOsdController {
 
     private String getDiagnostics(PlayerManager player) {
         PlaybackAnalyticsListener.Snapshot snapshot = player.isIjk() ? PlaybackAnalyticsListener.Snapshot.empty() : PlaybackAnalyticsListener.getSnapshot();
-        Format video = snapshot.videoFormat() != null ? snapshot.videoFormat() : player.getVideoFormat();
+        Format video = snapshot.videoFormat() != null ? snapshot.videoFormat() : snapshot.errorFormat() != null ? snapshot.errorFormat() : player.getVideoFormat();
         Format audio = snapshot.audioFormat();
         String state = stateText(player.getPlaybackState()) + (player.isLoading() ? " / 正在加载" : "");
         String buffer = join(" / ", formatDuration(player.getBufferedDuration()), player.getBufferedPercentage() > 0 ? player.getBufferedPercentage() + "%" : "");
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
         String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(formatBitrate(snapshot.bandwidthEstimate())), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
-        String videoText = summarizeVideo(video, player, snapshot.videoDecoderName());
+        String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
@@ -275,8 +275,12 @@ public class PlayerOsdController {
 
     private String getErrorText(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot) {
         String raw = join(" ", snapshot.errorCode(), shortText(snapshot.errorMessage(), 72));
+        String decoder = TextUtils.isEmpty(snapshot.errorDecoderName()) ? "" : "decoder " + snapshot.errorDecoderName();
+        String diagnostic = TextUtils.isEmpty(snapshot.errorDiagnosticInfo()) ? "" : "diagnostic " + snapshot.errorDiagnosticInfo();
+        String secure = snapshot.errorSecureDecoderRequired() ? "secure required" : "";
+        String cause = TextUtils.isEmpty(snapshot.errorCause()) ? "" : "cause " + shortText(snapshot.errorCause(), 72);
         String explanation = getErrorExplanation(player, snapshot);
-        return join(" / ", raw, explanation);
+        return join(" / ", raw, decoder, diagnostic, secure, cause, explanation);
     }
 
     private String getErrorExplanation(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot) {
@@ -290,11 +294,15 @@ public class PlayerOsdController {
         return "ERROR_CODE_DECODER_INIT_FAILED".equals(code) || "ERROR_CODE_DECODER_QUERY_FAILED".equals(code) || "ERROR_CODE_DECODING_FAILED".equals(code);
     }
 
-    private String summarizeVideo(Format format, PlayerManager player, String decoder) {
+    private String summarizeVideo(Format format, PlayerManager player, String decoder, VideoTrackState videoTrack) {
+        if (format == null && videoTrack.hasTracks()) format = videoTrack.format();
         String size = getSize(format, player);
         String fps = getFrameRate(format);
         String bitrate = getBitrate(format);
-        return join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate, TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder);
+        String codecs = format == null || TextUtils.isEmpty(format.codecs) ? "" : "codecs " + format.codecs;
+        String color = getColor(format);
+        String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
+        return join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate, codecs, color, TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support, videoTrack.supportSummary());
     }
 
     private String summarizeAudio(Format format, AudioTrackState audioTrack, String decoder) {
@@ -341,6 +349,36 @@ public class PlayerOsdController {
         return candidate == null ? new AudioTrackState(null, C.FORMAT_UNSUPPORTED_TYPE, false, total, supported) : new AudioTrackState(candidate.format(), candidate.support(), candidate.selected(), total, supported);
     }
 
+    private VideoTrackState getVideoTrackState(PlayerManager player) {
+        if (player == null || player.isIjk()) return VideoTrackState.empty();
+        Tracks tracks = player.getCurrentTracks();
+        if (tracks == null) return VideoTrackState.empty();
+        VideoTrackCandidate selected = null;
+        VideoTrackCandidate handled = null;
+        VideoTrackCandidate exceeds = null;
+        VideoTrackCandidate unsupported = null;
+        VideoTrackCandidate first = null;
+        int total = 0;
+        int supported = 0;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_VIDEO) continue;
+            for (int i = 0; i < group.length; i++) {
+                total++;
+                int support = group.getTrackSupport(i);
+                boolean isSelected = group.isTrackSelected(i);
+                if (support == C.FORMAT_HANDLED || support == C.FORMAT_EXCEEDS_CAPABILITIES) supported++;
+                VideoTrackCandidate candidate = new VideoTrackCandidate(group.getTrackFormat(i), support, isSelected);
+                if (first == null) first = candidate;
+                if (isSelected) selected = candidate;
+                if (handled == null && support == C.FORMAT_HANDLED) handled = candidate;
+                if (exceeds == null && support == C.FORMAT_EXCEEDS_CAPABILITIES) exceeds = candidate;
+                if (unsupported == null && isUnsupportedSupport(support)) unsupported = candidate;
+            }
+        }
+        VideoTrackCandidate candidate = selected != null ? selected : handled != null ? handled : exceeds != null ? exceeds : unsupported != null ? unsupported : first;
+        return candidate == null ? new VideoTrackState(null, C.FORMAT_UNSUPPORTED_TYPE, false, total, supported) : new VideoTrackState(candidate.format(), candidate.support(), candidate.selected(), total, supported);
+    }
+
     private boolean isUnsupportedSupport(int support) {
         return support == C.FORMAT_UNSUPPORTED_TYPE || support == C.FORMAT_UNSUPPORTED_SUBTYPE || support == C.FORMAT_UNSUPPORTED_DRM;
     }
@@ -369,6 +407,12 @@ public class PlayerOsdController {
 
     private String getBitrate(Format format) {
         return format == null ? "" : formatBitrate(format.bitrate);
+    }
+
+    private String getColor(Format format) {
+        if (format == null || format.colorInfo == null) return "";
+        String color = format.colorInfo.toLogString();
+        return TextUtils.isEmpty(color) ? "" : "color " + color;
     }
 
     private long getMediaBitrate(Format video, Format audio) {
@@ -537,6 +581,9 @@ public class PlayerOsdController {
     private record AudioTrackCandidate(Format format, int support, boolean selected) {
     }
 
+    private record VideoTrackCandidate(Format format, int support, boolean selected) {
+    }
+
     private record AudioTrackState(Format format, int support, boolean selected, int total, int supported) {
 
         static AudioTrackState empty() {
@@ -557,6 +604,25 @@ public class PlayerOsdController {
 
         String supportSummary() {
             return total <= 1 ? "" : "音轨 " + supported + "/" + total + " 支持";
+        }
+    }
+
+    private record VideoTrackState(Format format, int support, boolean selected, int total, int supported) {
+
+        static VideoTrackState empty() {
+            return new VideoTrackState(null, C.FORMAT_UNSUPPORTED_TYPE, false, 0, 0);
+        }
+
+        boolean hasTracks() {
+            return total > 0;
+        }
+
+        boolean isHandled() {
+            return support == C.FORMAT_HANDLED;
+        }
+
+        String supportSummary() {
+            return total <= 1 ? "" : "视频轨 " + supported + "/" + total + " 支持";
         }
     }
 }

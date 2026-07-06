@@ -137,8 +137,12 @@ public class ExoUtil {
         return decode == PlayerEngine.HARD ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER;
     }
 
-    private static int getAudioRenderMode(int decode) {
-        return decode == PlayerEngine.HARD ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER;
+    private static int getAudioRenderMode() {
+        return DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON;
+    }
+
+    private static boolean isAudioPrefer(int decode) {
+        return decode != PlayerEngine.SOFT && PlayerSetting.isAudioPrefer();
     }
 
     private static CaptionStyleCompat getCaptionStyle() {
@@ -344,7 +348,7 @@ public class ExoUtil {
     }
 
     private static RenderersFactory buildPlaybackRenderersFactory(int decode) {
-        return buildRenderersFactory(getAudioRenderMode(decode), getVideoRenderMode(decode), PlayerSetting.isAudioPrefer(), PlayerSetting.isVideoPrefer());
+        return buildRenderersFactory(getAudioRenderMode(), getVideoRenderMode(decode), isAudioPrefer(decode), PlayerSetting.isVideoPrefer());
     }
 
     static RenderersFactory buildRenderersFactory() {
