@@ -7,14 +7,20 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.text.SpannableStringBuilder;
 import android.text.Editable;
+import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 
@@ -66,6 +72,15 @@ public final class CodecCapabilityDialog {
         LinearLayout root = new LinearLayout(activity);
         root.setOrientation(LinearLayout.VERTICAL);
 
+        MaterialTextView note = new MaterialTextView(activity);
+        note.setText("视频只列硬件 decoder；音频列系统 decoder，包含平台软件 decoder。当前媒体页会按轨道逐条判断。");
+        note.setTextColor(Color.parseColor("#5F6368"));
+        note.setTextSize(12);
+        note.setLineSpacing(0, 1.12f);
+        LinearLayout.LayoutParams noteParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        noteParams.bottomMargin = ResUtil.dp2px(10);
+        root.addView(note, noteParams);
+
         search = new EditText(activity);
         search.setSingleLine(true);
         search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
@@ -94,8 +109,8 @@ public final class CodecCapabilityDialog {
         LinearLayout tabs = new LinearLayout(activity);
         tabs.setGravity(Gravity.CENTER_VERTICAL);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(38));
-        tabParams.topMargin = ResUtil.dp2px(10);
+        LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(36));
+        tabParams.topMargin = ResUtil.dp2px(9);
         root.addView(tabs, tabParams);
 
         current = tab(R.string.codec_capability_current, v -> setMode(MODE_CURRENT));
@@ -107,20 +122,25 @@ public final class CodecCapabilityDialog {
         tabs.addView(video);
         tabs.addView(audio);
 
+        FrameLayout report = new FrameLayout(activity);
+        report.setBackground(reportBackground());
+        report.setPadding(ResUtil.dp2px(2), ResUtil.dp2px(2), ResUtil.dp2px(2), ResUtil.dp2px(2));
+        LinearLayout.LayoutParams reportParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, getReportHeight());
+        reportParams.topMargin = ResUtil.dp2px(10);
+        root.addView(report, reportParams);
+
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
         content = new MaterialTextView(activity);
         content.setTextColor(Color.parseColor("#202124"));
-        content.setTextSize(13);
-        content.setLineSpacing(0, 1.08f);
+        content.setTextSize(12);
+        content.setLineSpacing(ResUtil.dp2px(2), 1.0f);
         content.setTypeface(Typeface.MONOSPACE);
         content.setTextIsSelectable(true);
-        content.setPadding(ResUtil.dp2px(10), ResUtil.dp2px(10), ResUtil.dp2px(10), ResUtil.dp2px(10));
+        content.setPadding(ResUtil.dp2px(12), ResUtil.dp2px(12), ResUtil.dp2px(12), ResUtil.dp2px(12));
         scroll.addView(content, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(Util.isLeanback() ? 430 : 360));
-        scrollParams.topMargin = ResUtil.dp2px(10);
-        root.addView(scroll, scrollParams);
+        report.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return root;
     }
 
@@ -147,11 +167,25 @@ public final class CodecCapabilityDialog {
         return button;
     }
 
+    private int getReportHeight() {
+        int screen = ResUtil.getScreenHeight(activity);
+        if (Util.isLeanback()) return Math.min(ResUtil.dp2px(430), Math.round(screen * 0.58f));
+        return Math.min(ResUtil.dp2px(330), Math.round(screen * (ResUtil.isLand(activity) ? 0.44f : 0.36f)));
+    }
+
     private GradientDrawable searchBackground() {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(Color.parseColor("#F8F9FA"));
         drawable.setCornerRadius(ResUtil.dp2px(6));
         drawable.setStroke(ResUtil.dp2px(1), Color.parseColor("#DADCE0"));
+        return drawable;
+    }
+
+    private GradientDrawable reportBackground() {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(Color.parseColor("#F8F9FA"));
+        drawable.setCornerRadius(ResUtil.dp2px(8));
+        drawable.setStroke(ResUtil.dp2px(1), Color.parseColor("#E0E3E7"));
         return drawable;
     }
 
@@ -167,7 +201,25 @@ public final class CodecCapabilityDialog {
         setSelected(video, mode == CodecCapabilityInspector.TYPE_VIDEO);
         setSelected(audio, mode == CodecCapabilityInspector.TYPE_AUDIO);
         String keyword = search == null || search.getText() == null ? "" : search.getText().toString();
-        content.setText(mode == MODE_CURRENT ? CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword) : CodecCapabilityInspector.buildDeviceReport(keyword, mode));
+        if (mode == MODE_CURRENT) content.setText(highlightSelectedTracks(CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword)));
+        else content.setText(CodecCapabilityInspector.buildDeviceReport(keyword, mode));
+    }
+
+    private SpannableStringBuilder highlightSelectedTracks(String text) {
+        SpannableStringBuilder builder = new SpannableStringBuilder(text);
+        String marker = " / 已选中";
+        int index = text.indexOf(marker);
+        while (index >= 0) {
+            int start = text.lastIndexOf("\n\n", index);
+            start = start < 0 ? 0 : start + 2;
+            int end = text.indexOf("\n\n", index);
+            end = end < 0 ? text.length() : end;
+            builder.setSpan(new BackgroundColorSpan(Color.parseColor("#E8F0FE")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            builder.setSpan(new ForegroundColorSpan(Color.parseColor("#174EA6")), start, Math.min(end, index + marker.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            builder.setSpan(new StyleSpan(Typeface.BOLD), start, Math.min(end, index + marker.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            index = text.indexOf(marker, end);
+        }
+        return builder;
     }
 
     private void setSelected(@NonNull MaterialButton button, boolean selected) {

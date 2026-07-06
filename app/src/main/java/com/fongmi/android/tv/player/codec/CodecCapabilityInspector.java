@@ -49,10 +49,11 @@ public final class CodecCapabilityInspector {
             builder.append(entry.text);
         }
         if (matched == 0) {
-            if (total == 0) return "未发现匹配类型的硬件解码器";
-            return TextUtils.isEmpty(query) ? "未发现硬件解码能力" : "没有匹配关键词的硬解能力";
+            if (total == 0) return type == TYPE_AUDIO ? "未发现系统音频解码器" : "未发现匹配类型的硬件解码器";
+            return TextUtils.isEmpty(query) ? "未发现解码能力" : "没有匹配关键词的解码能力";
         }
-        return "硬件解码器 " + matched + "/" + total + "\n\n" + builder;
+        String title = type == TYPE_AUDIO ? "系统音频解码器 " : type == TYPE_VIDEO ? "硬件视频解码器 " : "解码器 ";
+        return title + matched + "/" + total + "\n\n" + builder;
     }
 
     public static String buildCurrentMediaReport(Context context, PlayerManager player, String keyword) {
@@ -90,7 +91,7 @@ public final class CodecCapabilityInspector {
         List<CodecEntry> entries = new ArrayList<>();
         try {
             for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
-                if (info.isEncoder() || !isHardwareCodec(info)) continue;
+                if (info.isEncoder()) continue;
                 for (String mime : info.getSupportedTypes()) {
                     CodecEntry entry = buildEntry(info, mime);
                     if (entry != null) entries.add(entry);
@@ -108,6 +109,7 @@ public final class CodecCapabilityInspector {
             boolean video = mime != null && mime.startsWith("video/");
             boolean audio = mime != null && mime.startsWith("audio/");
             if (!video && !audio) return null;
+            if (video && !isHardwareCodec(info)) return null;
             String text = video ? videoEntry(info, mime, caps) : audioEntry(info, mime, caps);
             return new CodecEntry(video ? TYPE_VIDEO : TYPE_AUDIO, video ? "视频" : "音频", info.getName(), mime, text, normalize(text));
         } catch (Throwable ignored) {
@@ -141,7 +143,7 @@ public final class CodecCapabilityInspector {
 
     private static String audioEntry(MediaCodecInfo info, String mime, MediaCodecInfo.CodecCapabilities caps) {
         StringBuilder builder = new StringBuilder();
-        builder.append("音频 ").append(mime).append("\n");
+        builder.append("音频 ").append(mime).append(" / ").append(codecClass(info)).append("\n");
         builder.append("decoder ").append(info.getName()).append("\n");
         try {
             MediaCodecInfo.AudioCapabilities audio = caps.getAudioCapabilities();
@@ -162,18 +164,19 @@ public final class CodecCapabilityInspector {
         builder.append(selected ? " / 已选中" : " / 未选中").append("\n");
         builder.append("格式 ").append(type == C.TRACK_TYPE_VIDEO ? videoFormat(format) : audioFormat(format)).append("\n");
         builder.append("Media3轨道状态 ").append(supportText(support)).append("\n");
-        builder.append("硬解查询 ").append(formatSupport(context, format));
+        builder.append(type == C.TRACK_TYPE_VIDEO ? "硬解查询 " : "音频解码 ").append(formatSupport(context, format));
         return builder.toString();
     }
 
     private static String formatSupport(Context context, Format format) {
         String mime = getSampleMimeType(format);
         if (TextUtils.isEmpty(mime)) return "无法识别 MIME，codecs=" + empty(format == null ? null : format.codecs);
+        boolean audio = mime.startsWith("audio/");
         List<String> supported = new ArrayList<>();
         List<String> candidates = new ArrayList<>();
         try {
             for (androidx.media3.exoplayer.mediacodec.MediaCodecInfo info : MediaCodecSelector.DEFAULT.getDecoderInfos(mime, false, false)) {
-                if (!info.hardwareAccelerated) continue;
+                if (!audio && !info.hardwareAccelerated) continue;
                 candidates.add(info.name);
                 if (info.isFormatSupported(context, format)) supported.add(info.name);
             }
@@ -182,9 +185,9 @@ public final class CodecCapabilityInspector {
         } catch (Throwable e) {
             return "查询失败 " + e.getClass().getSimpleName();
         }
-        if (!supported.isEmpty()) return "当前规格可硬解 / " + TextUtils.join(", ", supported);
-        if (!candidates.isEmpty()) return "有硬解器支持该 MIME，但当前规格未声明可硬解 / 候选 " + TextUtils.join(", ", candidates);
-        return "没有该 MIME 的硬件 decoder";
+        if (!supported.isEmpty()) return audio ? "当前音频可由系统解码 / " + TextUtils.join(", ", supported) : "当前规格可硬解 / " + TextUtils.join(", ", supported);
+        if (!candidates.isEmpty()) return audio ? "有系统音频 decoder，但当前规格未声明支持 / 候选 " + TextUtils.join(", ", candidates) : "有硬解器支持该 MIME，但当前规格未声明可硬解 / 候选 " + TextUtils.join(", ", candidates);
+        return audio ? "没有该 MIME 的系统音频 decoder" : "没有该 MIME 的硬件 video decoder";
     }
 
     private static String videoFormat(Format format) {
@@ -237,6 +240,14 @@ public final class CodecCapabilityInspector {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return info.isHardwareAccelerated();
         String name = info.getName().toLowerCase(Locale.US);
         return !name.contains("google") && !name.contains("android") && !name.contains("ffmpeg") && !name.contains("software") && !name.startsWith("c2.android");
+    }
+
+    private static String codecClass(MediaCodecInfo info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (info.isHardwareAccelerated()) return "硬件";
+            if (info.isSoftwareOnly()) return "平台软件";
+        }
+        return isHardwareCodec(info) ? "硬件" : "系统";
     }
 
     private static boolean matchesType(CodecEntry entry, int type) {

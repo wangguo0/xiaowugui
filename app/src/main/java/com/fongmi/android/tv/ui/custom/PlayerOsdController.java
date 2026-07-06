@@ -15,6 +15,7 @@ import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Display;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.widget.TextView;
 
@@ -201,8 +202,23 @@ public class PlayerOsdController {
             return;
         }
         String text = getDiagnostics(player);
+        updateDiagnosticsWidth();
         diagnostics.setText(text);
         diagnostics.setVisibility(TextUtils.isEmpty(text) ? View.GONE : View.VISIBLE);
+    }
+
+    private void updateDiagnosticsWidth() {
+        int rootWidth = root.getWidth() > 0 ? root.getWidth() : App.get().getResources().getDisplayMetrics().widthPixels;
+        int rootHeight = root.getHeight() > 0 ? root.getHeight() : App.get().getResources().getDisplayMetrics().heightPixels;
+        if (rootWidth <= 0) return;
+        boolean land = rootWidth >= rootHeight;
+        int width = Math.round(rootWidth * (land ? 0.60f : 0.94f));
+        ViewGroup.LayoutParams params = diagnostics.getLayoutParams();
+        if (params != null && params.width != width) {
+            params.width = width;
+            diagnostics.setLayoutParams(params);
+        }
+        diagnostics.setMaxWidth(width);
     }
 
     private void setMiniProgress(PlayerManager player) {
@@ -261,19 +277,21 @@ public class PlayerOsdController {
         String preload = "预载 " + switchText(PreloadSetting.isPreload());
         String frameRateMatch = player.isIjk() ? "" : "帧率匹配 开";
         String softTune = getSoftDecodeTuneText(player);
-        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道 " + tunnel, "EXO增强 " + enhance, frameRateMatch, preload, "音频直通 " + passThrough, softTune, player.isIjk() ? "" : "FFmpeg音频兜底 开");
+        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "增强" + enhance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isIjk() ? "" : "音频兜底 开");
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
-        String device = join(" / ", getDeviceText(), getSystemText());
         String error = getErrorText(player, snapshot);
         return join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
                 row("播放", playerText),
                 row("网络", network),
                 row("状态", playback),
+                gap(),
                 row("视频", videoText),
                 row("音频", audioText),
                 row("来源", summarizeSource(player.getUrl())),
-                row("设备", device),
+                gap(),
+                row("设备", getDeviceText()),
+                row("系统", getSystemText()),
                 row("WebView", getWebViewText()),
                 row("屏幕", getDisplayText()),
                 row("网络环境", getNetworkEnvironmentText()),
@@ -332,7 +350,10 @@ public class PlayerOsdController {
         String codecs = format == null || TextUtils.isEmpty(format.codecs) ? "" : "codecs " + format.codecs;
         String color = getColor(format);
         String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
-        return join(" / ", join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate), codecs, color, TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support, videoTrack.supportSummary());
+        String main = join(" ", getMime(format), size, TextUtils.isEmpty(fps) ? "" : "@" + fps, bitrate);
+        String meta = join(" / ", codecs, color);
+        String decode = join(" / ", TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support, videoTrack.supportSummary());
+        return join("\n" + indent(), main, meta, decode);
     }
 
     private String summarizeAudio(Format format, AudioTrackState audioTrack, String decoder) {
@@ -341,7 +362,7 @@ public class PlayerOsdController {
             return join(" / ", summarizeAudioFormat(audioTrack.format()), supportText(audioTrack.support()), audioTrack.supportSummary(), audioTrack.selected() ? "已选中" : "未选中");
         }
         String support = audioTrack.hasTracks() && !audioTrack.isHandled() ? supportText(audioTrack.support()) : "";
-        return join(" / ", join(" ", summarizeAudioFormat(format), getBitrate(format)), TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support);
+        return join("\n" + indent(), join(" ", summarizeAudioFormat(format), getBitrate(format)), join(" / ", TextUtils.isEmpty(decoder) ? "" : "decoder " + decoder, support));
     }
 
     private String summarizeAudioFormat(Format format) {
@@ -442,7 +463,9 @@ public class PlayerOsdController {
     private String getColor(Format format) {
         if (format == null || format.colorInfo == null) return "";
         String color = format.colorInfo.toLogString();
-        return TextUtils.isEmpty(color) ? "" : "color " + color;
+        if (TextUtils.isEmpty(color)) return "";
+        color = color.replace("Limited range", "Limited").replace("Full range", "Full").replace("SMPTE 170M", "SMPTE170M");
+        return "color " + color;
     }
 
     private long getMediaBitrate(Format video, Format audio) {
@@ -567,13 +590,14 @@ public class PlayerOsdController {
             Display.Mode[] modes = display.getSupportedModes();
             if (modes == null || modes.length <= 1) return "";
             StringBuilder builder = new StringBuilder("modes ");
-            int count = Math.min(4, modes.length);
-            for (int i = 0; i < count; i++) {
-                if (i > 0) builder.append(",");
-                Display.Mode mode = modes[i];
-                builder.append(Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight())).append("x").append(Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight())).append("@").append(refreshFormat.format(mode.getRefreshRate()));
+            int count = 0;
+            for (Display.Mode mode : modes) {
+                String hz = refreshFormat.format(mode.getRefreshRate());
+                if (builder.toString().contains(hz + "Hz")) continue;
+                if (count++ > 0) builder.append("/");
+                builder.append(hz).append("Hz");
+                if (count >= 6) break;
             }
-            if (modes.length > count) builder.append("...");
             return builder.toString();
         } catch (Throwable ignored) {
             return "";
@@ -741,6 +765,14 @@ public class PlayerOsdController {
 
     private String row(String label, String value) {
         return label + "  " + (TextUtils.isEmpty(value) ? "-" : value);
+    }
+
+    private String indent() {
+        return "      ";
+    }
+
+    private String gap() {
+        return " ";
     }
 
     private String switchText(boolean enabled) {
