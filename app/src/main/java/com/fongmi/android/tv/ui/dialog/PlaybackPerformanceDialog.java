@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Dialog;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
@@ -118,8 +119,21 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         button.setInsetBottom(0);
         button.setFocusable(true);
         button.setFocusableInTouchMode(Util.isLeanback());
+        button.setCornerRadius(dp(6));
+        button.setTextColor(ColorStateList.valueOf(Color.parseColor("#174EA6")));
+        button.setBackgroundTintList(ColorStateList.valueOf(Color.WHITE));
+        button.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#8AB4F8")));
+        button.setStrokeWidth(dp(1));
+        button.setOnFocusChangeListener((view, hasFocus) -> styleAction(button, hasFocus));
         button.setOnClickListener(listener);
         return button;
+    }
+
+    private void styleAction(MaterialButton button, boolean focused) {
+        button.setTextColor(ColorStateList.valueOf(Color.parseColor(focused ? "#FFFFFF" : "#174EA6")));
+        button.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor(focused ? "#1A73E8" : "#FFFFFF")));
+        button.setStrokeColor(ColorStateList.valueOf(Color.parseColor(focused ? "#1A73E8" : "#8AB4F8")));
+        button.setStrokeWidth(dp(1));
     }
 
     private LinearLayout.LayoutParams actionParams(boolean first) {
@@ -257,18 +271,29 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         button.setInsetBottom(0);
         button.setText(label + "    " + value);
         button.setTextSize(14);
-        button.setTextColor(Color.parseColor("#202124"));
-        button.setBackgroundColor(Color.WHITE);
+        button.setTextColor(ColorStateList.valueOf(Color.parseColor("#202124")));
+        button.setBackgroundTintList(ColorStateList.valueOf(Color.WHITE));
         button.setCornerRadius(dp(6));
-        button.setStrokeColorResource(R.color.dialog_outlined_button_stroke);
+        button.setStrokeColor(ColorStateList.valueOf(Color.parseColor("#C4C7C5")));
         button.setStrokeWidth(dp(1));
         button.setFocusable(true);
         button.setFocusableInTouchMode(Util.isLeanback());
         button.setEnabled(action != null);
+        button.setOnFocusChangeListener((view, hasFocus) -> styleRow(button, action != null, hasFocus));
         if (action != null) button.setOnClickListener(view -> action.run());
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         params.bottomMargin = dp(7);
         list.addView(button, params);
+    }
+
+    private void styleRow(MaterialButton button, boolean enabled, boolean focused) {
+        int text = focused ? Color.WHITE : enabled ? Color.parseColor("#202124") : Color.parseColor("#5F6368");
+        int bg = focused ? Color.parseColor("#1A73E8") : Color.WHITE;
+        int stroke = focused ? Color.parseColor("#1A73E8") : Color.parseColor("#C4C7C5");
+        button.setTextColor(ColorStateList.valueOf(text));
+        button.setBackgroundTintList(ColorStateList.valueOf(bg));
+        button.setStrokeColor(ColorStateList.valueOf(stroke));
+        button.setStrokeWidth(dp(focused ? 2 : 1));
     }
 
     private void toggleRender() {

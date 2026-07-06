@@ -4,6 +4,7 @@ import android.app.Dialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -12,6 +13,7 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -45,6 +47,7 @@ public final class CodecCapabilityDialog {
     private MaterialButton video;
     private MaterialButton audio;
     private EditText search;
+    private ScrollView scroll;
     private Dialog dialog;
     private String reportText = "";
     private int mode = MODE_CURRENT;
@@ -70,7 +73,7 @@ public final class CodecCapabilityDialog {
         root.setOrientation(LinearLayout.VERTICAL);
 
         MaterialTextView note = new MaterialTextView(activity);
-        note.setText("芯片 " + chipText() + "\n视频只列硬件 decoder；音频列系统 decoder，包含平台软件 decoder。当前媒体页显示轨道选中状态；视频/音频页高亮表示该 decoder 可解当前轨道。");
+        note.setText("芯片 " + chipText());
         note.setTextColor(Color.parseColor("#5F6368"));
         note.setTextSize(12);
         note.setLineSpacing(0, 1.12f);
@@ -126,12 +129,16 @@ public final class CodecCapabilityDialog {
         reportParams.topMargin = ResUtil.dp2px(10);
         root.addView(report, reportParams);
 
-        ScrollView scroll = new ScrollView(activity);
+        scroll = new ScrollView(activity);
         scroll.setFillViewport(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scroll.setFocusable(true);
+        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        scroll.setOnKeyListener((view, keyCode, event) -> onScrollKey(keyCode, event));
         list = new LinearLayout(activity);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8), ResUtil.dp2px(8));
+        list.setOnKeyListener((view, keyCode, event) -> onScrollKey(keyCode, event));
         scroll.addView(list, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         report.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return root;
@@ -254,6 +261,7 @@ public final class CodecCapabilityDialog {
         item.setTextSize(Util.isLeanback() ? 14 : 12);
         item.setTypeface(Typeface.MONOSPACE);
         item.setSingleLine(false);
+        item.setMaxLines(Integer.MAX_VALUE);
         item.setMinWidth(0);
         item.setMinimumWidth(0);
         item.setMinHeight(ResUtil.dp2px(Util.isLeanback() ? 72 : 58));
@@ -264,6 +272,7 @@ public final class CodecCapabilityDialog {
         item.setFocusable(true);
         item.setFocusableInTouchMode(Util.isLeanback());
         item.setOnFocusChangeListener((view, hasFocus) -> styleItem(item, selected, matched, hasFocus));
+        item.setOnKeyListener((view, keyCode, event) -> onScrollKey(keyCode, event));
         item.setOnClickListener(view -> copyText(text));
         styleItem(item, selected, matched, false);
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -283,10 +292,28 @@ public final class CodecCapabilityDialog {
         int textColor = focused || selected ? Color.parseColor("#174EA6") : matched ? Color.parseColor("#5F4211") : Color.parseColor("#202124");
         int bgColor = focused ? Color.parseColor("#E8F0FE") : selected ? Color.parseColor("#D2E3FC") : matched ? Color.parseColor("#FFF7D6") : Color.WHITE;
         int strokeColor = focused || selected ? Color.parseColor("#1A73E8") : matched ? Color.parseColor("#E0B429") : Color.parseColor("#DADCE0");
-        item.setTextColor(textColor);
-        item.setBackgroundTintList(android.content.res.ColorStateList.valueOf(bgColor));
-        item.setStrokeColor(android.content.res.ColorStateList.valueOf(strokeColor));
+        item.setTextColor(ColorStateList.valueOf(textColor));
+        item.setBackgroundTintList(ColorStateList.valueOf(bgColor));
+        item.setStrokeColor(ColorStateList.valueOf(strokeColor));
         item.setStrokeWidth(ResUtil.dp2px(focused || selected ? 2 : 1));
+    }
+
+    private boolean onScrollKey(int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN || scroll == null) return false;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            scroll.smoothScrollBy(0, ResUtil.dp2px(72));
+            return false;
+        } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            scroll.smoothScrollBy(0, -ResUtil.dp2px(72));
+            return false;
+        } else if (keyCode == KeyEvent.KEYCODE_PAGE_DOWN) {
+            scroll.smoothScrollBy(0, scroll.getHeight());
+            return true;
+        } else if (keyCode == KeyEvent.KEYCODE_PAGE_UP) {
+            scroll.smoothScrollBy(0, -scroll.getHeight());
+            return true;
+        }
+        return false;
     }
 
     private void setSelected(@NonNull MaterialButton button, boolean selected) {
