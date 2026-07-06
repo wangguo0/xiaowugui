@@ -63,7 +63,7 @@ public final class CodecCapabilityDialog {
 
     private void show() {
         dialog = LightDialog.create(activity, activity.getString(R.string.codec_capability_title), createContent(), activity.getString(R.string.codec_capability_copy), v -> copy(), activity.getString(R.string.dialog_negative), null);
-        update();
+        update(true);
         dialog.show();
         applySize();
     }
@@ -97,7 +97,7 @@ public final class CodecCapabilityDialog {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                update();
+                update(true);
             }
 
             @Override
@@ -212,10 +212,14 @@ public final class CodecCapabilityDialog {
 
     private void setMode(int mode) {
         this.mode = mode;
-        update();
+        update(true);
     }
 
     private void update() {
+        update(false);
+    }
+
+    private void update(boolean resetPosition) {
         if (list == null) return;
         setSelected(current, mode == MODE_CURRENT);
         setSelected(all, mode == CodecCapabilityInspector.TYPE_ALL);
@@ -224,6 +228,7 @@ public final class CodecCapabilityDialog {
         String keyword = search == null || search.getText() == null ? "" : search.getText().toString();
         reportText = mode == MODE_CURRENT ? CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword) : CodecCapabilityInspector.buildDeviceReport(activity, player, keyword, mode);
         renderReport(reportText);
+        if (resetPosition) resetScrollAndFocus();
     }
 
     private void renderReport(String text) {
@@ -239,6 +244,25 @@ public final class CodecCapabilityDialog {
             if (i == 0 && blocks.length > 1 && !block.contains("\n")) addHeader(block);
             else addItem(block, isSelectedBlock(block), isMatchedBlock(block));
         }
+    }
+
+    private void resetScrollAndFocus() {
+        if (scroll == null || list == null) return;
+        scroll.post(() -> {
+            scroll.scrollTo(0, 0);
+            if (!Util.isLeanback()) return;
+            View first = firstFocusableItem();
+            if (first != null) first.requestFocus();
+            else scroll.requestFocus();
+        });
+    }
+
+    private View firstFocusableItem() {
+        for (int i = 0; i < list.getChildCount(); i++) {
+            View child = list.getChildAt(i);
+            if (child.isFocusable()) return child;
+        }
+        return null;
     }
 
     private void addHeader(String text) {
