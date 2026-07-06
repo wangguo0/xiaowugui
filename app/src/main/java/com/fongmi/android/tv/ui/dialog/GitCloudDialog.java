@@ -2128,6 +2128,7 @@ public class GitCloudDialog extends BaseAlertDialog {
         edit.setMinLines(minLines);
         edit.setMaxLines(maxLines);
         edit.setGravity(Gravity.TOP | Gravity.START);
+        edit.setPaddingRelative(dp(14), dp(18), dp(20), dp(20));
         edit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         edit.setOverScrollMode(View.OVER_SCROLL_NEVER);
         edit.setOnTouchListener((view, event) -> {
