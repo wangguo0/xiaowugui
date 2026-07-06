@@ -427,7 +427,7 @@ public class ExoUtil {
             super.buildAudioRenderers(context, audioRenderMode, mediaCodecSelector, enableDecoderFallback, audioSink, eventHandler, eventListener, out);
             if (audioRenderMode == EXTENSION_RENDERER_MODE_OFF) return;
             try {
-                out.add(getExtensionRendererIndex(audioRenderMode, audioPrefer, out), new CompatFfmpegAudioRenderer(eventHandler, eventListener, audioSink));
+                out.add(getExtensionRendererIndex(audioRenderMode, audioPrefer, out), new CompatFfmpegAudioRenderer(context, eventHandler, eventListener, audioSink, softVideoTune));
             } catch (Throwable ignored) {
             }
         }

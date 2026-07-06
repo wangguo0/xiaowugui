@@ -1,10 +1,21 @@
 package com.fongmi.android.tv.ui.custom;
 
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.net.TrafficStats;
+import android.os.Build;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.view.Display;
 import android.view.View;
+import android.webkit.WebView;
 import android.widget.TextView;
 
 import androidx.media3.common.C;
@@ -17,6 +28,7 @@ import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Util;
 
 import java.text.DecimalFormat;
@@ -34,6 +46,10 @@ public class PlayerOsdController {
 
     private static final DecimalFormat SPEED_FORMAT = new DecimalFormat("#.0");
     private static final int UID = App.get().getApplicationInfo().uid;
+    private static volatile String cachedDeviceText;
+    private static volatile String cachedSystemText;
+    private static volatile String cachedWebViewText;
+    private static volatile String cachedHevcDecoderText;
 
     private final SimpleDateFormat timeFormat;
     private final TextView topLeft;
@@ -247,7 +263,6 @@ public class PlayerOsdController {
         String softTune = getSoftDecodeTuneText(player);
         String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道 " + tunnel, "EXO增强 " + enhance, frameRateMatch, preload, "音频直通 " + passThrough, softTune, player.isIjk() ? "" : "FFmpeg音频兜底 开");
         String error = getErrorText(player, snapshot);
-        String display = getDisplayRefreshText();
         return join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
                 row("网络", network),
@@ -257,12 +272,17 @@ public class PlayerOsdController {
                 row("掉帧", String.valueOf(snapshot.droppedFrames())),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())),
-                row("屏幕", TextUtils.isEmpty(display) ? "-" : display),
+                row("设备", getDeviceText()),
+                row("系统", getSystemText()),
+                row("WebView", getWebViewText()),
+                row("屏幕", getDisplayText()),
+                row("网络环境", getNetworkEnvironmentText()),
+                row("HEVC硬解", getHevcDecoderText()),
                 TextUtils.isEmpty(error) ? "" : row("错误", error));
     }
 
     private String getDiagnosis(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot, Format video, AudioTrackState audioTrack) {
-        if (isDecodeError(snapshot) && player.isHardDecode()) return "硬件解码失败：设备可能不支持该视频编码、分辨率、帧率或规格；已禁止自动软解，可手动切换软解重试";
+        if (isDecodeError(snapshot) && player.isHardDecode()) return "硬件解码失败：设备可能不支持该视频编码、分辨率、帧率或规格";
         if (!TextUtils.isEmpty(snapshot.errorCode())) return "播放器报错，先看错误行";
         if (audioTrack.hasTracks() && audioTrack.isUnsupported()) return "音频轨不支持：" + summarizeAudioFormat(audioTrack.format()) + " / " + supportText(audioTrack.support());
         if (audioTrack.hasTracks() && !audioTrack.selected() && snapshot.audioFormat() == null && player.getPlaybackState() == androidx.media3.common.Player.STATE_READY) return "已发现音轨但未选中，可能无声";
@@ -288,7 +308,7 @@ public class PlayerOsdController {
     }
 
     private String getErrorExplanation(PlayerManager player, PlaybackAnalyticsListener.Snapshot snapshot) {
-        if (isDecodeError(snapshot) && player.isHardDecode()) return "中文说明：硬解失败，设备硬件解码器可能不支持当前视频规格；不会自动切软解";
+        if (isDecodeError(snapshot) && player.isHardDecode()) return "中文说明：硬解失败，设备硬件解码器可能不支持当前视频规格";
         if (isDecodeError(snapshot)) return "中文说明：软解/解码流程失败，请尝试切回硬解或更换资源";
         return "";
     }
@@ -497,6 +517,162 @@ public class PlayerOsdController {
         return refreshFormat.format(root.getDisplay().getRefreshRate()) + " Hz";
     }
 
+    private String getDeviceText() {
+        String value = cachedDeviceText;
+        if (value != null) return value;
+        return cachedDeviceText = join(" / ",
+                join(" ", emptyDash(Build.MANUFACTURER), emptyDash(Build.MODEL)),
+                "brand " + emptyDash(Build.BRAND),
+                "device " + emptyDash(Build.DEVICE),
+                "product " + emptyDash(Build.PRODUCT),
+                "abi " + String.join(",", Build.SUPPORTED_ABIS));
+    }
+
+    private String getSystemText() {
+        String value = cachedSystemText;
+        if (value != null) return value;
+        return cachedSystemText = join(" / ",
+                "Android " + emptyDash(Build.VERSION.RELEASE),
+                "SDK " + Build.VERSION.SDK_INT,
+                "incremental " + emptyDash(Build.VERSION.INCREMENTAL));
+    }
+
+    private String getWebViewText() {
+        String value = cachedWebViewText;
+        if (value != null) return value;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return cachedWebViewText = "provider unavailable / SDK " + Build.VERSION.SDK_INT;
+        try {
+            PackageInfo info = WebView.getCurrentWebViewPackage();
+            if (info == null) return cachedWebViewText = "provider unavailable";
+            long code = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
+            return cachedWebViewText = join(" / ", info.packageName, info.versionName, "code " + code);
+        } catch (Throwable e) {
+            return cachedWebViewText = "provider query failed: " + e.getClass().getSimpleName();
+        }
+    }
+
+    private String getDisplayText() {
+        Display display = root.getDisplay();
+        DisplayMetrics metrics = App.get().getResources().getDisplayMetrics();
+        String appSize = metrics.widthPixels > 0 && metrics.heightPixels > 0 ? "app " + metrics.widthPixels + "x" + metrics.heightPixels : "";
+        String refresh = getDisplayRefreshText();
+        if (display == null) return join(" / ", appSize, TextUtils.isEmpty(refresh) ? "" : refresh);
+        Display.Mode mode = display.getMode();
+        String modeText = mode == null ? "" : "mode " + Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight()) + "x" + Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight()) + "@" + refreshFormat.format(mode.getRefreshRate()) + "Hz";
+        return join(" / ", appSize, modeText, TextUtils.isEmpty(refresh) ? "" : "current " + refresh, getDisplayModesText(display));
+    }
+
+    private String getDisplayModesText(Display display) {
+        try {
+            Display.Mode[] modes = display.getSupportedModes();
+            if (modes == null || modes.length <= 1) return "";
+            StringBuilder builder = new StringBuilder("modes ");
+            int count = Math.min(4, modes.length);
+            for (int i = 0; i < count; i++) {
+                if (i > 0) builder.append(",");
+                Display.Mode mode = modes[i];
+                builder.append(Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight())).append("x").append(Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight())).append("@").append(refreshFormat.format(mode.getRefreshRate()));
+            }
+            if (modes.length > count) builder.append("...");
+            return builder.toString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    private String getNetworkEnvironmentText() {
+        return join(" / ", getActiveNetworkText(), getSystemProxyText(), getAppProxyText());
+    }
+
+    private String getActiveNetworkText() {
+        try {
+            ConnectivityManager manager = (ConnectivityManager) App.get().getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (manager == null) return "";
+            NetworkCapabilities caps = manager.getNetworkCapabilities(manager.getActiveNetwork());
+            if (caps == null) return "network unavailable";
+            String type = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "WiFi" :
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? "Ethernet" :
+                            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "Cellular" :
+                                    caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ? "VPN" : "Other";
+            String validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? "validated" : "not validated";
+            String metered = manager.isActiveNetworkMetered() ? "metered" : "unmetered";
+            return join(" ", type, validated, metered);
+        } catch (Throwable e) {
+            return "network query failed";
+        }
+    }
+
+    private String getSystemProxyText() {
+        String host = System.getProperty("http.proxyHost");
+        String port = System.getProperty("http.proxyPort");
+        return TextUtils.isEmpty(host) ? "system proxy 关" : "system proxy " + host + (TextUtils.isEmpty(port) ? "" : ":" + port);
+    }
+
+    private String getAppProxyText() {
+        if (!Setting.isShellProxy()) return "app proxy 关";
+        String url = Setting.getShellProxyUrl();
+        return "app proxy 开" + (TextUtils.isEmpty(url) ? "" : " " + shortText(url, 36));
+    }
+
+    private String getHevcDecoderText() {
+        String value = cachedHevcDecoderText;
+        if (value != null) return value;
+        try {
+            HevcDecoderSummary best = null;
+            int count = 0;
+            for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos()) {
+                if (info.isEncoder() || !isHardwareCodec(info)) continue;
+                HevcDecoderSummary summary = summarizeHevcDecoder(info);
+                if (summary == null) continue;
+                count++;
+                if (best == null || summary.score() > best.score()) best = summary;
+            }
+            if (best == null) return cachedHevcDecoderText = "未发现硬件 HEVC decoder";
+            return cachedHevcDecoderText = best.text() + (count > 1 ? " / hardware decoders " + count : "");
+        } catch (Throwable e) {
+            return cachedHevcDecoderText = "query failed: " + e.getClass().getSimpleName();
+        }
+    }
+
+    private HevcDecoderSummary summarizeHevcDecoder(MediaCodecInfo info) {
+        try {
+            MediaCodecInfo.VideoCapabilities caps = info.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_HEVC).getVideoCapabilities();
+            boolean uhd60 = supports(caps, 3840, 2160, 60);
+            boolean uhd30 = supports(caps, 3840, 2160, 30);
+            boolean qhd60 = supports(caps, 2560, 1440, 60);
+            boolean fhd60 = supports(caps, 1920, 1080, 60);
+            int score = (uhd60 ? 8 : 0) + (uhd30 ? 4 : 0) + (qhd60 ? 2 : 0) + (fhd60 ? 1 : 0);
+            String bitrate = "";
+            try {
+                android.util.Range<Integer> range = caps.getBitrateRange();
+                if (range != null && range.getUpper() > 0) bitrate = "bitrate<=" + formatBitrate(range.getUpper());
+            } catch (Throwable ignored) {
+            }
+            String text = join(" / ", info.getName(), "4K60 " + yesNo(uhd60), "4K30 " + yesNo(uhd30), "1440p60 " + yesNo(qhd60), "1080p60 " + yesNo(fhd60), bitrate);
+            return new HevcDecoderSummary(score, text);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private boolean supports(MediaCodecInfo.VideoCapabilities caps, int width, int height, double fps) {
+        try {
+            return caps.areSizeAndRateSupported(width, height, fps) || caps.areSizeAndRateSupported(height, width, fps);
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    private boolean isHardwareCodec(MediaCodecInfo info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return info.isHardwareAccelerated();
+        String name = info.getName().toLowerCase(Locale.US);
+        return !name.contains("google") && !name.contains("android") && !name.contains("ffmpeg") && !name.contains("software") && !name.startsWith("c2.android");
+    }
+
+    private String yesNo(boolean value) {
+        return value ? "是" : "否";
+    }
+
     private String summarizeSource(String url) {
         if (TextUtils.isEmpty(url)) return "";
         try {
@@ -592,6 +768,9 @@ public class PlayerOsdController {
     }
 
     private record VideoTrackCandidate(Format format, int support, boolean selected) {
+    }
+
+    private record HevcDecoderSummary(int score, String text) {
     }
 
     private record AudioTrackState(Format format, int support, boolean selected, int total, int supported) {
