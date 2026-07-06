@@ -241,6 +241,7 @@ public final class ChoiceDialog extends DialogFragment {
         button.setInsetTop(0);
         button.setInsetBottom(0);
         button.setStrokeWidth(dp(1));
+        button.setCornerRadius(dp(6));
         setItemEnabled(button, position);
         button.setText(itemText(position));
         styleItem(button, position);
@@ -366,6 +367,7 @@ public final class ChoiceDialog extends DialogFragment {
         button.setMinHeight(dp(40));
         button.setInsetTop(0);
         button.setInsetBottom(0);
+        button.setCornerRadius(dp(6));
         button.setFocusable(true);
         button.setFocusableInTouchMode(Util.isLeanback());
         button.setTextColor(ContextCompat.getColorStateList(requireContext(), primary ? R.color.dialog_primary_button_text : R.color.dialog_outlined_button_text));
