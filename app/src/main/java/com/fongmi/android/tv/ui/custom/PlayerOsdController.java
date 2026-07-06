@@ -296,7 +296,7 @@ public class PlayerOsdController {
     private String getSoftDecodeTuneText(PlayerManager player) {
         if (player.isHardDecode()) return "";
         if (player.isIjk()) return "软解降负载 IJK跳帧/滤波";
-        return "软解降负载 EXO待接入";
+        return "软解降负载 EXO跳帧/滤波/低分辨";
     }
 
     private boolean isDecodeError(PlaybackAnalyticsListener.Snapshot snapshot) {
