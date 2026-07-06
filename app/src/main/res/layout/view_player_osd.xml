@@ -117,7 +117,7 @@
             android:textScaleX="0.92"
             android:textSize="9sp"
             android:typeface="monospace"
-            tools:text="结论  正常&#10;视频  hevc 3840x2160 @59.940fps 42.0Mbps / codec hvc1 / color BT709 Limited SDR 8/8 / dec c2.mtk.hevc.decoder&#10;HEVC硬解  c2.mtk.hevc.decoder / 4K60 是 / 4K30 是 / 1440p60 是 / 1080p60 是 / bitrate&lt;=160Mbps&#10;音频  eac3 6ch 48kHz 640Kbps / dec c2.android.eac3.decoder&#10;网络  当前 12.8 MB/s / 估算带宽 48.0Mbps / 最近加载 6.2MB / 120 ms&#10;状态  就绪(READY) / 18.2 s / 48% / 重缓冲 0 次 / 掉帧 12&#10;播放  EXO / 硬解 / Surface / 隧道关 / 增强开 / 帧率匹配 开 / 预载开 / 直通开 / 兜底开&#10;来源  hls https://example.com m3u8" />
+            tools:text="结论  正常&#10;视频  hevc 3840x2160 @59.940fps 42.0Mbps / codec hvc1 / color BT709 Limited SDR 8/8 / dec c2.mtk.hevc.decoder&#10;HEVC硬解  c2.mtk.hevc.decoder / 4K60 是 / 4K30 是 / 1440p60 是 / 1080p60 是 / bitrate&lt;=160Mbps&#10;音频  eac3 6ch 48kHz 640Kbps / dec c2.android.eac3.decoder&#10;网络  当前 12.8 MB/s / 估算带宽 48.0Mbps / 最近加载 6.2MB / 120 ms&#10;状态  就绪(READY) / 18.2 s / 48% / 重缓冲 0 次 / 掉帧 12&#10;播放  EXO / 硬解 / Surface / 隧道关 / 性能推荐 / 帧率匹配 开 / 预载开 / 直通开 / 兜底开&#10;来源  hls https://example.com m3u8" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/osdDiagnosticsExtra"

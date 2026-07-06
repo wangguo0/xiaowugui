@@ -48,6 +48,7 @@ import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.track.LangUtil;
+import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -99,13 +100,15 @@ public class ExoUtil {
                 .setRenderersFactory(buildPlaybackRenderersFactory(decode))
                 .setMediaSourceFactory(buildMediaSourceFactory())
                 .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS);
-        if (PlayerSetting.isExoEnhanced()) {
-            builder.setLoadControl(buildEnhancedLoadControl()).setBandwidthMeter(buildEnhancedBandwidthMeter(profile)).experimentalSetDynamicSchedulingEnabled(true);
+        if (PlaybackPerformanceSetting.isHighBufferEnabled()) builder.setLoadControl(buildEnhancedLoadControl());
+        if (PlaybackPerformanceSetting.isBandwidthMeterEnabled()) builder.setBandwidthMeter(buildEnhancedBandwidthMeter(profile));
+        if (PlaybackPerformanceSetting.isDynamicSchedulingEnabled()) {
+            builder.experimentalSetDynamicSchedulingEnabled(true);
         }
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
         player.addAnalyticsListener(new PlaybackAnalyticsListener());
-        if (PlayerSetting.isExoEnhanced()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles));
+        if (PlaybackPerformanceSetting.isAdaptiveDowngradeEnabled()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles));
         if (BuildConfig.DEBUG) player.addAnalyticsListener(new EventLogger());
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);
         player.setHandleAudioBecomingNoisy(true);
@@ -162,7 +165,7 @@ public class ExoUtil {
         if (PlayerSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
-        if (PlayerSetting.isExoEnhanced()) {
+        if (PlaybackPerformanceSetting.isTrackLimitEnabled()) {
             applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode));
         } else {
             builder.setForceHighestSupportedBitrate(true);
@@ -330,10 +333,24 @@ public class ExoUtil {
 
     private static DefaultLoadControl buildEnhancedLoadControl() {
         return new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(ENHANCED_MIN_BUFFER_MS, ENHANCED_MAX_BUFFER_MS, ENHANCED_BUFFER_FOR_PLAYBACK_MS, ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
-                .setTargetBufferBytes(ENHANCED_TARGET_BUFFER_BYTES)
+                .setBufferDurationsMs(getMinBufferMs(), getMaxBufferMs(), ENHANCED_BUFFER_FOR_PLAYBACK_MS, ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
+                .setTargetBufferBytes(getTargetBufferBytes())
+                .setBackBuffer(PlayerSetting.getBackBufferMs(), true)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build();
+    }
+
+    private static int getMinBufferMs() {
+        return Math.min(ENHANCED_MIN_BUFFER_MS, Math.max(15_000, PlayerSetting.getBuffer() * 3_000));
+    }
+
+    private static int getMaxBufferMs() {
+        return Math.max(ENHANCED_MAX_BUFFER_MS / 2, Math.min(ENHANCED_MAX_BUFFER_MS, getMinBufferMs() * 4));
+    }
+
+    private static int getTargetBufferBytes() {
+        int bytes = PlayerSetting.getBufferBytes();
+        return bytes > 0 ? bytes : ENHANCED_TARGET_BUFFER_BYTES;
     }
 
     private static DefaultBandwidthMeter buildEnhancedBandwidthMeter(EnhancedVideoProfile profile) {
@@ -355,7 +372,7 @@ public class ExoUtil {
     }
 
     private static RenderersFactory buildPlaybackRenderersFactory(int decode) {
-        return buildRenderersFactory(getAudioRenderMode(), getVideoRenderMode(decode), isAudioPrefer(decode), PlayerSetting.isVideoPrefer(), decode == PlayerEngine.SOFT);
+        return buildRenderersFactory(getAudioRenderMode(), getVideoRenderMode(decode), isAudioPrefer(decode), PlayerSetting.isVideoPrefer(), decode == PlayerEngine.SOFT && PlaybackPerformanceSetting.isSoftVideoTuneEnabled());
     }
 
     static RenderersFactory buildRenderersFactory() {
@@ -369,12 +386,10 @@ public class ExoUtil {
                 return ExoUtil.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams);
             }
         };
-        if (PlayerSetting.isExoEnhanced()) {
-            factory.forceEnableMediaCodecAsynchronousQueueing();
-            factory.setEnableMediaCodecVideoRendererDurationToProgressUs(true);
-            factory.experimentalSetLateThresholdToDropDecoderInputUs(ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US);
-        }
-        return factory.setEnableDecoderFallback(true).setExtensionRendererMode(Math.max(audioRenderMode, videoRenderMode));
+        if (PlaybackPerformanceSetting.isCodecAsyncQueueingEnabled()) factory.forceEnableMediaCodecAsynchronousQueueing();
+        if (PlaybackPerformanceSetting.isVideoDurationProgressEnabled()) factory.setEnableMediaCodecVideoRendererDurationToProgressUs(true);
+        if (PlaybackPerformanceSetting.isLateDropInputEnabled()) factory.experimentalSetLateThresholdToDropDecoderInputUs(ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US);
+        return factory.setEnableDecoderFallback(PlaybackPerformanceSetting.isDecoderFallbackEnabled()).setExtensionRendererMode(Math.max(audioRenderMode, videoRenderMode));
     }
 
     private static AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams) {

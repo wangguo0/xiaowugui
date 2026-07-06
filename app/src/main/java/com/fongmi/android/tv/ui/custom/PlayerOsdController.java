@@ -28,6 +28,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
+import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.Setting;
@@ -307,12 +308,12 @@ public class PlayerOsdController {
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
         String tunnel = switchText(PlayerSetting.isTunnelingEnabled());
-        String enhance = switchText(PlayerSetting.isExoEnhanced());
+        String performance = PlaybackPerformanceSetting.getProfileName();
         String passThrough = switchText(PlayerSetting.isAudioPassThrough());
         String preload = "预载" + switchText(PreloadSetting.isPreload());
         String frameRateMatch = player.isIjk() ? "" : "帧率匹配 开";
         String softTune = getSoftDecodeTuneText(player);
-        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "增强" + enhance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isIjk() ? "" : "兜底开");
+        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isIjk() ? "" : "兜底开");
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
         String error = getErrorText(player, snapshot);
         String main = join("\n",
@@ -370,7 +371,7 @@ public class PlayerOsdController {
     private String getSoftDecodeTuneText(PlayerManager player) {
         if (player.isHardDecode()) return "";
         if (player.isIjk()) return "软解降负载 IJK跳帧/滤波";
-        return "软解降负载 EXO跳帧/滤波/低分辨";
+        return PlaybackPerformanceSetting.isSoftVideoTuneEnabled() ? "软解降负载 EXO跳帧/滤波/低分辨" : "软解降负载 关";
     }
 
     private boolean isDecodeError(PlaybackAnalyticsListener.Snapshot snapshot) {

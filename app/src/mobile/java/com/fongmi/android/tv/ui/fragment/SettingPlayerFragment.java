@@ -16,6 +16,7 @@ import com.fongmi.android.tv.impl.BufferListener;
 import com.fongmi.android.tv.impl.SpeedListener;
 import com.fongmi.android.tv.impl.UaListener;
 import com.fongmi.android.tv.player.lut.LutSetting;
+import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
@@ -24,6 +25,7 @@ import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.BufferDialog;
 import com.fongmi.android.tv.ui.dialog.ChoiceDialog;
 import com.fongmi.android.tv.ui.dialog.LutDialog;
+import com.fongmi.android.tv.ui.dialog.PlaybackPerformanceDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerButtonConfigDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerOsdDialog;
 import com.fongmi.android.tv.ui.dialog.SpeedDialog;
@@ -64,10 +66,11 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     @Override
     protected void initView() {
         format = new DecimalFormat("0.#");
+        PlaybackPerformanceSetting.ensureInitialized();
         mBinding.uaText.setText(Setting.getUa());
         mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
         mBinding.tunnelText.setText(getSwitch(PlayerSetting.isTunnel()));
-        mBinding.exo4kCompatText.setText(getSwitch(PlayerSetting.isExoEnhanced()));
+        setPerformanceText();
         setPadLiveModeText();
         setPlayerButtonsText();
         mBinding.adblockText.setText(getSwitch(Setting.isAdblock()));
@@ -115,7 +118,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.autoChange.setOnClickListener(this::setAutoChange);
         mBinding.render.setOnClickListener(this::setRender);
         mBinding.tunnel.setOnClickListener(this::setTunnel);
-        mBinding.exo4kCompat.setOnClickListener(this::setExo4KCompat);
+        mBinding.exo4kCompat.setOnClickListener(this::onPerformance);
         mBinding.caption.setOnClickListener(this::setCaption);
         mBinding.adblock.setOnClickListener(this::setAdblock);
         mBinding.caption.setOnLongClickListener(this::onCaption);
@@ -137,7 +140,9 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
 
     private void setAAC(View view) {
         PlayerSetting.putPreferAAC(!PlayerSetting.isPreferAAC());
+        PlaybackPerformanceSetting.markCustom();
         mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
+        setPerformanceText();
     }
 
     private void onKernel(View view) {
@@ -223,12 +228,16 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
     public void setBuffer(int times) {
         mBinding.bufferText.setText(String.valueOf(times));
         PlayerSetting.putBuffer(times);
+        PlaybackPerformanceSetting.markCustom();
+        setPerformanceText();
     }
 
     private void onBufferBytes(View view) {
         ChoiceDialog.showSingle(this, R.string.player_buffer_bytes, bufferBytes, PlayerSetting.getBufferBytesOption(), which -> {
             mBinding.bufferBytesText.setText(bufferBytes[which]);
             PlayerSetting.putBufferBytesOption(which);
+            PlaybackPerformanceSetting.markCustom();
+            setPerformanceText();
         });
     }
 
@@ -236,6 +245,8 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         ChoiceDialog.showSingle(this, R.string.player_back_buffer, backBuffer, PlayerSetting.getBackBufferOption(), which -> {
             mBinding.backBufferText.setText(backBuffer[which]);
             PlayerSetting.putBackBufferOption(which);
+            PlaybackPerformanceSetting.markCustom();
+            setPerformanceText();
         });
     }
 
@@ -243,19 +254,25 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         ChoiceDialog.showSingle(this, R.string.player_cache, playCache, PlayerSetting.getPlayCacheOption(), which -> {
             mBinding.playCacheText.setText(playCache[which]);
             PlayerSetting.putPlayCacheOption(which);
+            PlaybackPerformanceSetting.markCustom();
+            setPerformanceText();
         });
     }
 
     private void setPreload(View view) {
         PreloadSetting.putPreload(!PreloadSetting.isPreload());
+        PlaybackPerformanceSetting.markCustom();
         setPreloadText();
+        setPerformanceText();
     }
 
     private void onPreloadThread(View view) {
         String[] items = getPreloadThreadItems();
         ChoiceDialog.showSingle(this, R.string.player_preload_threads, items, PreloadSetting.getPreloadThreads() - PreloadSetting.MIN_THREADS, which -> {
             PreloadSetting.putPreloadThreads(PreloadSetting.MIN_THREADS + which);
+            PlaybackPerformanceSetting.markCustom();
             setPreloadText();
+            setPerformanceText();
         });
     }
 
@@ -263,7 +280,9 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         String[] items = getPreloadSizeItems();
         ChoiceDialog.showSingle(this, R.string.player_preload_size, items, getPreloadSizeIndex(), which -> {
             PreloadSetting.putPreloadSizeMb(PreloadSetting.MIN_SIZE_MB + which * PreloadSetting.STEP_SIZE_MB);
+            PlaybackPerformanceSetting.markCustom();
             setPreloadText();
+            setPerformanceText();
         });
     }
 
@@ -271,7 +290,9 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         String[] items = getPreloadTimeItems();
         ChoiceDialog.showSingle(this, R.string.player_preload_time, items, getPreloadTimeIndex(), which -> {
             PreloadSetting.putPreloadTimeSeconds(PreloadSetting.MIN_TIME_SECONDS + which * PreloadSetting.STEP_TIME_SECONDS);
+            PlaybackPerformanceSetting.markCustom();
             setPreloadText();
+            setPerformanceText();
         });
     }
 
@@ -335,19 +356,39 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         int index = (PlayerSetting.getRender() + 1) % render.length;
         mBinding.renderText.setText(render[index]);
         PlayerSetting.putRender(index);
-        mBinding.exo4kCompatText.setText(getSwitch(PlayerSetting.isExoEnhanced()));
+        PlaybackPerformanceSetting.markCustom();
+        setPerformanceText();
     }
 
     private void setTunnel(View view) {
         PlayerSetting.putTunnel(!PlayerSetting.isTunnel());
+        PlaybackPerformanceSetting.markCustom();
         mBinding.tunnelText.setText(getSwitch(PlayerSetting.isTunnel()));
         if (PlayerSetting.isTunnel() && PlayerSetting.getRender() == 1) setRender(view);
+        setPerformanceText();
     }
 
-    private void setExo4KCompat(View view) {
-        PlayerSetting.putExoEnhanced(!PlayerSetting.isExoEnhanced());
-        mBinding.exo4kCompatText.setText(getSwitch(PlayerSetting.isExoEnhanced()));
+    private void onPerformance(View view) {
+        PlaybackPerformanceDialog.show(this, this::refreshPerformanceSettings);
+    }
+
+    private void refreshPerformanceSettings() {
+        mBinding.bufferText.setText(String.valueOf(PlayerSetting.getBuffer()));
+        mBinding.bufferBytesText.setText(bufferBytes[PlayerSetting.getBufferBytesOption()]);
+        mBinding.backBufferText.setText(backBuffer[PlayerSetting.getBackBufferOption()]);
+        mBinding.playCacheText.setText(playCache[PlayerSetting.getPlayCacheOption()]);
         mBinding.renderText.setText(render[PlayerSetting.getRender()]);
+        mBinding.tunnelText.setText(getSwitch(PlayerSetting.isTunnel()));
+        mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
+        mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
+        mBinding.audioPassThroughText.setText(getSwitch(PlayerSetting.isAudioPassThrough()));
+        mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
+        setPreloadText();
+        setPerformanceText();
+    }
+
+    private void setPerformanceText() {
+        mBinding.exo4kCompatText.setText(PlaybackPerformanceSetting.getSummary());
     }
 
     private void setCaption(View view) {
@@ -374,17 +415,23 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
 
     private void setAudioDecode(View view) {
         PlayerSetting.putAudioPrefer(!PlayerSetting.isAudioPrefer());
+        PlaybackPerformanceSetting.markCustom();
         mBinding.audioDecodeText.setText(getSwitch(PlayerSetting.isAudioPrefer()));
+        setPerformanceText();
     }
 
     private void setAudioPassThrough(View view) {
         PlayerSetting.putAudioPassThrough(!PlayerSetting.isAudioPassThrough());
+        PlaybackPerformanceSetting.markCustom();
         mBinding.audioPassThroughText.setText(getSwitch(PlayerSetting.isAudioPassThrough()));
+        setPerformanceText();
     }
 
     private void setVideoDecode(View view) {
         PlayerSetting.putVideoPrefer(!PlayerSetting.isVideoPrefer());
+        PlaybackPerformanceSetting.markCustom();
         mBinding.videoDecodeText.setText(getSwitch(PlayerSetting.isVideoPrefer()));
+        setPerformanceText();
     }
 
     @Override
