@@ -201,25 +201,53 @@ public final class CodecCapabilityDialog {
         setSelected(video, mode == CodecCapabilityInspector.TYPE_VIDEO);
         setSelected(audio, mode == CodecCapabilityInspector.TYPE_AUDIO);
         String keyword = search == null || search.getText() == null ? "" : search.getText().toString();
-        if (mode == MODE_CURRENT) content.setText(highlightSelectedTracks(CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword)));
-        else content.setText(CodecCapabilityInspector.buildDeviceReport(keyword, mode));
+        if (mode == MODE_CURRENT) content.setText(highlightTrackBlocks(CodecCapabilityInspector.buildCurrentMediaReport(activity, player, keyword)));
+        else content.setText(highlightDecoderMatches(CodecCapabilityInspector.buildDeviceReport(activity, player, keyword, mode)));
     }
 
-    private SpannableStringBuilder highlightSelectedTracks(String text) {
+    private SpannableStringBuilder highlightTrackBlocks(String text) {
         SpannableStringBuilder builder = new SpannableStringBuilder(text);
-        String marker = " / 已选中";
+        int cursor = 0;
+        while (cursor < text.length()) {
+            int start = text.indexOf("轨 ", cursor);
+            if (start < 0) break;
+            int lineStart = text.lastIndexOf('\n', start);
+            lineStart = lineStart < 0 ? 0 : lineStart + 1;
+            int end = text.indexOf("\n\n", start);
+            end = end < 0 ? text.length() : end;
+            boolean selected = text.substring(lineStart, end).contains(" / 已选中");
+            applyBlockHighlight(builder, lineStart, end, selected);
+            cursor = end + 2;
+        }
+        return builder;
+    }
+
+    private SpannableStringBuilder highlightDecoderMatches(String text) {
+        SpannableStringBuilder builder = new SpannableStringBuilder(text);
+        highlightDecoderMarker(builder, text, "当前媒体 ", false);
+        highlightDecoderMarker(builder, text, "当前选中 ", true);
+        return builder;
+    }
+
+    private void highlightDecoderMarker(SpannableStringBuilder builder, String text, String marker, boolean selected) {
         int index = text.indexOf(marker);
         while (index >= 0) {
             int start = text.lastIndexOf("\n\n", index);
             start = start < 0 ? 0 : start + 2;
             int end = text.indexOf("\n\n", index);
             end = end < 0 ? text.length() : end;
-            builder.setSpan(new BackgroundColorSpan(Color.parseColor("#E8F0FE")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            builder.setSpan(new ForegroundColorSpan(Color.parseColor("#174EA6")), start, Math.min(end, index + marker.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            builder.setSpan(new StyleSpan(Typeface.BOLD), start, Math.min(end, index + marker.length()), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            applyBlockHighlight(builder, start, end, selected);
+            int lineEnd = text.indexOf('\n', index);
+            lineEnd = lineEnd < 0 || lineEnd > end ? end : lineEnd;
+            builder.setSpan(new StyleSpan(Typeface.BOLD), index, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             index = text.indexOf(marker, end);
         }
-        return builder;
+    }
+
+    private void applyBlockHighlight(SpannableStringBuilder builder, int start, int end, boolean selected) {
+        builder.setSpan(new BackgroundColorSpan(Color.parseColor(selected ? "#E8F0FE" : "#FFF7D6")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        builder.setSpan(new ForegroundColorSpan(Color.parseColor(selected ? "#174EA6" : "#5F4211")), start, Math.min(end, start + 40), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        if (selected) builder.setSpan(new StyleSpan(Typeface.BOLD), start, Math.min(end, start + 80), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
     private void setSelected(@NonNull MaterialButton button, boolean selected) {

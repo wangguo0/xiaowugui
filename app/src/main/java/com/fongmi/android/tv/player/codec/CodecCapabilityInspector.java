@@ -37,16 +37,22 @@ public final class CodecCapabilityInspector {
     }
 
     public static String buildDeviceReport(String keyword, int type) {
+        return buildDeviceReport(null, null, keyword, type);
+    }
+
+    public static String buildDeviceReport(Context context, PlayerManager player, String keyword, int type) {
         String query = normalize(keyword);
+        TrackMatcher matcher = TrackMatcher.create(context, player);
         StringBuilder builder = new StringBuilder();
         int total = 0;
         int matched = 0;
         for (CodecEntry entry : getHardwareDecoders()) {
             if (!matchesType(entry, type)) continue;
             total++;
-            if (!TextUtils.isEmpty(query) && !entry.searchText.contains(query)) continue;
+            String text = entry.text + matcher.describe(entry);
+            if (!TextUtils.isEmpty(query) && !normalize(text).contains(query)) continue;
             if (matched++ > 0) builder.append("\n\n");
-            builder.append(entry.text);
+            builder.append(text);
         }
         if (matched == 0) {
             if (total == 0) return type == TYPE_AUDIO ? "未发现系统音频解码器" : "未发现匹配类型的硬件解码器";
@@ -166,6 +172,41 @@ public final class CodecCapabilityInspector {
         builder.append("Media3轨道状态 ").append(supportText(support)).append("\n");
         builder.append(type == C.TRACK_TYPE_VIDEO ? "硬解查询 " : "音频解码 ").append(formatSupport(context, format));
         return builder.toString();
+    }
+
+    private static List<TrackRef> getTrackRefs(Context context, PlayerManager player) {
+        if (context == null || player == null || player.isIjk()) return List.of();
+        Tracks tracks = player.getCurrentTracks();
+        if (tracks == null || tracks.isEmpty()) return List.of();
+        List<TrackRef> refs = new ArrayList<>();
+        int videoIndex = 0;
+        int audioIndex = 0;
+        for (Tracks.Group group : tracks.getGroups()) {
+            int type = group.getType();
+            if (type != C.TRACK_TYPE_VIDEO && type != C.TRACK_TYPE_AUDIO) continue;
+            for (int i = 0; i < group.length; i++) {
+                Format format = group.getTrackFormat(i);
+                String mime = getSampleMimeType(format);
+                if (TextUtils.isEmpty(mime)) continue;
+                int index = type == C.TRACK_TYPE_VIDEO ? ++videoIndex : ++audioIndex;
+                refs.add(new TrackRef(type == C.TRACK_TYPE_VIDEO ? TYPE_VIDEO : TYPE_AUDIO, type == C.TRACK_TYPE_VIDEO ? "视频轨" : "音频轨", index, mime, format, group.isTrackSelected(i), decoderNames(context, mime, format)));
+            }
+        }
+        return refs;
+    }
+
+    private static List<String> decoderNames(Context context, String mime, Format format) {
+        boolean audio = mime.startsWith("audio/");
+        List<String> names = new ArrayList<>();
+        try {
+            for (androidx.media3.exoplayer.mediacodec.MediaCodecInfo info : MediaCodecSelector.DEFAULT.getDecoderInfos(mime, false, false)) {
+                if (!audio && !info.hardwareAccelerated) continue;
+                if (info.isFormatSupported(context, format)) names.add(info.name);
+                else if (!names.contains(info.name)) names.add(info.name);
+            }
+        } catch (Throwable ignored) {
+        }
+        return names;
     }
 
     private static String formatSupport(Context context, Format format) {
@@ -319,5 +360,62 @@ public final class CodecCapabilityInspector {
     }
 
     public record CodecEntry(int type, String kind, String name, String mime, String text, String searchText) {
+    }
+
+    private record TrackRef(int type, String label, int index, String mime, Format format, boolean selected, List<String> decoderNames) {
+
+        boolean matches(CodecEntry entry) {
+            return type == entry.type && mime.equals(entry.mime) && decoderNames.contains(entry.name);
+        }
+
+        String text() {
+            return label + index + (selected ? "(已选中)" : "") + " " + shortFormat(format);
+        }
+
+        private String shortFormat(Format format) {
+            if (format == null) return "";
+            if (type == TYPE_VIDEO) {
+                List<String> parts = new ArrayList<>();
+                if (format.width > 0 && format.height > 0) parts.add(format.width + "x" + format.height);
+                if (format.frameRate > 0) parts.add("@" + DECIMAL.format(format.frameRate) + "fps");
+                if (format.bitrate > 0) parts.add(formatBitrate(format.bitrate));
+                return TextUtils.join(" ", parts);
+            }
+            List<String> parts = new ArrayList<>();
+            if (format.channelCount > 0) parts.add(format.channelCount + "ch");
+            if (format.sampleRate > 0) parts.add(format.sampleRate + "Hz");
+            if (format.bitrate > 0) parts.add(formatBitrate(format.bitrate));
+            if (!TextUtils.isEmpty(format.language)) parts.add(format.language);
+            return TextUtils.join(" ", parts);
+        }
+    }
+
+    private static final class TrackMatcher {
+
+        private final List<TrackRef> refs;
+
+        private TrackMatcher(List<TrackRef> refs) {
+            this.refs = refs;
+        }
+
+        static TrackMatcher create(Context context, PlayerManager player) {
+            return new TrackMatcher(getTrackRefs(context, player));
+        }
+
+        String describe(CodecEntry entry) {
+            if (refs.isEmpty()) return "";
+            List<String> all = new ArrayList<>();
+            List<String> selected = new ArrayList<>();
+            for (TrackRef ref : refs) {
+                if (!ref.matches(entry)) continue;
+                all.add(ref.text());
+                if (ref.selected) selected.add(ref.text());
+            }
+            if (all.isEmpty()) return "";
+            StringBuilder builder = new StringBuilder();
+            builder.append("\n当前媒体 ").append(TextUtils.join(" / ", all));
+            if (!selected.isEmpty()) builder.append("\n当前选中 ").append(TextUtils.join(" / ", selected));
+            return builder.toString();
+        }
     }
 }
