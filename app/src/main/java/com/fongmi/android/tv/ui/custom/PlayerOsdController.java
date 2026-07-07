@@ -340,9 +340,9 @@ public class PlayerOsdController {
         if (isDecodeError(snapshot) && player.isHardDecode()) return "硬件解码失败：设备可能不支持该视频编码、分辨率、帧率或规格";
         if (!TextUtils.isEmpty(snapshot.errorCode())) return "播放器报错，先看错误行";
         if (audioTrack.hasTracks() && audioTrack.isUnsupported()) return "音频轨不支持：" + summarizeAudioFormat(audioTrack.format()) + " / " + supportText(audioTrack.support());
-        if (audioTrack.hasTracks() && !audioTrack.selected() && snapshot.audioFormat() == null && player.getPlaybackState() == androidx.media3.common.Player.STATE_READY) return "已发现音轨但未选中，可能无声";
-        if (audioTrack.hasTracks() && TextUtils.isEmpty(snapshot.audioDecoderName()) && player.getPlaybackState() == androidx.media3.common.Player.STATE_READY) return "已发现音轨但 decoder 未初始化，可能无声";
-        long mediaBitrate = getMediaBitrate(video, snapshot.audioFormat());
+        if (player.isExo() && audioTrack.hasTracks() && !audioTrack.selected() && snapshot.audioFormat() == null && player.getPlaybackState() == androidx.media3.common.Player.STATE_READY) return "已发现音轨但未选中，可能无声";
+        if (player.isExo() && audioTrack.hasTracks() && TextUtils.isEmpty(snapshot.audioDecoderName()) && player.getPlaybackState() == androidx.media3.common.Player.STATE_READY) return "已发现音轨但 decoder 未初始化，可能无声";
+        long mediaBitrate = getMediaBitrate(video, snapshot.audioFormat() != null ? snapshot.audioFormat() : audioTrack.format());
         long availableBitrate = snapshot.bandwidthEstimate() > 0 ? snapshot.bandwidthEstimate() : lastSpeedKBps * 1024 * 8;
         if (availableBitrate > 0 && mediaBitrate > 0 && availableBitrate < mediaBitrate * 13 / 10) return "网速可能低于资源码率";
         if (player.isLoading() && player.getBufferedDuration() < 3000) return "缓冲偏少，可能是网络或源响应慢";
@@ -418,7 +418,7 @@ public class PlayerOsdController {
     }
 
     private AudioTrackState getAudioTrackState(PlayerManager player) {
-        if (player == null || !player.isExo()) return AudioTrackState.empty();
+        if (player == null) return AudioTrackState.empty();
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null) return AudioTrackState.empty();
         AudioTrackCandidate selected = null;
@@ -446,7 +446,7 @@ public class PlayerOsdController {
     }
 
     private VideoTrackState getVideoTrackState(PlayerManager player) {
-        if (player == null || !player.isExo()) return VideoTrackState.empty();
+        if (player == null) return VideoTrackState.empty();
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null) return VideoTrackState.empty();
         VideoTrackCandidate selected = null;

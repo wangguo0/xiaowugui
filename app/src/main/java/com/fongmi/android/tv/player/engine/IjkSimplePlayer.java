@@ -12,11 +12,13 @@ import android.view.TextureView;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.SimpleBasePlayer;
+import androidx.media3.common.TrackGroup;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.MimeTypes;
@@ -37,6 +39,7 @@ import java.util.Map;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkTimedText;
+import tv.danmaku.ijk.media.player.misc.ITrackInfo;
 
 @UnstableApi
 class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener {
@@ -72,6 +75,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
     private Object videoOutput;
     private PlaybackParameters playbackParameters;
     private PlaybackException playerError;
+    private Tracks currentTracks;
     private VideoSize videoSize;
     private int playbackState;
     private int bufferingPercent;
@@ -91,6 +95,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         hlsProxy = new MpvHlsProxy();
         stateRefreshRunnable = this::refreshPlaybackState;
         playbackParameters = PlaybackParameters.DEFAULT;
+        currentTracks = Tracks.EMPTY;
         videoSize = VideoSize.UNKNOWN;
         playbackState = Player.STATE_IDLE;
         pendingSeekPositionMs = C.TIME_UNSET;
@@ -132,8 +137,12 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
                 .setDurationUs(duration == C.TIME_UNSET ? C.TIME_UNSET : duration * 1000)
                 .setIsSeekable(duration > 0)
                 .setIsDynamic(duration == C.TIME_UNSET)
-                .setTracks(Tracks.EMPTY)
+                .setTracks(currentTracks)
                 .build();
+    }
+
+    Tracks getCurrentTracksSnapshot() {
+        return currentTracks;
     }
 
     void setDecode(int decode) {
@@ -146,6 +155,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         pendingSeekPositionMs = mediaItem != null && startPositionMs > 0 ? startPositionMs : C.TIME_UNSET;
         playbackState = mediaItem == null ? Player.STATE_IDLE : Player.STATE_IDLE;
         loading = false;
+        currentTracks = Tracks.EMPTY;
         playerError = null;
         return Futures.immediateVoidFuture();
     }
@@ -254,6 +264,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         playbackState = Player.STATE_READY;
         loading = false;
         playerError = null;
+        refreshTracks();
         if (pendingSeekPositionMs != C.TIME_UNSET) {
             ijk.seekTo(pendingSeekPositionMs);
             pendingSeekPositionMs = C.TIME_UNSET;
@@ -310,6 +321,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
     @Override
     public void onVideoSizeChanged(IMediaPlayer mp, int width, int height, int sarNum, int sarDen) {
         videoSize = new VideoSize(width, height);
+        refreshTracks();
         invalidateState();
     }
 
@@ -362,6 +374,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         hlsProxy.clear();
         loading = false;
         bufferingPercent = 0;
+        currentTracks = Tracks.EMPTY;
         videoSize = VideoSize.UNKNOWN;
         if (resetState) playbackState = Player.STATE_IDLE;
         stopStateRefresh();
@@ -558,6 +571,110 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    private void refreshTracks() {
+        try {
+            List<ITrackInfo> infos = ijk.getTrackInfo();
+            if (infos == null || infos.isEmpty()) {
+                currentTracks = Tracks.EMPTY;
+                return;
+            }
+            List<Tracks.Group> groups = new java.util.ArrayList<>();
+            boolean selectedVideo = false;
+            boolean selectedAudio = false;
+            boolean selectedText = false;
+            int index = 0;
+            for (ITrackInfo info : infos) {
+                int type = mediaTrackType(info.getTrackType());
+                if (type == C.TRACK_TYPE_UNKNOWN) continue;
+                boolean selected = switch (type) {
+                    case C.TRACK_TYPE_VIDEO -> !selectedVideo;
+                    case C.TRACK_TYPE_AUDIO -> !selectedAudio;
+                    case C.TRACK_TYPE_TEXT -> !selectedText;
+                    default -> false;
+                };
+                if (selected) {
+                    if (type == C.TRACK_TYPE_VIDEO) selectedVideo = true;
+                    else if (type == C.TRACK_TYPE_AUDIO) selectedAudio = true;
+                    else if (type == C.TRACK_TYPE_TEXT) selectedText = true;
+                }
+                Format format = buildFormat(info, type, ++index);
+                TrackGroup group = new TrackGroup("ijk:" + type + ":" + index, format);
+                groups.add(new Tracks.Group(group, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{selected}));
+            }
+            currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("ijk", "tracks refreshed count=%d groups=%d", infos.size(), groups.size());
+        } catch (Throwable e) {
+            currentTracks = Tracks.EMPTY;
+            SpiderDebug.log("ijk", "tracks refresh failed error=%s", e.getMessage());
+        }
+    }
+
+    private int mediaTrackType(int ijkType) {
+        return switch (ijkType) {
+            case ITrackInfo.MEDIA_TRACK_TYPE_VIDEO -> C.TRACK_TYPE_VIDEO;
+            case ITrackInfo.MEDIA_TRACK_TYPE_AUDIO -> C.TRACK_TYPE_AUDIO;
+            case ITrackInfo.MEDIA_TRACK_TYPE_TEXT -> C.TRACK_TYPE_TEXT;
+            default -> C.TRACK_TYPE_UNKNOWN;
+        };
+    }
+
+    private Format buildFormat(ITrackInfo info, int type, int index) {
+        String codec = info.getMimeType();
+        Format.Builder builder = new Format.Builder()
+                .setId(type + ":" + index)
+                .setLabel(trackLabel(type, index))
+                .setCodecs(TextUtils.isEmpty(codec) ? null : codec)
+                .setLanguage(TextUtils.isEmpty(info.getLanguage()) ? null : info.getLanguage())
+                .setSampleMimeType(sampleMimeType(type, codec));
+        if (type == C.TRACK_TYPE_VIDEO) {
+            int width = info.getWidth() > 0 ? info.getWidth() : videoSize.width;
+            int height = info.getHeight() > 0 ? info.getHeight() : videoSize.height;
+            if (width > 0) builder.setWidth(width);
+            if (height > 0) builder.setHeight(height);
+            if (info.getFps() > 0) builder.setFrameRate(info.getFps());
+        } else if (type == C.TRACK_TYPE_AUDIO) {
+            if (info.getChannelCount() > 0) builder.setChannelCount(info.getChannelCount());
+        }
+        if (info.getBitrate() > 0) builder.setAverageBitrate(info.getBitrate());
+        return builder.build();
+    }
+
+    private String trackLabel(int type, int index) {
+        return switch (type) {
+            case C.TRACK_TYPE_VIDEO -> "Video " + index;
+            case C.TRACK_TYPE_AUDIO -> "Audio " + index;
+            case C.TRACK_TYPE_TEXT -> "Subtitle " + index;
+            default -> "Track " + index;
+        };
+    }
+
+    private String sampleMimeType(int type, String codec) {
+        String value = codec == null ? "" : codec.toLowerCase(Locale.US);
+        if (type == C.TRACK_TYPE_TEXT) {
+            if (value.contains("ass") || value.contains("ssa")) return MimeTypes.TEXT_SSA;
+            if (value.contains("webvtt") || value.contains("vtt")) return MimeTypes.TEXT_VTT;
+            if (value.contains("ttml")) return MimeTypes.APPLICATION_TTML;
+            return MimeTypes.APPLICATION_SUBRIP;
+        }
+        if (type == C.TRACK_TYPE_AUDIO) {
+            if (value.contains("aac")) return MimeTypes.AUDIO_AAC;
+            if (value.contains("ac3")) return MimeTypes.AUDIO_AC3;
+            if (value.contains("eac3") || value.contains("e-ac-3")) return MimeTypes.AUDIO_E_AC3;
+            if (value.contains("opus")) return MimeTypes.AUDIO_OPUS;
+            if (value.contains("vorbis")) return MimeTypes.AUDIO_VORBIS;
+            if (value.contains("flac")) return MimeTypes.AUDIO_FLAC;
+            if (value.contains("mp3") || value.contains("mpeg")) return MimeTypes.AUDIO_MPEG;
+            return TextUtils.isEmpty(value) ? null : MimeTypes.BASE_TYPE_AUDIO + "/" + value;
+        }
+        if (value.contains("hevc") || value.contains("h265")) return MimeTypes.VIDEO_H265;
+        if (value.contains("h264") || value.contains("avc")) return MimeTypes.VIDEO_H264;
+        if (value.contains("av1")) return MimeTypes.VIDEO_AV1;
+        if (value.contains("vp9")) return MimeTypes.VIDEO_VP9;
+        if (value.contains("vp8")) return MimeTypes.VIDEO_VP8;
+        if (value.contains("mpeg2")) return MimeTypes.VIDEO_MPEG2;
+        return TextUtils.isEmpty(value) ? null : MimeTypes.BASE_TYPE_VIDEO + "/" + value;
     }
 
     private int errorCode(int what) {

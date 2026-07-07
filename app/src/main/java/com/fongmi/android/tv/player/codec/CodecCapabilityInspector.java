@@ -63,7 +63,7 @@ public final class CodecCapabilityInspector {
     }
 
     public static String buildCurrentMediaReport(Context context, PlayerManager player, String keyword) {
-        if (player == null || !player.isExo()) return "当前播放器不是 Exo，无法读取 Media3 轨道支持信息";
+        if (player == null) return "当前播放器不可用";
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null || tracks.isEmpty()) return "当前还没有读取到媒体轨道，请开始播放后再查询";
         String query = normalize(keyword);
@@ -175,7 +175,7 @@ public final class CodecCapabilityInspector {
     }
 
     private static List<TrackRef> getTrackRefs(Context context, PlayerManager player) {
-        if (context == null || player == null || !player.isExo()) return List.of();
+        if (context == null || player == null) return List.of();
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null || tracks.isEmpty()) return List.of();
         List<TrackRef> refs = new ArrayList<>();
