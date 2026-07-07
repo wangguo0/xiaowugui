@@ -539,6 +539,27 @@ public class PlayerManager implements ParseCallback {
         setMediaItem();
     }
 
+    public void switchDecode(PlaySpec freshSpec, long position, float speed, boolean repeat) {
+        if (engine == null || player == null || freshSpec == null) return;
+        int next = engine.isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD;
+        boolean resetVideoSurface = playerType == PlayerSetting.EXO && next == PlayerEngine.HARD;
+        boolean wasPlayWhenReady = player.getPlayWhenReady();
+        prepareSeq++;
+        resetLutRuntimeState("switch_decode_fresh", true);
+        engine.release();
+        spec = freshSpec;
+        hardDecodeSwitchRetryArmed = next == PlayerEngine.HARD;
+        engine = buildEngine(playerType, next);
+        player = engine.getPlayer();
+        playWhenReady = wasPlayWhenReady;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh decode=%d position=%d spec=%s", next, position, debugSpec());
+        callback.onPlayerRebuild(player, resetVideoSurface);
+        setMediaItem(Constant.TIMEOUT_PLAY);
+        if (position > 0) seekTo(position);
+        if (speed != 1f) setSpeed(speed);
+        setRepeatOne(repeat);
+    }
+
     public void togglePlayer() {
         switchPlayer(PlayerSetting.nextPlayer(playerType));
     }
