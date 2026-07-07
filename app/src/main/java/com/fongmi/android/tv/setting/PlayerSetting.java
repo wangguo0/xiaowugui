@@ -10,6 +10,7 @@ public class PlayerSetting {
 
     public static final int EXO = 0;
     public static final int IJK = 1;
+    public static final int MPV = 2;
     public static final int RENDER_SURFACE = 0;
     public static final int RENDER_TEXTURE = 1;
     public static final int PAD_LIVE_FULLSCREEN = 0;
@@ -28,11 +29,19 @@ public class PlayerSetting {
     }
 
     public static boolean isPlayer(int player) {
-        return player == EXO || player == IJK;
+        return player == EXO || player == IJK || player == MPV;
     }
 
     public static int sanitizePlayer(int player) {
-        return player == IJK ? IJK : EXO;
+        return player == IJK || player == MPV ? player : EXO;
+    }
+
+    public static int nextPlayer(int player) {
+        return switch (sanitizePlayer(player)) {
+            case EXO -> IJK;
+            case IJK -> MPV;
+            default -> EXO;
+        };
     }
 
     public static int getRender() {

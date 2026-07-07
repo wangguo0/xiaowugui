@@ -29,6 +29,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.impl.ParseCallback;
 import com.fongmi.android.tv.player.engine.ExoPlayerEngine;
 import com.fongmi.android.tv.player.engine.IjkPlayerEngine;
+import com.fongmi.android.tv.player.engine.MpvPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
@@ -84,8 +85,6 @@ public class PlayerManager implements ParseCallback {
     private boolean danmakuLoadInProgress;
 
     private boolean initTrack;
-    private boolean exoFallbackTried;
-    private boolean realtimeFallbackTried;
     private boolean videoEffectsActive;
     private boolean videoEffectsDirty;
     private boolean lutAppliedForItem;
@@ -140,8 +139,6 @@ public class PlayerManager implements ParseCallback {
 
     private void onPlaybackTimeout() {
         if (retryLutWarmupByRefresh("timeout")) return;
-        if (retryRealtimeFallback("timeout")) return;
-        if (retryExoFallback("timeout")) return;
         callback.onError(ResUtil.getString(R.string.error_play_timeout));
     }
 
@@ -335,6 +332,18 @@ public class PlayerManager implements ParseCallback {
         return playerType == PlayerSetting.IJK;
     }
 
+    public boolean isMpv() {
+        return playerType == PlayerSetting.MPV;
+    }
+
+    public boolean isExo() {
+        return playerType == PlayerSetting.EXO;
+    }
+
+    public boolean isNativePlayer() {
+        return !isExo();
+    }
+
     public String getPositionTime(long delta) {
         long time = Math.max(0, Math.min(getPosition() + delta, Math.max(0, getDuration())));
         return Util.timeMs(time);
@@ -520,7 +529,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void togglePlayer() {
-        switchPlayer(playerType == PlayerSetting.EXO ? PlayerSetting.IJK : PlayerSetting.EXO);
+        switchPlayer(PlayerSetting.nextPlayer(playerType));
     }
 
     public void switchPlayer(int type) {
@@ -541,7 +550,6 @@ public class PlayerManager implements ParseCallback {
         engine.release();
         playerType = type;
         if (persist) {
-            exoFallbackTried = false;
             PlayerSetting.putPlayer(type);
         }
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player type=%d persist=%s position=%d spec=%s", type, persist, position, debugSpec());
@@ -574,7 +582,11 @@ public class PlayerManager implements ParseCallback {
     }
 
     private PlayerEngine buildEngine(int type, int decode) {
-        return type == PlayerSetting.IJK ? new IjkPlayerEngine(decode, listener) : new ExoPlayerEngine(decode, listener);
+        return switch (type) {
+            case PlayerSetting.IJK -> new IjkPlayerEngine(decode, listener);
+            case PlayerSetting.MPV -> new MpvPlayerEngine(decode, listener);
+            default -> new ExoPlayerEngine(decode, listener);
+        };
     }
 
     public void browse(PlaySpec spec) {
@@ -592,8 +604,6 @@ public class PlayerManager implements ParseCallback {
         this.spec = spec;
         this.playWhenReady = playWhenReady;
         retry = 0;
-        exoFallbackTried = false;
-        realtimeFallbackTried = false;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
         clearDanmakuState();
@@ -609,8 +619,6 @@ public class PlayerManager implements ParseCallback {
         spec = PlaySpec.fromParse(result, key, metadata);
         this.playWhenReady = playWhenReady;
         retry = 0;
-        exoFallbackTried = false;
-        realtimeFallbackTried = false;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
         clearDanmakuState();
@@ -1231,8 +1239,6 @@ public class PlayerManager implements ParseCallback {
             if (retryLutWarmupByRefresh(action, e)) return;
             if (action == PlayerEngine.ErrorAction.DECODE && retryHardDecodeSwitch(e)) return;
             if (action == PlayerEngine.ErrorAction.FATAL && retryLocalProxy(e)) return;
-            if (action == PlayerEngine.ErrorAction.FATAL && retryRealtimeFallback(e)) return;
-            if (action == PlayerEngine.ErrorAction.FATAL && retryExoFallback(e)) return;
             if (action == PlayerEngine.ErrorAction.RELOAD) {
                 callback.onReload(engine.getErrorMessage(e));
                 return;
@@ -1314,50 +1320,4 @@ public class PlayerManager implements ParseCallback {
         return true;
     }
 
-    private boolean retryRealtimeFallback(PlaybackException e) {
-        if (!canFallbackRealtimeToIjk()) return false;
-        realtimeFallbackTried = true;
-        exoFallbackTried = true;
-        App.removeCallbacks(runnable);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "exo realtime fallback to ijk code=%d message=%s spec=%s cause=%s", e.errorCode, e.getMessage(), debugSpec(), causeChain(e));
-        switchPlayer(PlayerSetting.IJK, false);
-        return true;
-    }
-
-    private boolean retryRealtimeFallback(String reason) {
-        if (!canFallbackRealtimeToIjk()) return false;
-        realtimeFallbackTried = true;
-        exoFallbackTried = true;
-        App.removeCallbacks(runnable);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "exo realtime fallback to ijk reason=%s spec=%s", reason, debugSpec());
-        switchPlayer(PlayerSetting.IJK, false);
-        return true;
-    }
-
-    private boolean canFallbackRealtimeToIjk() {
-        if (playerType != PlayerSetting.EXO) return false;
-        if (realtimeFallbackTried || spec == null || TextUtils.isEmpty(spec.getUrl())) return false;
-        String scheme = spec.getUri().getScheme();
-        return "rtp".equalsIgnoreCase(scheme) || "udp".equalsIgnoreCase(scheme);
-    }
-
-    private boolean retryExoFallback(PlaybackException e) {
-        if (playerType != PlayerSetting.IJK) return false;
-        if (exoFallbackTried || spec == null || TextUtils.isEmpty(spec.getUrl())) return false;
-        exoFallbackTried = true;
-        App.removeCallbacks(runnable);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "ijk fatal fallback to exo code=%d message=%s spec=%s cause=%s", e.errorCode, e.getMessage(), debugSpec(), causeChain(e));
-        switchPlayer(PlayerSetting.EXO, false);
-        return true;
-    }
-
-    private boolean retryExoFallback(String reason) {
-        if (playerType != PlayerSetting.IJK) return false;
-        if (exoFallbackTried || spec == null || TextUtils.isEmpty(spec.getUrl())) return false;
-        exoFallbackTried = true;
-        App.removeCallbacks(runnable);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "ijk fallback to exo reason=%s spec=%s", reason, debugSpec());
-        switchPlayer(PlayerSetting.EXO, false);
-        return true;
-    }
 }

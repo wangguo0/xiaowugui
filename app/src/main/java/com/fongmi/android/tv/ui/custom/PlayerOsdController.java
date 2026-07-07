@@ -296,7 +296,7 @@ public class PlayerOsdController {
     }
 
     private DiagnosticsText getDiagnostics(PlayerManager player) {
-        PlaybackAnalyticsListener.Snapshot snapshot = player.isIjk() ? PlaybackAnalyticsListener.Snapshot.empty() : PlaybackAnalyticsListener.getSnapshot();
+        PlaybackAnalyticsListener.Snapshot snapshot = player.isExo() ? PlaybackAnalyticsListener.getSnapshot() : PlaybackAnalyticsListener.Snapshot.empty();
         Format video = snapshot.videoFormat() != null ? snapshot.videoFormat() : snapshot.errorFormat() != null ? snapshot.errorFormat() : player.getVideoFormat();
         Format audio = snapshot.audioFormat();
         String state = stateText(player.getPlaybackState()) + (player.isLoading() ? " / 正在加载" : "");
@@ -311,9 +311,9 @@ public class PlayerOsdController {
         String performance = PlaybackPerformanceSetting.getProfileName();
         String passThrough = switchText(PlayerSetting.isAudioPassThrough());
         String preload = "预载" + switchText(PreloadSetting.isPreload());
-        String frameRateMatch = player.isIjk() ? "" : "帧率匹配 开";
+        String frameRateMatch = player.isExo() ? "帧率匹配 开" : "";
         String softTune = getSoftDecodeTuneText(player);
-        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isIjk() ? "" : "兜底开");
+        String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isExo() ? "兜底开" : "");
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
         String error = getErrorText(player, snapshot);
         String main = join("\n",
@@ -371,6 +371,7 @@ public class PlayerOsdController {
     private String getSoftDecodeTuneText(PlayerManager player) {
         if (player.isHardDecode()) return "";
         if (player.isIjk()) return "软解降负载 IJK跳帧/滤波";
+        if (player.isMpv()) return "软解降负载 MPV hwdec=no";
         return PlaybackPerformanceSetting.isSoftVideoTuneEnabled() ? "软解降负载 EXO跳帧/滤波/低分辨" : "软解降负载 关";
     }
 
@@ -417,7 +418,7 @@ public class PlayerOsdController {
     }
 
     private AudioTrackState getAudioTrackState(PlayerManager player) {
-        if (player == null || player.isIjk()) return AudioTrackState.empty();
+        if (player == null || !player.isExo()) return AudioTrackState.empty();
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null) return AudioTrackState.empty();
         AudioTrackCandidate selected = null;
@@ -445,7 +446,7 @@ public class PlayerOsdController {
     }
 
     private VideoTrackState getVideoTrackState(PlayerManager player) {
-        if (player == null || player.isIjk()) return VideoTrackState.empty();
+        if (player == null || !player.isExo()) return VideoTrackState.empty();
         Tracks tracks = player.getCurrentTracks();
         if (tracks == null) return VideoTrackState.empty();
         VideoTrackCandidate selected = null;
