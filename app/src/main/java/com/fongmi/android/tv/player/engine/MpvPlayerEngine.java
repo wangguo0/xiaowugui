@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.player.engine;
 
 import androidx.media3.common.MimeTypes;
+import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
@@ -14,6 +16,8 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.exo.ExoUtil;
+import com.fongmi.android.tv.player.exo.TrackUtil;
+import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 
@@ -124,20 +128,49 @@ public class MpvPlayerEngine implements PlayerEngine {
 
     @Override
     public void setTrack(List<Track> tracks) {
+        for (Track track : tracks) {
+            if (track.isDisabled() && track.getType() == C.TRACK_TYPE_TEXT) {
+                player.setTrackSelection(C.TRACK_TYPE_TEXT, "no");
+                continue;
+            }
+            String id = findMpvTrackId(track);
+            if (id != null) player.setTrackSelection(track.getType(), id);
+        }
     }
 
     @Override
     public void resetTrack() {
+        player.resetTrackSelection();
     }
 
     @Override
     public boolean haveTrack(int type) {
-        return false;
+        return TrackUtil.count(getCurrentTracks(), type) > 0;
     }
 
     @Override
     public Tracks getCurrentTracks() {
-        return Tracks.EMPTY;
+        return player.getCurrentTracksSnapshot();
+    }
+
+    private String findMpvTrackId(Track track) {
+        if (track == null || track.getFormat() == null) return null;
+        for (Tracks.Group group : getCurrentTracks().getGroups()) {
+            if (group.getType() != track.getType()) continue;
+            for (int i = 0; i < group.length; i++) {
+                if (!group.isTrackSupported(i)) continue;
+                Format format = group.getTrackFormat(i);
+                if (!track.getFormat().equals(PlayerHelper.describeFormat(format))) continue;
+                return parseMpvTrackId(format.id);
+            }
+        }
+        return null;
+    }
+
+    private String parseMpvTrackId(String id) {
+        if (id == null) return null;
+        int index = id.indexOf(':');
+        return index >= 0 && index + 1 < id.length() ? id.substring(index + 1) : id;
     }
 
     @Override

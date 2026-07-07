@@ -15,12 +15,14 @@ import android.view.TextureView;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.PlaybackParameters;
 import androidx.media3.common.Player;
 import androidx.media3.common.SimpleBasePlayer;
+import androidx.media3.common.TrackGroup;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
@@ -95,6 +97,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private String currentPlayableUri;
     private PlaybackParameters playbackParameters;
     private PlaybackException playerError;
+    private Tracks currentTracks;
     private VideoSize videoSize;
     private int playbackState;
     private long pendingSeekPositionMs;
@@ -134,6 +137,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         recentLogs = new ArrayList<>();
         contentFds = new ArrayList<>();
         playbackParameters = PlaybackParameters.DEFAULT;
+        currentTracks = Tracks.EMPTY;
         videoSize = VideoSize.UNKNOWN;
         playbackState = Player.STATE_IDLE;
         pendingSeekPositionMs = C.TIME_UNSET;
@@ -178,7 +182,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 .setDurationUs(duration == C.TIME_UNSET ? C.TIME_UNSET : duration * 1000)
                 .setIsSeekable(duration > 0)
                 .setIsDynamic(duration == C.TIME_UNSET)
-                .setTracks(Tracks.EMPTY)
+                .setTracks(currentTracks)
                 .build();
     }
 
@@ -189,6 +193,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedPositionMs = Math.max(0, startPositionMs == C.TIME_UNSET ? 0 : startPositionMs);
         cachedDurationMs = C.TIME_UNSET;
         cachedCacheDurationMs = 0;
+        currentTracks = Tracks.EMPTY;
         playbackState = mediaItem == null ? Player.STATE_IDLE : Player.STATE_IDLE;
         loading = false;
         fileLoaded = false;
@@ -473,6 +478,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("idle-active", MPVLib.MpvFormat.MPV_FORMAT_FLAG);
         observe("width", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("height", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("track-list/count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
     }
 
     private void handleProperty(String property, @Nullable Object value) {
@@ -499,10 +505,48 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
             case "width", "height" -> updateVideoSize();
+            case "track-list/count" -> refreshTracks();
             default -> {
             }
         }
         invalidateState();
+    }
+
+    public Tracks getCurrentTracksSnapshot() {
+        return currentTracks;
+    }
+
+    public void resetTrackSelection() {
+        setMpvTrack(C.TRACK_TYPE_VIDEO, "auto");
+        setMpvTrack(C.TRACK_TYPE_AUDIO, "auto");
+        setMpvTrack(C.TRACK_TYPE_TEXT, "auto");
+        refreshTracks();
+        invalidateState();
+    }
+
+    public void setTrackSelection(int type, String mpvId) {
+        if (TextUtils.isEmpty(mpvId)) return;
+        setMpvTrack(type, mpvId);
+        refreshTracks();
+        invalidateState();
+    }
+
+    private void setMpvTrack(int type, String mpvId) {
+        if (!initialized) return;
+        String property = mpvTrackProperty(type);
+        if (property == null) return;
+        safeSetPropertyString(property, mpvId);
+        SpiderDebug.log("mpv", "select track type=%d property=%s id=%s", type, property, mpvId);
+    }
+
+    @Nullable
+    private String mpvTrackProperty(int type) {
+        return switch (type) {
+            case C.TRACK_TYPE_VIDEO -> "vid";
+            case C.TRACK_TYPE_AUDIO -> "aid";
+            case C.TRACK_TYPE_TEXT -> "sid";
+            default -> null;
+        };
     }
 
     private void handleEvent(int eventId) {
@@ -534,6 +578,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 loading = true;
                 cachedDurationMs = durationMs();
                 updateVideoSize();
+                refreshTracks();
                 SpiderDebug.log("mpv", "event=file-loaded duration=%d size=%dx%d path=%s", cachedDurationMs, videoSize.width, videoSize.height, stringProperty("path", ""));
                 addSubtitleConfigurations();
                 if (pendingSeekPositionMs != C.TIME_UNSET) {
@@ -546,6 +591,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             case MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
                 playbackRestarted = true;
                 updateVideoSize();
+                refreshTracks();
                 SpiderDebug.log("mpv", "event=playback-restart position=%d duration=%d size=%dx%d", positionMs(), durationMs(), videoSize.width, videoSize.height);
                 if (playbackState != Player.STATE_ENDED) {
                     playbackState = Player.STATE_READY;
@@ -870,6 +916,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedPositionMs = 0;
         cachedCacheDurationMs = 0;
         cachedDurationMs = C.TIME_UNSET;
+        currentTracks = Tracks.EMPTY;
         videoSize = VideoSize.UNKNOWN;
         playerError = null;
         pendingSeekPositionMs = C.TIME_UNSET;
@@ -1074,6 +1121,83 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return playbackState == Player.STATE_READY && playWhenReady && !loading;
     }
 
+    private void refreshTracks() {
+        if (!initialized) {
+            currentTracks = Tracks.EMPTY;
+            return;
+        }
+        int count = Math.max(0, intProperty("track-list/count", 0));
+        if (count <= 0) {
+            currentTracks = Tracks.EMPTY;
+            return;
+        }
+        List<Tracks.Group> groups = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            TrackInfo info = readTrackInfo(i);
+            if (info == null) continue;
+            Format format = info.toFormat();
+            TrackGroup mediaGroup = new TrackGroup("mpv:" + info.type + ":" + info.id, format);
+            groups.add(new Tracks.Group(mediaGroup, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{info.selected}));
+        }
+        currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "tracks refreshed count=%d groups=%d", count, groups.size());
+    }
+
+    @Nullable
+    private TrackInfo readTrackInfo(int index) {
+        String prefix = "track-list/" + index + "/";
+        String mpvType = stringProperty(prefix + "type", "");
+        int type = mediaTrackType(mpvType);
+        if (type == C.TRACK_TYPE_UNKNOWN) return null;
+        if (type == C.TRACK_TYPE_VIDEO && booleanProperty(prefix + "albumart", false)) return null;
+        String id = stringProperty(prefix + "id", "");
+        if (TextUtils.isEmpty(id)) id = String.valueOf(intProperty(prefix + "id", index + 1));
+        String title = stringProperty(prefix + "title", "");
+        String lang = stringProperty(prefix + "lang", "");
+        String codec = stringProperty(prefix + "codec", "");
+        boolean selected = booleanProperty(prefix + "selected", false);
+        int width = intProperty(prefix + "demux-w", C.LENGTH_UNSET);
+        int height = intProperty(prefix + "demux-h", C.LENGTH_UNSET);
+        int sampleRate = intProperty(prefix + "demux-samplerate", C.RATE_UNSET_INT);
+        int channels = intProperty(prefix + "demux-channel-count", C.LENGTH_UNSET);
+        int bitrate = intProperty(prefix + "demux-bitrate", C.LENGTH_UNSET);
+        return new TrackInfo(type, id, title, lang, codec, selected, width, height, sampleRate, channels, bitrate);
+    }
+
+    private int mediaTrackType(String mpvType) {
+        if ("video".equals(mpvType)) return C.TRACK_TYPE_VIDEO;
+        if ("audio".equals(mpvType)) return C.TRACK_TYPE_AUDIO;
+        if ("sub".equals(mpvType)) return C.TRACK_TYPE_TEXT;
+        return C.TRACK_TYPE_UNKNOWN;
+    }
+
+    private String sampleMimeType(TrackInfo info) {
+        String codec = info.codec == null ? "" : info.codec.toLowerCase(Locale.US);
+        if (info.type == C.TRACK_TYPE_TEXT) {
+            if (codec.contains("ass") || codec.contains("ssa")) return MimeTypes.TEXT_SSA;
+            if (codec.contains("webvtt") || codec.contains("vtt")) return MimeTypes.TEXT_VTT;
+            if (codec.contains("ttml")) return MimeTypes.APPLICATION_TTML;
+            return MimeTypes.APPLICATION_SUBRIP;
+        }
+        if (info.type == C.TRACK_TYPE_AUDIO) {
+            if (codec.contains("aac")) return MimeTypes.AUDIO_AAC;
+            if (codec.contains("ac3")) return MimeTypes.AUDIO_AC3;
+            if (codec.contains("eac3") || codec.contains("e-ac-3")) return MimeTypes.AUDIO_E_AC3;
+            if (codec.contains("opus")) return MimeTypes.AUDIO_OPUS;
+            if (codec.contains("vorbis")) return MimeTypes.AUDIO_VORBIS;
+            if (codec.contains("flac")) return MimeTypes.AUDIO_FLAC;
+            if (codec.contains("mp3")) return MimeTypes.AUDIO_MPEG;
+            return MimeTypes.BASE_TYPE_AUDIO + "/" + (TextUtils.isEmpty(codec) ? "unknown" : codec);
+        }
+        if (codec.contains("hevc") || codec.contains("h265")) return MimeTypes.VIDEO_H265;
+        if (codec.contains("h264") || codec.contains("avc")) return MimeTypes.VIDEO_H264;
+        if (codec.contains("av1")) return MimeTypes.VIDEO_AV1;
+        if (codec.contains("vp9")) return MimeTypes.VIDEO_VP9;
+        if (codec.contains("vp8")) return MimeTypes.VIDEO_VP8;
+        if (codec.contains("mpeg2")) return MimeTypes.VIDEO_MPEG2;
+        return MimeTypes.BASE_TYPE_VIDEO + "/" + (TextUtils.isEmpty(codec) ? "unknown" : codec);
+    }
+
     private long doublePropertyMs(String property, long fallback) {
         try {
             Double value = MPVLib.getPropertyDouble(property);
@@ -1229,6 +1353,60 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         try (OutputStream out = new FileOutputStream(file)) {
             out.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (IOException ignored) {
+        }
+    }
+
+    private final class TrackInfo {
+        final int type;
+        final String id;
+        final String title;
+        final String lang;
+        final String codec;
+        final boolean selected;
+        final int width;
+        final int height;
+        final int sampleRate;
+        final int channels;
+        final int bitrate;
+
+        TrackInfo(int type, String id, String title, String lang, String codec, boolean selected, int width, int height, int sampleRate, int channels, int bitrate) {
+            this.type = type;
+            this.id = id;
+            this.title = title;
+            this.lang = lang;
+            this.codec = codec;
+            this.selected = selected;
+            this.width = width;
+            this.height = height;
+            this.sampleRate = sampleRate;
+            this.channels = channels;
+            this.bitrate = bitrate;
+        }
+
+        Format toFormat() {
+            String label = TextUtils.isEmpty(title) ? trackLabel() : title;
+            Format.Builder builder = new Format.Builder()
+                    .setId(type + ":" + id)
+                    .setLabel(label)
+                    .setCodecs(TextUtils.isEmpty(codec) ? null : codec)
+                    .setLanguage(TextUtils.isEmpty(lang) ? null : lang)
+                    .setSampleMimeType(sampleMimeType(this));
+            if (width > 0) builder.setWidth(width);
+            if (height > 0) builder.setHeight(height);
+            if (sampleRate > 0) builder.setSampleRate(sampleRate);
+            if (channels > 0) builder.setChannelCount(channels);
+            if (bitrate > 0) builder.setAverageBitrate(bitrate);
+            return builder.build();
+        }
+
+        private String trackLabel() {
+            String prefix = switch (type) {
+                case C.TRACK_TYPE_VIDEO -> "Video";
+                case C.TRACK_TYPE_AUDIO -> "Audio";
+                case C.TRACK_TYPE_TEXT -> "Subtitle";
+                default -> "Track";
+            };
+            return prefix + " " + id;
         }
     }
 }
