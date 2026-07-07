@@ -479,6 +479,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("width", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("height", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("track-list/count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("vid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("aid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("sid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-tracks/video/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-tracks/audio/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-tracks/sub/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
     }
 
     private void handleProperty(String property, @Nullable Object value) {
@@ -506,6 +512,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
             case "width", "height" -> updateVideoSize();
             case "track-list/count" -> refreshTracks();
+            case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
             default -> {
             }
         }
@@ -1131,16 +1138,98 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             currentTracks = Tracks.EMPTY;
             return;
         }
-        List<Tracks.Group> groups = new ArrayList<>();
+        List<TrackInfo> infos = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             TrackInfo info = readTrackInfo(i);
             if (info == null) continue;
+            infos.add(info);
+        }
+        if (infos.isEmpty()) {
+            currentTracks = Tracks.EMPTY;
+            return;
+        }
+        String selectedVideo = selectedTrackId(C.TRACK_TYPE_VIDEO);
+        String selectedAudio = selectedTrackId(C.TRACK_TYPE_AUDIO);
+        String selectedText = selectedTrackId(C.TRACK_TYPE_TEXT);
+        boolean hasSelectedVideo = hasSelectedTrack(infos, C.TRACK_TYPE_VIDEO, selectedVideo);
+        boolean hasSelectedAudio = hasSelectedTrack(infos, C.TRACK_TYPE_AUDIO, selectedAudio);
+        boolean hasSelectedText = hasSelectedTrack(infos, C.TRACK_TYPE_TEXT, selectedText);
+        boolean autoVideoFallbackUsed = false;
+        boolean autoAudioFallbackUsed = false;
+        boolean autoTextFallbackUsed = false;
+        List<Tracks.Group> groups = new ArrayList<>();
+        for (TrackInfo info : infos) {
+            boolean selected = isTrackSelected(info, trackIdForType(info.type, selectedVideo, selectedAudio, selectedText));
+            if (!selected && info.type == C.TRACK_TYPE_VIDEO && !hasSelectedVideo && isAutoTrackChoice(selectedVideo) && !autoVideoFallbackUsed) {
+                selected = true;
+                autoVideoFallbackUsed = true;
+            } else if (!selected && info.type == C.TRACK_TYPE_AUDIO && !hasSelectedAudio && isAutoTrackChoice(selectedAudio) && !autoAudioFallbackUsed) {
+                selected = true;
+                autoAudioFallbackUsed = true;
+            } else if (!selected && info.type == C.TRACK_TYPE_TEXT && !hasSelectedText && isAutoTrackChoice(selectedText) && !autoTextFallbackUsed) {
+                selected = true;
+                autoTextFallbackUsed = true;
+            }
             Format format = info.toFormat();
             TrackGroup mediaGroup = new TrackGroup("mpv:" + info.type + ":" + info.id, format);
-            groups.add(new Tracks.Group(mediaGroup, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{info.selected}));
+            groups.add(new Tracks.Group(mediaGroup, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{selected}));
         }
         currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "tracks refreshed count=%d groups=%d", count, groups.size());
+    }
+
+    private boolean hasSelectedTrack(List<TrackInfo> infos, int type, String selectedId) {
+        for (TrackInfo info : infos) {
+            if (info.type == type && isTrackSelected(info, selectedId)) return true;
+        }
+        return false;
+    }
+
+    private boolean isTrackSelected(TrackInfo info, String selectedId) {
+        if (info.selected) return true;
+        if (TextUtils.isEmpty(selectedId) || isAutoTrackChoice(selectedId) || isDisabledTrackChoice(selectedId)) return false;
+        return selectedId.equals(info.id);
+    }
+
+    private String selectedTrackId(int type) {
+        String currentTrackId = currentTrackId(type);
+        if (!TextUtils.isEmpty(currentTrackId)) return currentTrackId;
+        String property = mpvTrackProperty(type);
+        return property == null ? "" : propertyStringOrInt(property);
+    }
+
+    private String currentTrackId(int type) {
+        String property = switch (type) {
+            case C.TRACK_TYPE_VIDEO -> "current-tracks/video/id";
+            case C.TRACK_TYPE_AUDIO -> "current-tracks/audio/id";
+            case C.TRACK_TYPE_TEXT -> "current-tracks/sub/id";
+            default -> null;
+        };
+        return property == null ? "" : propertyStringOrInt(property);
+    }
+
+    private String propertyStringOrInt(String property) {
+        String value = stringProperty(property, "");
+        if (!TextUtils.isEmpty(value)) return value;
+        int intValue = intProperty(property, Integer.MIN_VALUE);
+        return intValue == Integer.MIN_VALUE ? "" : String.valueOf(intValue);
+    }
+
+    private String trackIdForType(int type, String selectedVideo, String selectedAudio, String selectedText) {
+        return switch (type) {
+            case C.TRACK_TYPE_VIDEO -> selectedVideo;
+            case C.TRACK_TYPE_AUDIO -> selectedAudio;
+            case C.TRACK_TYPE_TEXT -> selectedText;
+            default -> "";
+        };
+    }
+
+    private boolean isAutoTrackChoice(String value) {
+        return "auto".equalsIgnoreCase(value);
+    }
+
+    private boolean isDisabledTrackChoice(String value) {
+        return "no".equalsIgnoreCase(value);
     }
 
     @Nullable

@@ -348,7 +348,7 @@ public class PlayerOsdController {
         if (player.isLoading() && player.getBufferedDuration() < 3000) return "缓冲偏少，可能是网络或源响应慢";
         if (snapshot.droppedFrames() >= 60) return "掉帧较多，可能是解码或渲染压力";
         if (video != null && video.bitrate >= 30_000_000) return "资源码率较高，对网络和解码要求高";
-        if (audioTrack.hasTracks() && snapshot.audioFormat() == null) return "正在等待音频轨信息";
+        if (player.isExo() && audioTrack.hasTracks() && snapshot.audioFormat() == null) return "正在等待音频轨信息";
         return "正常";
     }
 
