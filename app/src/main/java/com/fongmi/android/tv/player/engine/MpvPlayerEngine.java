@@ -153,6 +153,11 @@ public class MpvPlayerEngine implements PlayerEngine {
         return player.getCurrentTracksSnapshot();
     }
 
+    @Override
+    public Format getVideoFormat() {
+        return TrackUtil.selectedFormat(getCurrentTracks(), C.TRACK_TYPE_VIDEO);
+    }
+
     private String findMpvTrackId(Track track) {
         if (track == null || track.getFormat() == null) return null;
         for (Tracks.Group group : getCurrentTracks().getGroups()) {

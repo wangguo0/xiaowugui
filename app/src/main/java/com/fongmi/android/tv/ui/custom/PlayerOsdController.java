@@ -302,7 +302,7 @@ public class PlayerOsdController {
         String state = stateText(player.getPlaybackState()) + (player.isLoading() ? " / 正在加载" : "");
         String buffer = join(" / ", formatDuration(player.getBufferedDuration()), player.getBufferedPercentage() > 0 ? player.getBufferedPercentage() + "%" : "");
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
-        String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(formatBitrate(snapshot.bandwidthEstimate())), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
+        String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(getBandwidthEstimateText(snapshot)), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
@@ -347,7 +347,7 @@ public class PlayerOsdController {
         if (availableBitrate > 0 && mediaBitrate > 0 && availableBitrate < mediaBitrate * 13 / 10) return "网速可能低于资源码率";
         if (player.isLoading() && player.getBufferedDuration() < 3000) return "缓冲偏少，可能是网络或源响应慢";
         if (snapshot.droppedFrames() >= 60) return "掉帧较多，可能是解码或渲染压力";
-        if (video != null && video.bitrate >= 30_000_000) return "资源码率较高，对网络和解码要求高";
+        if (formatBitrateValue(video) >= 30_000_000) return "资源码率较高，对网络和解码要求高";
         if (player.isExo() && audioTrack.hasTracks() && snapshot.audioFormat() == null) return "正在等待音频轨信息";
         return "正常";
     }
@@ -381,14 +381,14 @@ public class PlayerOsdController {
     }
 
     private String summarizeVideo(Format format, PlayerManager player, String decoder, VideoTrackState videoTrack) {
-        if (format == null && videoTrack.hasTracks()) format = videoTrack.format();
+        if (videoTrack.hasTracks()) format = mergeFormat(format, videoTrack.format());
         String size = getSize(format, player);
         String fps = getFrameRate(format);
         String bitrate = getBitrate(format);
         String codec = format == null || TextUtils.isEmpty(format.codecs) ? "codec -" : "codec " + format.codecs;
         String color = getColor(format).replace("color ", "色彩 ");
         String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
-        String decode = "decoder " + emptyDash(decoder);
+        String decode = "decoder " + emptyDash(decoderText(player, decoder));
         return join(" / ",
                 "格式 " + emptyDash(getMime(format)),
                 "分辨率 " + emptyDash(size),
@@ -401,13 +401,40 @@ public class PlayerOsdController {
                 videoTrack.supportSummary());
     }
 
+    private Format mergeFormat(Format primary, Format fallback) {
+        if (primary == null) return fallback;
+        if (fallback == null) return primary;
+        Format.Builder builder = primary.buildUpon();
+        if (TextUtils.isEmpty(primary.sampleMimeType) && !TextUtils.isEmpty(fallback.sampleMimeType)) builder.setSampleMimeType(fallback.sampleMimeType);
+        if (TextUtils.isEmpty(primary.codecs) && !TextUtils.isEmpty(fallback.codecs)) builder.setCodecs(fallback.codecs);
+        if (primary.width <= 0 && fallback.width > 0) builder.setWidth(fallback.width);
+        if (primary.height <= 0 && fallback.height > 0) builder.setHeight(fallback.height);
+        if (primary.frameRate <= 0 && fallback.frameRate > 0) builder.setFrameRate(fallback.frameRate);
+        if (formatBitrateValue(primary) <= 0 && formatBitrateValue(fallback) > 0) builder.setAverageBitrate(formatBitrateValue(fallback));
+        if (primary.colorInfo == null && fallback.colorInfo != null) builder.setColorInfo(fallback.colorInfo);
+        return builder.build();
+    }
+
     private String summarizeAudio(Format format, AudioTrackState audioTrack, String decoder) {
         if (format == null) {
             if (!audioTrack.hasTracks()) return "未发现音轨";
             return join(" / ", summarizeAudioFormat(audioTrack.format()), supportText(audioTrack.support()), audioTrack.supportSummary(), audioTrack.selected() ? "已选中" : "未选中");
         }
         String support = audioTrack.hasTracks() && !audioTrack.isHandled() ? supportText(audioTrack.support()) : "";
-        return join(" / ", join(" ", summarizeAudioFormat(format), getBitrate(format)), TextUtils.isEmpty(decoder) ? "" : "dec " + decoder, support);
+        return join(" / ", join(" ", summarizeAudioFormat(format), getBitrate(format)), TextUtils.isEmpty(audioDecoderText(decoder)) ? "" : "dec " + audioDecoderText(decoder), support);
+    }
+
+    private String decoderText(PlayerManager player, String decoder) {
+        if (!TextUtils.isEmpty(decoder)) return decoder;
+        if (player == null) return "";
+        if (player.isMpv()) return player.isHardDecode() ? "MPV mediacodec" : "MPV ffmpeg";
+        if (player.isIjk()) return player.isHardDecode() ? "IJK mediacodec" : "IJK ffmpeg";
+        return "";
+    }
+
+    private String audioDecoderText(String decoder) {
+        if (!TextUtils.isEmpty(decoder)) return decoder;
+        return "";
     }
 
     private String summarizeAudioFormat(Format format) {
@@ -502,7 +529,13 @@ public class PlayerOsdController {
     }
 
     private String getBitrate(Format format) {
-        return format == null ? "" : formatBitrate(format.bitrate);
+        return format == null ? "" : formatBitrate(formatBitrateValue(format));
+    }
+
+    private String getBandwidthEstimateText(PlaybackAnalyticsListener.Snapshot snapshot) {
+        if (snapshot.bandwidthEstimate() > 0) return formatBitrate(snapshot.bandwidthEstimate());
+        long realtimeEstimate = lastSpeedKBps * 1024L * 8L;
+        return realtimeEstimate > 0 ? formatBitrate(realtimeEstimate) : "";
     }
 
     private String getColor(Format format) {
@@ -515,9 +548,17 @@ public class PlayerOsdController {
 
     private long getMediaBitrate(Format video, Format audio) {
         long bitrate = 0;
-        if (video != null && video.bitrate > 0) bitrate += video.bitrate;
-        if (audio != null && audio.bitrate > 0) bitrate += audio.bitrate;
+        if (video != null && formatBitrateValue(video) > 0) bitrate += formatBitrateValue(video);
+        if (audio != null && formatBitrateValue(audio) > 0) bitrate += formatBitrateValue(audio);
         return bitrate;
+    }
+
+    private int formatBitrateValue(Format format) {
+        if (format == null) return 0;
+        if (format.bitrate > 0) return format.bitrate;
+        if (format.averageBitrate > 0) return format.averageBitrate;
+        if (format.peakBitrate > 0) return format.peakBitrate;
+        return 0;
     }
 
     private String getMime(Format format) {

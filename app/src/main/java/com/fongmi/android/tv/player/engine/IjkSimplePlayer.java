@@ -12,6 +12,7 @@ import android.view.TextureView;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
@@ -634,11 +635,65 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             if (width > 0) builder.setWidth(width);
             if (height > 0) builder.setHeight(height);
             if (info.getFps() > 0) builder.setFrameRate(info.getFps());
+            ColorInfo colorInfo = colorInfo(info);
+            if (colorInfo != null) builder.setColorInfo(colorInfo);
         } else if (type == C.TRACK_TYPE_AUDIO) {
             if (info.getChannelCount() > 0) builder.setChannelCount(info.getChannelCount());
         }
-        if (info.getBitrate() > 0) builder.setAverageBitrate(info.getBitrate());
+        int bitrate = info.getBitrate();
+        if (bitrate <= 0 && type == C.TRACK_TYPE_VIDEO) bitrate = safeIntBitrate(ijk.getBitRate());
+        if (bitrate > 0) builder.setAverageBitrate(bitrate);
         return builder.build();
+    }
+
+    @Nullable
+    private ColorInfo colorInfo(ITrackInfo info) {
+        int colorSpace = colorSpace(info);
+        int colorRange = colorRange(info);
+        int colorTransfer = colorTransfer(info);
+        if (colorSpace == C.LENGTH_UNSET && colorRange == C.LENGTH_UNSET && colorTransfer == C.LENGTH_UNSET) return null;
+        ColorInfo.Builder builder = new ColorInfo.Builder();
+        if (colorSpace != C.LENGTH_UNSET) builder.setColorSpace(colorSpace);
+        if (colorRange != C.LENGTH_UNSET) builder.setColorRange(colorRange);
+        if (colorTransfer != C.LENGTH_UNSET) builder.setColorTransfer(colorTransfer);
+        return builder.build();
+    }
+
+    private int colorSpace(ITrackInfo info) {
+        String value = lower(joinColor(info.getColorPrimaries(), info.getColorSpace()));
+        if (value.contains("bt2020") || value.contains("bt.2020") || value.contains("2020")) return C.COLOR_SPACE_BT2020;
+        if (value.contains("bt709") || value.contains("bt.709") || value.contains("709")) return C.COLOR_SPACE_BT709;
+        if (value.contains("bt601") || value.contains("bt.601") || value.contains("601") || value.contains("smpte170m") || value.contains("smpte-170m")) return C.COLOR_SPACE_BT601;
+        return C.LENGTH_UNSET;
+    }
+
+    private int colorRange(ITrackInfo info) {
+        String value = lower(info.getColorRange());
+        if (value.contains("jpeg") || value.contains("pc") || value.contains("full")) return C.COLOR_RANGE_FULL;
+        if (value.contains("mpeg") || value.contains("tv") || value.contains("limited")) return C.COLOR_RANGE_LIMITED;
+        return C.LENGTH_UNSET;
+    }
+
+    private int colorTransfer(ITrackInfo info) {
+        String value = lower(info.getColorTransfer());
+        if (value.contains("smpte2084") || value.contains("st2084") || value.contains("pq")) return C.COLOR_TRANSFER_ST2084;
+        if (value.contains("arib-std-b67") || value.contains("hlg")) return C.COLOR_TRANSFER_HLG;
+        if (value.contains("iec61966") || value.contains("srgb")) return C.COLOR_TRANSFER_SRGB;
+        if (value.contains("linear")) return C.COLOR_TRANSFER_LINEAR;
+        if (value.contains("bt709") || value.contains("bt.709") || value.contains("bt601") || value.contains("bt.601") || value.contains("smpte170m") || value.contains("smpte-170m")) return C.COLOR_TRANSFER_SDR;
+        return C.LENGTH_UNSET;
+    }
+
+    private String joinColor(String first, String second) {
+        return (first == null ? "" : first) + " " + (second == null ? "" : second);
+    }
+
+    private String lower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.US);
+    }
+
+    private int safeIntBitrate(long bitrate) {
+        return bitrate > 0 && bitrate <= Integer.MAX_VALUE ? (int) bitrate : 0;
     }
 
     private String trackLabel(int type, int index) {

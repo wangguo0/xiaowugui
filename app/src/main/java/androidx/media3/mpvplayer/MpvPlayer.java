@@ -15,6 +15,7 @@ import android.view.TextureView;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
+import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
@@ -478,6 +479,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("idle-active", MPVLib.MpvFormat.MPV_FORMAT_FLAG);
         observe("width", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("height", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("container-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
+        observe("estimated-vf-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
+        observe("video-params/primaries", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("video-params/gamma", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("video-params/colorlevels", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("video-params/colormatrix", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("track-list/count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("vid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("aid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
@@ -510,7 +517,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 }
             }
             case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
-            case "width", "height" -> updateVideoSize();
+            case "width", "height" -> {
+                updateVideoSize();
+                refreshTracks();
+            }
+            case "container-fps", "estimated-vf-fps", "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
             case "track-list/count" -> refreshTracks();
             case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
             default -> {
@@ -1160,10 +1171,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         List<Tracks.Group> groups = new ArrayList<>();
         for (TrackInfo info : infos) {
             boolean selected = isTrackSelected(info, trackIdForType(info.type, selectedVideo, selectedAudio, selectedText));
-            if (!selected && info.type == C.TRACK_TYPE_VIDEO && !hasSelectedVideo && isAutoTrackChoice(selectedVideo) && !autoVideoFallbackUsed) {
+            if (!selected && info.type == C.TRACK_TYPE_VIDEO && !hasSelectedVideo && isAutoOrUnknownTrackChoice(selectedVideo) && !autoVideoFallbackUsed) {
                 selected = true;
                 autoVideoFallbackUsed = true;
-            } else if (!selected && info.type == C.TRACK_TYPE_AUDIO && !hasSelectedAudio && isAutoTrackChoice(selectedAudio) && !autoAudioFallbackUsed) {
+            } else if (!selected && info.type == C.TRACK_TYPE_AUDIO && !hasSelectedAudio && isAutoOrUnknownTrackChoice(selectedAudio) && !autoAudioFallbackUsed) {
                 selected = true;
                 autoAudioFallbackUsed = true;
             } else if (!selected && info.type == C.TRACK_TYPE_TEXT && !hasSelectedText && isAutoTrackChoice(selectedText) && !autoTextFallbackUsed) {
@@ -1175,7 +1186,65 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             groups.add(new Tracks.Group(mediaGroup, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{selected}));
         }
         currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
+        logTrackSnapshot(infos, selectedVideo, selectedAudio, selectedText, currentTracks);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "tracks refreshed count=%d groups=%d", count, groups.size());
+    }
+
+    private void logTrackSnapshot(List<TrackInfo> infos, String selectedVideo, String selectedAudio, String selectedText, Tracks tracks) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("tracks snapshot ");
+        builder.append("vid=").append(selectedVideo).append(" aid=").append(selectedAudio).append(" sid=").append(selectedText);
+        builder.append(" rawVid=").append(propertyStringOrInt("vid"));
+        builder.append(" rawAid=").append(propertyStringOrInt("aid"));
+        builder.append(" rawSid=").append(propertyStringOrInt("sid"));
+        builder.append(" currentVideo=").append(propertyStringOrInt("current-tracks/video/id"));
+        builder.append(" currentAudio=").append(propertyStringOrInt("current-tracks/audio/id"));
+        builder.append(" currentSub=").append(propertyStringOrInt("current-tracks/sub/id"));
+        builder.append(" size=").append(videoSize.width).append("x").append(videoSize.height);
+        builder.append(" width=").append(intProperty("width", C.LENGTH_UNSET));
+        builder.append(" height=").append(intProperty("height", C.LENGTH_UNSET));
+        builder.append(" fps=").append(videoFrameRate());
+        builder.append(" color primaries=").append(stringProperty("video-params/primaries", ""));
+        builder.append(" gamma=").append(stringProperty("video-params/gamma", ""));
+        builder.append(" levels=").append(stringProperty("video-params/colorlevels", ""));
+        builder.append(" matrix=").append(stringProperty("video-params/colormatrix", ""));
+        for (int i = 0; i < infos.size(); i++) {
+            TrackInfo info = infos.get(i);
+            builder.append(" | track[").append(i).append("]");
+            builder.append(" type=").append(trackTypeName(info.type));
+            builder.append(" id=").append(info.id);
+            builder.append(" rawSelected=").append(info.selected);
+            builder.append(" finalSelected=").append(isTrackSelectedInSnapshot(tracks, info));
+            builder.append(" codec=").append(info.codec);
+            builder.append(" size=").append(info.width).append("x").append(info.height);
+            builder.append(" fps=").append(info.frameRate);
+            builder.append(" sr=").append(info.sampleRate);
+            builder.append(" ch=").append(info.channels);
+            builder.append(" br=").append(info.bitrate);
+            builder.append(" color=").append(info.colorInfo == null ? "" : info.colorInfo.toLogString());
+        }
+        String text = builder.toString();
+        Log.d(TAG, text);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "%s", text);
+    }
+
+    private boolean isTrackSelectedInSnapshot(Tracks tracks, TrackInfo info) {
+        if (tracks == null || tracks.isEmpty()) return false;
+        String groupId = "mpv:" + info.type + ":" + info.id;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.length <= 0 || !group.getMediaTrackGroup().id.equals(groupId)) continue;
+            return group.isTrackSelected(0);
+        }
+        return false;
+    }
+
+    private String trackTypeName(int type) {
+        return switch (type) {
+            case C.TRACK_TYPE_VIDEO -> "video";
+            case C.TRACK_TYPE_AUDIO -> "audio";
+            case C.TRACK_TYPE_TEXT -> "text";
+            default -> String.valueOf(type);
+        };
     }
 
     private boolean hasSelectedTrack(List<TrackInfo> infos, int type, String selectedId) {
@@ -1188,7 +1257,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean isTrackSelected(TrackInfo info, String selectedId) {
         if (info.selected) return true;
         if (TextUtils.isEmpty(selectedId) || isAutoTrackChoice(selectedId) || isDisabledTrackChoice(selectedId)) return false;
-        return selectedId.equals(info.id);
+        return selectedId.equals(info.id) || normalizeTrackId(selectedId).equals(normalizeTrackId(info.id));
     }
 
     private String selectedTrackId(int type) {
@@ -1228,8 +1297,19 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return "auto".equalsIgnoreCase(value);
     }
 
+    private boolean isAutoOrUnknownTrackChoice(String value) {
+        return TextUtils.isEmpty(value) || isAutoTrackChoice(value);
+    }
+
     private boolean isDisabledTrackChoice(String value) {
         return "no".equalsIgnoreCase(value);
+    }
+
+    private String normalizeTrackId(String value) {
+        if (value == null) return "";
+        String normalized = value.trim();
+        while (normalized.startsWith("0") && normalized.length() > 1) normalized = normalized.substring(1);
+        return normalized;
     }
 
     @Nullable
@@ -1247,10 +1327,69 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         boolean selected = booleanProperty(prefix + "selected", false);
         int width = intProperty(prefix + "demux-w", C.LENGTH_UNSET);
         int height = intProperty(prefix + "demux-h", C.LENGTH_UNSET);
+        float frameRate = type == C.TRACK_TYPE_VIDEO ? videoFrameRate() : C.RATE_UNSET;
+        if (type == C.TRACK_TYPE_VIDEO) {
+            if (width <= 0) width = videoSize.width > 0 ? videoSize.width : intProperty("width", C.LENGTH_UNSET);
+            if (height <= 0) height = videoSize.height > 0 ? videoSize.height : intProperty("height", C.LENGTH_UNSET);
+        }
         int sampleRate = intProperty(prefix + "demux-samplerate", C.RATE_UNSET_INT);
         int channels = intProperty(prefix + "demux-channel-count", C.LENGTH_UNSET);
         int bitrate = intProperty(prefix + "demux-bitrate", C.LENGTH_UNSET);
-        return new TrackInfo(type, id, title, lang, codec, selected, width, height, sampleRate, channels, bitrate);
+        if (bitrate <= 0 && type == C.TRACK_TYPE_VIDEO) bitrate = intProperty("video-bitrate", C.LENGTH_UNSET);
+        if (bitrate <= 0 && type == C.TRACK_TYPE_AUDIO) bitrate = intProperty("audio-bitrate", C.LENGTH_UNSET);
+        ColorInfo colorInfo = type == C.TRACK_TYPE_VIDEO ? videoColorInfo() : null;
+        return new TrackInfo(type, id, title, lang, codec, selected, width, height, frameRate, sampleRate, channels, bitrate, colorInfo);
+    }
+
+    private float videoFrameRate() {
+        double fps = doubleProperty("container-fps", 0);
+        if (fps <= 0) fps = doubleProperty("estimated-vf-fps", 0);
+        return fps > 0 ? (float) fps : C.RATE_UNSET;
+    }
+
+    @Nullable
+    private ColorInfo videoColorInfo() {
+        int colorSpace = mpvColorSpace();
+        int colorRange = mpvColorRange();
+        int colorTransfer = mpvColorTransfer();
+        if (colorSpace == C.LENGTH_UNSET && colorRange == C.LENGTH_UNSET && colorTransfer == C.LENGTH_UNSET) return null;
+        ColorInfo.Builder builder = new ColorInfo.Builder();
+        if (colorSpace != C.LENGTH_UNSET) builder.setColorSpace(colorSpace);
+        if (colorRange != C.LENGTH_UNSET) builder.setColorRange(colorRange);
+        if (colorTransfer != C.LENGTH_UNSET) builder.setColorTransfer(colorTransfer);
+        return builder.build();
+    }
+
+    private int mpvColorSpace() {
+        String primaries = lowerProperty("video-params/primaries");
+        String matrix = lowerProperty("video-params/colormatrix");
+        String value = !TextUtils.isEmpty(primaries) ? primaries : matrix;
+        if (value.contains("bt.2020") || value.contains("bt2020") || value.contains("2020")) return C.COLOR_SPACE_BT2020;
+        if (value.contains("bt.709") || value.contains("bt709") || value.contains("709")) return C.COLOR_SPACE_BT709;
+        if (value.contains("bt.601") || value.contains("bt601") || value.contains("601") || value.contains("smpte-170m") || value.contains("smpte170m")) return C.COLOR_SPACE_BT601;
+        return C.LENGTH_UNSET;
+    }
+
+    private int mpvColorRange() {
+        String value = lowerProperty("video-params/colorlevels");
+        if (value.contains("full") || value.contains("pc")) return C.COLOR_RANGE_FULL;
+        if (value.contains("limited") || value.contains("tv")) return C.COLOR_RANGE_LIMITED;
+        return C.LENGTH_UNSET;
+    }
+
+    private int mpvColorTransfer() {
+        String value = lowerProperty("video-params/gamma");
+        if (value.contains("pq") || value.contains("st.2084") || value.contains("st2084")) return C.COLOR_TRANSFER_ST2084;
+        if (value.contains("hlg")) return C.COLOR_TRANSFER_HLG;
+        if (value.contains("srgb")) return C.COLOR_TRANSFER_SRGB;
+        if (value.contains("linear")) return C.COLOR_TRANSFER_LINEAR;
+        if (value.contains("gamma2.2") || value.contains("bt.470m") || value.contains("bt470m")) return C.COLOR_TRANSFER_GAMMA_2_2;
+        if (value.contains("bt.1886") || value.contains("bt1886") || value.contains("709") || value.contains("601")) return C.COLOR_TRANSFER_SDR;
+        return C.LENGTH_UNSET;
+    }
+
+    private String lowerProperty(String property) {
+        return stringProperty(property, "").toLowerCase(Locale.US);
     }
 
     private int mediaTrackType(String mpvType) {
@@ -1292,6 +1431,16 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             Double value = MPVLib.getPropertyDouble(property);
             if (value == null || value.isNaN() || value.isInfinite()) return fallback;
             return Math.max(0, Math.round(value * SECONDS_TO_MS));
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
+    private double doubleProperty(String property, double fallback) {
+        try {
+            Double value = MPVLib.getPropertyDouble(property);
+            if (value == null || value.isNaN() || value.isInfinite()) return fallback;
+            return value;
         } catch (Throwable ignored) {
             return fallback;
         }
@@ -1454,11 +1603,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         final boolean selected;
         final int width;
         final int height;
+        final float frameRate;
         final int sampleRate;
         final int channels;
         final int bitrate;
+        final ColorInfo colorInfo;
 
-        TrackInfo(int type, String id, String title, String lang, String codec, boolean selected, int width, int height, int sampleRate, int channels, int bitrate) {
+        TrackInfo(int type, String id, String title, String lang, String codec, boolean selected, int width, int height, float frameRate, int sampleRate, int channels, int bitrate, @Nullable ColorInfo colorInfo) {
             this.type = type;
             this.id = id;
             this.title = title;
@@ -1467,9 +1618,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             this.selected = selected;
             this.width = width;
             this.height = height;
+            this.frameRate = frameRate;
             this.sampleRate = sampleRate;
             this.channels = channels;
             this.bitrate = bitrate;
+            this.colorInfo = colorInfo;
         }
 
         Format toFormat() {
@@ -1482,6 +1635,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                     .setSampleMimeType(sampleMimeType(this));
             if (width > 0) builder.setWidth(width);
             if (height > 0) builder.setHeight(height);
+            if (frameRate > 0) builder.setFrameRate(frameRate);
+            if (colorInfo != null) builder.setColorInfo(colorInfo);
             if (sampleRate > 0) builder.setSampleRate(sampleRate);
             if (channels > 0) builder.setChannelCount(channels);
             if (bitrate > 0) builder.setAverageBitrate(bitrate);

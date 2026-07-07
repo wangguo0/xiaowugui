@@ -21,6 +21,22 @@ public class TrackUtil {
         return tracks.getGroups().stream().filter(trackGroup -> trackGroup.getType() == type).mapToInt(trackGroup -> trackGroup.length).sum();
     }
 
+    public static Format selectedFormat(Tracks tracks, int type) {
+        if (tracks == null || tracks.isEmpty()) return null;
+        Format first = null;
+        Format supported = null;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != type) continue;
+            for (int i = 0; i < group.length; i++) {
+                Format format = group.getTrackFormat(i);
+                if (first == null) first = format;
+                if (supported == null && group.isTrackSupported(i)) supported = format;
+                if (group.isTrackSelected(i)) return format;
+            }
+        }
+        return supported != null ? supported : first;
+    }
+
     public static void reset(Player player) {
         player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon().clearOverrides().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build());
     }
