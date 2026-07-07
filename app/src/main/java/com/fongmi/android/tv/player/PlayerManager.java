@@ -22,6 +22,7 @@ import androidx.media3.ui.danmaku.DanmakuController;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Constant;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SiteApi;
 import com.fongmi.android.tv.bean.Danmaku;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Sub;
@@ -82,7 +83,11 @@ public class PlayerManager implements ParseCallback {
     private String currentDanmakuKey;
     private String loadingDanmakuKey;
     private long danmakuLoadStartedAtMs;
+    private long pendingSwitchPositionMs = C.TIME_UNSET;
+    private float pendingSwitchSpeed = 1f;
     private boolean danmakuLoadInProgress;
+    private boolean pendingSwitchRepeat;
+    private boolean pendingSwitchRestore;
 
     private boolean initTrack;
     private boolean videoEffectsActive;
@@ -314,6 +319,10 @@ public class PlayerManager implements ParseCallback {
         return ResUtil.getStringArray(R.array.select_player_kernel)[playerType];
     }
 
+    public int getPlayerType() {
+        return playerType;
+    }
+
     public String getLutText() {
         return LutSetting.getButtonText();
     }
@@ -499,12 +508,14 @@ public class PlayerManager implements ParseCallback {
         retry = 0;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
+        clearPendingSwitchRestore();
     }
 
     public void clear() {
         prepareSeq++;
         lutApplySeq++;
         spec = null;
+        clearPendingSwitchRestore();
         clearDanmakuState();
         lutAppliedForItem = false;
         lutApplyInProgress = false;
@@ -536,6 +547,28 @@ public class PlayerManager implements ParseCallback {
         switchPlayer(type, true);
     }
 
+    public void switchPlayer(int type, PlaySpec freshSpec, long position, float speed, boolean repeat) {
+        if (engine == null || player == null || freshSpec == null) return;
+        type = PlayerSetting.sanitizePlayer(type);
+        boolean wasPlayWhenReady = player.getPlayWhenReady();
+        int decode = engine.getDecode();
+        prepareSeq++;
+        resetLutRuntimeState("switch_player_fresh", true);
+        engine.release();
+        playerType = type;
+        PlayerSetting.putPlayer(type);
+        spec = freshSpec;
+        playWhenReady = wasPlayWhenReady;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player fresh type=%d position=%d spec=%s", type, position, debugSpec());
+        engine = buildEngine(playerType, decode);
+        player = engine.getPlayer();
+        callback.onPlayerRebuild(player, false);
+        setMediaItem(Constant.TIMEOUT_PLAY);
+        if (position > 0) seekTo(position);
+        if (speed != 1f) setSpeed(speed);
+        setRepeatOne(repeat);
+    }
+
     private void switchPlayer(int type, boolean persist) {
         if (engine == null || player == null) return;
         type = PlayerSetting.sanitizePlayer(type);
@@ -558,6 +591,7 @@ public class PlayerManager implements ParseCallback {
         callback.onPlayerRebuild(player, false);
         if (spec == null || spec.getUrl() == null) return;
         this.playWhenReady = wasPlayWhenReady;
+        if (reparseForPlayerSwitch(position, speed, repeat)) return;
         setMediaItem(Constant.TIMEOUT_PLAY);
         if (position > 0) seekTo(position);
         if (speed != 1f) setSpeed(speed);
@@ -601,6 +635,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void start(PlaySpec spec, long timeout, boolean playWhenReady) {
+        clearPendingSwitchRestore();
         this.spec = spec;
         this.playWhenReady = playWhenReady;
         retry = 0;
@@ -616,7 +651,8 @@ public class PlayerManager implements ParseCallback {
 
     public void parse(String key, Result result, boolean useParse, MediaMetadata metadata, boolean playWhenReady) {
         stopParse();
-        spec = PlaySpec.fromParse(result, key, metadata);
+        clearPendingSwitchRestore();
+        spec = PlaySpec.fromParse(result, key, metadata, useParse);
         this.playWhenReady = playWhenReady;
         retry = 0;
         localProxyRetry = 0;
@@ -628,6 +664,77 @@ public class PlayerManager implements ParseCallback {
     private void stopParse() {
         if (parseJob != null) parseJob.stop();
         parseJob = null;
+    }
+
+    private boolean reparseForPlayerSwitch(long position, float speed, boolean repeat) {
+        if (spec == null || !spec.canReparse() || !spec.isParseSource()) return false;
+        Result result = spec.getParseResult();
+        boolean useParse = spec.isParseUseParse();
+        MediaMetadata metadata = spec.getMetadata();
+        String key = spec.getKey();
+        pendingSwitchRestore = true;
+        pendingSwitchPositionMs = position;
+        pendingSwitchSpeed = speed;
+        pendingSwitchRepeat = repeat;
+        stopParse();
+        if (spec.isParseSource()) {
+            spec = PlaySpec.fromParse(result, key, metadata, useParse);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player reparse type=%d position=%d useParse=%s spec=%s", playerType, position, useParse, debugSpec());
+            parseJob = ParseJob.create(this).start(result, useParse);
+        } else {
+            refreshDirectForPlayerSwitch(result, key, metadata);
+        }
+        return true;
+    }
+
+    private void refreshDirectForPlayerSwitch(Result result, String key, MediaMetadata metadata) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player refresh direct type=%d key=%s flag=%s url=%s", playerType, key, result.getFlag(), summarizeUrl(result.getUrl().v()));
+        Task.execute(() -> {
+            try {
+                Result refreshed = SiteApi.playerContent(key, result.getFlag(), result.getUrl().v());
+                App.post(() -> startRefreshedSwitchResult(refreshed, key, metadata));
+            } catch (Throwable e) {
+                App.post(() -> {
+                    clearPendingSwitchRestore();
+                    callback.onError(e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void startRefreshedSwitchResult(Result result, String key, MediaMetadata metadata) {
+        if (result == null || result.hasMsg() || result.getRealUrl().isEmpty()) {
+            clearPendingSwitchRestore();
+            callback.onError(result == null ? ResUtil.getString(R.string.error_play_url) : result.hasMsg() ? result.getMsg() : ResUtil.getString(R.string.error_play_url));
+            return;
+        }
+        if (result.needParse()) {
+            spec = PlaySpec.fromParse(result, key, metadata, false);
+            parseJob = ParseJob.create(this).start(result, false);
+            return;
+        }
+        spec = PlaySpec.from(result, key, metadata);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player refreshed direct spec=%s", debugSpec());
+        setMediaItem(Constant.TIMEOUT_PLAY);
+        restoreAfterSwitchReparse();
+    }
+
+    private void restoreAfterSwitchReparse() {
+        if (!pendingSwitchRestore) return;
+        long position = pendingSwitchPositionMs;
+        float speed = pendingSwitchSpeed;
+        boolean repeat = pendingSwitchRepeat;
+        clearPendingSwitchRestore();
+        if (position > 0) seekTo(position);
+        if (speed != 1f) setSpeed(speed);
+        setRepeatOne(repeat);
+    }
+
+    private void clearPendingSwitchRestore() {
+        pendingSwitchRestore = false;
+        pendingSwitchPositionMs = C.TIME_UNSET;
+        pendingSwitchSpeed = 1f;
+        pendingSwitchRepeat = false;
     }
 
     public void setMediaItem() {
@@ -1124,10 +1231,12 @@ public class PlayerManager implements ParseCallback {
         if (spec != null) spec.setHeaders(headers);
         if (spec != null) spec.setUrl(url);
         setMediaItem(Constant.TIMEOUT_PLAY);
+        restoreAfterSwitchReparse();
     }
 
     @Override
     public void onParseError() {
+        clearPendingSwitchRestore();
         callback.onError(ResUtil.getString(R.string.error_play_parse));
     }
 

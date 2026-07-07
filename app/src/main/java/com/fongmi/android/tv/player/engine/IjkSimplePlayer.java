@@ -19,7 +19,9 @@ import androidx.media3.common.Player;
 import androidx.media3.common.SimpleBasePlayer;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.mpvplayer.MpvHlsProxy;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.player.exo.ExoUtil;
@@ -29,6 +31,8 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
@@ -60,6 +64,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             .build();
 
     private final IjkMediaPlayer ijk;
+    private final MpvHlsProxy hlsProxy;
     private final Runnable stateRefreshRunnable;
     private MediaItem mediaItem;
     private SurfaceHolder surfaceHolder;
@@ -83,6 +88,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         this.decode = decode;
         ijk = new IjkMediaPlayer();
         ijk.setListener(this);
+        hlsProxy = new MpvHlsProxy();
         stateRefreshRunnable = this::refreshPlaybackState;
         playbackParameters = PlaybackParameters.DEFAULT;
         videoSize = VideoSize.UNKNOWN;
@@ -189,6 +195,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
     @Override
     protected ListenableFuture<?> handleRelease() {
         stopInternal(false);
+        hlsProxy.release();
         ijk.release();
         return Futures.immediateVoidFuture();
     }
@@ -317,10 +324,18 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             loading = true;
             playerError = null;
             ijk.reset();
+            hlsProxy.clear();
             ijk.setWakeMode(App.get(), PowerManager.PARTIAL_WAKE_LOCK);
-            configureOptions(mediaItem.localConfiguration.uri);
+            Uri sourceUri = mediaItem.localConfiguration.uri;
+            Map<String, String> headers = ExoUtil.extractHeaders(mediaItem);
+            String playableUrl = sourceUri.toString();
+            if (shouldProxyHls(mediaItem, playableUrl)) {
+                playableUrl = hlsProxy.proxy(playableUrl, headers);
+                SpiderDebug.log("ijk", "hls proxy enabled original=%s proxy=%s", sourceUri, playableUrl);
+            }
+            configureOptions(sourceUri);
             bindVideoOutput();
-            ijk.setDataSource(App.get(), mediaItem.localConfiguration.uri, ExoUtil.extractHeaders(mediaItem));
+            ijk.setDataSource(App.get(), Uri.parse(playableUrl), headers);
             ijk.setAudioStreamType(AudioManager.STREAM_MUSIC);
             ijk.setScreenOnWhilePlaying(true);
             ijk.setLooping(repeatOne);
@@ -344,6 +359,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         } catch (Throwable ignored) {
         }
         ijk.reset();
+        hlsProxy.clear();
         loading = false;
         bufferingPercent = 0;
         videoSize = VideoSize.UNKNOWN;
@@ -462,6 +478,28 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "probesize", 512000);
             ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "analyzeduration", 2000000);
         }
+    }
+
+    private boolean shouldProxyHls(MediaItem item, String uri) {
+        if (!isLikelyHls(item, uri) || TextUtils.isEmpty(uri)) return false;
+        Uri parsed = Uri.parse(uri);
+        String scheme = parsed.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) return false;
+        return !"/mpv/index.m3u8".equals(parsed.getPath()) && !"/mpv/item".equals(parsed.getPath());
+    }
+
+    private boolean isLikelyHls(MediaItem item, String uri) {
+        if (item.localConfiguration != null) {
+            String mimeType = item.localConfiguration.mimeType;
+            if (MimeTypes.APPLICATION_M3U8.equals(mimeType)
+                    || "application/vnd.apple.mpegurl".equalsIgnoreCase(mimeType)
+                    || "application/x-mpegurl".equalsIgnoreCase(mimeType)
+                    || "hls".equalsIgnoreCase(mimeType)) {
+                return true;
+            }
+        }
+        String lower = uri == null ? "" : uri.toLowerCase(Locale.US);
+        return lower.contains("m3u8");
     }
 
     private final SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {

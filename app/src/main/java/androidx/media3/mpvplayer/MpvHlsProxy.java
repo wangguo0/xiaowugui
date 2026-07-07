@@ -29,12 +29,13 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.ResponseBody;
 
-final class MpvHlsProxy extends NanoHTTPD {
+public final class MpvHlsProxy extends NanoHTTPD {
 
     private static final String TAG = "mpv-proxy";
     private static final String MIME_M3U8 = "application/vnd.apple.mpegurl; charset=utf-8";
     private static final String MIME_TS = "video/MP2T";
     private static final String MIME_BINARY = "application/octet-stream";
+    private static final String PLAYLIST_RANGE = "bytes=0-";
     private static final int PREFIX_SCAN_LIMIT = 64 * 1024;
     private static final long SESSION_TTL_MS = TimeUnit.MINUTES.toMillis(3);
     private static final byte[] PNG_SIGNATURE = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
@@ -48,7 +49,7 @@ final class MpvHlsProxy extends NanoHTTPD {
     private volatile int sessionId;
     private volatile boolean started;
 
-    MpvHlsProxy() {
+    public MpvHlsProxy() {
         super("127.0.0.1", 0);
         client = OkHttp.player().newBuilder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -60,7 +61,7 @@ final class MpvHlsProxy extends NanoHTTPD {
         nextId = new AtomicLong();
     }
 
-    synchronized String proxy(String url, Map<String, String> headers) throws IOException {
+    public synchronized String proxy(String url, Map<String, String> headers) throws IOException {
         ensureStarted();
         int id = ++this.sessionId;
         Session session = new Session(url, sanitize(headers), System.currentTimeMillis());
@@ -71,12 +72,12 @@ final class MpvHlsProxy extends NanoHTTPD {
         return proxyUrl;
     }
 
-    synchronized void clear() {
+    public synchronized void clear() {
         sessions.clear();
         targets.clear();
     }
 
-    synchronized void release() {
+    public synchronized void release() {
         clear();
         if (started) stop();
         started = false;
@@ -110,10 +111,14 @@ final class MpvHlsProxy extends NanoHTTPD {
         int id = parseSessionId(httpSession);
         Session session = sessions.get(id);
         if (session == null || TextUtils.isEmpty(session.url)) return error(Status.NOT_FOUND, "expired playlist");
-        try (okhttp3.Response response = fetch(session, session.url, null)) {
+        try (okhttp3.Response response = fetch(session, session.url, PLAYLIST_RANGE)) {
             ResponseBody body = response.body();
             if (body == null) return error(Status.INTERNAL_ERROR, "empty playlist body");
             String text = body.string();
+            if (!looksLikePlaylist(text)) {
+                SpiderDebug.log(TAG, "invalid playlist session=%d code=%d bytes=%d url=%s", id, response.code(), text.length(), shortUrl(session.url));
+                return error(Status.BAD_REQUEST, "invalid playlist");
+            }
             String rewritten = rewritePlaylist(response.request().url().toString(), text, id);
             byte[] data = rewritten.getBytes(StandardCharsets.UTF_8);
             SpiderDebug.log(TAG, "playlist session=%d code=%d bytes=%d rewritten=%d url=%s", id, response.code(), text.length(), data.length, shortUrl(session.url));
@@ -126,7 +131,7 @@ final class MpvHlsProxy extends NanoHTTPD {
         Target target = id == null ? null : targets.get(id);
         Session owner = target == null ? null : sessions.get(target.sessionId);
         if (target == null || owner == null) return error(Status.NOT_FOUND, "expired item");
-        okhttp3.Response response = fetch(owner, target.url, null);
+        okhttp3.Response response = fetch(owner, target.url, isPlaylistUrl(target.url, null) ? PLAYLIST_RANGE : null);
         ResponseBody body = response.body();
         if (body == null) {
             response.close();
@@ -137,6 +142,10 @@ final class MpvHlsProxy extends NanoHTTPD {
         if (isPlaylistUrl(target.url, type) || isPlaylistUrl(finalUrl, type)) {
             try (response; body) {
                 String text = body.string();
+                if (!looksLikePlaylist(text)) {
+                    SpiderDebug.log(TAG, "invalid nested playlist id=%s code=%d bytes=%d url=%s", id, response.code(), text.length(), shortUrl(target.url));
+                    return error(Status.BAD_REQUEST, "invalid playlist");
+                }
                 String rewritten = rewritePlaylist(finalUrl, text, target.sessionId);
                 byte[] data = rewritten.getBytes(StandardCharsets.UTF_8);
                 SpiderDebug.log(TAG, "nested playlist id=%s code=%d bytes=%d url=%s", id, response.code(), data.length, shortUrl(target.url));
@@ -242,6 +251,12 @@ final class MpvHlsProxy extends NanoHTTPD {
         int query = lower.indexOf('?');
         if (query >= 0) lower = lower.substring(0, query);
         return lower.endsWith(".m3u8") || lower.endsWith(".m3u");
+    }
+
+    private static boolean looksLikePlaylist(String text) {
+        if (TextUtils.isEmpty(text)) return false;
+        String value = text.trim();
+        return value.startsWith("#EXTM3U") || value.contains("\n#EXTM3U");
     }
 
     private static String mediaMime(@Nullable MediaType type) {
