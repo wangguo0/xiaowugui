@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.engine;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
+import androidx.media3.common.MediaEdition;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
@@ -53,6 +54,16 @@ public class MpvPlayerEngine implements PlayerEngine {
         player.release();
         SpiderDebug.log("player-engine", "rebuild mpv decode=%d", decode);
         return player = buildPlayer(listener);
+    }
+
+    @Override
+    public boolean isRepeatOne() {
+        return player.getRepeatMode() == Player.REPEAT_MODE_ONE;
+    }
+
+    @Override
+    public void setRepeatOne(boolean repeat) {
+        player.setRepeatMode(repeat ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
     }
 
     @Override
@@ -156,6 +167,21 @@ public class MpvPlayerEngine implements PlayerEngine {
     @Override
     public Format getVideoFormat() {
         return TrackUtil.selectedFormat(getCurrentTracks(), C.TRACK_TYPE_VIDEO);
+    }
+
+    @Override
+    public boolean haveTitle() {
+        return !getCurrentMediaEditions().isEmpty();
+    }
+
+    @Override
+    public List<MediaEdition> getCurrentMediaEditions() {
+        return player.getCurrentMediaEditions();
+    }
+
+    @Override
+    public boolean selectEdition(MediaEdition edition) {
+        return player.selectEdition(edition);
     }
 
     private String findMpvTrackId(Track track) {

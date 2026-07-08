@@ -19,6 +19,7 @@ import androidx.annotation.Nullable;
 import androidx.media3.common.C;
 import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
+import androidx.media3.common.MediaEdition;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
@@ -35,6 +36,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.net.HttpHeaders;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -115,6 +119,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private PlaybackParameters playbackParameters;
     private PlaybackException playerError;
     private Tracks currentTracks;
+    private List<MediaEdition> currentChapters;
     private VideoSize videoSize;
     private int playbackState;
     private long pendingSeekPositionMs;
@@ -145,6 +150,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean sawVideoOutputError;
     private boolean sawDrmError;
     private int loadStartRetryCount;
+    private int currentChapter;
     private int surfaceWidth;
     private int surfaceHeight;
     private String lastFailureLog;
@@ -163,10 +169,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         contentFds = new ArrayList<>();
         playbackParameters = PlaybackParameters.DEFAULT;
         currentTracks = Tracks.EMPTY;
+        currentChapters = List.of();
         videoSize = VideoSize.UNKNOWN;
         playbackState = Player.STATE_IDLE;
         pendingSeekPositionMs = C.TIME_UNSET;
         cachedDurationMs = C.TIME_UNSET;
+        currentChapter = C.INDEX_UNSET;
         textOffsetMs = 0;
         audioOffsetMs = 0;
         playWhenReady = true;
@@ -193,6 +201,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 .setAudioOffsetMs(audioOffsetMs)
                 .setVideoSize(videoSize)
                 .setVolume(volume)
+                .setCurrentMediaEditions(currentChapters)
                 .setPlaylist(currentItem == null ? ImmutableList.of() : ImmutableList.of(mediaItemData(currentItem)))
                 .setCurrentMediaItemIndex(currentItem == null ? C.INDEX_UNSET : 0);
         if (currentItem != null) {
@@ -228,6 +237,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedDurationMs = C.TIME_UNSET;
         cachedCacheDurationMs = 0;
         currentTracks = Tracks.EMPTY;
+        currentChapters = List.of();
         playbackState = mediaItem == null ? Player.STATE_IDLE : Player.STATE_IDLE;
         loading = false;
         fileLoaded = false;
@@ -238,6 +248,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         idleActive = false;
         currentPlayableUri = null;
         currentLikelyHls = false;
+        currentChapter = C.INDEX_UNSET;
         resetFailureSignals();
         recentLogs.clear();
         playerError = null;
@@ -564,6 +575,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("current-tracks/video/demux-h", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("current-tracks/audio/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/sub/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("chapter", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("chapter-list", MPVLib.MpvFormat.MPV_FORMAT_STRING);
     }
 
     private void handleProperty(String property, @Nullable Object value) {
@@ -604,6 +617,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 refreshTracks();
             }
             case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
+            case "chapter" -> {
+                if (value instanceof Number number) currentChapter = number.intValue();
+                refreshChapters();
+            }
+            case "chapter-list" -> handleChapterListProperty(value);
             default -> {
             }
         }
@@ -627,6 +645,15 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setMpvTrack(type, mpvId);
         refreshTracks();
         invalidateState();
+    }
+
+    public boolean selectEdition(MediaEdition edition) {
+        if (edition == null || edition.index < 0 || edition.index >= currentChapters.size()) return false;
+        currentChapter = edition.index;
+        if (initialized) safeSetPropertyInt("chapter", edition.index);
+        refreshChapters();
+        invalidateState();
+        return true;
     }
 
     private void setMpvTrack(int type, String mpvId) {
@@ -684,6 +711,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 cachedDurationMs = durationMs();
                 updateVideoSize();
                 refreshTracks();
+                refreshChapters();
                 SpiderDebug.log("mpv", "event=file-loaded duration=%d size=%dx%d path=%s", cachedDurationMs, videoSize.width, videoSize.height, stringProperty("path", ""));
                 addSubtitleConfigurations();
                 if (pendingSeekPositionMs != C.TIME_UNSET) {
@@ -697,6 +725,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 playbackRestarted = true;
                 updateVideoSize();
                 refreshTracks();
+                refreshChapters();
                 SpiderDebug.log("mpv", "event=playback-restart position=%d duration=%d size=%dx%d", positionMs(), durationMs(), videoSize.width, videoSize.height);
                 if (playbackState != Player.STATE_ENDED) {
                     playbackState = Player.STATE_READY;
@@ -1085,12 +1114,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedCacheDurationMs = 0;
         cachedDurationMs = C.TIME_UNSET;
         currentTracks = Tracks.EMPTY;
+        currentChapters = List.of();
         videoSize = VideoSize.UNKNOWN;
         playerError = null;
         pendingSeekPositionMs = C.TIME_UNSET;
         idleActive = false;
         currentPlayableUri = null;
         currentLikelyHls = false;
+        currentChapter = C.INDEX_UNSET;
         resetFailureSignals();
         hlsProxy.clear();
         mainHandler.removeCallbacks(endFileValidationRunnable);
@@ -1467,6 +1498,74 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
         logTrackSnapshot(infos, selectedVideo, selectedAudio, selectedText, currentTracks);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "tracks refreshed count=%d groups=%d", count, groups.size());
+    }
+
+    private void refreshChapters() {
+        if (released || !initialized) return;
+        currentChapter = intProperty("chapter", currentChapter);
+        List<MediaEdition> chapters = parseChapters(stringProperty("chapter-list", ""));
+        if (chapters.isEmpty()) chapters = readChaptersFromProperties();
+        updateCurrentChapters(chapters);
+    }
+
+    private void handleChapterListProperty(@Nullable Object value) {
+        List<MediaEdition> chapters = value instanceof String string ? parseChapters(string) : List.of();
+        if (chapters.isEmpty()) chapters = readChaptersFromProperties();
+        updateCurrentChapters(chapters);
+    }
+
+    private void updateCurrentChapters(List<MediaEdition> chapters) {
+        if (chapters == null) chapters = List.of();
+        if (chapters.equals(currentChapters)) return;
+        currentChapters = chapters;
+        SpiderDebug.log("mpv", "chapters refreshed count=%d selected=%d", chapters.size(), currentChapter);
+        invalidateState();
+    }
+
+    private List<MediaEdition> parseChapters(String json) {
+        if (TextUtils.isEmpty(json)) return List.of();
+        String trimmed = json.trim();
+        if (!trimmed.startsWith("[")) return List.of();
+        try {
+            JSONArray array = new JSONArray(trimmed);
+            List<MediaEdition> items = new ArrayList<>();
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject item = array.optJSONObject(i);
+                if (item == null) continue;
+                items.add(MediaEdition.edition(i, secondsToUs(item.optDouble("time", 0)), chapterLabel(i, item.optString("title", null)), i == currentChapter));
+            }
+            return items;
+        } catch (Throwable ignored) {
+            return List.of();
+        }
+    }
+
+    private List<MediaEdition> readChaptersFromProperties() {
+        int count = Math.max(0, intProperty("chapter-list/count", 0));
+        if (count <= 0) return List.of();
+        List<MediaEdition> items = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String prefix = "chapter-list/" + i + "/";
+            items.add(MediaEdition.edition(i, secondsToUs(doubleProperty(prefix + "time", 0)), chapterLabel(i, stringProperty(prefix + "title", null)), i == currentChapter));
+        }
+        return items;
+    }
+
+    private String chapterLabel(int index, @Nullable String title) {
+        title = emptyToNull(title);
+        return title == null ? "Chapter " + (index + 1) : title;
+    }
+
+    private long secondsToUs(double seconds) {
+        if (seconds <= 0 || Double.isNaN(seconds) || Double.isInfinite(seconds)) return 0;
+        return Math.round(seconds * 1_000_000.0);
+    }
+
+    @Nullable
+    private String emptyToNull(@Nullable String value) {
+        if (TextUtils.isEmpty(value)) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void logTrackSnapshot(List<TrackInfo> infos, String selectedVideo, String selectedAudio, String selectedText, Tracks tracks) {
@@ -1849,6 +1948,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void safeSetPropertyDouble(String property, double value) {
         try {
             MPVLib.setPropertyDouble(property, value);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void safeSetPropertyInt(String property, int value) {
+        try {
+            MPVLib.setPropertyInt(property, value);
         } catch (Throwable ignored) {
         }
     }

@@ -377,6 +377,8 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void setTitle(MediaEdition edition) {
+        if (edition == null) return;
+        if (isMpv() && engine.selectEdition(edition)) return;
         if (spec != null) spec.setUrl(spec.getUri().buildUpon().fragment("edition=" + edition.index).build().toString());
         if (engine.selectEdition(edition)) return;
         setMediaItem();
