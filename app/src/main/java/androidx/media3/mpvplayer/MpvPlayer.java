@@ -69,6 +69,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private static final int MAX_LOAD_START_RETRIES = 2;
     private static final double SECONDS_TO_MS = 1000.0;
     private static final double DEFAULT_SUBTITLE_TEXT_SIZE_FRACTION = 0.0533;
+    private static final double MICROSECONDS_TO_SECONDS = 1_000_000.0;
+    private static final String CONCAT_SOURCE_SEPARATOR = "***";
+    private static final String CONCAT_SOURCE_SEPARATOR_REGEX = "\\*\\*\\*";
+    private static final String CONCAT_DURATION_SEPARATOR = "|||";
+    private static final String CONCAT_DURATION_SEPARATOR_REGEX = "\\|\\|\\|";
     private static final String HLS_LOAD_OPTIONS = "demuxer=lavf,demuxer-lavf-format=hls,demuxer-lavf-probesize=10485760,demuxer-lavf-analyzeduration=5";
     private static final int RECENT_LOG_LIMIT = 32;
     private static final String HEADER_ACCEPT = "Accept";
@@ -529,7 +534,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             applyTextOffset();
             applyAudioOffset();
             applySubtitleStyle();
-            currentPlayableUri = playableUri(mediaItem.localConfiguration.uri);
+            currentPlayableUri = playableUri(mediaItem);
             currentLikelyHls = isLikelyHls(mediaItem, currentPlayableUri);
             if (shouldProxyHls(currentPlayableUri, currentLikelyHls)) {
                 String originalUri = currentPlayableUri;
@@ -877,6 +882,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private boolean isLikelyHls(MediaItem item, String uri) {
+        if (uri != null && uri.startsWith("edl://")) return false;
         if (item.localConfiguration != null) {
             String mimeType = item.localConfiguration.mimeType;
             if (MimeTypes.APPLICATION_M3U8.equals(mimeType)
@@ -1033,13 +1039,53 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private String playableUri(Uri uri) throws IOException {
+        String value = uri.toString();
+        if (isConcatenatingUri(value)) return edlUri(value);
         if ("content".equalsIgnoreCase(uri.getScheme())) {
             ParcelFileDescriptor fd = context.getContentResolver().openFileDescriptor(uri, "r");
             if (fd == null) throw new IOException("Unable to open content uri: " + uri);
             contentFds.add(fd);
             return "fd://" + fd.getFd();
         }
-        return uri.toString();
+        return value;
+    }
+
+    private String playableUri(MediaItem item) throws IOException {
+        Uri requestUri = item.requestMetadata.mediaUri;
+        if (requestUri != null && isConcatenatingUri(requestUri.toString())) return edlUri(requestUri.toString());
+        return playableUri(item.localConfiguration.uri);
+    }
+
+    private boolean isConcatenatingUri(String uri) {
+        return uri != null && uri.contains(CONCAT_SOURCE_SEPARATOR) && uri.contains(CONCAT_DURATION_SEPARATOR);
+    }
+
+    private String edlUri(String uri) throws IOException {
+        StringBuilder builder = new StringBuilder("edl://");
+        int count = 0;
+        for (String split : uri.split(CONCAT_SOURCE_SEPARATOR_REGEX)) {
+            String[] info = split.split(CONCAT_DURATION_SEPARATOR_REGEX, 2);
+            if (info.length < 2 || TextUtils.isEmpty(info[0])) continue;
+            if (count++ > 0) builder.append(';');
+            builder.append("file=").append(edlValue(info[0]));
+            long durationUs = parseLong(info[1], C.TIME_UNSET);
+            if (durationUs > 0) builder.append(",length=").append(String.format(Locale.US, "%.3f", durationUs / MICROSECONDS_TO_SECONDS));
+        }
+        if (count == 0) throw new IOException("Invalid concatenating media uri");
+        SpiderDebug.log("mpv", "concat uri converted to EDL segments=%d", count);
+        return builder.toString();
+    }
+
+    private String edlValue(String value) {
+        return "%" + value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + "%" + value;
+    }
+
+    private long parseLong(String value, long fallback) {
+        try {
+            return Long.parseLong(value);
+        } catch (Throwable ignored) {
+            return fallback;
+        }
     }
 
     private void addSubtitleConfigurations() {

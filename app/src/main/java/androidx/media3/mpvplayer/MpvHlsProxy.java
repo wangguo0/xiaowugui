@@ -248,10 +248,12 @@ public final class MpvHlsProxy extends NanoHTTPD {
         String[] lines = text.split("\n", -1);
         StringBuilder out = new StringBuilder(text.length() + 256);
         List<Segment> segments = new ArrayList<>();
+        boolean[] skipVariantLines = lowerVariantLinesToSkip(lines, session);
         boolean pendingByteRange = false;
         double pendingDuration = 0;
         double elapsed = 0;
         for (int i = 0; i < lines.length; i++) {
+            if (skipVariantLines != null && skipVariantLines[i]) continue;
             String raw = trimCr(lines[i]);
             String line = raw.trim();
             if (line.startsWith("#") && line.contains("URI=\"")) {
@@ -282,6 +284,91 @@ public final class MpvHlsProxy extends NanoHTTPD {
         }
         recordPlaylistDetails(session, text, segments);
         return out.toString();
+    }
+
+    @Nullable
+    private boolean[] lowerVariantLinesToSkip(String[] lines, int session) {
+        List<Variant> variants = new ArrayList<>();
+        for (int i = 0; i < lines.length; i++) {
+            String line = trimCr(lines[i]).trim();
+            if (!line.startsWith("#EXT-X-STREAM-INF")) continue;
+            int uriLine = nextUriLine(lines, i + 1);
+            if (uriLine < 0) continue;
+            variants.add(new Variant(i, uriLine, variantBandwidth(line), variantWidth(line), variantHeight(line)));
+        }
+        if (variants.size() <= 1) return null;
+        Variant best = null;
+        for (Variant variant : variants) if (best == null || variant.betterThan(best)) best = variant;
+        if (best == null || best.score() <= 0) return null;
+        boolean[] skip = new boolean[lines.length];
+        for (Variant variant : variants) {
+            if (variant == best) continue;
+            skip[variant.tagLine] = true;
+            skip[variant.uriLine] = true;
+        }
+        SpiderDebug.log(TAG, "master playlist select highest variant session=%d variants=%d bandwidth=%d resolution=%dx%d", session, variants.size(), best.bandwidth, best.width, best.height);
+        return skip;
+    }
+
+    private int nextUriLine(String[] lines, int start) {
+        for (int i = start; i < lines.length; i++) {
+            String line = trimCr(lines[i]).trim();
+            if (line.isEmpty()) continue;
+            if (!line.startsWith("#")) return i;
+            if (line.startsWith("#EXT-X-STREAM-INF")) return -1;
+        }
+        return -1;
+    }
+
+    private long variantBandwidth(String line) {
+        long average = parseLongAttribute(line, "AVERAGE-BANDWIDTH");
+        return average > 0 ? average : parseLongAttribute(line, "BANDWIDTH");
+    }
+
+    private int variantWidth(String line) {
+        return variantResolution(line)[0];
+    }
+
+    private int variantHeight(String line) {
+        return variantResolution(line)[1];
+    }
+
+    private int[] variantResolution(String line) {
+        String value = attributeValue(line, "RESOLUTION");
+        if (TextUtils.isEmpty(value)) return new int[]{0, 0};
+        String[] parts = value.toLowerCase(Locale.US).split("x", 2);
+        if (parts.length < 2) return new int[]{0, 0};
+        try {
+            return new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+        } catch (Throwable ignored) {
+            return new int[]{0, 0};
+        }
+    }
+
+    private long parseLongAttribute(String line, String name) {
+        String value = attributeValue(line, name);
+        if (TextUtils.isEmpty(value)) return 0;
+        try {
+            return Long.parseLong(value);
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    @Nullable
+    private String attributeValue(String line, String name) {
+        int colon = line.indexOf(':');
+        if (colon < 0 || colon >= line.length() - 1) return null;
+        for (String part : line.substring(colon + 1).split(",")) {
+            int equals = part.indexOf('=');
+            if (equals <= 0) continue;
+            String key = part.substring(0, equals).trim();
+            if (!name.equalsIgnoreCase(key)) continue;
+            String value = part.substring(equals + 1).trim();
+            if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) value = value.substring(1, value.length() - 1);
+            return value;
+        }
+        return null;
     }
 
     private String rewriteUriAttributes(String playlistUrl, String line, int session) {
@@ -784,6 +871,21 @@ public final class MpvHlsProxy extends NanoHTTPD {
     private record Segment(String url, double durationSeconds, double startSeconds, boolean byteRange) {
         double endSeconds() {
             return startSeconds + durationSeconds;
+        }
+    }
+
+    private record Variant(int tagLine, int uriLine, long bandwidth, int width, int height) {
+        long area() {
+            return (long) width * height;
+        }
+
+        long score() {
+            return Math.max(bandwidth, area());
+        }
+
+        boolean betterThan(Variant other) {
+            if (bandwidth != other.bandwidth) return bandwidth > other.bandwidth;
+            return area() > other.area();
         }
     }
 
