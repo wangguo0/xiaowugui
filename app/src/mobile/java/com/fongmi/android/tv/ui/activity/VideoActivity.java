@@ -1383,10 +1383,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void switchDecodeWithResult(Result result, long position, float speed, boolean repeat, MediaMetadata metadata) {
         decodeSwitchRefreshing = false;
-        if (result == null || result.hasMsg() || result.getRealUrl().isEmpty() || result.needParse() || isUseParse()) {
+        if (result == null || result.hasMsg() || result.getRealUrl().isEmpty()) {
             player().toggleDecode();
         } else {
-            player().switchDecode(PlaySpec.from(result, getHistoryKey(), metadata), position, speed, repeat);
+            player().switchDecode(result, getHistoryKey(), metadata, isUseParse(), position, speed, repeat);
         }
         setR1Callback();
         setDecode();

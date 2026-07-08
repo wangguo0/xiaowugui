@@ -624,6 +624,39 @@ public class PlayerManager implements ParseCallback {
         setRepeatOne(repeat);
     }
 
+    public void switchDecode(Result result, String key, MediaMetadata metadata, boolean useParse, long position, float speed, boolean repeat) {
+        if (engine == null || player == null || result == null || result.hasMsg() || result.getRealUrl().isEmpty()) return;
+        int next = engine.isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD;
+        boolean resetVideoSurface = playerType == PlayerSetting.EXO && next == PlayerEngine.HARD;
+        boolean wasPlayWhenReady = player.getPlayWhenReady();
+        prepareSeq++;
+        resetLutRuntimeState("switch_decode_result", true);
+        stopNativeAudioSession();
+        stopParse();
+        engine.release();
+        hardDecodeSwitchRetryArmed = next == PlayerEngine.HARD;
+        engine = buildEngine(playerType, next);
+        player = engine.getPlayer();
+        playWhenReady = wasPlayWhenReady;
+        callback.onPlayerRebuild(player, resetVideoSurface);
+        if (result.needParse() || useParse) {
+            pendingSwitchRestore = true;
+            pendingSwitchPositionMs = position;
+            pendingSwitchSpeed = speed;
+            pendingSwitchRepeat = repeat;
+            spec = PlaySpec.fromParse(result, key, metadata, useParse);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh parse decode=%d position=%d useParse=%s spec=%s", next, position, useParse, debugSpec());
+            parseJob = ParseJob.create(this).start(result, useParse);
+        } else {
+            spec = PlaySpec.from(result, key, metadata);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh result decode=%d position=%d spec=%s", next, position, debugSpec());
+            setMediaItem(Constant.TIMEOUT_PLAY);
+            if (position > 0) seekTo(position);
+            if (speed != 1f) setSpeed(speed);
+            setRepeatOne(repeat);
+        }
+    }
+
     public void togglePlayer() {
         switchPlayer(PlayerSetting.nextPlayer(playerType));
     }
