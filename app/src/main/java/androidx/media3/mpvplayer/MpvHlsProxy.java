@@ -126,12 +126,15 @@ public final class MpvHlsProxy extends NanoHTTPD {
         }
     }
 
-    private Response serveItem(IHTTPSession session) throws IOException {
-        String id = session.getParms().get("id");
+    private Response serveItem(IHTTPSession httpSession) throws IOException {
+        String id = httpSession.getParms().get("id");
         Target target = id == null ? null : targets.get(id);
         Session owner = target == null ? null : sessions.get(target.sessionId);
         if (target == null || owner == null) return error(Status.NOT_FOUND, "expired item");
-        okhttp3.Response response = fetch(owner, target.url, isPlaylistUrl(target.url, null) ? PLAYLIST_RANGE : null);
+        String range = requestHeader(httpSession, "range");
+        boolean targetPlaylist = isPlaylistUrl(target.url, null);
+        String forwardedRange = targetPlaylist ? PLAYLIST_RANGE : range;
+        okhttp3.Response response = fetch(owner, target.url, forwardedRange);
         ResponseBody body = response.body();
         if (body == null) {
             response.close();
@@ -153,11 +156,16 @@ public final class MpvHlsProxy extends NanoHTTPD {
             }
         }
 
-        InputStream stream = new CloseResponseInputStream(new PngPrefixStrippingInputStream(body.byteStream(), target.url), response);
-        Response result = newChunkedResponse(toStatus(response.code()), mediaMime(type), stream);
-        result.addHeader("Access-Control-Allow-Origin", "*");
-        result.addHeader("Cache-Control", "no-cache");
-        result.addHeader("Connection", "close");
+        boolean mayStripPngPrefix = isPngMime(type);
+        long contentLength = body.contentLength();
+        InputStream source = mayStripPngPrefix ? new PngPrefixStrippingInputStream(body.byteStream(), target.url) : body.byteStream();
+        InputStream stream = new CloseResponseInputStream(source, response);
+        Response result = mayStripPngPrefix || contentLength < 0
+                ? newChunkedResponse(toStatus(response.code()), mediaMime(type), stream)
+                : newFixedLengthResponse(toStatus(response.code()), mediaMime(type), stream, contentLength);
+        addStreamingHeaders(result, response, forwardedRange);
+        SpiderDebug.log(TAG, "item id=%s code=%d range=%s contentRange=%s length=%d mime=%s url=%s",
+                id, response.code(), forwardedRange, response.header("Content-Range"), contentLength, mediaMime(type), shortUrl(target.url));
         return result;
     }
 
@@ -261,8 +269,42 @@ public final class MpvHlsProxy extends NanoHTTPD {
 
     private static String mediaMime(@Nullable MediaType type) {
         String value = type == null ? "" : type.toString();
-        if (value.toLowerCase(Locale.US).contains("image/png")) return MIME_TS;
+        if (isPngMime(type)) return MIME_TS;
         return TextUtils.isEmpty(value) ? MIME_BINARY : value;
+    }
+
+    @Nullable
+    private static String requestHeader(IHTTPSession session, String name) {
+        if (session == null || session.getHeaders() == null) return null;
+        for (Map.Entry<String, String> entry : session.getHeaders().entrySet()) {
+            if (entry.getKey() != null && entry.getKey().equalsIgnoreCase(name)) return entry.getValue();
+        }
+        return null;
+    }
+
+    private static void addStreamingHeaders(Response result, okhttp3.Response upstream, @Nullable String range) {
+        result.addHeader("Access-Control-Allow-Origin", "*");
+        result.addHeader("Cache-Control", "no-cache");
+        result.addHeader("Connection", "close");
+        copyHeader(result, upstream, "Content-Range");
+        copyHeader(result, upstream, "ETag");
+        copyHeader(result, upstream, "Last-Modified");
+        String acceptRanges = upstream.header("Accept-Ranges");
+        if (!TextUtils.isEmpty(acceptRanges)) {
+            result.addHeader("Accept-Ranges", acceptRanges);
+        } else if (!TextUtils.isEmpty(range) || upstream.code() == 206) {
+            result.addHeader("Accept-Ranges", "bytes");
+        }
+    }
+
+    private static void copyHeader(Response result, okhttp3.Response upstream, String name) {
+        String value = upstream.header(name);
+        if (!TextUtils.isEmpty(value)) result.addHeader(name, value);
+    }
+
+    private static boolean isPngMime(@Nullable MediaType type) {
+        String value = type == null ? "" : type.toString();
+        return value.toLowerCase(Locale.US).contains("image/png");
     }
 
     private static Response noCache(Response response) {
