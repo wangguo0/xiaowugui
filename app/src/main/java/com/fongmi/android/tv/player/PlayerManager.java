@@ -1,6 +1,12 @@
 package com.fongmi.android.tv.player;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
 
@@ -74,6 +80,8 @@ public class PlayerManager implements ParseCallback {
     private final Runnable runnable;
     private final Callback callback;
     private final DynamicLutEffect dynamicLutEffect;
+    private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
+    private final BroadcastReceiver noisyReceiver;
     private DanmakuController danmakuController;
     private PlayerEngine engine;
     private VideoSize videoSize;
@@ -89,6 +97,10 @@ public class PlayerManager implements ParseCallback {
     private boolean danmakuLoadInProgress;
     private boolean pendingSwitchRepeat;
     private boolean pendingSwitchRestore;
+    private boolean audioFocusHeld;
+    private boolean noisyReceiverRegistered;
+    private boolean resumeOnAudioFocusGain;
+    private Object audioFocusRequest;
 
     private boolean initTrack;
     private boolean videoEffectsActive;
@@ -115,6 +127,14 @@ public class PlayerManager implements ParseCallback {
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
         this.dynamicLutEffect = new DynamicLutEffect();
+        this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
+        this.noisyReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent == null || !AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) return;
+                onNativeAudioBecomingNoisy();
+            }
+        };
         this.playerType = PlayerSetting.getPlayer();
         this.engine = buildEngine(playerType, PlayerEngine.HARD);
         this.player = engine.getPlayer();
@@ -126,6 +146,7 @@ public class PlayerManager implements ParseCallback {
         lutApplySeq++;
         player.removeListener(listener);
         App.removeCallbacks(runnable);
+        stopNativeAudioSession();
         if (engine == null) return;
         engine.release();
         engine = null;
@@ -472,19 +493,23 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void play() {
+        startNativeAudioSession(true);
         player.play();
     }
 
     public void pause() {
         player.pause();
+        stopNativeAudioSession();
     }
 
     public void stop() {
+        stopNativeAudioSession();
         engine.stop();
         stopParse();
     }
 
     public void clearMediaItems() {
+        stopNativeAudioSession();
         player.clearMediaItems();
     }
 
@@ -561,6 +586,7 @@ public class PlayerManager implements ParseCallback {
         boolean wasPlayWhenReady = player.getPlayWhenReady();
         prepareSeq++;
         resetLutRuntimeState("switch_decode_fresh", true);
+        stopNativeAudioSession();
         engine.release();
         spec = freshSpec;
         hardDecodeSwitchRetryArmed = next == PlayerEngine.HARD;
@@ -590,6 +616,7 @@ public class PlayerManager implements ParseCallback {
         int decode = engine.getDecode();
         prepareSeq++;
         resetLutRuntimeState("switch_player_fresh", true);
+        stopNativeAudioSession();
         engine.release();
         playerType = type;
         PlayerSetting.putPlayer(type);
@@ -616,6 +643,7 @@ public class PlayerManager implements ParseCallback {
         int decode = engine.getDecode();
         prepareSeq++;
         resetLutRuntimeState("switch_player", true);
+        stopNativeAudioSession();
         engine.release();
         playerType = type;
         if (persist) {
@@ -639,6 +667,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void rebuildPlayer(boolean resetVideoSurface) {
+        stopNativeAudioSession();
         player = engine.rebuild(listener);
         videoEffectsActive = false;
         videoEffectsDirty = false;
@@ -816,12 +845,126 @@ public class PlayerManager implements ParseCallback {
         waitingLutBeforePlay = false;
         applySubtitleStyle();
         engine.start(spec.checkUa(), playWhenReady);
+        startNativeAudioSession(playWhenReady);
         App.post(runnable, timeout);
         if (notifyPrepare) callback.onPrepare();
     }
 
     private void applySubtitleStyle() {
         if (engine != null) engine.setSubtitleStyle(PlayerSetting.getSubtitleTextSize(), PlayerSetting.getSubtitlePosition());
+    }
+
+    private void startNativeAudioSession(boolean shouldPlay) {
+        if (!shouldPlay || !isNativePlayer()) return;
+        requestNativeAudioFocus();
+        registerNoisyReceiver();
+    }
+
+    private void stopNativeAudioSession() {
+        unregisterNoisyReceiver();
+        abandonNativeAudioFocus();
+        resumeOnAudioFocusGain = false;
+    }
+
+    private void requestNativeAudioFocus() {
+        AudioManager manager = audioManager();
+        if (manager == null || audioFocusHeld) return;
+        int result;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = AudioFocusApi26.request(manager, audioFocusChangeListener);
+            result = audioFocusRequest == null ? AudioManager.AUDIOFOCUS_REQUEST_FAILED : AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        } else {
+            result = manager.requestAudioFocus(audioFocusChangeListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+        audioFocusHeld = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        if (!audioFocusHeld && SpiderDebug.isEnabled()) SpiderDebug.log("player", "native audio focus request denied type=%d", playerType);
+    }
+
+    private void abandonNativeAudioFocus() {
+        if (!audioFocusHeld) return;
+        AudioManager manager = audioManager();
+        if (manager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) AudioFocusApi26.abandon(manager, audioFocusRequest);
+            else manager.abandonAudioFocus(audioFocusChangeListener);
+        }
+        audioFocusRequest = null;
+        audioFocusHeld = false;
+    }
+
+    private void registerNoisyReceiver() {
+        if (noisyReceiverRegistered) return;
+        try {
+            App.get().registerReceiver(noisyReceiver, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+            noisyReceiverRegistered = true;
+        } catch (Throwable e) {
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "register noisy receiver failed error=%s", causeChain(e));
+        }
+    }
+
+    private void unregisterNoisyReceiver() {
+        if (!noisyReceiverRegistered) return;
+        try {
+            App.get().unregisterReceiver(noisyReceiver);
+        } catch (Throwable e) {
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "unregister noisy receiver failed error=%s", causeChain(e));
+        }
+        noisyReceiverRegistered = false;
+    }
+
+    private void onNativeAudioBecomingNoisy() {
+        if (!isNativePlayer() || player == null) return;
+        boolean wasPlaying = player.isPlaying();
+        player.pause();
+        stopNativeAudioSession();
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "native audio noisy pause type=%d wasPlaying=%s", playerType, wasPlaying);
+    }
+
+    private void onNativeAudioFocusChanged(int focusChange) {
+        if (!isNativePlayer() || player == null) return;
+        switch (focusChange) {
+            case AudioManager.AUDIOFOCUS_GAIN -> {
+                if (resumeOnAudioFocusGain) {
+                    resumeOnAudioFocusGain = false;
+                    startNativeAudioSession(true);
+                    player.play();
+                }
+            }
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                resumeOnAudioFocusGain = player.isPlaying();
+                player.pause();
+            }
+            case AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeOnAudioFocusGain = false;
+                player.pause();
+                stopNativeAudioSession();
+            }
+        }
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "native audio focus changed type=%d change=%d resume=%s", playerType, focusChange, resumeOnAudioFocusGain);
+    }
+
+    private AudioManager audioManager() {
+        return (AudioManager) App.get().getSystemService(Context.AUDIO_SERVICE);
+    }
+
+    private static final class AudioFocusApi26 {
+
+        private static Object request(AudioManager manager, AudioManager.OnAudioFocusChangeListener listener) {
+            android.media.AudioAttributes attributes = new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+                    .build();
+            android.media.AudioFocusRequest request = new android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attributes)
+                    .setOnAudioFocusChangeListener(listener)
+                    .setAcceptsDelayedFocusGain(false)
+                    .setWillPauseWhenDucked(true)
+                    .build();
+            return manager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED ? request : null;
+        }
+
+        private static void abandon(AudioManager manager, Object request) {
+            if (request instanceof android.media.AudioFocusRequest) manager.abandonAudioFocusRequest((android.media.AudioFocusRequest) request);
+        }
     }
 
     private boolean rejectMpvDrmMedia() {
