@@ -53,6 +53,7 @@ import is.xyz.mpv.MPVLib;
 public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObserver, MPVLib.LogObserver {
 
     private static final String TAG = "TV-mpv";
+    private static final String SIZE_TAG = "MPV_SIZE";
     private static final long STATE_REFRESH_INTERVAL_MS = 1000;
     private static final long END_FILE_VALIDATION_DELAY_MS = 800;
     private static final long LOAD_START_RETRY_DELAY_MS = 1000;
@@ -175,11 +176,16 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     @Override
     protected State getState() {
         int state = playbackState;
+        MediaItem currentItem = mediaItem;
+        if (currentItem == null && state != Player.STATE_IDLE && state != Player.STATE_ENDED) {
+            Log.w(TAG, "Coerce empty playlist state=" + state + " loading=" + loading + " fileLoaded=" + fileLoaded + " playbackRestarted=" + playbackRestarted);
+            state = Player.STATE_IDLE;
+        }
         State.Builder builder = new State.Builder()
                 .setAvailableCommands(COMMANDS)
                 .setPlayWhenReady(playWhenReady, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
                 .setPlaybackState(state)
-                .setIsLoading(loading && state != Player.STATE_IDLE && state != Player.STATE_ENDED)
+                .setIsLoading(currentItem != null && loading && state != Player.STATE_IDLE && state != Player.STATE_ENDED)
                 .setPlayerError(playerError)
                 .setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF)
                 .setPlaybackParameters(playbackParameters)
@@ -187,9 +193,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 .setAudioOffsetMs(audioOffsetMs)
                 .setVideoSize(videoSize)
                 .setVolume(volume)
-                .setPlaylist(mediaItem == null ? ImmutableList.of() : ImmutableList.of(mediaItemData()))
-                .setCurrentMediaItemIndex(mediaItem == null ? C.INDEX_UNSET : 0);
-        if (mediaItem != null) {
+                .setPlaylist(currentItem == null ? ImmutableList.of() : ImmutableList.of(mediaItemData(currentItem)))
+                .setCurrentMediaItemIndex(currentItem == null ? C.INDEX_UNSET : 0);
+        if (currentItem != null) {
             long duration = durationMs();
             long position = positionMs();
             PositionSupplier positionSupplier = isPlayingInternal()
@@ -202,11 +208,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return builder.build();
     }
 
-    private MediaItemData mediaItemData() {
+    private MediaItemData mediaItemData(MediaItem item) {
         long duration = durationMs();
-        return new MediaItemData.Builder(mediaItem.mediaId)
-                .setMediaItem(mediaItem)
-                .setMediaMetadata(mediaItem.mediaMetadata)
+        return new MediaItemData.Builder(item.mediaId)
+                .setMediaItem(item)
+                .setMediaMetadata(item.mediaMetadata)
                 .setDurationUs(duration == C.TIME_UNSET ? C.TIME_UNSET : duration * 1000)
                 .setIsSeekable(duration > 0)
                 .setIsDynamic(duration == C.TIME_UNSET)
@@ -250,14 +256,21 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     @Override
     protected ListenableFuture<?> handleReplaceMediaItems(int fromIndex, int toIndex, List<MediaItem> mediaItems) {
-        mediaItem = mediaItems.isEmpty() ? null : mediaItems.get(0);
+        if (mediaItems.isEmpty()) {
+            stopInternal(true);
+            mediaItem = null;
+            invalidateState();
+        } else {
+            mediaItem = mediaItems.get(0);
+        }
         return Futures.immediateVoidFuture();
     }
 
     @Override
     protected ListenableFuture<?> handleRemoveMediaItems(int fromIndex, int toIndex) {
-        mediaItem = null;
         stopInternal(true);
+        mediaItem = null;
+        invalidateState();
         return Futures.immediateVoidFuture();
     }
 
@@ -528,6 +541,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("idle-active", MPVLib.MpvFormat.MPV_FORMAT_FLAG);
         observe("width", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("height", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-params/w", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-params/h", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-params/dw", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-params/dh", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-out-params/w", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-out-params/h", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-out-params/dw", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("video-out-params/dh", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("container-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
         observe("estimated-vf-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
         observe("video-params/primaries", MPVLib.MpvFormat.MPV_FORMAT_STRING);
@@ -539,12 +560,19 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("aid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("sid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/video/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-tracks/video/demux-w", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("current-tracks/video/demux-h", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("current-tracks/audio/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/sub/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
     }
 
     private void handleProperty(String property, @Nullable Object value) {
         if (released) return;
+        if (mediaItem == null) {
+            playbackState = Player.STATE_IDLE;
+            loading = false;
+            return;
+        }
         switch (property) {
             case "time-pos", "time-pos/full" -> cachedPositionMs = doubleSecondsToMs(value, cachedPositionMs);
             case "duration", "duration/full" -> cachedDurationMs = doubleSecondsToMs(value, cachedDurationMs);
@@ -566,12 +594,15 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 }
             }
             case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
-            case "width", "height" -> {
+            case "width", "height", "video-params/w", "video-params/h", "video-params/dw", "video-params/dh", "video-out-params/w", "video-out-params/h", "video-out-params/dw", "video-out-params/dh", "current-tracks/video/demux-w", "current-tracks/video/demux-h" -> {
                 updateVideoSize();
                 refreshTracks();
             }
             case "container-fps", "estimated-vf-fps", "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
-            case "track-list/count" -> refreshTracks();
+            case "track-list/count" -> {
+                updateVideoSize();
+                refreshTracks();
+            }
             case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
             default -> {
             }
@@ -618,6 +649,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private void handleEvent(int eventId) {
         if (released) return;
+        if (mediaItem == null && eventId != MPVLib.MpvEvent.MPV_EVENT_SHUTDOWN) {
+            playbackState = Player.STATE_IDLE;
+            loading = false;
+            Log.d(TAG, "Ignore stale mpv event without media item event=" + eventId);
+            invalidateState();
+            return;
+        }
         switch (eventId) {
             case MPVLib.MpvEvent.MPV_EVENT_START_FILE -> {
                 loadStarted = true;
@@ -885,6 +923,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         detachSurfaceHolder();
         surfaceWidth = 0;
         surfaceHeight = 0;
+        Log.d(SIZE_TAG, "mpv setVideoOutput output=" + surfaceOutputName(output));
         if (output instanceof SurfaceView view) {
             updateSurfaceSize(view);
             setSurfaceHolder(view.getHolder());
@@ -906,6 +945,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void setSurfaceHolder(SurfaceHolder holder) {
         surfaceHolder = holder;
         updateSurfaceSize(holder);
+        Log.d(SIZE_TAG, "mpv setSurfaceHolder frame=" + surfaceFrame(holder) + " cached=" + surfaceWidth + "x" + surfaceHeight);
         surfaceHolder.addCallback(surfaceCallback);
         surface = surfaceHolder.getSurface();
         ownsSurface = false;
@@ -920,6 +960,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             setRuntimeString("force-window", "yes");
             applyAndroidSurfaceSize();
             safeSetPropertyString("vo", config.vo());
+            Log.d(SIZE_TAG, "mpv bind surface valid=" + surface.isValid() + " cached=" + surfaceWidth + "x" + surfaceHeight + " vo=" + config.vo());
             SpiderDebug.log("mpv", "surface attached surface=%s size=%dx%d vo=%s", surface, surfaceWidth, surfaceHeight, config.vo());
         } catch (Throwable e) {
             fail(mpvError(ERROR_VIDEO_OUTPUT_FAILED, e.getMessage(), e), PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED);
@@ -959,6 +1000,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (view == null || view.getWidth() <= 0 || view.getHeight() <= 0) return;
         surfaceWidth = view.getWidth();
         surfaceHeight = view.getHeight();
+        Log.d(SIZE_TAG, "mpv updateSurfaceSize view=" + surfaceOutputName(view) + " size=" + surfaceWidth + "x" + surfaceHeight);
     }
 
     private void updateSurfaceSize(SurfaceHolder holder) {
@@ -967,20 +1009,35 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (frame == null || frame.width() <= 0 || frame.height() <= 0) return;
         surfaceWidth = frame.width();
         surfaceHeight = frame.height();
+        Log.d(SIZE_TAG, "mpv updateSurfaceSize holder frame=" + frame.width() + "x" + frame.height());
     }
 
     private void updateSurfaceSize(int width, int height) {
         if (width <= 0 || height <= 0) return;
         surfaceWidth = width;
         surfaceHeight = height;
+        Log.d(SIZE_TAG, "mpv updateSurfaceSize changed=" + surfaceWidth + "x" + surfaceHeight);
     }
 
     private void applyAndroidSurfaceSize() {
         if (surfaceWidth > 0 && surfaceHeight > 0) {
             safeSetPropertyString("android-surface-size", surfaceWidth + "x" + surfaceHeight);
+            Log.d(SIZE_TAG, "mpv android-surface-size=" + surfaceWidth + "x" + surfaceHeight);
         } else {
             safeSetPropertyString("android-surface-size", "0x0");
+            Log.d(SIZE_TAG, "mpv android-surface-size=0x0");
         }
+    }
+
+    private String surfaceOutputName(Object output) {
+        if (output == null) return "null";
+        return output.getClass().getSimpleName();
+    }
+
+    private String surfaceFrame(SurfaceHolder holder) {
+        if (holder == null || holder.getSurfaceFrame() == null) return "null";
+        Rect frame = holder.getSurfaceFrame();
+        return frame.width() + "x" + frame.height();
     }
 
     private void releaseOwnedSurface() {
@@ -993,6 +1050,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         @Override
         public void surfaceCreated(SurfaceHolder holder) {
             surface = holder.getSurface();
+            updateSurfaceSize(holder);
+            Log.d(SIZE_TAG, "mpv surfaceCreated frame=" + surfaceFrame(holder) + " valid=" + (surface != null && surface.isValid()));
             bindVideoOutput();
         }
 
@@ -1000,12 +1059,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             surface = holder.getSurface();
             updateSurfaceSize(width, height);
+            Log.d(SIZE_TAG, "mpv surfaceChanged format=" + format + " size=" + width + "x" + height + " frame=" + surfaceFrame(holder));
             if (initialized) applyAndroidSurfaceSize();
             bindVideoOutput();
         }
 
         @Override
         public void surfaceDestroyed(SurfaceHolder holder) {
+            Log.d(SIZE_TAG, "mpv surfaceDestroyed frame=" + surfaceFrame(holder));
             surface = null;
             detachMpvSurface();
         }
@@ -1109,9 +1170,56 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void updateVideoSize() {
-        int width = intProperty("width", 0);
-        int height = intProperty("height", 0);
-        if (width > 0 && height > 0) videoSize = new VideoSize(width, height);
+        SizeCandidate candidate = videoSizeCandidate();
+        if (candidate == null || candidate.width <= 0 || candidate.height <= 0) return;
+        if (videoSize.width == candidate.width && videoSize.height == candidate.height) return;
+        videoSize = new VideoSize(candidate.width, candidate.height);
+        Log.d(SIZE_TAG, "mpv videoSize=" + candidate.width + "x" + candidate.height + " source=" + candidate.source + " surface=" + surfaceWidth + "x" + surfaceHeight);
+    }
+
+    @Nullable
+    private SizeCandidate videoSizeCandidate() {
+        SizeCandidate candidate = candidateFromProperties("current-tracks/video/demux-w", "current-tracks/video/demux-h", "current-track");
+        if (candidate != null) return candidate;
+        candidate = candidateFromSelectedVideoTrack();
+        if (candidate != null) return candidate;
+        candidate = candidateFromProperties("video-params/dw", "video-params/dh", "video-params-display");
+        if (candidate != null) return candidate;
+        candidate = candidateFromProperties("video-params/w", "video-params/h", "video-params");
+        if (candidate != null) return candidate;
+        candidate = candidateFromProperties("video-out-params/dw", "video-out-params/dh", "video-out-display");
+        if (candidate != null) return candidate;
+        candidate = candidateFromProperties("video-out-params/w", "video-out-params/h", "video-out");
+        if (candidate != null) return candidate;
+        return candidateFromProperties("width", "height", "width-height");
+    }
+
+    @Nullable
+    private SizeCandidate candidateFromProperties(String widthProperty, String heightProperty, String source) {
+        int width = intProperty(widthProperty, 0);
+        int height = intProperty(heightProperty, 0);
+        return width > 0 && height > 0 ? new SizeCandidate(width, height, source) : null;
+    }
+
+    @Nullable
+    private SizeCandidate candidateFromSelectedVideoTrack() {
+        int count = Math.max(0, intProperty("track-list/count", 0));
+        SizeCandidate firstVideo = null;
+        for (int i = 0; i < count; i++) {
+            String prefix = "track-list/" + i + "/";
+            if (!"video".equals(stringProperty(prefix + "type", ""))) continue;
+            if (booleanProperty(prefix + "albumart", false)) continue;
+            int width = intProperty(prefix + "demux-w", 0);
+            int height = intProperty(prefix + "demux-h", 0);
+            if (width <= 0 || height <= 0) continue;
+            SizeCandidate candidate = new SizeCandidate(width, height, "track-list/" + i);
+            if (firstVideo == null) firstVideo = candidate;
+            if (booleanProperty(prefix + "selected", false)) return candidate;
+        }
+        return firstVideo;
+    }
+
+    private record SizeCandidate(int width, int height, String source) {
     }
 
     private void startStateRefresh() {

@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -131,6 +132,8 @@ import java.util.Map;
 import java.util.Objects;
 
 public class VideoActivity extends PlaybackActivity implements Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, DanmakuDialog.Host, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, EpisodeGroupAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener {
+
+    private static final String SIZE_TAG = "MPV_SIZE";
 
     private ActivityVideoBinding mBinding;
     private ViewGroup.LayoutParams mFrameParams;
@@ -589,7 +592,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.danmaku.setVisibility(DanmakuSetting.isLoad() ? View.VISIBLE : View.GONE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         setupActionButtons();
-        mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> mPiP.update(this, view));
+        mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            mPiP.update(this, view);
+            Log.d(SIZE_TAG, "video layout new=" + (right - left) + "x" + (bottom - top)
+                    + " old=" + (oldRight - oldLeft) + "x" + (oldBottom - oldTop)
+                    + " fullscreen=" + isFullscreen()
+                    + " land=" + isLand()
+                    + " scale=" + getScale()
+                    + " player=" + (service() == null ? "none" : player().getPlayerText()));
+        });
     }
 
     private void setupActionButtons() {
@@ -1503,6 +1514,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void enterFullscreen() {
         if (isFullscreen()) return;
+        logVideoFrame("enterFullscreen before");
         setFullscreen(true);
         if (isLand() && !player().isPortrait()) setTransition();
         mBinding.video.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
@@ -1513,10 +1525,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mKeyDown.resetScale();
         App.post(mR3, 2000);
         hideControl();
+        logVideoFrame("enterFullscreen after");
     }
 
     private void exitFullscreen() {
         if (!isFullscreen()) return;
+        logVideoFrame("exitFullscreen before");
         setFullscreen(false);
         if (isLand() && !player().isPortrait()) setTransition();
         setRequestedOrientation(PlaybackOrientation.getExitFullscreenOrientation(isPort()));
@@ -1529,6 +1543,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         App.post(mR3, 2000);
         setRotate(false);
         hideControl();
+        logVideoFrame("exitFullscreen after");
     }
 
     private void setTransition() {
@@ -2031,16 +2046,20 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onSizeChanged(VideoSize size) {
+        logVideoFrame("onSizeChanged before size=" + size.width + "x" + size.height);
         mPiP.update(this, size.width, size.height, getScale());
         setSizeText();
         updateVideoHeight();
         applyResizeMode(getScale());
         checkOrientation();
+        logVideoFrame("onSizeChanged after size=" + size.width + "x" + size.height);
     }
 
     @Override
     protected void onSurfaceAttached() {
+        logVideoFrame("onSurfaceAttached before");
         applyResizeMode(getScale());
+        logVideoFrame("onSurfaceAttached after");
     }
 
     @Override
@@ -2120,8 +2139,27 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void updateVideoHeight() {
         if (isLand() || isFullscreen() || isInPictureInPictureMode()) return;
         if (mFrameHeight <= 0 || mFrameParams.height == mFrameHeight) return;
+        logVideoFrame("updateVideoHeight restore from=" + mFrameParams.height + " to=" + mFrameHeight);
         mFrameParams.height = mFrameHeight;
         mBinding.video.setLayoutParams(mFrameParams);
+    }
+
+    private void logVideoFrame(String step) {
+        if (mBinding == null) return;
+        Log.d(SIZE_TAG, "video " + step
+                + " frameParam=" + (mFrameParams == null ? "null" : mFrameParams.width + "x" + mFrameParams.height)
+                + " frameHeight=" + mFrameHeight
+                + " video=" + viewSize(mBinding.video)
+                + " exo=" + viewSize(mBinding.exo)
+                + " fullscreen=" + isFullscreen()
+                + " land=" + isLand()
+                + " scale=" + getScale()
+                + " player=" + (service() == null ? "none" : player().getPlayerText()));
+    }
+
+    private static String viewSize(View view) {
+        if (view == null) return "null";
+        return view.getWidth() + "x" + view.getHeight();
     }
 
     private void checkEnded(boolean notify) {

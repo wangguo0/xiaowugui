@@ -7,6 +7,7 @@ import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -37,6 +38,8 @@ import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.util.concurrent.ListenableFuture;
 
 public abstract class PlaybackActivity extends BaseActivity implements MediaController.Listener, Player.Listener, ServiceConnection {
+
+    private static final String SIZE_TAG = "MPV_SIZE";
 
     private ListenableFuture<MediaController> mControllerFuture;
     private MediaController mController;
@@ -192,11 +195,13 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void applyResizeMode(int resizeMode) {
+        logSurfaceState("applyResizeMode before mode=" + resizeMode);
         PlayerView view = getExoView();
         view.setResizeMode(resizeMode);
         view.requestLayout();
         View surface = view.getVideoSurfaceView();
         if (surface != null) surface.requestLayout();
+        logSurfaceState("applyResizeMode after mode=" + resizeMode);
     }
 
     protected void onReclaim() {
@@ -287,6 +292,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private void attachSurface() {
         if (mService == null) return;
         int targetRender = getRender();
+        logSurfaceState("attach start target=" + targetRender);
         syncShutter(true);
         if (render != targetRender) {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "switch render from=%d to=%d", render, targetRender);
@@ -294,14 +300,17 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
             getExoView().setRender(targetRender);
             render = targetRender;
             syncShutter(true);
+            logSurfaceState("attach after setRender target=" + targetRender);
         }
         if (getExoView().getPlayer() == null) {
             getExoView().setPlayer(player().getPlayer());
+            logSurfaceState("attach after setPlayer");
             syncVideoSurfaceSize(null);
             syncShutter();
             if (player().isNativePlayer()) getExoView().post(this::syncShutter);
         }
         onSurfaceAttached();
+        logSurfaceState("attach done");
     }
 
     private void syncVideoSurfaceSize(VideoSize size) {
@@ -310,6 +319,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         if (!(surface instanceof SurfaceView surfaceView)) return;
         if (!PlaybackPerformanceSetting.isSurfaceFixedSizeEnabled() || getRender() != PlayerSetting.RENDER_SURFACE || player().isNativePlayer()) {
             surfaceView.getHolder().setSizeFromLayout();
+            logSurfaceState("syncVideoSurfaceSize layout size=" + (size == null ? "null" : size.width + "x" + size.height));
             return;
         }
         int width = size != null && size.width > 0 ? size.width : player().getVideoWidth();
@@ -322,6 +332,36 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
             height = Math.max(1, Math.round(height * scale));
         }
         surfaceView.getHolder().setFixedSize(width, height);
+        logSurfaceState("syncVideoSurfaceSize fixed=" + width + "x" + height);
+    }
+
+    private void logSurfaceState(String step) {
+        PlayerView view = getExoView();
+        if (view == null) return;
+        View surface = view.getVideoSurfaceView();
+        View content = view.findViewById(androidx.media3.ui.R.id.exo_content_frame);
+        String playerText = mService == null ? "none" : player().getPlayerText();
+        boolean nativePlayer = mService != null && player().isNativePlayer();
+        int targetRender = mService == null ? -1 : getRender();
+        Log.d(SIZE_TAG, "playback " + step
+                + " key=" + getPlaybackKey()
+                + " player=" + playerText
+                + " native=" + nativePlayer
+                + " render=" + render
+                + " target=" + targetRender
+                + " resize=" + view.getResizeMode()
+                + " playerView=" + viewSize(view)
+                + " content=" + viewSize(content)
+                + " surface=" + surfaceName(surface) + ":" + viewSize(surface));
+    }
+
+    private static String viewSize(View view) {
+        if (view == null) return "null";
+        return view.getWidth() + "x" + view.getHeight();
+    }
+
+    private static String surfaceName(View view) {
+        return view == null ? "null" : view.getClass().getSimpleName();
     }
 
     private void syncShutter() {
@@ -489,6 +529,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     @Override
     public void onVideoSizeChanged(@NonNull VideoSize size) {
         if (!isOwner()) return;
+        logSurfaceState("onVideoSizeChanged size=" + size.width + "x" + size.height + " ratio=" + size.pixelWidthHeightRatio);
         syncVideoSurfaceSize(size);
         onSizeChanged(size);
     }
