@@ -55,9 +55,11 @@ Do not treat `MPV_EVENT_FILE_LOADED` as Media3 `STATE_READY` by itself. A file c
 load and immediately fail before a useful audio/video frame is produced. Prefer
 waiting for `MPV_EVENT_PLAYBACK_RESTART` before reporting ready playback.
 
-`MPV_EVENT_END_FILE` can mean success or failure. The bundled JNI currently only
-forwards the event id, not `mpv_event_end_file.reason`, so Java must infer obvious
-failure cases from mpv logs and properties until native event data is exposed.
+`MPV_EVENT_END_FILE` can mean success or failure. The bundled JNI now forwards
+`mpv_event_end_file.reason` and `mpv_event_end_file.error` through
+`MPVLib.endFile(reason, error, errorText)`. Java should use this structured
+native event first, and keep mpv logs/properties only as secondary classification
+signals for user-facing error messages.
 
 ## Current HLS limitation
 

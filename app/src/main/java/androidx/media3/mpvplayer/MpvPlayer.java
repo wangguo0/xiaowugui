@@ -182,6 +182,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private int surfaceWidth;
     private int surfaceHeight;
     private String lastFailureLog;
+    private int lastEndFileReason;
+    private int lastEndFileError;
+    private String lastEndFileErrorText;
     private float volume;
 
     public MpvPlayer(Context context, MpvPlayerConfig config) {
@@ -203,6 +206,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         pendingSeekPositionMs = C.TIME_UNSET;
         cachedDurationMs = C.TIME_UNSET;
         currentChapter = C.INDEX_UNSET;
+        lastEndFileReason = MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_UNKNOWN;
         textOffsetMs = 0;
         audioOffsetMs = 0;
         subtitleTextSize = 0f;
@@ -491,6 +495,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     @Override
     public void event(int eventId) {
         postToMain(() -> handleEvent(eventId));
+    }
+
+    @Override
+    public void endFile(int reason, int error, String errorText) {
+        postToMain(() -> handleEndFile(reason, error, errorText));
     }
 
     @Override
@@ -852,22 +861,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 updateVideoSize("event=video-reconfig#" + videoReconfigCount);
             }
             case MPVLib.MpvEvent.MPV_EVENT_END_FILE -> {
-                stopStateRefresh();
-                loading = false;
-                if (stopping) {
-                    stopping = false;
-                } else if (isFailedLoadedMedia()) {
-                    fail(new IOException(failedLoadedMediaMessage()), PlaybackException.ERROR_CODE_DECODING_FAILED);
-                    return;
-                } else if (fileLoaded || eofReached) {
-                    playbackState = Player.STATE_ENDED;
-                } else {
-                    loading = true;
-                    playbackState = Player.STATE_BUFFERING;
-                    mainHandler.removeCallbacks(endFileValidationRunnable);
-                    mainHandler.postDelayed(endFileValidationRunnable, END_FILE_VALIDATION_DELAY_MS);
-                    startStateRefresh();
-                }
+                handleEndFile(MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_UNKNOWN, MPVLib.MpvError.MPV_ERROR_SUCCESS, null);
+                return;
             }
             case MPVLib.MpvEvent.MPV_EVENT_IDLE -> {
                 if (loading && !fileLoaded && !stopping) {
@@ -884,6 +879,36 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             default -> {
             }
+        }
+        invalidateState();
+    }
+
+    private void handleEndFile(int reason, int error, @Nullable String errorText) {
+        if (released) return;
+        lastEndFileReason = reason;
+        lastEndFileError = error;
+        lastEndFileErrorText = errorText;
+        SpiderDebug.log("mpv", "event=end-file reason=%s(%d) error=%s(%d) text=%s loaded=%s restart=%s eof=%s stopping=%s uri=%s",
+                endFileReasonName(reason), reason, mpvErrorName(error), error, TextUtils.isEmpty(errorText) ? "-" : errorText,
+                fileLoaded, playbackRestarted, eofReached, stopping, currentPlayableUri);
+        stopStateRefresh();
+        loading = false;
+        if (stopping) {
+            stopping = false;
+        } else if (reason == MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_ERROR) {
+            fail(nativeEndFileError(reason, error, errorText), nativeEndFilePlaybackExceptionCode(error));
+            return;
+        } else if (isFailedLoadedMedia()) {
+            fail(new IOException(failedLoadedMediaMessage()), PlaybackException.ERROR_CODE_DECODING_FAILED);
+            return;
+        } else if (fileLoaded || eofReached) {
+            playbackState = Player.STATE_ENDED;
+        } else {
+            loading = true;
+            playbackState = Player.STATE_BUFFERING;
+            mainHandler.removeCallbacks(endFileValidationRunnable);
+            mainHandler.postDelayed(endFileValidationRunnable, END_FILE_VALIDATION_DELAY_MS);
+            startStateRefresh();
         }
         invalidateState();
     }
@@ -1538,6 +1563,73 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return cause == null ? mpvError(code, detail) : mpvError(code, detail, cause);
     }
 
+    private IOException nativeEndFileError(int reason, int error, @Nullable String errorText) {
+        return mpvError(nativeEndFileErrorCode(error), nativeEndFileDetail(reason, error, errorText));
+    }
+
+    private String nativeEndFileErrorCode(int error) {
+        if (sawDrmError) return ERROR_DRM_UNSUPPORTED;
+        if (sawVideoOutputError || error == MPVLib.MpvError.MPV_ERROR_VO_INIT_FAILED) return ERROR_VIDEO_OUTPUT_FAILED;
+        if (sawNetworkError) return ERROR_NETWORK_FAILED;
+        if (currentLikelyHls && (sawNoAvData
+                || sawInvalidData
+                || sawPngVideo
+                || error == MPVLib.MpvError.MPV_ERROR_NOTHING_TO_PLAY
+                || error == MPVLib.MpvError.MPV_ERROR_UNKNOWN_FORMAT
+                || error == MPVLib.MpvError.MPV_ERROR_UNSUPPORTED)) {
+            return ERROR_HLS_PLAYBACK_FAILED;
+        }
+        if (sawNoAvData || error == MPVLib.MpvError.MPV_ERROR_NOTHING_TO_PLAY) return ERROR_NO_AV_DATA;
+        if (sawInvalidData
+                || sawPngVideo
+                || error == MPVLib.MpvError.MPV_ERROR_UNKNOWN_FORMAT
+                || error == MPVLib.MpvError.MPV_ERROR_UNSUPPORTED) {
+            return ERROR_INVALID_MEDIA_DATA;
+        }
+        if (sawDecodeError) return ERROR_DECODE_FAILED;
+        return error == MPVLib.MpvError.MPV_ERROR_LOADING_FAILED ? ERROR_LOAD_FAILED : ERROR_DECODE_FAILED;
+    }
+
+    private int nativeEndFilePlaybackExceptionCode(int error) {
+        if (error == MPVLib.MpvError.MPV_ERROR_LOADING_FAILED) return PlaybackException.ERROR_CODE_IO_UNSPECIFIED;
+        if (error == MPVLib.MpvError.MPV_ERROR_VO_INIT_FAILED) return PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED;
+        return PlaybackException.ERROR_CODE_DECODING_FAILED;
+    }
+
+    private String nativeEndFileDetail(int reason, int error, @Nullable String errorText) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("native end-file reason=").append(endFileReasonName(reason)).append('(').append(reason).append(')');
+        builder.append(" error=").append(mpvErrorName(error)).append('(').append(error).append(')');
+        if (!TextUtils.isEmpty(errorText)) builder.append(' ').append(errorText);
+        return builder.toString();
+    }
+
+    private String endFileReasonName(int reason) {
+        return switch (reason) {
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_EOF -> "eof";
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_STOP -> "stop";
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_QUIT -> "quit";
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_ERROR -> "error";
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_REDIRECT -> "redirect";
+            case MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_UNKNOWN -> "unknown";
+            default -> "unknown";
+        };
+    }
+
+    private String mpvErrorName(int error) {
+        return switch (error) {
+            case MPVLib.MpvError.MPV_ERROR_SUCCESS -> "success";
+            case MPVLib.MpvError.MPV_ERROR_LOADING_FAILED -> "loading_failed";
+            case MPVLib.MpvError.MPV_ERROR_AO_INIT_FAILED -> "ao_init_failed";
+            case MPVLib.MpvError.MPV_ERROR_VO_INIT_FAILED -> "vo_init_failed";
+            case MPVLib.MpvError.MPV_ERROR_NOTHING_TO_PLAY -> "nothing_to_play";
+            case MPVLib.MpvError.MPV_ERROR_UNKNOWN_FORMAT -> "unknown_format";
+            case MPVLib.MpvError.MPV_ERROR_UNSUPPORTED -> "unsupported";
+            case MPVLib.MpvError.MPV_ERROR_GENERIC -> "generic";
+            default -> "unknown";
+        };
+    }
+
     private IOException mpvError(String code, @Nullable String detail) {
         return new IOException(code + detailSuffix(detail));
     }
@@ -1653,6 +1745,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         sawVideoOutputError = false;
         sawDrmError = false;
         lastFailureLog = null;
+        lastEndFileReason = MPVLib.MpvEndFileReason.MPV_END_FILE_REASON_UNKNOWN;
+        lastEndFileError = MPVLib.MpvError.MPV_ERROR_SUCCESS;
+        lastEndFileErrorText = null;
     }
 
     private boolean recentLogsContain(String... needles) {
@@ -2178,6 +2273,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         parts.add("audio-codec=" + stringProperty("audio-codec", ""));
         parts.add("hwdec=" + stringProperty("hwdec-current", ""));
         parts.add("vo=" + stringProperty("current-vo", stringProperty("vo-configured", "")));
+        parts.add("end-file=" + endFileReasonName(lastEndFileReason) + "/" + mpvErrorName(lastEndFileError) + "(" + lastEndFileError + ")");
+        if (!TextUtils.isEmpty(lastEndFileErrorText)) parts.add("end-file-text=" + lastEndFileErrorText);
         if (currentLikelyHls) parts.add("hls-proxy=" + hlsProxy.diagnostics());
         return String.join(" ", parts);
     }
