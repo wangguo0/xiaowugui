@@ -311,7 +311,7 @@ public class PlayerOsdController {
         String render = PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE ? "Surface" : "Texture";
         String tunnel = switchText(PlayerSetting.isTunnelingEnabled());
         String performance = PlaybackPerformanceSetting.getProfileName();
-        String passThrough = switchText(PlayerSetting.isAudioPassThrough());
+        String passThrough = player.getAudioPassThroughText();
         String preload = "预载" + switchText(PreloadSetting.isPreload());
         String frameRateMatch = player.isExo() ? "帧率匹配 开" : "";
         String softTune = getSoftDecodeTuneText(player);

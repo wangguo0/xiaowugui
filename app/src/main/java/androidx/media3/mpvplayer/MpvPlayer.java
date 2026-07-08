@@ -167,6 +167,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean cachedCacheUnderrun;
     private boolean cachedCacheBof;
     private boolean cachedCacheEof;
+    private boolean preferAacApplied;
+    private boolean audioTrackManuallySelected;
     private int loadStartRetryCount;
     private int currentChapter;
     private int cachedCacheBufferingState;
@@ -267,6 +269,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         loadStartRetryCount = 0;
         eofReached = false;
         idleActive = false;
+        preferAacApplied = false;
+        audioTrackManuallySelected = false;
         currentPlayableUri = null;
         currentLikelyHls = false;
         currentChapter = C.INDEX_UNSET;
@@ -406,6 +410,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         subtitlePosition = position;
         applySubtitleStyle();
         invalidateState();
+    }
+
+    public String getAudioSpdifCodecs() {
+        return config.audioSpdif();
     }
 
     public PlayerCacheState getCacheState() {
@@ -571,6 +579,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("hwdec", config.hwdec());
         setOption("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1");
         setOption("ao", config.ao());
+        if (!TextUtils.isEmpty(config.audioSpdif())) setOption("audio-spdif", config.audioSpdif());
         setOption("audio-set-media-role", "yes");
         setOption("tls-verify", config.tlsVerify() ? "yes" : "no");
         if (config.caFile().isFile()) setOption("tls-ca-file", config.caFile().getAbsolutePath());
@@ -722,6 +731,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     public void resetTrackSelection() {
+        audioTrackManuallySelected = true;
+        preferAacApplied = true;
         setMpvTrack(C.TRACK_TYPE_VIDEO, "auto");
         setMpvTrack(C.TRACK_TYPE_AUDIO, "auto");
         setMpvTrack(C.TRACK_TYPE_TEXT, "auto");
@@ -731,6 +742,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     public void setTrackSelection(int type, String mpvId) {
         if (TextUtils.isEmpty(mpvId)) return;
+        if (type == C.TRACK_TYPE_AUDIO) {
+            audioTrackManuallySelected = true;
+            preferAacApplied = true;
+        }
         setMpvTrack(type, mpvId);
         refreshTracks();
         invalidateState();
@@ -1199,6 +1214,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         playbackRestarted = false;
         loadStartRetryCount = 0;
         eofReached = false;
+        preferAacApplied = false;
+        audioTrackManuallySelected = false;
         cachedPositionMs = 0;
         cachedDurationMs = C.TIME_UNSET;
         resetCacheState();
@@ -1616,8 +1633,44 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             groups.add(new Tracks.Group(mediaGroup, false, new int[]{C.FORMAT_HANDLED}, new boolean[]{selected}));
         }
         currentTracks = groups.isEmpty() ? Tracks.EMPTY : new Tracks(groups);
+        maybeSelectPreferredAac(infos, selectedAudio);
         logTrackSnapshot(infos, selectedVideo, selectedAudio, selectedText, currentTracks);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "tracks refreshed count=%d groups=%d", count, groups.size());
+    }
+
+    private void maybeSelectPreferredAac(List<TrackInfo> infos, String selectedAudio) {
+        if (!PlayerSetting.isPreferAAC() || preferAacApplied || audioTrackManuallySelected || !initialized) return;
+        TrackInfo selected = findTrack(infos, C.TRACK_TYPE_AUDIO, selectedAudio);
+        if (selected != null && isAacTrack(selected)) {
+            preferAacApplied = true;
+            return;
+        }
+        TrackInfo preferred = findPreferredAacTrack(infos, selected);
+        if (preferred == null || TextUtils.equals(preferred.id, selected == null ? "" : selected.id)) return;
+        preferAacApplied = true;
+        setMpvTrack(C.TRACK_TYPE_AUDIO, preferred.id);
+        SpiderDebug.log("mpv", "prefer AAC audio track selected id=%s codec=%s previous=%s", preferred.id, preferred.codec, selected == null ? selectedAudio : selected.id);
+    }
+
+    @Nullable
+    private TrackInfo findTrack(List<TrackInfo> infos, int type, String selectedId) {
+        for (TrackInfo info : infos) if (info.type == type && isTrackSelected(info, selectedId)) return info;
+        return null;
+    }
+
+    @Nullable
+    private TrackInfo findPreferredAacTrack(List<TrackInfo> infos, @Nullable TrackInfo selected) {
+        TrackInfo first = null;
+        for (TrackInfo info : infos) {
+            if (info.type != C.TRACK_TYPE_AUDIO || !isAacTrack(info)) continue;
+            if (first == null) first = info;
+            if (selected != null && !TextUtils.isEmpty(selected.lang) && TextUtils.equals(selected.lang, info.lang)) return info;
+        }
+        return first;
+    }
+
+    private boolean isAacTrack(TrackInfo info) {
+        return info != null && sampleMimeType(info).equals(MimeTypes.AUDIO_AAC);
     }
 
     private void refreshChapters() {

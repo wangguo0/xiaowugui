@@ -333,6 +333,13 @@ public class PlayerManager implements ParseCallback {
         return engine != null && engine.supportsSubtitleStyle();
     }
 
+    public String getAudioPassThroughText() {
+        if (!PlayerSetting.isAudioPassThrough()) return "关";
+        if (!isMpv()) return "开";
+        String codecs = engine == null ? "" : engine.getAudioSpdifCodecs();
+        return TextUtils.isEmpty(codecs) ? "开/PCM" : "开/" + codecs;
+    }
+
     public void setSubtitleStyle(float textSize, float position) {
         if (engine != null) engine.setSubtitleStyle(textSize, position);
     }

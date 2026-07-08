@@ -22,6 +22,7 @@ public final class MpvPlayerConfig {
     private final String hwdec;
     private final String vo;
     private final String ao;
+    private final String audioSpdif;
     private final String logLevel;
     private final boolean tlsVerify;
     private final boolean cache;
@@ -40,6 +41,7 @@ public final class MpvPlayerConfig {
         hwdec = builder.hwdec;
         vo = builder.vo;
         ao = builder.ao;
+        audioSpdif = builder.audioSpdif;
         logLevel = builder.logLevel;
         tlsVerify = builder.tlsVerify;
         cache = builder.cache;
@@ -88,6 +90,10 @@ public final class MpvPlayerConfig {
         return ao;
     }
 
+    public String audioSpdif() {
+        return audioSpdif;
+    }
+
     public String logLevel() {
         return logLevel;
     }
@@ -131,6 +137,7 @@ public final class MpvPlayerConfig {
         private String hwdec = "mediacodec,mediacodec-copy";
         private String vo = "gpu";
         private String ao = "audiotrack,opensles";
+        private String audioSpdif = "";
         private String logLevel = "all=v";
         private boolean tlsVerify = true;
         private boolean cache = true;
@@ -183,6 +190,11 @@ public final class MpvPlayerConfig {
 
         public Builder ao(String ao) {
             this.ao = ao;
+            return this;
+        }
+
+        public Builder audioSpdif(String audioSpdif) {
+            this.audioSpdif = audioSpdif;
             return this;
         }
 

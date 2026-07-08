@@ -181,6 +181,11 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public String getAudioSpdifCodecs() {
+        return player.getAudioSpdifCodecs();
+    }
+
+    @Override
     public void setSubtitleStyle(float textSize, float position) {
         player.setSubtitleStyle(textSize, position);
     }
@@ -292,11 +297,17 @@ public class MpvPlayerEngine implements PlayerEngine {
     private MpvPlayerConfig buildConfig() {
         return MpvPlayerConfig.builder(App.get())
                 .hwdec(decode == HARD ? "mediacodec,mediacodec-copy" : "no")
+                .audioSpdif(resolveAudioSpdifCodecs())
                 .demuxerMaxBytes(getDemuxerMaxBytes())
                 .demuxerMaxBackBytes(getDemuxerMaxBackBytes())
                 .cacheSeconds(getDemuxerReadAheadSeconds())
                 .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds())
                 .build();
+    }
+
+    private String resolveAudioSpdifCodecs() {
+        if (!PlayerSetting.isAudioPassThrough()) return "";
+        return MpvAudioCapabilities.getAudioSpdifCodecs(App.get());
     }
 
     private long getDemuxerMaxBytes() {

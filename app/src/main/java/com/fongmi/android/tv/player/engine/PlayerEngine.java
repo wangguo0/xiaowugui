@@ -83,6 +83,10 @@ public interface PlayerEngine {
         return false;
     }
 
+    default String getAudioSpdifCodecs() {
+        return "";
+    }
+
     default void setSubtitleStyle(float textSize, float position) {
     }
 
