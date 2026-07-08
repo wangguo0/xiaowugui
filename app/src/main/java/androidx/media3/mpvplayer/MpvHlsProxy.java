@@ -221,14 +221,9 @@ public final class MpvHlsProxy extends NanoHTTPD {
         boolean mayStripPngPrefix = isPngMime(type);
         recordItemResponse(target.sessionId, response.code(), target.url);
         long contentLength = body.contentLength();
-        String mime = mediaMimeFor(target.url, finalUrl, type);
-        InputStream source = body.byteStream();
-        if (mayStripPngPrefix) {
-            source = new PngPrefixStrippingInputStream(source, target.url);
-        } else {
-            source = maybeCacheStreaming(owner, target, source, response.code(), forwardedRange, contentLength, mime);
-        }
+        InputStream source = mayStripPngPrefix ? new PngPrefixStrippingInputStream(body.byteStream(), target.url) : body.byteStream();
         InputStream stream = new CloseResponseInputStream(source, response);
+        String mime = mediaMimeFor(target.url, finalUrl, type);
         Response result = mayStripPngPrefix || contentLength < 0
                 ? newChunkedResponse(toStatus(response.code()), mime, stream)
                 : newFixedLengthResponse(toStatus(response.code()), mime, stream, contentLength);
@@ -262,7 +257,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
             String raw = trimCr(lines[i]);
             String line = raw.trim();
             if (line.startsWith("#") && line.contains("URI=\"")) {
-                out.append(rewriteUriAttributes(playlistUrl, raw, session, isCacheableUriAttribute(line)));
+                out.append(rewriteUriAttributes(playlistUrl, raw, session));
                 if (line.startsWith("#EXT-X-MAP") && line.toUpperCase(Locale.US).contains("BYTERANGE=")) {
                     stats(session).hasByteRange = true;
                 }
@@ -275,7 +270,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
                 out.append(raw);
             } else if (!line.isEmpty() && !line.startsWith("#")) {
                 String targetUrl = resolve(playlistUrl, line);
-                out.append(proxyItemUrl(targetUrl, session, pendingDuration > 0 && !pendingByteRange));
+                out.append(proxyItemUrl(targetUrl, session));
                 if (pendingDuration > 0) {
                     segments.add(new Segment(targetUrl, pendingDuration, elapsed, pendingByteRange));
                     elapsed += pendingDuration;
@@ -376,19 +371,14 @@ public final class MpvHlsProxy extends NanoHTTPD {
         return null;
     }
 
-    private boolean isCacheableUriAttribute(String line) {
-        if (!line.startsWith("#EXT-X-MAP")) return false;
-        return !line.toUpperCase(Locale.US).contains("BYTERANGE=");
-    }
-
-    private String rewriteUriAttributes(String playlistUrl, String line, int session, boolean cacheable) {
+    private String rewriteUriAttributes(String playlistUrl, String line, int session) {
         Matcher matcher = URI_ATTR.matcher(line);
         StringBuffer buffer = new StringBuffer();
         while (matcher.find()) {
             String value = matcher.group(1);
             String replacement = value;
             if (!TextUtils.isEmpty(value) && !value.startsWith("data:")) {
-                replacement = proxyItemUrl(resolve(playlistUrl, value), session, cacheable);
+                replacement = proxyItemUrl(resolve(playlistUrl, value), session);
             }
             matcher.appendReplacement(buffer, "URI=\"" + Matcher.quoteReplacement(replacement) + "\"");
         }
@@ -396,9 +386,9 @@ public final class MpvHlsProxy extends NanoHTTPD {
         return buffer.toString();
     }
 
-    private String proxyItemUrl(String targetUrl, int session, boolean cacheable) {
+    private String proxyItemUrl(String targetUrl, int session) {
         String id = Long.toString(nextId.incrementAndGet());
-        targets.put(id, new Target(session, targetUrl, System.currentTimeMillis(), cacheable));
+        targets.put(id, new Target(session, targetUrl, System.currentTimeMillis()));
         return baseUrl() + "/mpv/item?s=" + session + "&id=" + id;
     }
 
@@ -427,37 +417,6 @@ public final class MpvHlsProxy extends NanoHTTPD {
         response.addHeader("Accept-Ranges", "bytes");
         if (range != null) response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + length);
         return response;
-    }
-
-    private InputStream maybeCacheStreaming(Session session, Target target, InputStream source, int status, @Nullable String range, long contentLength, String mime) {
-        if (!shouldWriteThroughCache(target, status, range, contentLength)) return source;
-        File file = cacheFile(session, target.url);
-        if (file.isFile() && file.length() >= MIN_CACHE_FILE_BYTES) return source;
-        String key = file.getName();
-        if (!preloading.add(key)) return source;
-        File dir = cacheDir();
-        if (!dir.exists() && !dir.mkdirs()) {
-            preloading.remove(key);
-            return source;
-        }
-        File temp = tempFile(dir, file);
-        try {
-            return new CacheWritingInputStream(source, new FileOutputStream(temp), temp, file, key, target.url, contentLength, mime);
-        } catch (Throwable e) {
-            preloading.remove(key);
-            //noinspection ResultOfMethodCallIgnored
-            temp.delete();
-            SpiderDebug.log(TAG, "stream cache open failed url=%s error=%s", shortUrl(target.url), e.getMessage());
-            return source;
-        }
-    }
-
-    private boolean shouldWriteThroughCache(Target target, int status, @Nullable String range, long contentLength) {
-        if (target == null || !target.cacheable) return false;
-        if (!isCacheEnabled() || !stats(target.sessionId).vod) return false;
-        if (!isHttpUrl(target.url) || !TextUtils.isEmpty(range)) return false;
-        if (status != 200 || contentLength < MIN_CACHE_FILE_BYTES) return false;
-        return contentLength <= cacheLimitBytes();
     }
 
     private void preloadSegments(Session session, List<Segment> segments, double startSeconds) {
@@ -906,7 +865,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
     private record Session(String url, Map<String, String> headers, long createdAtMs) {
     }
 
-    private record Target(int sessionId, String url, long createdAtMs, boolean cacheable) {
+    private record Target(int sessionId, String url, long createdAtMs) {
     }
 
     private record Segment(String url, double durationSeconds, double startSeconds, boolean byteRange) {
@@ -931,144 +890,6 @@ public final class MpvHlsProxy extends NanoHTTPD {
     }
 
     private record Range(long start, long end) {
-    }
-
-    private final class CacheWritingInputStream extends FilterInputStream {
-
-        private final File temp;
-        private final File file;
-        private final String key;
-        private final String url;
-        private final long expectedLength;
-        private final String mime;
-        private OutputStream cache;
-        private long written;
-        private boolean completed;
-        private boolean released;
-
-        CacheWritingInputStream(InputStream in, OutputStream cache, File temp, File file, String key, String url, long expectedLength, String mime) {
-            super(in);
-            this.cache = cache;
-            this.temp = temp;
-            this.file = file;
-            this.key = key;
-            this.url = url;
-            this.expectedLength = expectedLength;
-            this.mime = mime;
-        }
-
-        @Override
-        public int read() throws IOException {
-            int value = super.read();
-            if (value == -1) {
-                finishCache();
-            } else {
-                writeCacheByte(value);
-            }
-            return value;
-        }
-
-        @Override
-        public int read(byte[] buffer, int offset, int length) throws IOException {
-            int read = super.read(buffer, offset, length);
-            if (read == -1) {
-                finishCache();
-            } else if (read > 0) {
-                writeCache(buffer, offset, read);
-            }
-            return read;
-        }
-
-        @Override
-        public void close() throws IOException {
-            try {
-                super.close();
-            } finally {
-                if (!completed) abortCache();
-            }
-        }
-
-        private void writeCacheByte(int value) {
-            OutputStream out = cache;
-            if (out == null) return;
-            try {
-                out.write(value);
-                written++;
-                if (written > cacheLimitBytes()) disableCache("item exceeds limit");
-            } catch (Throwable e) {
-                disableCache(e.getMessage());
-            }
-        }
-
-        private void writeCache(byte[] buffer, int offset, int length) {
-            OutputStream out = cache;
-            if (out == null) return;
-            try {
-                out.write(buffer, offset, length);
-                written += length;
-                if (written > cacheLimitBytes()) disableCache("item exceeds limit");
-            } catch (Throwable e) {
-                disableCache(e.getMessage());
-            }
-        }
-
-        private void finishCache() {
-            if (completed) return;
-            completed = true;
-            OutputStream out = cache;
-            cache = null;
-            try {
-                if (out != null) out.close();
-                if (expectedLength > 0 && written != expectedLength) {
-                    //noinspection ResultOfMethodCallIgnored
-                    temp.delete();
-                    SpiderDebug.log(TAG, "stream cache discard length=%d expected=%d url=%s", written, expectedLength, shortUrl(url));
-                    return;
-                }
-                commitCacheFile(temp, file, mime);
-                pruneCache();
-                SpiderDebug.log(TAG, "stream cached length=%d url=%s", written, shortUrl(url));
-            } catch (Throwable e) {
-                //noinspection ResultOfMethodCallIgnored
-                temp.delete();
-                SpiderDebug.log(TAG, "stream cache commit failed url=%s error=%s", shortUrl(url), e.getMessage());
-            } finally {
-                releaseKey();
-            }
-        }
-
-        private void disableCache(String reason) {
-            OutputStream out = cache;
-            cache = null;
-            closeQuietly(out);
-            //noinspection ResultOfMethodCallIgnored
-            temp.delete();
-            releaseKey();
-            SpiderDebug.log(TAG, "stream cache disabled url=%s error=%s", shortUrl(url), reason);
-        }
-
-        private void abortCache() {
-            OutputStream out = cache;
-            cache = null;
-            closeQuietly(out);
-            //noinspection ResultOfMethodCallIgnored
-            temp.delete();
-            releaseKey();
-        }
-
-        private void releaseKey() {
-            if (released) return;
-            released = true;
-            preloading.remove(key);
-        }
-
-        private void closeQuietly(@Nullable OutputStream out) {
-            if (out == null) return;
-            try {
-                out.close();
-            } catch (Throwable ignored) {
-            }
-        }
     }
 
     private static final class SessionStats {
