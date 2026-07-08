@@ -181,9 +181,15 @@ public class MpvPlayerEngine implements PlayerEngine {
     @Override
     public String getErrorMessage(PlaybackException e) {
         String message = e.getMessage();
-        if (message != null && message.startsWith("MPV_HLS_PLAYBACK_FAILED")) {
-            return ResUtil.getString(R.string.error_play_mpv_hls_unsupported);
-        }
+        if (startsWith(message, MpvPlayer.ERROR_HLS_PLAYBACK_FAILED)) return ResUtil.getString(R.string.error_play_mpv_hls_unsupported);
+        if (startsWith(message, MpvPlayer.ERROR_LOAD_FAILED)) return ResUtil.getString(R.string.error_play_mpv_load_failed);
+        if (startsWith(message, MpvPlayer.ERROR_NETWORK_FAILED)) return ResUtil.getString(R.string.error_play_mpv_network_failed);
+        if (startsWith(message, MpvPlayer.ERROR_DRM_UNSUPPORTED)) return ResUtil.getString(R.string.error_play_mpv_drm_unsupported);
+        if (startsWith(message, MpvPlayer.ERROR_UNEXPECTED_IMAGE)) return ResUtil.getString(R.string.error_play_mpv_unexpected_image);
+        if (startsWith(message, MpvPlayer.ERROR_NO_AV_DATA)) return ResUtil.getString(R.string.error_play_mpv_no_av);
+        if (startsWith(message, MpvPlayer.ERROR_INVALID_MEDIA_DATA)) return ResUtil.getString(R.string.error_play_mpv_invalid_data);
+        if (startsWith(message, MpvPlayer.ERROR_DECODE_FAILED)) return ResUtil.getString(R.string.error_play_mpv_decode_failed);
+        if (startsWith(message, MpvPlayer.ERROR_VIDEO_OUTPUT_FAILED)) return ResUtil.getString(R.string.error_play_mpv_video_output);
         return e.getMessage();
     }
 
@@ -197,7 +203,7 @@ public class MpvPlayerEngine implements PlayerEngine {
     private boolean shouldRetryFormat(PlaybackException e) {
         if (retriedFormat || spec == null || spec.getFormat() != null) return false;
         String message = e.getMessage();
-        if (message != null && message.startsWith("MPV failed to play media")) return false;
+        if (isTerminalMpvError(message)) return false;
         return e.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
                 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
                 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED
@@ -218,6 +224,21 @@ public class MpvPlayerEngine implements PlayerEngine {
         if (playWhenReady) player.play();
         else player.pause();
         return ErrorAction.RECOVERED;
+    }
+
+    private boolean isTerminalMpvError(String message) {
+        return startsWith(message, MpvPlayer.ERROR_HLS_PLAYBACK_FAILED)
+                || startsWith(message, MpvPlayer.ERROR_NETWORK_FAILED)
+                || startsWith(message, MpvPlayer.ERROR_DRM_UNSUPPORTED)
+                || startsWith(message, MpvPlayer.ERROR_UNEXPECTED_IMAGE)
+                || startsWith(message, MpvPlayer.ERROR_NO_AV_DATA)
+                || startsWith(message, MpvPlayer.ERROR_INVALID_MEDIA_DATA)
+                || startsWith(message, MpvPlayer.ERROR_DECODE_FAILED)
+                || startsWith(message, MpvPlayer.ERROR_VIDEO_OUTPUT_FAILED);
+    }
+
+    private boolean startsWith(String message, String prefix) {
+        return message != null && message.startsWith(prefix);
     }
 
     private MpvPlayer buildPlayer(Player.Listener listener) {

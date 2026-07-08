@@ -57,10 +57,19 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private static final int MAX_LOAD_START_RETRIES = 2;
     private static final double SECONDS_TO_MS = 1000.0;
     private static final String HLS_LOAD_OPTIONS = "demuxer=lavf,demuxer-lavf-format=hls,demuxer-lavf-probesize=10485760,demuxer-lavf-analyzeduration=5";
-    private static final String HLS_PLAYBACK_FAILED_MESSAGE = "MPV_HLS_PLAYBACK_FAILED";
     private static final int RECENT_LOG_LIMIT = 32;
     private static final String HEADER_ACCEPT = "Accept";
     private static final String HEADER_ORIGIN = "Origin";
+
+    public static final String ERROR_HLS_PLAYBACK_FAILED = "MPV_HLS_PLAYBACK_FAILED";
+    public static final String ERROR_LOAD_FAILED = "MPV_LOAD_FAILED";
+    public static final String ERROR_NETWORK_FAILED = "MPV_NETWORK_FAILED";
+    public static final String ERROR_DRM_UNSUPPORTED = "MPV_DRM_UNSUPPORTED";
+    public static final String ERROR_UNEXPECTED_IMAGE = "MPV_UNEXPECTED_IMAGE";
+    public static final String ERROR_NO_AV_DATA = "MPV_NO_AV_DATA";
+    public static final String ERROR_INVALID_MEDIA_DATA = "MPV_INVALID_MEDIA_DATA";
+    public static final String ERROR_DECODE_FAILED = "MPV_DECODE_FAILED";
+    public static final String ERROR_VIDEO_OUTPUT_FAILED = "MPV_VIDEO_OUTPUT_FAILED";
 
     private static final Commands COMMANDS = new Commands.Builder()
             .add(COMMAND_PLAY_PAUSE)
@@ -128,6 +137,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean sawNoAvData;
     private boolean sawInvalidData;
     private boolean sawPngVideo;
+    private boolean sawNetworkError;
+    private boolean sawDecodeError;
+    private boolean sawVideoOutputError;
+    private boolean sawDrmError;
     private int loadStartRetryCount;
     private String lastFailureLog;
     private float volume;
@@ -415,6 +428,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             recentLogs.clear();
             mainHandler.removeCallbacks(endFileValidationRunnable);
             closeContentFds();
+            if (hasDrmConfiguration(mediaItem)) {
+                fail(mpvError(ERROR_DRM_UNSUPPORTED, "MediaItem DRM configuration is not supported by libmpv"), PlaybackException.ERROR_CODE_DRM_UNSPECIFIED);
+                return;
+            }
             Map<String, String> headers = applyMediaOptions(mediaItem);
             bindVideoOutput();
             safeSetPropertyBoolean("pause", !playWhenReady);
@@ -439,7 +456,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             invalidateState();
             startStateRefresh();
         } catch (Throwable e) {
-            fail(e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
+            fail(classifyLoadError(e, e.getMessage()), PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
         }
     }
 
@@ -615,7 +632,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED -> {
                 if (loadedUnexpectedImage()) {
-                    fail(new IOException("MPV loaded image entry instead of video: " + stringProperty("path", "") + recentLogSuffix()), PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED);
+                    fail(mpvError(ERROR_UNEXPECTED_IMAGE, "path=" + stringProperty("path", "")), PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED);
                     return;
                 }
                 fileLoaded = true;
@@ -733,6 +750,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         String scheme = parsed.getScheme();
         if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) return false;
         return !"/mpv/index.m3u8".equals(parsed.getPath()) && !"/mpv/item".equals(parsed.getPath());
+    }
+
+    private boolean hasDrmConfiguration(MediaItem item) {
+        return item != null && item.localConfiguration != null && item.localConfiguration.drmConfiguration != null;
     }
 
     private Map<String, String> applyMediaOptions(MediaItem item) {
@@ -892,7 +913,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             safeSetPropertyString("vo", config.vo());
             SpiderDebug.log("mpv", "surface attached surface=%s vo=%s", surface, config.vo());
         } catch (Throwable e) {
-            fail(e, PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED);
+            fail(mpvError(ERROR_VIDEO_OUTPUT_FAILED, e.getMessage(), e), PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED);
         }
     }
 
@@ -1043,7 +1064,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             loadCurrentUri();
             scheduleLoadStartRetry();
         } catch (Throwable e) {
-            fail(e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
+            fail(classifyLoadError(e, e.getMessage()), PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
         }
     }
 
@@ -1074,7 +1095,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void validateEarlyEndFile() {
         if (released || stopping || fileLoaded || eofReached || playerError != null || playbackState != Player.STATE_BUFFERING) return;
         if (booleanProperty("idle-active", idleActive)) {
-            fail(new IOException("MPV failed to load media" + recentLogSuffix()), PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
+            fail(classifyLoadError(null, "idle-active=true"), PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
         } else {
             startStateRefresh();
         }
@@ -1082,8 +1103,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private boolean isFailedLoadedMedia() {
         if (!fileLoaded) return false;
-        if (sawNoAvData || sawInvalidData || sawPngVideo) return true;
-        if (recentLogsContain("no audio or video data played", "invalid data found when processing input", "video: png")) return true;
+        if (sawNoAvData || sawInvalidData || sawPngVideo || sawNetworkError || sawDecodeError || sawVideoOutputError || sawDrmError) return true;
+        if (recentLogsContain("no audio or video data played", "invalid data found when processing input", "video: png", "could not open codec", "failed to initialize decoder", "video output failed")) return true;
         return playbackRestarted && videoSize.width <= 0 && videoSize.height <= 0 && positionMs() <= 0 && durationMs() == C.TIME_UNSET;
     }
 
@@ -1093,9 +1114,41 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 || sawPngVideo
                 || recentLogsContain("no audio or video data played", "invalid data found when processing input", "video: png")
                 || playbackRestarted && videoSize.width <= 0 && videoSize.height <= 0 && positionMs() <= 0)) {
-            return HLS_PLAYBACK_FAILED_MESSAGE + recentLogSuffix();
+            return ERROR_HLS_PLAYBACK_FAILED + detailSuffix("hls input failed");
         }
-        return "MPV failed to play media" + recentLogSuffix();
+        if (sawDrmError) return ERROR_DRM_UNSUPPORTED + detailSuffix("drm/encrypted media");
+        if (sawVideoOutputError) return ERROR_VIDEO_OUTPUT_FAILED + detailSuffix("video output failed");
+        if (sawNetworkError) return ERROR_NETWORK_FAILED + detailSuffix("network/io failure");
+        if (sawNoAvData || recentLogsContain("no audio or video data played")) return ERROR_NO_AV_DATA + detailSuffix("no audio or video data played");
+        if (sawInvalidData || sawPngVideo || recentLogsContain("invalid data found when processing input", "video: png")) return ERROR_INVALID_MEDIA_DATA + detailSuffix("invalid media data");
+        return ERROR_DECODE_FAILED + detailSuffix("no playable audio/video output");
+    }
+
+    private IOException classifyLoadError(@Nullable Throwable cause, @Nullable String detail) {
+        String code;
+        if (sawDrmError) code = ERROR_DRM_UNSUPPORTED;
+        else if (sawVideoOutputError) code = ERROR_VIDEO_OUTPUT_FAILED;
+        else if (sawNetworkError) code = ERROR_NETWORK_FAILED;
+        else if (sawInvalidData || sawPngVideo) code = ERROR_INVALID_MEDIA_DATA;
+        else if (sawNoAvData) code = ERROR_NO_AV_DATA;
+        else code = ERROR_LOAD_FAILED;
+        return cause == null ? mpvError(code, detail) : mpvError(code, detail, cause);
+    }
+
+    private IOException mpvError(String code, @Nullable String detail) {
+        return new IOException(code + detailSuffix(detail));
+    }
+
+    private IOException mpvError(String code, @Nullable String detail, Throwable cause) {
+        return new IOException(code + detailSuffix(detail), cause);
+    }
+
+    private String detailSuffix(@Nullable String detail) {
+        StringBuilder builder = new StringBuilder();
+        if (!TextUtils.isEmpty(detail)) builder.append(": ").append(detail);
+        String recent = recentLogSuffix();
+        if (!TextUtils.isEmpty(recent)) builder.append(recent);
+        return builder.toString();
     }
 
     private void rememberLog(String line) {
@@ -1108,7 +1161,53 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (lower.contains("no audio or video data played")) sawNoAvData = true;
         if (lower.contains("invalid data found when processing input")) sawInvalidData = true;
         if (lower.contains("video: png")) sawPngVideo = true;
-        if (sawNoAvData || sawInvalidData || sawPngVideo || lower.contains("failed") || lower.contains("error")) lastFailureLog = line;
+        if (isNetworkFailureLog(lower)) sawNetworkError = true;
+        if (isDecodeFailureLog(lower)) sawDecodeError = true;
+        if (isVideoOutputFailureLog(lower)) sawVideoOutputError = true;
+        if (isDrmFailureLog(lower)) sawDrmError = true;
+        if (sawNoAvData || sawInvalidData || sawPngVideo || sawNetworkError || sawDecodeError || sawVideoOutputError || sawDrmError || lower.contains("failed") || lower.contains("error")) lastFailureLog = line;
+    }
+
+    private boolean isNetworkFailureLog(String lower) {
+        return lower.contains("http error")
+                || lower.contains("server returned")
+                || lower.contains("connection timed out")
+                || lower.contains("connection refused")
+                || lower.contains("connection reset")
+                || lower.contains("network is unreachable")
+                || lower.contains("name resolution")
+                || lower.contains("cannot resolve")
+                || lower.contains("timed out")
+                || ((lower.contains("tls") || lower.contains("ssl")) && (lower.contains("failed") || lower.contains("error") || lower.contains("certificate")))
+                || lower.contains("error reading")
+                || lower.contains("failed to open http")
+                || lower.contains("failed to open https");
+    }
+
+    private boolean isDecodeFailureLog(String lower) {
+        return lower.contains("could not open codec")
+                || lower.contains("failed to initialize decoder")
+                || lower.contains("failed to init decoder")
+                || lower.contains("decoder init failed")
+                || lower.contains("error while decoding")
+                || lower.contains("error decoding")
+                || lower.contains("decoding failed")
+                || lower.contains("no decoders available")
+                || lower.contains("hardware decoding failed");
+    }
+
+    private boolean isVideoOutputFailureLog(String lower) {
+        return lower.contains("video output failed")
+                || lower.contains("failed to create android surface")
+                || lower.contains("could not create egl")
+                || (lower.contains("egl") && lower.contains("failed"))
+                || (lower.contains("vo/") && lower.contains("failed"));
+    }
+
+    private boolean isDrmFailureLog(String lower) {
+        return (lower.contains("widevine") && (lower.contains("unsupported") || lower.contains("not supported") || lower.contains("failed") || lower.contains("error")))
+                || (lower.contains("encrypted") && (lower.contains("unsupported") || lower.contains("not supported") || lower.contains("failed")))
+                || (lower.contains("drm") && (lower.contains("unsupported") || lower.contains("not supported") || lower.contains("failed") || lower.contains("error")));
     }
 
     private boolean shouldDebugLogMpvLine(String line) {
@@ -1131,6 +1230,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         sawNoAvData = false;
         sawInvalidData = false;
         sawPngVideo = false;
+        sawNetworkError = false;
+        sawDecodeError = false;
+        sawVideoOutputError = false;
+        sawDrmError = false;
         lastFailureLog = null;
     }
 
@@ -1518,7 +1621,28 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         closeContentFds();
         mainHandler.removeCallbacks(endFileValidationRunnable);
         stopStateRefresh();
+        SpiderDebug.log("mpv", "fail code=%d message=%s diagnostics=%s", errorCode, e.getMessage(), diagnosticSummary());
         invalidateState();
+    }
+
+    private String diagnosticSummary() {
+        List<String> parts = new ArrayList<>();
+        parts.add("uri=" + currentPlayableUri);
+        parts.add("hls=" + currentLikelyHls);
+        parts.add("loaded=" + fileLoaded);
+        parts.add("started=" + loadStarted);
+        parts.add("restart=" + playbackRestarted);
+        parts.add("size=" + videoSize.width + "x" + videoSize.height);
+        parts.add("position=" + cachedPositionMs);
+        parts.add("duration=" + cachedDurationMs);
+        parts.add("tracks=" + currentTracks.getGroups().size());
+        parts.add("path=" + stringProperty("path", ""));
+        parts.add("file-format=" + stringProperty("file-format", ""));
+        parts.add("video-codec=" + stringProperty("video-codec", ""));
+        parts.add("audio-codec=" + stringProperty("audio-codec", ""));
+        parts.add("hwdec=" + stringProperty("hwdec-current", ""));
+        parts.add("vo=" + stringProperty("current-vo", stringProperty("vo-configured", "")));
+        return String.join(" ", parts);
     }
 
     private String recentLogSuffix() {
