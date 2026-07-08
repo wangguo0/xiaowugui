@@ -9,6 +9,7 @@ import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 
 import com.fongmi.android.tv.bean.Track;
+import com.fongmi.android.tv.player.lut.MpvLutShader;
 
 import java.util.Collections;
 import java.util.List;
@@ -69,6 +70,17 @@ public interface PlayerEngine {
     }
 
     default void setVideoEffects(List<Effect> effects) {
+    }
+
+    default boolean supportsNativeLut() {
+        return false;
+    }
+
+    default boolean supportsLut() {
+        return supportsVideoEffects() || supportsNativeLut();
+    }
+
+    default void setNativeLutShader(MpvLutShader shader) {
     }
 
     default Format getVideoFormat() {

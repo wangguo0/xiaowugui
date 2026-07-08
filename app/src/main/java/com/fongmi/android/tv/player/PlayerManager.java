@@ -46,6 +46,8 @@ import com.fongmi.android.tv.player.lut.LutEligibility;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
+import com.fongmi.android.tv.player.lut.MpvLutShader;
+import com.fongmi.android.tv.player.lut.MpvLutShaderFactory;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.LocalProxyDebug;
@@ -171,7 +173,9 @@ public class PlayerManager implements ParseCallback {
 
     private void resetLutRuntimeState(String reason, boolean clearEngineEffects) {
         lutApplySeq++;
-        if (clearEngineEffects && engine != null && videoEffectsActive) {
+        if (clearEngineEffects && engine != null && engine.supportsNativeLut()) {
+            safeSetNativeLut(null, reason + "_reset");
+        } else if (clearEngineEffects && engine != null && videoEffectsActive) {
             try {
                 engine.setVideoEffects(Collections.emptyList());
                 if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "clear effects before reset reason=%s", reason);
@@ -1083,6 +1087,10 @@ public class PlayerManager implements ParseCallback {
             return;
         }
         if (notify || preview) pendingLutPreview = preview;
+        if (engine.supportsNativeLut()) {
+            applyNativeLut(seq, preset, notify, preview);
+            return;
+        }
         if (!ensureLutPipelineReadyForCurrentItem("request")) {
             return;
         }
@@ -1108,6 +1116,61 @@ public class PlayerManager implements ParseCallback {
                 });
             }
         });
+    }
+
+    private void applyNativeLut(int seq, LutPreset preset, boolean notify, boolean preview) {
+        lutAppliedForItem = false;
+        lutApplyInProgress = true;
+        pendingLutPreview = false;
+        int strength = LutSetting.getStrength();
+        Task.execute(() -> {
+            long start = System.currentTimeMillis();
+            try {
+                MpvLutShader shader = MpvLutShaderFactory.create(preset, strength, preview);
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "create shader preset=%s format=%s strength=%d preview=%s cost=%dms", preset.getId(), preset.getFormat(), strength, preview, System.currentTimeMillis() - start);
+                App.post(() -> applyNativeLutShader(seq, shader, notify, preview));
+            } catch (Throwable e) {
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "create shader failed preset=%s strength=%d error=%s", preset.getId(), strength, causeChain(e));
+                App.post(() -> {
+                    if (seq != lutApplySeq || engine == null) return;
+                    lutApplyInProgress = false;
+                    setNeutralVideoEffects("native_error");
+                    completeLutBeforePlay("native_error");
+                    if (notify) Notify.show(R.string.lut_apply_failed);
+                });
+            }
+        });
+    }
+
+    private void applyNativeLutShader(int seq, MpvLutShader shader, boolean notify, boolean preview) {
+        if (seq != lutApplySeq || engine == null) return;
+        String reason = getLutUnavailableReason();
+        if (!TextUtils.isEmpty(reason)) {
+            lutApplyInProgress = false;
+            setNeutralVideoEffects(reason);
+            completeLutBeforePlay(reason);
+            if (notify) Notify.show(reason);
+            return;
+        }
+        if (safeSetNativeLut(shader, preview ? "preview_native" : "apply_native")) {
+            lutAppliedForItem = true;
+            pendingLutPreview = false;
+            if (preview) scheduleNativeLutPreviewCommit(seq);
+        } else {
+            lutAppliedForItem = false;
+        }
+        lutApplyInProgress = false;
+        completeLutBeforePlay(preview ? "preview_native" : "apply_native");
+    }
+
+    private void scheduleNativeLutPreviewCommit(int seq) {
+        int delayMs = Math.max(1, LutSetting.getPreviewSeconds()) * 1000;
+        App.post(() -> {
+            if (seq != lutApplySeq || engine == null || !engine.supportsNativeLut()) return;
+            if (!lutAllowed || !LutSetting.isEnabled()) return;
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "commit preview shader seq=%d delay=%d", seq, delayMs);
+            applyLut(false, false);
+        }, delayMs);
     }
 
     private void applyLutColor(int seq, ColorLut colorLut, boolean notify, boolean preview, int previewSeconds) {
@@ -1289,11 +1352,19 @@ public class PlayerManager implements ParseCallback {
 
     private void clearVideoEffects(String reason) {
         dynamicLutEffect.clear();
+        if (engine != null && engine.supportsNativeLut()) {
+            safeSetNativeLut(null, reason);
+            return;
+        }
         safeSetVideoEffects(Collections.emptyList(), reason);
     }
 
     private void setNeutralVideoEffects(String reason) {
         dynamicLutEffect.clear();
+        if (engine != null && engine.supportsNativeLut()) {
+            safeSetNativeLut(null, reason);
+            return;
+        }
         if (canKeepWarmNeutralEffects()) safeSetVideoEffects(dynamicLutEffect.effects(), reason + "_dynamic_passthrough");
         else clearVideoEffects(reason);
     }
@@ -1334,6 +1405,18 @@ public class PlayerManager implements ParseCallback {
             return true;
         } catch (Throwable e) {
             if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "set effects failed reason=%s error=%s", reason, causeChain(e));
+            return false;
+        }
+    }
+
+    private boolean safeSetNativeLut(MpvLutShader shader, String reason) {
+        if (engine == null || !engine.supportsNativeLut()) return false;
+        try {
+            engine.setNativeLutShader(shader);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "set shader=%s reason=%s", shader == null ? "none" : shader.diagnostics(), reason);
+            return true;
+        } catch (Throwable e) {
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "set shader failed reason=%s error=%s", reason, causeChain(e));
             return false;
         }
     }

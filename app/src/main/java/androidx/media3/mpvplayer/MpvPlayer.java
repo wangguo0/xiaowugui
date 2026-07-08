@@ -35,6 +35,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
+import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.collect.ImmutableList;
@@ -126,7 +127,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private SurfaceHolder surfaceHolder;
     private Surface surface;
     private Object videoOutput;
+    private MpvLutShader lutShader;
     private String currentPlayableUri;
+    private String appliedLutShaderPath;
     private PlaybackParameters playbackParameters;
     private PlaybackException playerError;
     private Tracks currentTracks;
@@ -428,6 +431,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return config.audioSpdif();
     }
 
+    public void setLutShader(@Nullable MpvLutShader shader) {
+        lutShader = shader;
+        applyShaderPipeline(false);
+    }
+
     public PlayerCacheState getCacheState() {
         if (initialized && mediaItem != null) refreshCacheState();
         return new PlayerCacheState(
@@ -556,6 +564,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             } else {
                 hlsProxy.clear();
             }
+            applyShaderPipeline(true);
             Log.d(TAG, "load uri=" + currentPlayableUri + " hls=" + currentLikelyHls);
             SpiderDebug.log("mpv", "load uri=%s hls=%s surface=%s attached=%s hwdec=%s", currentPlayableUri, currentLikelyHls, surface != null && surface.isValid(), surfaceAttached, config.hwdec());
             loadCurrentUri();
@@ -583,6 +592,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         MPVLib.addObserver(this);
         MPVLib.addLogObserver(this);
         applyPostInitOptions();
+        applyShaderPipeline(true);
         observeProperties();
     }
 
@@ -2289,6 +2299,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         parts.add("audio-codec=" + stringProperty("audio-codec", ""));
         parts.add("hwdec=" + stringProperty("hwdec-current", ""));
         parts.add("vo=" + stringProperty("current-vo", stringProperty("vo-configured", "")));
+        parts.add("shader=" + (lutShader == null ? "-" : lutShader.diagnostics()));
         parts.add("end-file=" + endFileReasonName(lastEndFileReason) + "/" + mpvErrorName(lastEndFileError) + "(" + lastEndFileError + ")");
         if (!TextUtils.isEmpty(lastEndFileErrorText)) parts.add("end-file-text=" + lastEndFileErrorText);
         if (currentLikelyHls) parts.add("hls-proxy=" + hlsProxy.diagnostics());
@@ -2299,6 +2310,21 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (!TextUtils.isEmpty(lastFailureLog)) return ": " + lastFailureLog;
         if (recentLogs.isEmpty()) return "";
         return ": " + recentLogs.get(recentLogs.size() - 1);
+    }
+
+    private void applyShaderPipeline(boolean force) {
+        if (!initialized) return;
+        String target = lutShader == null ? "" : lutShader.getPath();
+        if (!force && TextUtils.equals(appliedLutShaderPath, target)) return;
+        if (!TextUtils.isEmpty(appliedLutShaderPath)) {
+            safeCommand(new String[]{"change-list", "glsl-shaders", "remove", appliedLutShaderPath});
+            SpiderDebug.log("mpv", "shader remove lut=%s", appliedLutShaderPath);
+        }
+        if (!TextUtils.isEmpty(target)) {
+            safeCommand(new String[]{"change-list", "glsl-shaders", "append", target});
+            SpiderDebug.log("mpv", "shader append lut=%s", target);
+        }
+        appliedLutShaderPath = target;
     }
 
     private void postToMain(Runnable runnable) {
@@ -2457,6 +2483,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void safeSetPropertyString(String property, String value) {
         try {
             MPVLib.setPropertyString(property, value);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void safeCommand(String[] command) {
+        try {
+            MPVLib.command(command);
         } catch (Throwable ignored) {
         }
     }

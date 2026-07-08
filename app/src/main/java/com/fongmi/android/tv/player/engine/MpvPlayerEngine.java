@@ -19,6 +19,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.player.PlayerHelper;
+import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -169,6 +170,16 @@ public class MpvPlayerEngine implements PlayerEngine {
     @Override
     public Format getVideoFormat() {
         return TrackUtil.selectedFormat(getCurrentTracks(), C.TRACK_TYPE_VIDEO);
+    }
+
+    @Override
+    public boolean supportsNativeLut() {
+        return true;
+    }
+
+    @Override
+    public void setNativeLutShader(MpvLutShader shader) {
+        player.setLutShader(shader);
     }
 
     @Override
