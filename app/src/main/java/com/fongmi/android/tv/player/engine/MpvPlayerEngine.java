@@ -19,6 +19,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.player.PlayerHelper;
+import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
@@ -316,7 +317,9 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     private MpvPlayerConfig buildConfig() {
+        MpvConfigStore.ensureReady();
         return MpvPlayerConfig.builder(App.get())
+                .configDir(MpvConfigStore.configDir())
                 .hwdec(decode == HARD ? "mediacodec,mediacodec-copy" : "no")
                 .audioSpdif(resolveAudioSpdifCodecs())
                 .demuxerMaxBytes(getDemuxerMaxBytes())

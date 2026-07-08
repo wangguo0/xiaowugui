@@ -591,7 +591,6 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("config-dir", config.configDir().getAbsolutePath());
         setOption("gpu-shader-cache-dir", config.cacheDir().getAbsolutePath());
         setOption("icc-cache-dir", config.cacheDir().getAbsolutePath());
-        setOption("profile", "fast");
         setOption("vo", config.vo());
         setOption("gpu-context", "android");
         setOption("opengl-es", "yes");
@@ -609,18 +608,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("cache-pause-initial", "no");
         setOption("demuxer-thread", "yes");
         setOption("demuxer-seekable-cache", "auto");
-        setOption("http-allow-redirect", "yes");
-        setOption("hls-bitrate", "max");
         setOption("demuxer-max-bytes", String.valueOf(config.demuxerMaxBytes()));
         setOption("demuxer-max-back-bytes", String.valueOf(config.demuxerMaxBackBytes()));
         setOption("demuxer-readahead-secs", String.valueOf(config.demuxerReadaheadSeconds()));
-        setOption("sub-ass", "yes");
-        setOption("sub-ass-override", "yes");
-        setOption("embeddedfonts", "yes");
-        setOption("sub-fix-timing", "yes");
-        setOption("sub-use-margins", "yes");
-        setOption("sub-font-provider", "fontconfig");
-        setOption("volume-max", "100");
         setOption("msg-level", config.logLevel());
         for (Map.Entry<String, String> entry : config.extraOptions().entrySet()) setOption(entry.getKey(), entry.getValue());
     }
