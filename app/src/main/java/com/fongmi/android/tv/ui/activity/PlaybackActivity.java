@@ -21,6 +21,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
+import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
 import com.fongmi.android.tv.R;
@@ -195,13 +196,21 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void applyResizeMode(int resizeMode) {
-        logSurfaceState("applyResizeMode before mode=" + resizeMode);
+        int effectiveResizeMode = effectiveResizeMode(resizeMode);
+        logSurfaceState("applyResizeMode before mode=" + resizeMode + " effective=" + effectiveResizeMode);
         PlayerView view = getExoView();
-        view.setResizeMode(resizeMode);
+        view.setResizeMode(effectiveResizeMode);
         view.requestLayout();
         View surface = view.getVideoSurfaceView();
         if (surface != null) surface.requestLayout();
-        logSurfaceState("applyResizeMode after mode=" + resizeMode);
+        logSurfaceState("applyResizeMode after mode=" + resizeMode + " effective=" + effectiveResizeMode);
+    }
+
+    private int effectiveResizeMode(int resizeMode) {
+        if (mService != null && player().isMpv() && resizeMode == AspectRatioFrameLayout.RESIZE_MODE_FIT) {
+            return AspectRatioFrameLayout.RESIZE_MODE_FILL;
+        }
+        return resizeMode;
     }
 
     protected void onReclaim() {

@@ -132,6 +132,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private Tracks currentTracks;
     private List<MediaEdition> currentChapters;
     private VideoSize videoSize;
+    private String lastVideoSizeCandidateLog;
     private int playbackState;
     private long pendingSeekPositionMs;
     private long cachedPositionMs;
@@ -175,6 +176,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean preferAacApplied;
     private boolean audioTrackManuallySelected;
     private int loadStartRetryCount;
+    private int videoReconfigCount;
     private int currentChapter;
     private int cachedCacheBufferingState;
     private int surfaceWidth;
@@ -513,6 +515,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             loadStarted = false;
             playbackRestarted = false;
             loadStartRetryCount = 0;
+            videoReconfigCount = 0;
+            lastVideoSizeCandidateLog = null;
             eofReached = false;
             idleActive = false;
             cachedDurationMs = C.TIME_UNSET;
@@ -712,12 +716,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
             case "width", "height", "video-params/w", "video-params/h", "video-params/dw", "video-params/dh", "video-out-params/w", "video-out-params/h", "video-out-params/dw", "video-out-params/dh", "current-tracks/video/demux-w", "current-tracks/video/demux-h" -> {
-                updateVideoSize();
+                updateVideoSize("property:" + property);
                 refreshTracks();
             }
             case "container-fps", "estimated-vf-fps", "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
             case "track-list/count" -> {
-                updateVideoSize();
+                updateVideoSize("property:" + property);
                 refreshTracks();
             }
             case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
@@ -819,7 +823,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 playbackState = Player.STATE_BUFFERING;
                 loading = true;
                 cachedDurationMs = durationMs();
-                updateVideoSize();
+                updateVideoSize("event=file-loaded");
                 refreshTracks();
                 refreshChapters();
                 SpiderDebug.log("mpv", "event=file-loaded duration=%d size=%dx%d path=%s", cachedDurationMs, videoSize.width, videoSize.height, stringProperty("path", ""));
@@ -833,7 +837,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> {
                 playbackRestarted = true;
-                updateVideoSize();
+                updateVideoSize("event=playback-restart");
                 refreshTracks();
                 refreshChapters();
                 SpiderDebug.log("mpv", "event=playback-restart position=%d duration=%d size=%dx%d", positionMs(), durationMs(), videoSize.width, videoSize.height);
@@ -843,7 +847,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                     startStateRefresh();
                 }
             }
-            case MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG -> updateVideoSize();
+            case MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG -> {
+                videoReconfigCount++;
+                updateVideoSize("event=video-reconfig#" + videoReconfigCount);
+            }
             case MPVLib.MpvEvent.MPV_EVENT_END_FILE -> {
                 stopStateRefresh();
                 loading = false;
@@ -1353,12 +1360,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         }
     }
 
-    private void updateVideoSize() {
+    private void updateVideoSize(String reason) {
         SizeCandidate candidate = videoSizeCandidate();
+        logVideoSizeCandidates(reason, candidate);
         if (candidate == null || candidate.width <= 0 || candidate.height <= 0) return;
         if (videoSize.width == candidate.width && videoSize.height == candidate.height) return;
         videoSize = new VideoSize(candidate.width, candidate.height);
-        Log.d(SIZE_TAG, "mpv videoSize=" + candidate.width + "x" + candidate.height + " source=" + candidate.source + " surface=" + surfaceWidth + "x" + surfaceHeight);
+        Log.d(SIZE_TAG, "mpv videoSize=" + candidate.width + "x" + candidate.height + " source=" + candidate.source + " reason=" + reason + " surface=" + surfaceWidth + "x" + surfaceHeight);
     }
 
     @Nullable
@@ -1371,11 +1379,16 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (candidate != null) return candidate;
         candidate = candidateFromProperties("video-params/w", "video-params/h", "video-params");
         if (candidate != null) return candidate;
+        candidate = candidateFromProperties("width", "height", "width-height");
+        if (candidate != null) return candidate;
+        if (!canUseVideoOutSizeFallback()) return null;
         candidate = candidateFromProperties("video-out-params/dw", "video-out-params/dh", "video-out-display");
         if (candidate != null) return candidate;
-        candidate = candidateFromProperties("video-out-params/w", "video-out-params/h", "video-out");
-        if (candidate != null) return candidate;
-        return candidateFromProperties("width", "height", "width-height");
+        return candidateFromProperties("video-out-params/w", "video-out-params/h", "video-out");
+    }
+
+    private boolean canUseVideoOutSizeFallback() {
+        return videoSize.width <= 0 && videoSize.height <= 0 && (fileLoaded || playbackRestarted);
     }
 
     @Nullable
@@ -1401,6 +1414,48 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             if (booleanProperty(prefix + "selected", false)) return candidate;
         }
         return firstVideo;
+    }
+
+    private void logVideoSizeCandidates(String reason, @Nullable SizeCandidate candidate) {
+        String text = "mpv size candidates reason=" + reason
+                + " selected=" + candidateText(candidate)
+                + " stable=" + size("current", "current-tracks/video/demux-w", "current-tracks/video/demux-h")
+                + " track=" + selectedTrackSizeText()
+                + " paramsDisplay=" + size("vp-d", "video-params/dw", "video-params/dh")
+                + " params=" + size("vp", "video-params/w", "video-params/h")
+                + " legacy=" + size("wh", "width", "height")
+                + " outDisplay=" + size("vo-d", "video-out-params/dw", "video-out-params/dh")
+                + " out=" + size("vo", "video-out-params/w", "video-out-params/h")
+                + " fileLoaded=" + fileLoaded
+                + " restarted=" + playbackRestarted
+                + " reconfig=" + videoReconfigCount
+                + " surface=" + surfaceWidth + "x" + surfaceHeight;
+        if (text.equals(lastVideoSizeCandidateLog)) return;
+        lastVideoSizeCandidateLog = text;
+        Log.d(SIZE_TAG, text);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv", "%s", text);
+    }
+
+    private String candidateText(@Nullable SizeCandidate candidate) {
+        return candidate == null ? "none" : candidate.source + ":" + candidate.width + "x" + candidate.height;
+    }
+
+    private String size(String label, String widthProperty, String heightProperty) {
+        return label + ":" + intProperty(widthProperty, 0) + "x" + intProperty(heightProperty, 0);
+    }
+
+    private String selectedTrackSizeText() {
+        int count = Math.max(0, intProperty("track-list/count", 0));
+        String first = "none";
+        for (int i = 0; i < count; i++) {
+            String prefix = "track-list/" + i + "/";
+            if (!"video".equals(stringProperty(prefix + "type", ""))) continue;
+            if (booleanProperty(prefix + "albumart", false)) continue;
+            String text = "track" + i + ":" + intProperty(prefix + "demux-w", 0) + "x" + intProperty(prefix + "demux-h", 0) + ":sel=" + booleanProperty(prefix + "selected", false);
+            if ("none".equals(first)) first = text;
+            if (booleanProperty(prefix + "selected", false)) return text;
+        }
+        return first;
     }
 
     private record SizeCandidate(int width, int height, String source) {
