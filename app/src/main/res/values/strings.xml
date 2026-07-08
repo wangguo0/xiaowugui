@@ -71,6 +71,9 @@
     <string name="play_track_audio">Audio</string>
     <string name="play_track_video">Video</string>
     <string name="play_track_disable_subtitle">Subtitle off</string>
+    <string name="play_track_disable_secondary_subtitle">Secondary subtitle off</string>
+    <string name="play_track_secondary_subtitle">Secondary</string>
+    <string name="play_track_primary_subtitle">Main</string>
     <string name="offset_text">Text offset</string>
     <string name="offset_audio">Audio offset</string>
     <string name="offset_setting">Offset settings</string>
@@ -1082,5 +1085,6 @@
         <item>Select video track</item>
         <item>Select subtitle track</item>
     </string-array>
+    <string name="select_secondary_subtitle_track">Select secondary subtitle</string>
 
 </resources>

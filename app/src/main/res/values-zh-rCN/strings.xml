@@ -70,6 +70,9 @@
     <string name="play_track_audio">音轨</string>
     <string name="play_track_video">视轨</string>
     <string name="play_track_disable_subtitle">关闭字幕</string>
+    <string name="play_track_disable_secondary_subtitle">关闭第二字幕</string>
+    <string name="play_track_secondary_subtitle">第二字幕</string>
+    <string name="play_track_primary_subtitle">主字幕</string>
     <string name="offset_text">字幕偏移</string>
     <string name="offset_audio">音轨偏移</string>
     <string name="offset_setting">偏移设置</string>
@@ -1074,5 +1077,6 @@
         <item>选择视轨</item>
         <item>选择字幕</item>
     </string-array>
+    <string name="select_secondary_subtitle_track">选择第二字幕</string>
 
 </resources>

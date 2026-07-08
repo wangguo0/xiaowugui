@@ -333,6 +333,14 @@ public class PlayerManager implements ParseCallback {
         return engine != null && engine.supportsSubtitleStyle();
     }
 
+    public boolean supportsSecondarySubtitle() {
+        return engine != null && engine.supportsSecondarySubtitle();
+    }
+
+    public boolean isSecondarySubtitleSelected(Format format) {
+        return engine != null && engine.isSecondarySubtitleSelected(format);
+    }
+
     public String getAudioPassThroughText() {
         if (!PlayerSetting.isAudioPassThrough()) return "关";
         if (!isMpv()) return "开";
@@ -497,6 +505,10 @@ public class PlayerManager implements ParseCallback {
 
     public void setTrack(List<Track> tracks) {
         if (!tracks.isEmpty()) engine.setTrack(tracks);
+    }
+
+    public void setSecondarySubtitleTrack(Track track) {
+        if (engine != null) engine.setSecondarySubtitleTrack(track);
     }
 
     public void play() {

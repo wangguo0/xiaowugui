@@ -676,11 +676,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("vid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("aid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("sid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("secondary-sid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/video/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/video/demux-w", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("current-tracks/video/demux-h", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("current-tracks/audio/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("current-tracks/sub/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-tracks/sub2/id", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("chapter", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("chapter-list", MPVLib.MpvFormat.MPV_FORMAT_STRING);
     }
@@ -733,7 +735,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 updateVideoSize("property:" + property);
                 refreshTracks();
             }
-            case "vid", "aid", "sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id" -> refreshTracks();
+            case "vid", "aid", "sid", "secondary-sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id", "current-tracks/sub2/id" -> refreshTracks();
             case "chapter" -> {
                 if (value instanceof Number number) currentChapter = number.intValue();
                 refreshChapters();
@@ -755,6 +757,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setMpvTrack(C.TRACK_TYPE_VIDEO, "auto");
         setMpvTrack(C.TRACK_TYPE_AUDIO, "auto");
         setMpvTrack(C.TRACK_TYPE_TEXT, "auto");
+        setSecondarySubtitleTrackSelection("no");
         refreshTracks();
         invalidateState();
     }
@@ -768,6 +771,21 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setMpvTrack(type, mpvId);
         refreshTracks();
         invalidateState();
+    }
+
+    public void setSecondarySubtitleTrackSelection(String mpvId) {
+        if (TextUtils.isEmpty(mpvId) || !initialized) return;
+        safeSetPropertyString("secondary-sid", mpvId);
+        SpiderDebug.log("mpv", "select secondary subtitle id=%s", mpvId);
+        refreshTracks();
+        invalidateState();
+    }
+
+    public boolean isSecondarySubtitleSelected(String mpvId) {
+        if (TextUtils.isEmpty(mpvId)) return false;
+        String selected = secondarySubtitleTrackId();
+        if (TextUtils.isEmpty(selected) || isAutoTrackChoice(selected) || isDisabledTrackChoice(selected)) return false;
+        return selected.equals(mpvId) || normalizeTrackId(selected).equals(normalizeTrackId(mpvId));
     }
 
     public boolean selectEdition(MediaEdition edition) {
@@ -1945,9 +1963,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         builder.append(" rawVid=").append(propertyStringOrInt("vid"));
         builder.append(" rawAid=").append(propertyStringOrInt("aid"));
         builder.append(" rawSid=").append(propertyStringOrInt("sid"));
+        builder.append(" secondarySid=").append(secondarySubtitleTrackId());
         builder.append(" currentVideo=").append(propertyStringOrInt("current-tracks/video/id"));
         builder.append(" currentAudio=").append(propertyStringOrInt("current-tracks/audio/id"));
         builder.append(" currentSub=").append(propertyStringOrInt("current-tracks/sub/id"));
+        builder.append(" currentSub2=").append(propertyStringOrInt("current-tracks/sub2/id"));
         builder.append(" size=").append(videoSize.width).append("x").append(videoSize.height);
         builder.append(" width=").append(intProperty("width", C.LENGTH_UNSET));
         builder.append(" height=").append(intProperty("height", C.LENGTH_UNSET));
@@ -2023,6 +2043,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             default -> null;
         };
         return property == null ? "" : propertyStringOrInt(property);
+    }
+
+    private String secondarySubtitleTrackId() {
+        String current = propertyStringOrInt("current-tracks/sub2/id");
+        if (!TextUtils.isEmpty(current)) return current;
+        return propertyStringOrInt("secondary-sid");
     }
 
     private String propertyStringOrInt(String property) {

@@ -90,6 +90,17 @@ public interface PlayerEngine {
     default void setSubtitleStyle(float textSize, float position) {
     }
 
+    default boolean supportsSecondarySubtitle() {
+        return false;
+    }
+
+    default boolean isSecondarySubtitleSelected(Format format) {
+        return false;
+    }
+
+    default void setSecondarySubtitleTrack(Track track) {
+    }
+
     default boolean haveTitle() {
         return false;
     }

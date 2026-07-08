@@ -191,6 +191,27 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public boolean supportsSecondarySubtitle() {
+        return true;
+    }
+
+    @Override
+    public boolean isSecondarySubtitleSelected(Format format) {
+        return format != null && player.isSecondarySubtitleSelected(parseMpvTrackId(format.id));
+    }
+
+    @Override
+    public void setSecondarySubtitleTrack(Track track) {
+        if (track == null) return;
+        if (track.isDisabled() && track.getType() == C.TRACK_TYPE_TEXT) {
+            player.setSecondarySubtitleTrackSelection("no");
+            return;
+        }
+        String id = findMpvTrackId(track);
+        if (id != null) player.setSecondarySubtitleTrackSelection(id);
+    }
+
+    @Override
     public boolean haveTitle() {
         return !getCurrentMediaEditions().isEmpty();
     }
