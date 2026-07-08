@@ -708,10 +708,14 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
     private String sampleMimeType(int type, String codec) {
         String value = codec == null ? "" : codec.toLowerCase(Locale.US);
         if (type == C.TRACK_TYPE_TEXT) {
+            if (value.contains("pgs") || value.contains("hdmv")) return MimeTypes.APPLICATION_PGS;
+            if (value.contains("dvd") || value.contains("vobsub")) return MimeTypes.APPLICATION_VOBSUB;
+            if (value.contains("dvb")) return MimeTypes.APPLICATION_DVBSUBS;
             if (value.contains("ass") || value.contains("ssa")) return MimeTypes.TEXT_SSA;
             if (value.contains("webvtt") || value.contains("vtt")) return MimeTypes.TEXT_VTT;
+            if (value.contains("srt") || value.contains("subrip")) return MimeTypes.APPLICATION_SUBRIP;
             if (value.contains("ttml")) return MimeTypes.APPLICATION_TTML;
-            return MimeTypes.APPLICATION_SUBRIP;
+            return TextUtils.isEmpty(value) ? MimeTypes.TEXT_UNKNOWN : MimeTypes.BASE_TYPE_TEXT + "/" + value;
         }
         if (type == C.TRACK_TYPE_AUDIO) {
             if (value.contains("aac")) return MimeTypes.AUDIO_AAC;

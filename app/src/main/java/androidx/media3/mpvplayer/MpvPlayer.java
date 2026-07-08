@@ -1430,10 +1430,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private String sampleMimeType(TrackInfo info) {
         String codec = info.codec == null ? "" : info.codec.toLowerCase(Locale.US);
         if (info.type == C.TRACK_TYPE_TEXT) {
+            if (codec.contains("pgs") || codec.contains("hdmv")) return MimeTypes.APPLICATION_PGS;
+            if (codec.contains("dvd") || codec.contains("vobsub")) return MimeTypes.APPLICATION_VOBSUB;
+            if (codec.contains("dvb")) return MimeTypes.APPLICATION_DVBSUBS;
             if (codec.contains("ass") || codec.contains("ssa")) return MimeTypes.TEXT_SSA;
             if (codec.contains("webvtt") || codec.contains("vtt")) return MimeTypes.TEXT_VTT;
+            if (codec.contains("srt") || codec.contains("subrip")) return MimeTypes.APPLICATION_SUBRIP;
             if (codec.contains("ttml")) return MimeTypes.APPLICATION_TTML;
-            return MimeTypes.APPLICATION_SUBRIP;
+            return TextUtils.isEmpty(codec) ? MimeTypes.TEXT_UNKNOWN : MimeTypes.BASE_TYPE_TEXT + "/" + codec;
         }
         if (info.type == C.TRACK_TYPE_AUDIO) {
             if (codec.contains("aac")) return MimeTypes.AUDIO_AAC;
