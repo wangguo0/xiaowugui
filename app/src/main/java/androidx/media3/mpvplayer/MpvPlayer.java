@@ -367,6 +367,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         pendingSeekPositionMs = cachedPositionMs;
         if (initialized && playbackState != Player.STATE_IDLE) {
             seekMpv(cachedPositionMs);
+            if (currentLikelyHls && playbackRestarted) hlsProxy.preloadAround(cachedPositionMs);
             if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_BUFFERING;
         }
         invalidateState();
@@ -2076,6 +2077,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         parts.add("audio-codec=" + stringProperty("audio-codec", ""));
         parts.add("hwdec=" + stringProperty("hwdec-current", ""));
         parts.add("vo=" + stringProperty("current-vo", stringProperty("vo-configured", "")));
+        if (currentLikelyHls) parts.add("hls-proxy=" + hlsProxy.diagnostics());
         return String.join(" ", parts);
     }
 
