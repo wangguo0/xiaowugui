@@ -766,6 +766,7 @@ public class PlayerManager implements ParseCallback {
     private void setMediaItem(long timeout) {
         if (spec == null || spec.getUrl() == null) return;
         int seq = ++prepareSeq;
+        if (rejectMpvDrmMedia()) return;
         if (LocalProxyDebug.shouldAwaitReady(spec.getUrl())) {
             awaitLocalProxyAndSetMediaItem(seq, timeout);
             return;
@@ -801,6 +802,15 @@ public class PlayerManager implements ParseCallback {
         engine.start(spec.checkUa(), playWhenReady);
         App.post(runnable, timeout);
         if (notifyPrepare) callback.onPrepare();
+    }
+
+    private boolean rejectMpvDrmMedia() {
+        if (!isMpv() || spec == null || spec.getDrm() == null) return false;
+        App.removeCallbacks(runnable);
+        clearPendingSwitchRestore();
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "reject drm for mpv spec=%s drm=%s", debugSpec(), spec.getDrm().getType());
+        callback.onError(ResUtil.getString(R.string.error_play_mpv_drm_unsupported));
+        return true;
     }
 
     private void prepareLutPipeline() {

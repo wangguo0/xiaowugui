@@ -213,7 +213,9 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void startPlayer(String key, Result result, boolean useParse, long timeout, MediaMetadata metadata) {
-        if (result.getDrm() != null && !FrameworkMediaDrm.isCryptoSchemeSupported(result.getDrm().getUUID())) {
+        if (rejectUnsupportedDrm(key, result)) {
+            return;
+        } else if (result.getDrm() != null && !FrameworkMediaDrm.isCryptoSchemeSupported(result.getDrm().getUUID())) {
             onError(ResUtil.getString(R.string.error_play_drm));
         } else if (result.hasMsg()) {
             onError(result.getMsg());
@@ -226,6 +228,17 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
             attachSurface();
             player().start(PlaySpec.from(result, key, metadata), timeout, PlayerSetting.isAutoPlay());
         }
+    }
+
+    private boolean rejectUnsupportedDrm(String key, Result result) {
+        if (result == null || result.getDrm() == null || !isSelectedMpvPlayer()) return false;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "reject drm for mpv key=%s drm=%s", key, result.getDrm().getType());
+        onError(ResUtil.getString(R.string.error_play_mpv_drm_unsupported));
+        return true;
+    }
+
+    private boolean isSelectedMpvPlayer() {
+        return mService != null ? player().isMpv() : PlayerSetting.getPlayer() == PlayerSetting.MPV;
     }
 
     private void bindPlaybackService() {
