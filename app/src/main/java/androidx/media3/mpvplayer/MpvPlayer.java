@@ -2,6 +2,7 @@ package androidx.media3.mpvplayer;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,6 +13,7 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.TextureView;
+import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
@@ -142,6 +144,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean sawVideoOutputError;
     private boolean sawDrmError;
     private int loadStartRetryCount;
+    private int surfaceWidth;
+    private int surfaceHeight;
     private String lastFailureLog;
     private float volume;
 
@@ -879,9 +883,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private void setVideoOutput(Object output) {
         detachSurfaceHolder();
+        surfaceWidth = 0;
+        surfaceHeight = 0;
         if (output instanceof SurfaceView view) {
+            updateSurfaceSize(view);
             setSurfaceHolder(view.getHolder());
         } else if (output instanceof TextureView view && view.getSurfaceTexture() != null) {
+            updateSurfaceSize(view);
             releaseOwnedSurface();
             surface = new Surface(view.getSurfaceTexture());
             ownsSurface = true;
@@ -897,6 +905,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private void setSurfaceHolder(SurfaceHolder holder) {
         surfaceHolder = holder;
+        updateSurfaceSize(holder);
         surfaceHolder.addCallback(surfaceCallback);
         surface = surfaceHolder.getSurface();
         ownsSurface = false;
@@ -909,9 +918,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             MPVLib.attachSurface(surface);
             surfaceAttached = true;
             setRuntimeString("force-window", "yes");
-            safeSetPropertyString("android-surface-size", "0x0");
+            applyAndroidSurfaceSize();
             safeSetPropertyString("vo", config.vo());
-            SpiderDebug.log("mpv", "surface attached surface=%s vo=%s", surface, config.vo());
+            SpiderDebug.log("mpv", "surface attached surface=%s size=%dx%d vo=%s", surface, surfaceWidth, surfaceHeight, config.vo());
         } catch (Throwable e) {
             fail(mpvError(ERROR_VIDEO_OUTPUT_FAILED, e.getMessage(), e), PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED);
         }
@@ -922,6 +931,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         detachMpvSurface();
         releaseOwnedSurface();
         surface = null;
+        surfaceWidth = 0;
+        surfaceHeight = 0;
     }
 
     private void detachMpvSurface() {
@@ -944,6 +955,34 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         surfaceHolder = null;
     }
 
+    private void updateSurfaceSize(View view) {
+        if (view == null || view.getWidth() <= 0 || view.getHeight() <= 0) return;
+        surfaceWidth = view.getWidth();
+        surfaceHeight = view.getHeight();
+    }
+
+    private void updateSurfaceSize(SurfaceHolder holder) {
+        if (holder == null) return;
+        Rect frame = holder.getSurfaceFrame();
+        if (frame == null || frame.width() <= 0 || frame.height() <= 0) return;
+        surfaceWidth = frame.width();
+        surfaceHeight = frame.height();
+    }
+
+    private void updateSurfaceSize(int width, int height) {
+        if (width <= 0 || height <= 0) return;
+        surfaceWidth = width;
+        surfaceHeight = height;
+    }
+
+    private void applyAndroidSurfaceSize() {
+        if (surfaceWidth > 0 && surfaceHeight > 0) {
+            safeSetPropertyString("android-surface-size", surfaceWidth + "x" + surfaceHeight);
+        } else {
+            safeSetPropertyString("android-surface-size", "0x0");
+        }
+    }
+
     private void releaseOwnedSurface() {
         if (ownsSurface && surface != null) surface.release();
         ownsSurface = false;
@@ -960,7 +999,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             surface = holder.getSurface();
-            if (initialized) safeSetPropertyString("android-surface-size", width + "x" + height);
+            updateSurfaceSize(width, height);
+            if (initialized) applyAndroidSurfaceSize();
             bindVideoOutput();
         }
 
