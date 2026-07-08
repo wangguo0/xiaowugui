@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil;
 
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.exo.TrackUtil;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -72,12 +73,19 @@ public final class CodecCapabilityInspector {
         int matched = 0;
         int videoIndex = 0;
         int audioIndex = 0;
+        Format selectedVideo = TrackUtil.selectedFormat(tracks, C.TRACK_TYPE_VIDEO);
+        Format selectedAudio = TrackUtil.selectedFormat(tracks, C.TRACK_TYPE_AUDIO);
+        boolean hasSelectedVideo = hasSelectedTrack(tracks, C.TRACK_TYPE_VIDEO);
+        boolean hasSelectedAudio = hasSelectedTrack(tracks, C.TRACK_TYPE_AUDIO);
         for (Tracks.Group group : tracks.getGroups()) {
             int type = group.getType();
             if (type != C.TRACK_TYPE_VIDEO && type != C.TRACK_TYPE_AUDIO) continue;
             for (int i = 0; i < group.length; i++) {
                 Format format = group.getTrackFormat(i);
-                String text = formatTrack(context, type, type == C.TRACK_TYPE_VIDEO ? ++videoIndex : ++audioIndex, format, group.getTrackSupport(i), group.isTrackSelected(i));
+                Format fallback = type == C.TRACK_TYPE_VIDEO ? selectedVideo : selectedAudio;
+                boolean hasSelected = type == C.TRACK_TYPE_VIDEO ? hasSelectedVideo : hasSelectedAudio;
+                boolean selected = group.isTrackSelected(i) || !hasSelected && sameFormat(format, fallback);
+                String text = formatTrack(context, type, type == C.TRACK_TYPE_VIDEO ? ++videoIndex : ++audioIndex, format, group.getTrackSupport(i), selected);
                 total++;
                 if (!TextUtils.isEmpty(query) && !normalize(text).contains(query)) continue;
                 if (matched++ > 0) builder.append("\n\n");
@@ -89,6 +97,22 @@ public final class CodecCapabilityInspector {
             return "当前媒体轨道没有匹配关键词";
         }
         return "当前媒体轨道 " + matched + "/" + total + "\n\n" + builder;
+    }
+
+    private static boolean hasSelectedTrack(Tracks tracks, int type) {
+        if (tracks == null || tracks.isEmpty()) return false;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != type) continue;
+            for (int i = 0; i < group.length; i++) {
+                if (group.isTrackSelected(i)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean sameFormat(Format format, Format other) {
+        if (format == null || other == null) return false;
+        return format == other || format.equals(other);
     }
 
     public static List<CodecEntry> getHardwareDecoders() {
@@ -181,6 +205,10 @@ public final class CodecCapabilityInspector {
         List<TrackRef> refs = new ArrayList<>();
         int videoIndex = 0;
         int audioIndex = 0;
+        Format selectedVideo = TrackUtil.selectedFormat(tracks, C.TRACK_TYPE_VIDEO);
+        Format selectedAudio = TrackUtil.selectedFormat(tracks, C.TRACK_TYPE_AUDIO);
+        boolean hasSelectedVideo = hasSelectedTrack(tracks, C.TRACK_TYPE_VIDEO);
+        boolean hasSelectedAudio = hasSelectedTrack(tracks, C.TRACK_TYPE_AUDIO);
         for (Tracks.Group group : tracks.getGroups()) {
             int type = group.getType();
             if (type != C.TRACK_TYPE_VIDEO && type != C.TRACK_TYPE_AUDIO) continue;
@@ -189,7 +217,10 @@ public final class CodecCapabilityInspector {
                 String mime = getSampleMimeType(format);
                 if (TextUtils.isEmpty(mime)) continue;
                 int index = type == C.TRACK_TYPE_VIDEO ? ++videoIndex : ++audioIndex;
-                refs.add(new TrackRef(type == C.TRACK_TYPE_VIDEO ? TYPE_VIDEO : TYPE_AUDIO, type == C.TRACK_TYPE_VIDEO ? "视频轨" : "音频轨", index, mime, format, group.isTrackSelected(i), decoderNames(context, mime, format)));
+                Format fallback = type == C.TRACK_TYPE_VIDEO ? selectedVideo : selectedAudio;
+                boolean hasSelected = type == C.TRACK_TYPE_VIDEO ? hasSelectedVideo : hasSelectedAudio;
+                boolean selected = group.isTrackSelected(i) || !hasSelected && sameFormat(format, fallback);
+                refs.add(new TrackRef(type == C.TRACK_TYPE_VIDEO ? TYPE_VIDEO : TYPE_AUDIO, type == C.TRACK_TYPE_VIDEO ? "视频轨" : "音频轨", index, mime, format, selected, decoderNames(context, mime, format)));
             }
         }
         return refs;

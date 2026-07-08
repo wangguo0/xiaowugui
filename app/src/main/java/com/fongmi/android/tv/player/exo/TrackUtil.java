@@ -7,7 +7,6 @@ import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.C;
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlayerHelper;
@@ -48,6 +47,7 @@ public class TrackUtil {
         for (Tracks.Group trackGroup : currentTracks.getGroups()) {
             if (trackGroup.getType() != track.getType()) continue;
             for (int i = 0; i < trackGroup.length; i++) {
+                if (!trackGroup.isTrackSupported(i)) continue;
                 Format format = trackGroup.getTrackFormat(i);
                 if (track.getFormat().equals(PlayerHelper.describeFormat(format))) {
                     return new TrackInfo(trackGroup, i);
@@ -72,11 +72,6 @@ public class TrackUtil {
             if (track.isSelected()) selectedIndexMapByType.put(type, info.trackIndex);
         }
         TrackSelectionParameters.Builder builder = player.getTrackSelectionParameters().buildUpon();
-        if (builder instanceof DefaultTrackSelector.Parameters.Builder exoBuilder) {
-            exoBuilder.setExceedRendererCapabilitiesIfNecessary(true);
-            exoBuilder.setExceedVideoConstraintsIfNecessary(true);
-            exoBuilder.setExceedAudioConstraintsIfNecessary(true);
-        }
         mediaGroupMapByType.forEach((type, mediaGroup) -> {
             builder.setTrackTypeDisabled(type, mediaGroup == null);
             if (mediaGroup == null) return;
