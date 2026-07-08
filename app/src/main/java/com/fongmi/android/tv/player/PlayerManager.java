@@ -32,6 +32,7 @@ import com.fongmi.android.tv.player.engine.ExoPlayerEngine;
 import com.fongmi.android.tv.player.engine.IjkPlayerEngine;
 import com.fongmi.android.tv.player.engine.MpvPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
+import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
 import com.fongmi.android.tv.player.lut.LutEffectFactory;
@@ -301,6 +302,10 @@ public class PlayerManager implements ParseCallback {
 
     public Format getVideoFormat() {
         return engine.getVideoFormat();
+    }
+
+    public PlayerCacheState getCacheState() {
+        return engine == null ? PlayerCacheState.empty() : engine.getCacheState();
     }
 
     public boolean supportsSubtitleStyle() {

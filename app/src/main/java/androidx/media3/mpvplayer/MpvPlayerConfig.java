@@ -11,7 +11,8 @@ import java.util.Map;
 
 public final class MpvPlayerConfig {
 
-    private static final long DEFAULT_DEMUXER_BYTES = 64L * 1024L * 1024L;
+    public static final long DEFAULT_DEMUXER_BYTES = 64L * 1024L * 1024L;
+    public static final int DEFAULT_CACHE_SECONDS = 20;
 
     private final File configDir;
     private final File cacheDir;
@@ -23,8 +24,11 @@ public final class MpvPlayerConfig {
     private final String ao;
     private final String logLevel;
     private final boolean tlsVerify;
+    private final boolean cache;
     private final long demuxerMaxBytes;
     private final long demuxerMaxBackBytes;
+    private final int cacheSeconds;
+    private final int demuxerReadaheadSeconds;
     private final Map<String, String> extraOptions;
 
     private MpvPlayerConfig(Builder builder) {
@@ -38,8 +42,11 @@ public final class MpvPlayerConfig {
         ao = builder.ao;
         logLevel = builder.logLevel;
         tlsVerify = builder.tlsVerify;
+        cache = builder.cache;
         demuxerMaxBytes = builder.demuxerMaxBytes;
         demuxerMaxBackBytes = builder.demuxerMaxBackBytes;
+        cacheSeconds = builder.cacheSeconds;
+        demuxerReadaheadSeconds = builder.demuxerReadaheadSeconds;
         extraOptions = Collections.unmodifiableMap(new LinkedHashMap<>(builder.extraOptions));
     }
 
@@ -89,12 +96,24 @@ public final class MpvPlayerConfig {
         return tlsVerify;
     }
 
+    public boolean cache() {
+        return cache;
+    }
+
     public long demuxerMaxBytes() {
         return demuxerMaxBytes;
     }
 
     public long demuxerMaxBackBytes() {
         return demuxerMaxBackBytes;
+    }
+
+    public int cacheSeconds() {
+        return cacheSeconds;
+    }
+
+    public int demuxerReadaheadSeconds() {
+        return demuxerReadaheadSeconds;
     }
 
     public Map<String, String> extraOptions() {
@@ -114,8 +133,11 @@ public final class MpvPlayerConfig {
         private String ao = "audiotrack,opensles";
         private String logLevel = "all=v";
         private boolean tlsVerify = true;
+        private boolean cache = true;
         private long demuxerMaxBytes = DEFAULT_DEMUXER_BYTES;
         private long demuxerMaxBackBytes = DEFAULT_DEMUXER_BYTES;
+        private int cacheSeconds = DEFAULT_CACHE_SECONDS;
+        private int demuxerReadaheadSeconds = DEFAULT_CACHE_SECONDS;
 
         private Builder(Context context) {
             Context app = context.getApplicationContext();
@@ -174,6 +196,11 @@ public final class MpvPlayerConfig {
             return this;
         }
 
+        public Builder cache(boolean cache) {
+            this.cache = cache;
+            return this;
+        }
+
         public Builder demuxerMaxBytes(long demuxerMaxBytes) {
             this.demuxerMaxBytes = demuxerMaxBytes;
             return this;
@@ -181,6 +208,16 @@ public final class MpvPlayerConfig {
 
         public Builder demuxerMaxBackBytes(long demuxerMaxBackBytes) {
             this.demuxerMaxBackBytes = demuxerMaxBackBytes;
+            return this;
+        }
+
+        public Builder cacheSeconds(int cacheSeconds) {
+            this.cacheSeconds = cacheSeconds;
+            return this;
+        }
+
+        public Builder demuxerReadaheadSeconds(int demuxerReadaheadSeconds) {
+            this.demuxerReadaheadSeconds = demuxerReadaheadSeconds;
             return this;
         }
 

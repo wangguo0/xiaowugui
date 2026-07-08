@@ -19,6 +19,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.exo.TrackUtil;
 import com.fongmi.android.tv.player.PlayerHelper;
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 
@@ -170,6 +171,11 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public PlayerCacheState getCacheState() {
+        return player.getCacheState();
+    }
+
+    @Override
     public boolean supportsSubtitleStyle() {
         return true;
     }
@@ -286,6 +292,30 @@ public class MpvPlayerEngine implements PlayerEngine {
     private MpvPlayerConfig buildConfig() {
         return MpvPlayerConfig.builder(App.get())
                 .hwdec(decode == HARD ? "mediacodec,mediacodec-copy" : "no")
+                .demuxerMaxBytes(getDemuxerMaxBytes())
+                .demuxerMaxBackBytes(getDemuxerMaxBackBytes())
+                .cacheSeconds(getDemuxerReadAheadSeconds())
+                .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds())
                 .build();
+    }
+
+    private long getDemuxerMaxBytes() {
+        int bytes = PlayerSetting.getBufferBytes();
+        return bytes > 0 ? bytes : MpvPlayerConfig.DEFAULT_DEMUXER_BYTES;
+    }
+
+    private long getDemuxerMaxBackBytes() {
+        if (PlayerSetting.getBackBufferMs() <= 0) return 0;
+        long forward = getDemuxerMaxBytes();
+        return switch (PlayerSetting.getBackBufferOption()) {
+            case 1 -> Math.max(16L * 1024 * 1024, forward / 4);
+            case 2 -> Math.max(32L * 1024 * 1024, forward / 2);
+            case 3 -> forward;
+            default -> 0;
+        };
+    }
+
+    private int getDemuxerReadAheadSeconds() {
+        return Math.min(60, Math.max(15, PlayerSetting.getBuffer() * 3));
     }
 }

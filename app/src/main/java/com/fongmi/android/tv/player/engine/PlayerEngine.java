@@ -75,6 +75,10 @@ public interface PlayerEngine {
         return null;
     }
 
+    default PlayerCacheState getCacheState() {
+        return PlayerCacheState.empty();
+    }
+
     default boolean supportsSubtitleStyle() {
         return false;
     }

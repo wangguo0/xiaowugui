@@ -27,6 +27,7 @@ import androidx.media3.common.Tracks;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
@@ -303,6 +304,7 @@ public class PlayerOsdController {
         String buffer = join(" / ", formatDuration(player.getBufferedDuration()), player.getBufferedPercentage() > 0 ? player.getBufferedPercentage() + "%" : "");
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
         String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(getBandwidthEstimateText(snapshot)), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
+        String nativeCache = summarizeNativeCache(player.getCacheState());
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
@@ -323,6 +325,7 @@ public class PlayerOsdController {
                 row("设备HEVC能力", getHevcDecoderText()),
                 row("音频", audioText),
                 row("网络", network),
+                TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
                 row("状态", playback),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())));
@@ -538,6 +541,27 @@ public class PlayerOsdController {
         return realtimeEstimate > 0 ? formatBitrate(realtimeEstimate) : "";
     }
 
+    private String summarizeNativeCache(PlayerCacheState cache) {
+        if (cache == null || !cache.available()) return "";
+        String runtime = join(" / ",
+                cache.cacheDurationMs() > 0 ? "时长 " + formatDuration(cache.cacheDurationMs()) : "",
+                cache.forwardBytes() > 0 ? "前向 " + formatBytes(cache.forwardBytes()) : "",
+                cache.totalBytes() > 0 ? "总 " + formatBytes(cache.totalBytes()) : "",
+                cache.fileBytes() > 0 ? "临时 " + formatBytes(cache.fileBytes()) : "",
+                cache.rawInputBytesPerSecond() > 0 ? "读速 " + formatByteSpeed(cache.rawInputBytesPerSecond()) : "",
+                cache.bufferingState() > 0 && cache.bufferingState() < 100 ? "填充 " + cache.bufferingState() + "%" : "",
+                cache.idle() ? "idle" : "",
+                cache.underrun() ? "underrun" : "",
+                cache.bofCached() && cache.eofCached() ? "全量缓存" : cache.eofCached() ? "EOF" : "");
+        String config = join(" / ",
+                "cache " + switchText(cache.enabled()),
+                "目标 " + cache.cacheSeconds() + "s",
+                "readahead " + cache.readaheadSeconds() + "s",
+                cache.maxBytes() > 0 ? "上限 " + formatBytes(cache.maxBytes()) : "",
+                cache.maxBackBytes() > 0 ? "回退 " + formatBytes(cache.maxBackBytes()) : "回退 关");
+        return join(" / ", runtime, config);
+    }
+
     private String getColor(Format format) {
         if (format == null || format.colorInfo == null) return "";
         String color = format.colorInfo.toLogString();
@@ -613,6 +637,10 @@ public class PlayerOsdController {
 
     private String formatSpeed(long kbps) {
         return kbps < 1000 ? kbps + " KB/s" : SPEED_FORMAT.format(kbps / 1024f) + " MB/s";
+    }
+
+    private String formatByteSpeed(long bytesPerSecond) {
+        return formatSpeed(Math.max(0, bytesPerSecond / 1024));
     }
 
     private String formatDuration(long ms) {
