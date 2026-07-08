@@ -1123,11 +1123,13 @@ public class PlayerManager implements ParseCallback {
         lutApplyInProgress = true;
         pendingLutPreview = false;
         int strength = LutSetting.getStrength();
+        int previewSeconds = LutSetting.getPreviewSeconds();
+        long previewStartMs = preview && player != null ? Math.max(0, player.getCurrentPosition()) : 0;
         Task.execute(() -> {
             long start = System.currentTimeMillis();
             try {
-                MpvLutShader shader = MpvLutShaderFactory.create(preset, strength, preview);
-                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "create shader preset=%s format=%s strength=%d preview=%s cost=%dms", preset.getId(), preset.getFormat(), strength, preview, System.currentTimeMillis() - start);
+                MpvLutShader shader = MpvLutShaderFactory.create(preset, strength, preview, previewStartMs, previewSeconds);
+                if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "create shader preset=%s format=%s strength=%d preview=%s start=%d seconds=%d cost=%dms", preset.getId(), preset.getFormat(), strength, preview, previewStartMs, previewSeconds, System.currentTimeMillis() - start);
                 App.post(() -> applyNativeLutShader(seq, shader, notify, preview));
             } catch (Throwable e) {
                 if (SpiderDebug.isEnabled()) SpiderDebug.log("lut-mpv", "create shader failed preset=%s strength=%d error=%s", preset.getId(), strength, causeChain(e));
@@ -1164,7 +1166,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void scheduleNativeLutPreviewCommit(int seq) {
-        int delayMs = Math.max(1, LutSetting.getPreviewSeconds()) * 1000;
+        int delayMs = Math.max(1, LutSetting.getPreviewSeconds()) * 1000 + MpvLutShaderFactory.PREVIEW_SLIDE_MS;
         App.post(() -> {
             if (seq != lutApplySeq || engine == null || !engine.supportsNativeLut()) return;
             if (!lutAllowed || !LutSetting.isEnabled()) return;
