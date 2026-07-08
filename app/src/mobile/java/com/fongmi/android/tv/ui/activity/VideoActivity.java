@@ -972,6 +972,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private int getEpisodeSpan(List<Episode> items) {
         EpisodeTitleCompact.apply(items);
+        if (items.size() == 1) return 1;
         int maxLen = 0;
         for (Episode item : items) maxLen = Math.max(maxLen, item.getDisplayName().length());
         if (maxLen >= 12) return PlayerSetting.getEpisodeColumn();
