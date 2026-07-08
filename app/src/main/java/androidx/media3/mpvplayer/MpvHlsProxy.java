@@ -111,7 +111,11 @@ public final class MpvHlsProxy extends NanoHTTPD {
         int id = parseSessionId(httpSession);
         Session session = sessions.get(id);
         if (session == null || TextUtils.isEmpty(session.url)) return error(Status.NOT_FOUND, "expired playlist");
-        try (okhttp3.Response response = fetch(session, session.url, PLAYLIST_RANGE)) {
+        try (okhttp3.Response response = fetch(session, session.url, PLAYLIST_RANGE, false)) {
+            if (!response.isSuccessful()) {
+                SpiderDebug.log(TAG, "playlist error session=%d code=%d url=%s", id, response.code(), shortUrl(session.url));
+                return error(toStatus(response.code()), "playlist http " + response.code());
+            }
             ResponseBody body = response.body();
             if (body == null) return error(Status.INTERNAL_ERROR, "empty playlist body");
             String text = body.string();
@@ -134,7 +138,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
         String range = requestHeader(httpSession, "range");
         boolean targetPlaylist = isPlaylistUrl(target.url, null);
         String forwardedRange = targetPlaylist ? PLAYLIST_RANGE : range;
-        okhttp3.Response response = fetch(owner, target.url, forwardedRange);
+        okhttp3.Response response = fetch(owner, target.url, forwardedRange, !targetPlaylist);
         ResponseBody body = response.body();
         if (body == null) {
             response.close();
@@ -144,6 +148,10 @@ public final class MpvHlsProxy extends NanoHTTPD {
         MediaType type = body.contentType();
         if (isPlaylistUrl(target.url, type) || isPlaylistUrl(finalUrl, type)) {
             try (response; body) {
+                if (!response.isSuccessful()) {
+                    SpiderDebug.log(TAG, "nested playlist error id=%s code=%d url=%s", id, response.code(), shortUrl(target.url));
+                    return error(toStatus(response.code()), "nested playlist http " + response.code());
+                }
                 String text = body.string();
                 if (!looksLikePlaylist(text)) {
                     SpiderDebug.log(TAG, "invalid nested playlist id=%s code=%d bytes=%d url=%s", id, response.code(), text.length(), shortUrl(target.url));
@@ -169,12 +177,13 @@ public final class MpvHlsProxy extends NanoHTTPD {
         return result;
     }
 
-    private okhttp3.Response fetch(Session session, String url, @Nullable String range) throws IOException {
+    private okhttp3.Response fetch(Session session, String url, @Nullable String range, boolean identityEncoding) throws IOException {
         Request.Builder builder = new Request.Builder().url(url);
         for (Map.Entry<String, String> entry : session.headers.entrySet()) {
             if (TextUtils.isEmpty(entry.getKey()) || TextUtils.isEmpty(entry.getValue())) continue;
             builder.header(entry.getKey(), entry.getValue());
         }
+        if (identityEncoding) builder.header("Accept-Encoding", "identity");
         if (!TextUtils.isEmpty(range)) builder.header("Range", range);
         return client.newCall(builder.build()).execute();
     }
@@ -314,7 +323,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
         return response;
     }
 
-    private static Response error(Status status, String text) {
+    private static Response error(Response.IStatus status, String text) {
         return noCache(newFixedLengthResponse(status, MIME_PLAINTEXT, text == null ? "" : text));
     }
 
