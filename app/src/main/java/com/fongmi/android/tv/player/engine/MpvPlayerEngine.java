@@ -170,6 +170,16 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public boolean supportsSubtitleStyle() {
+        return true;
+    }
+
+    @Override
+    public void setSubtitleStyle(float textSize, float position) {
+        player.setSubtitleStyle(textSize, position);
+    }
+
+    @Override
     public boolean haveTitle() {
         return !getCurrentMediaEditions().isEmpty();
     }

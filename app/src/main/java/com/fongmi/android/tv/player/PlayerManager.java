@@ -303,6 +303,14 @@ public class PlayerManager implements ParseCallback {
         return engine.getVideoFormat();
     }
 
+    public boolean supportsSubtitleStyle() {
+        return engine != null && engine.supportsSubtitleStyle();
+    }
+
+    public void setSubtitleStyle(float textSize, float position) {
+        if (engine != null) engine.setSubtitleStyle(textSize, position);
+    }
+
     public String getSpeedText() {
         return SPEED_FORMAT.format(getSpeed());
     }
@@ -801,9 +809,14 @@ public class PlayerManager implements ParseCallback {
         prepareLutPipeline();
         initTrack = false;
         waitingLutBeforePlay = false;
+        applySubtitleStyle();
         engine.start(spec.checkUa(), playWhenReady);
         App.post(runnable, timeout);
         if (notifyPrepare) callback.onPrepare();
+    }
+
+    private void applySubtitleStyle() {
+        if (engine != null) engine.setSubtitleStyle(PlayerSetting.getSubtitleTextSize(), PlayerSetting.getSubtitlePosition());
     }
 
     private boolean rejectMpvDrmMedia() {
@@ -1422,6 +1435,7 @@ public class PlayerManager implements ParseCallback {
             setDanmakus(target.getDanmakus());
             initTrack = false;
             waitingLutBeforePlay = false;
+            applySubtitleStyle();
             engine.start(target.checkUa(), position, wasPlayWhenReady);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);

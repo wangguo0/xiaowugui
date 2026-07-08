@@ -2,7 +2,9 @@ package androidx.media3.mpvplayer;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Color;
 import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,6 +16,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.TextureView;
 import android.view.View;
+import android.view.accessibility.CaptioningManager;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
@@ -31,6 +34,7 @@ import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.collect.ImmutableList;
 import com.google.common.net.HttpHeaders;
@@ -63,6 +67,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private static final long LOAD_START_RETRY_DELAY_MS = 1000;
     private static final int MAX_LOAD_START_RETRIES = 2;
     private static final double SECONDS_TO_MS = 1000.0;
+    private static final double DEFAULT_SUBTITLE_TEXT_SIZE_FRACTION = 0.0533;
     private static final String HLS_LOAD_OPTIONS = "demuxer=lavf,demuxer-lavf-format=hls,demuxer-lavf-probesize=10485760,demuxer-lavf-analyzeduration=5";
     private static final int RECENT_LOG_LIMIT = 32;
     private static final String HEADER_ACCEPT = "Accept";
@@ -128,6 +133,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private long cachedCacheDurationMs;
     private long textOffsetMs;
     private long audioOffsetMs;
+    private float subtitleTextSize;
+    private float subtitlePosition;
     private boolean playWhenReady;
     private boolean loading;
     private boolean repeatOne;
@@ -177,6 +184,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         currentChapter = C.INDEX_UNSET;
         textOffsetMs = 0;
         audioOffsetMs = 0;
+        subtitleTextSize = 0f;
+        subtitlePosition = 0f;
         playWhenReady = true;
         volume = 1f;
     }
@@ -380,6 +389,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return Futures.immediateVoidFuture();
     }
 
+    public void setSubtitleStyle(float textSize, float position) {
+        subtitleTextSize = textSize;
+        subtitlePosition = position;
+        applySubtitleStyle();
+        invalidateState();
+    }
+
     @Override
     protected ListenableFuture<?> handleSetVideoOutput(Object videoOutput) {
         this.videoOutput = videoOutput;
@@ -468,6 +484,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             safeSetPropertyDouble("volume", volume * 100.0);
             applyTextOffset();
             applyAudioOffset();
+            applySubtitleStyle();
             currentPlayableUri = playableUri(mediaItem.localConfiguration.uri);
             currentLikelyHls = isLikelyHls(mediaItem, currentPlayableUri);
             if (shouldProxyHls(currentPlayableUri, currentLikelyHls)) {
@@ -529,6 +546,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("demuxer-max-bytes", String.valueOf(config.demuxerMaxBytes()));
         setOption("demuxer-max-back-bytes", String.valueOf(config.demuxerMaxBackBytes()));
         setOption("demuxer-readahead-secs", "20");
+        setOption("sub-ass", "yes");
+        setOption("sub-ass-override", "yes");
+        setOption("embeddedfonts", "yes");
+        setOption("sub-fix-timing", "yes");
+        setOption("sub-use-margins", "yes");
+        setOption("sub-font-provider", "fontconfig");
         setOption("volume-max", "100");
         setOption("msg-level", config.logLevel());
         for (Map.Entry<String, String> entry : config.extraOptions().entrySet()) setOption(entry.getKey(), entry.getValue());
@@ -1945,6 +1968,98 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (initialized) safeSetPropertyDouble("audio-delay", audioOffsetMs / SECONDS_TO_MS);
     }
 
+    private void applySubtitleStyle() {
+        if (!initialized) return;
+        CaptionStyle style = captionStyle();
+        safeSetPropertyDouble("sub-scale", subtitleScale());
+        safeSetPropertyDouble("sub-pos", subtitlePosition());
+        safeSetPropertyString("sub-font", style.font);
+        safeSetPropertyString("sub-bold", style.bold ? "yes" : "no");
+        safeSetPropertyString("sub-italic", style.italic ? "yes" : "no");
+        safeSetPropertyString("sub-color", mpvColor(style.foreground));
+        safeSetPropertyString("sub-border-color", mpvColor(style.edge));
+        safeSetPropertyString("sub-shadow-color", mpvColor(style.back));
+        safeSetPropertyString("sub-back-color", mpvColor(style.back));
+        safeSetPropertyString("sub-border-style", style.borderStyle);
+        safeSetPropertyDouble("sub-border-size", style.borderSize);
+        safeSetPropertyDouble("sub-shadow-offset", style.shadowOffset);
+        safeSetPropertyString("sub-ass-style-overrides", assStyleOverrides(style));
+    }
+
+    private double subtitleScale() {
+        if (subtitleTextSize <= 0) return 1.0;
+        return Math.max(0.5, Math.min(2.5, subtitleTextSize / DEFAULT_SUBTITLE_TEXT_SIZE_FRACTION));
+    }
+
+    private double subtitlePosition() {
+        return Math.max(0, Math.min(150, 100.0 - subtitlePosition * 100.0));
+    }
+
+    private CaptionStyle captionStyle() {
+        if (!PlayerSetting.isCaption()) return defaultCaptionStyle();
+        try {
+            CaptioningManager manager = (CaptioningManager) context.getSystemService(Context.CAPTIONING_SERVICE);
+            CaptioningManager.CaptionStyle style = manager == null ? null : manager.getUserStyle();
+            if (style == null) return defaultCaptionStyle();
+            int foreground = style.hasForegroundColor() ? style.foregroundColor : Color.WHITE;
+            int background = style.hasBackgroundColor() ? style.backgroundColor : Color.TRANSPARENT;
+            int edge = style.hasEdgeColor() ? style.edgeColor : Color.BLACK;
+            int edgeType = style.hasEdgeType() ? style.edgeType : CaptioningManager.CaptionStyle.EDGE_TYPE_OUTLINE;
+            Typeface typeface = style.getTypeface();
+            String font = captionFont(typeface);
+            boolean bold = typeface != null && typeface.isBold();
+            boolean italic = typeface != null && typeface.isItalic();
+            return switch (edgeType) {
+                case CaptioningManager.CaptionStyle.EDGE_TYPE_NONE -> captionStyle(font, bold, italic, foreground, edge, background, Color.TRANSPARENT, 0.0, 0.0);
+                case CaptioningManager.CaptionStyle.EDGE_TYPE_DROP_SHADOW -> captionStyle(font, bold, italic, foreground, edge, background, edge, 0.0, 2.0);
+                case CaptioningManager.CaptionStyle.EDGE_TYPE_RAISED, CaptioningManager.CaptionStyle.EDGE_TYPE_DEPRESSED -> captionStyle(font, bold, italic, foreground, edge, background, edge, 1.0, 1.0);
+                default -> captionStyle(font, bold, italic, foreground, edge, background, Color.TRANSPARENT, 3.0, 0.0);
+            };
+        } catch (Throwable ignored) {
+            return defaultCaptionStyle();
+        }
+    }
+
+    private CaptionStyle captionStyle(String font, boolean bold, boolean italic, int foreground, int edge, int background, int shadow, double borderSize, double shadowOffset) {
+        boolean hasBackground = Color.alpha(background) > 0;
+        return new CaptionStyle(font, bold, italic, foreground, edge, hasBackground ? background : shadow, hasBackground ? "background-box" : "outline-and-shadow", borderSize, hasBackground ? 2.0 : shadowOffset);
+    }
+
+    private CaptionStyle defaultCaptionStyle() {
+        return new CaptionStyle("sans-serif", false, false, Color.WHITE, Color.BLACK, Color.TRANSPARENT, "outline-and-shadow", 3.0, 0.0);
+    }
+
+    private String captionFont(@Nullable Typeface typeface) {
+        if (typeface == null || Typeface.DEFAULT.equals(typeface) || Typeface.SANS_SERIF.equals(typeface)) return "sans-serif";
+        if (Typeface.SERIF.equals(typeface)) return "serif";
+        if (Typeface.MONOSPACE.equals(typeface)) return "monospace";
+        String value = typeface.toString().toLowerCase(Locale.US);
+        if (value.contains("mono")) return "monospace";
+        if (value.contains("serif")) return "serif";
+        return "sans-serif";
+    }
+
+    private String mpvColor(int color) {
+        return String.format(Locale.US, "%.4f/%.4f/%.4f/%.4f", Color.red(color) / 255.0, Color.green(color) / 255.0, Color.blue(color) / 255.0, Color.alpha(color) / 255.0);
+    }
+
+    private String assStyleOverrides(CaptionStyle style) {
+        return "FontName=" + style.font
+                + ",Bold=" + (style.bold ? "1" : "0")
+                + ",Italic=" + (style.italic ? "1" : "0")
+                + ",PrimaryColour=" + assColor(style.foreground)
+                + ",OutlineColour=" + assColor(style.edge)
+                + ",BackColour=" + assColor(style.back)
+                + ",BorderStyle=" + ("background-box".equals(style.borderStyle) ? "4" : "1")
+                + ",Outline=" + String.format(Locale.US, "%.1f", style.borderSize)
+                + ",Shadow=" + String.format(Locale.US, "%.1f", style.shadowOffset);
+    }
+
+    private String assColor(int color) {
+        int alpha = 255 - Color.alpha(color);
+        return String.format(Locale.US, "&H%02X%02X%02X%02X", alpha, Color.blue(color), Color.green(color), Color.red(color));
+    }
+
     private void safeSetPropertyDouble(String property, double value) {
         try {
             MPVLib.setPropertyDouble(property, value);
@@ -2070,5 +2185,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             };
             return prefix + " " + id;
         }
+    }
+
+    private record CaptionStyle(String font, boolean bold, boolean italic, int foreground, int edge, int back, String borderStyle, double borderSize, double shadowOffset) {
     }
 }
