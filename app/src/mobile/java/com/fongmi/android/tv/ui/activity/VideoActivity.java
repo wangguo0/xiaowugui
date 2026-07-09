@@ -70,6 +70,7 @@ import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.playback.PlaybackOrientation;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
@@ -644,6 +645,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setDecode() {
         mBinding.control.action.decode.setText(player().getDecodeText());
+    }
+
+    private void setDecodeSwitchPending(boolean pending) {
+        mBinding.control.action.decode.setEnabled(!pending);
+        mBinding.control.action.decode.setAlpha(pending ? 0.65f : 1.0f);
+    }
+
+    private void setNextDecodeText() {
+        int next = player().isHardDecode() ? PlayerEngine.SOFT : PlayerEngine.HARD;
+        mBinding.control.action.decode.setText(ResUtil.getStringArray(R.array.select_decode)[next]);
     }
 
     private void setPlayerKernel() {
@@ -1356,7 +1367,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private boolean refreshAndSwitchDecode() {
-        if (decodeSwitchRefreshing || getFlag() == null || getEpisode() == null) return false;
+        if (decodeSwitchRefreshing) return true;
+        if (getFlag() == null || getEpisode() == null) return false;
         long position = player().getPosition();
         float speed = player().getSpeed();
         boolean repeat = player().isRepeatOne();
@@ -1365,6 +1377,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         String episode = getEpisode().getUrl();
         MediaMetadata metadata = buildMetadata();
         decodeSwitchRefreshing = true;
+        setNextDecodeText();
+        setDecodeSwitchPending(true);
         mClock.setCallback(null);
         SpiderDebug.log("video-flow", "switch decode refresh start key=%s flag=%s episode=%s", key, flag, episode);
         Task.execute(() -> {
@@ -1374,6 +1388,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             } catch (Throwable e) {
                 App.post(() -> {
                     decodeSwitchRefreshing = false;
+                    setDecodeSwitchPending(false);
+                    setDecode();
                     Notify.show(e.getMessage());
                 });
             }
@@ -1389,6 +1405,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             player().switchDecode(result, getHistoryKey(), metadata, isUseParse(), position, speed, repeat);
         }
         setR1Callback();
+        setDecodeSwitchPending(false);
         setDecode();
     }
 
