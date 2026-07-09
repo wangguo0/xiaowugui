@@ -113,8 +113,8 @@ public class SiteApi {
     public static Result detailContent(@NonNull String key, @NonNull String id) throws Exception {
         SpiderDebug.log("detail", "key=%s,id=%s", key, id);
         if (WebHomeInlineVodStore.KEY.equals(key)) return WebHomeInlineVodStore.detail(id);
-        if (PUSH.equals(key)) return pushDetail(id);
         Site site = VodConfig.get().getSite(key);
+        if (site.isEmpty() && PUSH.equals(key)) return pushDetail(id);
         if (isSpider(site)) {
             String detailContent = site.recent().spider().detailContent(Arrays.asList(id));
             SpiderDebug.log("detail", detailContent);
