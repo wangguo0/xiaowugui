@@ -126,6 +126,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private MediaItem mediaItem;
     private SurfaceHolder surfaceHolder;
     private Surface surface;
+    private Surface attachedSurface;
     private Object videoOutput;
     private MpvLutShader lutShader;
     private String currentPlayableUri;
@@ -184,6 +185,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private int cachedCacheBufferingState;
     private int surfaceWidth;
     private int surfaceHeight;
+    private String attachedVo;
     private String lastFailureLog;
     private int lastEndFileReason;
     private int lastEndFileError;
@@ -1263,12 +1265,25 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void bindVideoOutput() {
         if (!initialized || surface == null || !surface.isValid()) return;
         try {
+            if (surfaceAttached && attachedSurface == surface) {
+                setRuntimeString("force-window", "yes");
+                applyAndroidSurfaceSize();
+                if (!TextUtils.equals(attachedVo, config.vo())) {
+                    safeSetPropertyString("vo", config.vo());
+                    attachedVo = config.vo();
+                }
+                Log.d(SIZE_TAG, "mpv resize attached surface cached=" + surfaceWidth + "x" + surfaceHeight + " vo=" + config.vo());
+                SpiderDebug.log("mpv", "surface resized surface=%s size=%dx%d vo=%s", surface, surfaceWidth, surfaceHeight, config.vo());
+                return;
+            }
             if (surfaceAttached) detachMpvSurface();
             MPVLib.attachSurface(surface);
             surfaceAttached = true;
+            attachedSurface = surface;
             setRuntimeString("force-window", "yes");
             applyAndroidSurfaceSize();
             safeSetPropertyString("vo", config.vo());
+            attachedVo = config.vo();
             Log.d(SIZE_TAG, "mpv bind surface valid=" + surface.isValid() + " cached=" + surfaceWidth + "x" + surfaceHeight + " vo=" + config.vo());
             SpiderDebug.log("mpv", "surface attached surface=%s size=%dx%d vo=%s", surface, surfaceWidth, surfaceHeight, config.vo());
         } catch (Throwable e) {
@@ -1294,6 +1309,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         } catch (Throwable ignored) {
         }
         surfaceAttached = false;
+        attachedSurface = null;
+        attachedVo = null;
     }
 
     private void detachSurfaceHolder() {
@@ -1369,7 +1386,6 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             surface = holder.getSurface();
             updateSurfaceSize(width, height);
             Log.d(SIZE_TAG, "mpv surfaceChanged format=" + format + " size=" + width + "x" + height + " frame=" + surfaceFrame(holder));
-            if (initialized) applyAndroidSurfaceSize();
             bindVideoOutput();
         }
 
@@ -1441,6 +1457,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         }
         initialized = false;
         surfaceAttached = false;
+        attachedSurface = null;
+        attachedVo = null;
         stopping = false;
         loadStarted = false;
         loadStartRetryCount = 0;

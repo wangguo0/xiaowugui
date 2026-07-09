@@ -1565,10 +1565,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setTransition() {
+        if (!shouldAnimateVideoFrameTransition()) {
+            Log.d(SIZE_TAG, "video transition skipped native player=" + player().getPlayerText());
+            return;
+        }
         ChangeBounds transition = new ChangeBounds();
         transition.setDuration(150);
         ViewGroup parent = (ViewGroup) mBinding.video.getParent();
         TransitionManager.beginDelayedTransition(parent, transition);
+    }
+
+    private boolean shouldAnimateVideoFrameTransition() {
+        return service() == null || !player().isNativePlayer();
     }
 
     private int getLockOrient() {
