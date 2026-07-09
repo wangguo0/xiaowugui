@@ -367,6 +367,8 @@ bash gradlew :app:assembleMobileArm64_v8aDebug :app:assembleLeanbackArmeabi_v7aD
 - `third_party/mpv-player-jni/include/mpv/client.h`
 - `app/src/arm64_v8a/assets/mpv-libs/arm64-v8a/` 或 `app/src/armeabi_v7a/assets/mpv-libs/armeabi-v7a/` 里的 MPV 相关 `.so`
 
+当前 `libmpv.so`/FFmpeg assets 已使用启用 Vulkan 的 Android 构建；`libplayer.so` 仍由本仓库 `third_party/mpv-player-jni` 构建，用于保留 END_FILE reason/error 等本地桥接能力。替换外部 MPV native 包时，必须继续把 FFmpeg 依赖名从 `libav*`/`libsw*` 等长改为 `libmv*`/`libmw*`，否则会和 `nextlib-media3ext` 内置 FFmpeg 发生 Android linker 复用冲突。
+
 重建命令：
 
 ```bash

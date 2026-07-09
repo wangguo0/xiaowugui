@@ -61,6 +61,42 @@ waiting for `MPV_EVENT_PLAYBACK_RESTART` before reporting ready playback.
 native event first, and keep mpv logs/properties only as secondary classification
 signals for user-facing error messages.
 
+## Vulkan renderer
+
+The OpenGL path remains the default renderer because it is the broadest Android
+compatibility path:
+
+```text
+vo=gpu
+gpu-context=android
+opengl-es=yes
+```
+
+The Vulkan path is opt-in and should only be enabled when both checks pass:
+
+- bundled `libmpv.so` feature list contains `vulkan`
+- device is Android 13+ with OpenGL ES 3.1+ and Vulkan 1.3 hardware feature
+
+When enabled, use:
+
+```text
+vo=gpu-next
+gpu-context=androidvk
+gpu-api=vulkan
+```
+
+References checked:
+
+- `mpv-android/mpv-android#596`: enabling Vulkan requires native build changes,
+  not just Java options. The build needs shaderc, libplacebo Vulkan
+  (`-Dvk-proc-addr=enabled`), and mpv `-Dvulkan=enabled`.
+- `marlboro-advance/mpvEx`: exposes Vulkan as an experimental decoder/render
+  option and gates it behind Android 13+ / Vulkan 1.3 detection.
+
+Do not blindly set `gpu-context=androidvk` with the old bundled native assets.
+If native Vulkan is absent, mpv will fail video output initialization. The app
+therefore falls back to OpenGL and logs native/device Vulkan availability.
+
 ## Current HLS limitation
 
 The existing Exo/Media3 stack in this repo is patched for HLS edge cases, notably:

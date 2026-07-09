@@ -1,6 +1,8 @@
 package is.xyz.mpv;
 
 import android.content.Context;
+import android.content.pm.FeatureInfo;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.os.Build;
@@ -9,9 +11,11 @@ import android.view.Surface;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,6 +41,8 @@ public final class MPVLib {
     private static boolean loaded;
     private static Throwable loadError;
     private static String loadedAbi;
+    private static Boolean bundledVulkanEnabled;
+    private static Boolean deviceVulkan13Capable;
 
     private MPVLib() {
     }
@@ -70,6 +76,53 @@ public final class MPVLib {
         return loadedAbi;
     }
 
+    public static synchronized boolean isBundledVulkanEnabled(Context context) {
+        if (bundledVulkanEnabled != null) return bundledVulkanEnabled;
+        try {
+            Context app = context.getApplicationContext();
+            String abi = chooseAbi(app.getAssets());
+            bundledVulkanEnabled = abi != null && hasBundledFeature(app.getAssets(), abi, "vulkan");
+        } catch (Throwable e) {
+            bundledVulkanEnabled = false;
+            Log.w(TAG, "Unable to detect bundled MPV Vulkan support", e);
+        }
+        return bundledVulkanEnabled;
+    }
+
+    public static synchronized boolean isDeviceVulkan13Capable(Context context) {
+        if (deviceVulkan13Capable != null) return deviceVulkan13Capable;
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                deviceVulkan13Capable = false;
+                return false;
+            }
+            PackageManager pm = context.getApplicationContext().getPackageManager();
+            int glesVersion = 0;
+            FeatureInfo[] features = pm.getSystemAvailableFeatures();
+            if (features != null) {
+                for (FeatureInfo feature : features) {
+                    if (feature != null && feature.name == null) {
+                        glesVersion = feature.reqGlEsVersion;
+                        break;
+                    }
+                }
+            }
+            if (glesVersion < 0x00030001) {
+                deviceVulkan13Capable = false;
+                return false;
+            }
+            deviceVulkan13Capable = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_VERSION, 0x00403000);
+        } catch (Throwable e) {
+            deviceVulkan13Capable = false;
+            Log.w(TAG, "Unable to detect device Vulkan support", e);
+        }
+        return deviceVulkan13Capable;
+    }
+
+    public static boolean isVulkanRendererAvailable(Context context) {
+        return isBundledVulkanEnabled(context) && isDeviceVulkan13Capable(context);
+    }
+
     private static String chooseAbi(AssetManager assets) {
         for (String abi : Build.SUPPORTED_ABIS) {
             if (assetExists(assets, abi, "mpv")) return abi;
@@ -100,6 +153,22 @@ public final class MPVLib {
 
     private static String assetPath(String abi, String lib) {
         return ASSET_ROOT + "/" + abi + "/" + System.mapLibraryName(lib);
+    }
+
+    private static boolean hasBundledFeature(AssetManager assets, String abi, String feature) throws IOException {
+        try (InputStream in = assets.open(assetPath(abi, "mpv"), AssetManager.ACCESS_STREAMING)) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+            String text = out.toString(StandardCharsets.ISO_8859_1.name());
+            int start = text.indexOf("List of enabled features:");
+            if (start < 0) return false;
+            int end = text.indexOf('\0', start);
+            String features = text.substring(start, end > start ? end : Math.min(text.length(), start + 2048));
+            for (String token : features.split("\\s+")) if (feature.equals(token)) return true;
+            return false;
+        }
     }
 
     public static native void create(Context appctx);

@@ -21,9 +21,12 @@ public final class MpvPlayerConfig {
     private final String referer;
     private final String hwdec;
     private final String vo;
+    private final String gpuContext;
+    private final String gpuApi;
     private final String ao;
     private final String audioSpdif;
     private final String logLevel;
+    private final boolean openglEs;
     private final boolean tlsVerify;
     private final boolean cache;
     private final long demuxerMaxBytes;
@@ -40,9 +43,12 @@ public final class MpvPlayerConfig {
         referer = builder.referer;
         hwdec = builder.hwdec;
         vo = builder.vo;
+        gpuContext = builder.gpuContext;
+        gpuApi = builder.gpuApi;
         ao = builder.ao;
         audioSpdif = builder.audioSpdif;
         logLevel = builder.logLevel;
+        openglEs = builder.openglEs;
         tlsVerify = builder.tlsVerify;
         cache = builder.cache;
         demuxerMaxBytes = builder.demuxerMaxBytes;
@@ -86,6 +92,14 @@ public final class MpvPlayerConfig {
         return vo;
     }
 
+    public String gpuContext() {
+        return gpuContext;
+    }
+
+    public String gpuApi() {
+        return gpuApi;
+    }
+
     public String ao() {
         return ao;
     }
@@ -96,6 +110,10 @@ public final class MpvPlayerConfig {
 
     public String logLevel() {
         return logLevel;
+    }
+
+    public boolean openglEs() {
+        return openglEs;
     }
 
     public boolean tlsVerify() {
@@ -136,9 +154,12 @@ public final class MpvPlayerConfig {
         private String referer;
         private String hwdec = "mediacodec,mediacodec-copy";
         private String vo = "gpu";
+        private String gpuContext = "android";
+        private String gpuApi = "";
         private String ao = "audiotrack,opensles";
         private String audioSpdif = "";
         private String logLevel = "all=v";
+        private boolean openglEs = true;
         private boolean tlsVerify = true;
         private boolean cache = true;
         private long demuxerMaxBytes = DEFAULT_DEMUXER_BYTES;
@@ -185,6 +206,21 @@ public final class MpvPlayerConfig {
 
         public Builder vo(String vo) {
             this.vo = vo;
+            return this;
+        }
+
+        public Builder gpuContext(String gpuContext) {
+            this.gpuContext = gpuContext;
+            return this;
+        }
+
+        public Builder gpuApi(String gpuApi) {
+            this.gpuApi = gpuApi;
+            return this;
+        }
+
+        public Builder openglEs(boolean openglEs) {
+            this.openglEs = openglEs;
             return this;
         }
 

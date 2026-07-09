@@ -333,6 +333,18 @@ public class PlayerManager implements ParseCallback {
         return engine == null ? PlayerCacheState.empty() : engine.getCacheState();
     }
 
+    public String getRenderDiagnostics() {
+        return engine == null ? "" : engine.getRenderDiagnostics();
+    }
+
+    public String getRuntimeDiagnostics() {
+        return engine == null ? "" : engine.getRuntimeDiagnostics();
+    }
+
+    public long getDroppedFrames() {
+        return engine == null ? 0 : engine.getDroppedFrames();
+    }
+
     public boolean supportsSubtitleStyle() {
         return engine != null && engine.supportsSubtitleStyle();
     }

@@ -188,6 +188,20 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private int lastEndFileReason;
     private int lastEndFileError;
     private String lastEndFileErrorText;
+    private String cachedCurrentVo;
+    private String cachedCurrentGpuContext;
+    private String cachedGpuApi;
+    private String cachedCurrentAo;
+    private String cachedAudioDevice;
+    private String cachedHwdecCurrent;
+    private double cachedAvSyncSeconds;
+    private double cachedDisplayFps;
+    private double cachedEstimatedDisplayFps;
+    private long cachedDecoderDroppedFrames;
+    private long cachedOutputDroppedFrames;
+    private long cachedMistimedFrames;
+    private long cachedDelayedFrames;
+    private boolean cachedDisplaySyncActive;
     private float volume;
 
     public MpvPlayer(Context context, MpvPlayerConfig config) {
@@ -459,6 +473,41 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 config.demuxerReadaheadSeconds());
     }
 
+    public String getRenderDiagnostics() {
+        refreshRenderState();
+        String requested = isConfiguredVulkan() ? "vulkan" : "opengl";
+        String currentVo = firstNonEmpty(cachedCurrentVo, initialized ? stringProperty("current-vo", "") : "", config.vo());
+        String currentGpuContext = firstNonEmpty(cachedCurrentGpuContext, initialized ? stringProperty("current-gpu-context", "") : "", config.gpuContext());
+        String gpuApi = firstNonEmpty(cachedGpuApi, initialized ? stringProperty("gpu-api", "") : "", config.gpuApi(), config.openglEs() ? "opengl-es" : "");
+        String actual = isRuntimeVulkan(currentVo, currentGpuContext, gpuApi) ? "vulkan" : "opengl";
+        return "请求 " + requested
+                + " / 实际 " + actual
+                + " / vo " + emptyDash(currentVo)
+                + " / context " + emptyDash(currentGpuContext)
+                + " / api " + emptyDash(gpuApi);
+    }
+
+    public String getRuntimeDiagnostics() {
+        refreshRuntimeDiagnostics();
+        String hwdec = firstNonEmpty(cachedHwdecCurrent, initialized ? stringProperty("hwdec-current", "") : "", config.hwdec());
+        String ao = firstNonEmpty(cachedCurrentAo, initialized ? stringProperty("current-ao", "") : "", config.ao());
+        String audioDevice = firstNonEmpty(cachedAudioDevice, initialized ? stringProperty("audio-device", "") : "");
+        return joinParts(
+                "hwdec " + emptyDash(hwdec),
+                "ao " + emptyDash(ao),
+                TextUtils.isEmpty(audioDevice) ? "" : "device " + shortText(audioDevice, 32),
+                formatAvSync(),
+                formatDisplayFps(),
+                formatDroppedFrames(),
+                formatDisplaySync(),
+                formatShader());
+    }
+
+    public long getDroppedFrames() {
+        refreshRuntimeDiagnostics();
+        return Math.max(0, cachedDecoderDroppedFrames) + Math.max(0, cachedOutputDroppedFrames);
+    }
+
     @Override
     protected ListenableFuture<?> handleSetVideoOutput(Object videoOutput) {
         this.videoOutput = videoOutput;
@@ -538,6 +587,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             idleActive = false;
             cachedDurationMs = C.TIME_UNSET;
             cachedCacheDurationMs = 0;
+            resetRuntimeDiagnostics();
             resetFailureSignals();
             recentLogs.clear();
             mainHandler.removeCallbacks(endFileValidationRunnable);
@@ -566,7 +616,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             applyShaderPipeline(true);
             Log.d(TAG, "load uri=" + currentPlayableUri + " hls=" + currentLikelyHls);
-            SpiderDebug.log("mpv", "load uri=%s hls=%s surface=%s attached=%s hwdec=%s", currentPlayableUri, currentLikelyHls, surface != null && surface.isValid(), surfaceAttached, config.hwdec());
+            SpiderDebug.log("mpv", "load uri=%s hls=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", currentPlayableUri, currentLikelyHls, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());
             loadCurrentUri();
             scheduleLoadStartRetry();
             invalidateState();
@@ -602,8 +652,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("gpu-shader-cache-dir", config.cacheDir().getAbsolutePath());
         setOption("icc-cache-dir", config.cacheDir().getAbsolutePath());
         setOption("vo", config.vo());
-        setOption("gpu-context", "android");
-        setOption("opengl-es", "yes");
+        setOption("gpu-context", config.gpuContext());
+        if (!TextUtils.isEmpty(config.gpuApi())) setOption("gpu-api", config.gpuApi());
+        if (config.openglEs()) setOption("opengl-es", "yes");
         setOption("hwdec", config.hwdec());
         setOption("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1");
         setOption("ao", config.ao());
@@ -672,6 +723,20 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         observe("video-params/gamma", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("video-params/colorlevels", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("video-params/colormatrix", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-vo", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-gpu-context", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("gpu-api", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("current-ao", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("audio-device", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("hwdec-current", MPVLib.MpvFormat.MPV_FORMAT_STRING);
+        observe("avsync", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
+        observe("display-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
+        observe("estimated-display-fps", MPVLib.MpvFormat.MPV_FORMAT_DOUBLE);
+        observe("decoder-frame-drop-count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("frame-drop-count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("mistimed-frame-count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("vo-delayed-frame-count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
+        observe("display-sync-active", MPVLib.MpvFormat.MPV_FORMAT_FLAG);
         observe("track-list/count", MPVLib.MpvFormat.MPV_FORMAT_INT64);
         observe("vid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
         observe("aid", MPVLib.MpvFormat.MPV_FORMAT_STRING);
@@ -731,6 +796,20 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 refreshTracks();
             }
             case "container-fps", "estimated-vf-fps", "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
+            case "current-vo" -> cachedCurrentVo = stringValue(value, cachedCurrentVo);
+            case "current-gpu-context" -> cachedCurrentGpuContext = stringValue(value, cachedCurrentGpuContext);
+            case "gpu-api" -> cachedGpuApi = stringValue(value, cachedGpuApi);
+            case "current-ao" -> cachedCurrentAo = stringValue(value, cachedCurrentAo);
+            case "audio-device" -> cachedAudioDevice = stringValue(value, cachedAudioDevice);
+            case "hwdec-current" -> cachedHwdecCurrent = stringValue(value, cachedHwdecCurrent);
+            case "avsync" -> cachedAvSyncSeconds = doubleValue(value, cachedAvSyncSeconds);
+            case "display-fps" -> cachedDisplayFps = doubleValue(value, cachedDisplayFps);
+            case "estimated-display-fps" -> cachedEstimatedDisplayFps = doubleValue(value, cachedEstimatedDisplayFps);
+            case "decoder-frame-drop-count" -> cachedDecoderDroppedFrames = Math.max(0, longValue(value, cachedDecoderDroppedFrames));
+            case "frame-drop-count" -> cachedOutputDroppedFrames = Math.max(0, longValue(value, cachedOutputDroppedFrames));
+            case "mistimed-frame-count" -> cachedMistimedFrames = Math.max(0, longValue(value, cachedMistimedFrames));
+            case "vo-delayed-frame-count" -> cachedDelayedFrames = Math.max(0, longValue(value, cachedDelayedFrames));
+            case "display-sync-active" -> cachedDisplaySyncActive = Boolean.TRUE.equals(value);
             case "track-list/count" -> {
                 updateVideoSize("property:" + property);
                 refreshTracks();
@@ -2224,6 +2303,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         }
     }
 
+    private double doubleValue(@Nullable Object value, double fallback) {
+        if (!(value instanceof Number number)) return fallback;
+        double result = number.doubleValue();
+        return Double.isNaN(result) || Double.isInfinite(result) ? fallback : result;
+    }
+
     private long doubleSecondsToMs(@Nullable Object value, long fallback) {
         if (value instanceof Number number) return Math.max(0, Math.round(number.doubleValue() * SECONDS_TO_MS));
         return fallback;
@@ -2268,6 +2353,131 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         } catch (Throwable ignored) {
             return fallback;
         }
+    }
+
+    private void refreshRenderState() {
+        if (!initialized) return;
+        cachedCurrentVo = firstNonEmpty(stringProperty("current-vo", cachedCurrentVo), cachedCurrentVo);
+        cachedCurrentGpuContext = firstNonEmpty(stringProperty("current-gpu-context", cachedCurrentGpuContext), cachedCurrentGpuContext);
+        cachedGpuApi = firstNonEmpty(stringProperty("gpu-api", cachedGpuApi), cachedGpuApi);
+    }
+
+    private void refreshRuntimeDiagnostics() {
+        if (!initialized) return;
+        cachedCurrentAo = firstNonEmpty(stringProperty("current-ao", cachedCurrentAo), cachedCurrentAo);
+        cachedAudioDevice = firstNonEmpty(stringProperty("audio-device", cachedAudioDevice), cachedAudioDevice);
+        cachedHwdecCurrent = firstNonEmpty(stringProperty("hwdec-current", cachedHwdecCurrent), cachedHwdecCurrent);
+        cachedAvSyncSeconds = doubleProperty("avsync", cachedAvSyncSeconds);
+        cachedDisplayFps = doubleProperty("display-fps", cachedDisplayFps);
+        cachedEstimatedDisplayFps = doubleProperty("estimated-display-fps", cachedEstimatedDisplayFps);
+        cachedDecoderDroppedFrames = Math.max(0, longProperty("decoder-frame-drop-count", cachedDecoderDroppedFrames));
+        cachedOutputDroppedFrames = Math.max(0, longProperty("frame-drop-count", cachedOutputDroppedFrames));
+        cachedMistimedFrames = Math.max(0, longProperty("mistimed-frame-count", cachedMistimedFrames));
+        cachedDelayedFrames = Math.max(0, longProperty("vo-delayed-frame-count", cachedDelayedFrames));
+        cachedDisplaySyncActive = booleanProperty("display-sync-active", cachedDisplaySyncActive);
+    }
+
+    private void resetRuntimeDiagnostics() {
+        cachedCurrentVo = null;
+        cachedCurrentGpuContext = null;
+        cachedGpuApi = null;
+        cachedCurrentAo = null;
+        cachedAudioDevice = null;
+        cachedHwdecCurrent = null;
+        cachedAvSyncSeconds = 0;
+        cachedDisplayFps = 0;
+        cachedEstimatedDisplayFps = 0;
+        cachedDecoderDroppedFrames = 0;
+        cachedOutputDroppedFrames = 0;
+        cachedMistimedFrames = 0;
+        cachedDelayedFrames = 0;
+        cachedDisplaySyncActive = false;
+    }
+
+    private String stringValue(@Nullable Object value, String fallback) {
+        return value instanceof String text && !TextUtils.isEmpty(text) ? text : fallback;
+    }
+
+    private String joinParts(String... values) {
+        StringBuilder builder = new StringBuilder();
+        if (values == null) return "";
+        for (String value : values) {
+            if (TextUtils.isEmpty(value)) continue;
+            if (builder.length() > 0) builder.append(" / ");
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
+    private String shortText(String value, int maxLength) {
+        if (TextUtils.isEmpty(value) || maxLength <= 0 || value.length() <= maxLength) return value;
+        return value.substring(0, maxLength - 1) + "...";
+    }
+
+    private String formatAvSync() {
+        long ms = Math.round(cachedAvSyncSeconds * 1000.0);
+        return "A-V " + ms + "ms";
+    }
+
+    private String formatDisplayFps() {
+        if (cachedDisplayFps <= 0 && cachedEstimatedDisplayFps <= 0) return "";
+        if (cachedDisplayFps > 0 && cachedEstimatedDisplayFps > 0 && Math.abs(cachedDisplayFps - cachedEstimatedDisplayFps) >= 0.01) {
+            return "刷新 " + formatHz(cachedDisplayFps) + "/估" + formatHz(cachedEstimatedDisplayFps);
+        }
+        return "刷新 " + formatHz(cachedDisplayFps > 0 ? cachedDisplayFps : cachedEstimatedDisplayFps);
+    }
+
+    private String formatDroppedFrames() {
+        long total = cachedDecoderDroppedFrames + cachedOutputDroppedFrames;
+        if (total <= 0 && cachedMistimedFrames <= 0 && cachedDelayedFrames <= 0) return "";
+        return joinParts(
+                total > 0 ? "掉帧 dec " + cachedDecoderDroppedFrames + "/out " + cachedOutputDroppedFrames : "",
+                cachedMistimedFrames > 0 ? "mistimed " + cachedMistimedFrames : "",
+                cachedDelayedFrames > 0 ? "delayed " + cachedDelayedFrames : "");
+    }
+
+    private String formatDisplaySync() {
+        return cachedDisplaySyncActive ? "display-sync 开" : "";
+    }
+
+    private String formatShader() {
+        return lutShader == null ? "" : "shader 开";
+    }
+
+    private String formatHz(double value) {
+        if (value <= 0) return "-";
+        double rounded = Math.rint(value);
+        if (Math.abs(value - rounded) < 0.01) return String.valueOf((long) rounded) + "Hz";
+        return String.format(Locale.US, "%.2fHz", value);
+    }
+
+    private String firstNonEmpty(String... values) {
+        if (values == null) return "";
+        for (String value : values) {
+            if (!TextUtils.isEmpty(value)) return value;
+        }
+        return "";
+    }
+
+    private String emptyDash(String value) {
+        return TextUtils.isEmpty(value) ? "-" : value;
+    }
+
+    private boolean isConfiguredVulkan() {
+        return TextUtils.equals(config.vo(), "gpu-next")
+                && TextUtils.equals(config.gpuContext(), "androidvk")
+                && TextUtils.equals(config.gpuApi(), "vulkan");
+    }
+
+    private boolean isRuntimeVulkan(String currentVo, String currentGpuContext, String gpuApi) {
+        return containsIgnoreCase(currentGpuContext, "vk")
+                || containsIgnoreCase(currentGpuContext, "vulkan")
+                || containsIgnoreCase(gpuApi, "vulkan")
+                || containsIgnoreCase(currentVo, "gpu-next") && isConfiguredVulkan();
+    }
+
+    private boolean containsIgnoreCase(String value, String needle) {
+        return value != null && needle != null && value.toLowerCase(Locale.US).contains(needle.toLowerCase(Locale.US));
     }
 
     private void fail(Throwable e, int errorCode) {

@@ -28,6 +28,8 @@ import com.github.catvod.crawler.SpiderDebug;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import is.xyz.mpv.MPVLib;
+
 @UnstableApi
 public class MpvPlayerEngine implements PlayerEngine {
 
@@ -188,6 +190,21 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public String getRenderDiagnostics() {
+        return player.getRenderDiagnostics();
+    }
+
+    @Override
+    public String getRuntimeDiagnostics() {
+        return player.getRuntimeDiagnostics();
+    }
+
+    @Override
+    public long getDroppedFrames() {
+        return player.getDroppedFrames();
+    }
+
+    @Override
     public boolean supportsSubtitleStyle() {
         return true;
     }
@@ -329,15 +346,27 @@ public class MpvPlayerEngine implements PlayerEngine {
 
     private MpvPlayerConfig buildConfig() {
         MpvConfigStore.ensureReady();
-        return MpvPlayerConfig.builder(App.get())
+        boolean requestVulkan = PlayerSetting.getMpvRender() == PlayerSetting.MPV_RENDER_VULKAN;
+        boolean nativeVulkan = MPVLib.isBundledVulkanEnabled(App.get());
+        boolean deviceVulkan = MPVLib.isDeviceVulkan13Capable(App.get());
+        boolean useVulkan = requestVulkan && nativeVulkan && deviceVulkan;
+        if (requestVulkan && !useVulkan) SpiderDebug.log("player-engine", "mpv render requested=vulkan but unavailable native=%s device=%s; fallback=opengl", nativeVulkan, deviceVulkan);
+        SpiderDebug.log("player-engine", "mpv render requested=%s nativeVulkan=%s deviceVulkan=%s actual=%s", requestVulkan ? "vulkan" : "opengl", nativeVulkan, deviceVulkan, useVulkan ? "vulkan" : "opengl");
+        MpvPlayerConfig.Builder builder = MpvPlayerConfig.builder(App.get())
                 .configDir(MpvConfigStore.configDir())
                 .hwdec(decode == HARD ? "mediacodec,mediacodec-copy" : "no")
                 .audioSpdif(resolveAudioSpdifCodecs())
                 .demuxerMaxBytes(getDemuxerMaxBytes())
                 .demuxerMaxBackBytes(getDemuxerMaxBackBytes())
                 .cacheSeconds(getDemuxerReadAheadSeconds())
-                .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds())
-                .build();
+                .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds());
+        if (useVulkan) {
+            builder.vo("gpu-next")
+                    .gpuContext("androidvk")
+                    .gpuApi("vulkan")
+                    .openglEs(false);
+        }
+        return builder.build();
     }
 
     private String resolveAudioSpdifCodecs() {

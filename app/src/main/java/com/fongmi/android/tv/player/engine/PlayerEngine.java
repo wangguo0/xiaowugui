@@ -91,6 +91,18 @@ public interface PlayerEngine {
         return PlayerCacheState.empty();
     }
 
+    default String getRenderDiagnostics() {
+        return "";
+    }
+
+    default String getRuntimeDiagnostics() {
+        return "";
+    }
+
+    default long getDroppedFrames() {
+        return 0;
+    }
+
     default boolean supportsSubtitleStyle() {
         return false;
     }

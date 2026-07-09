@@ -305,6 +305,8 @@ public class PlayerOsdController {
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
         String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(getBandwidthEstimateText(snapshot)), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
         String nativeCache = summarizeNativeCache(player.getCacheState());
+        String renderDiagnostics = player.getRenderDiagnostics();
+        String runtimeDiagnostics = player.getRuntimeDiagnostics();
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
@@ -316,7 +318,7 @@ public class PlayerOsdController {
         String frameRateMatch = player.isExo() ? "帧率匹配 开" : "";
         String softTune = getSoftDecodeTuneText(player);
         String playerText = join(" / ", player.getPlayerText(), player.getDecodeText(), render, "隧道" + tunnel, "性能" + performance, frameRateMatch, preload, "直通" + passThrough, softTune, player.isExo() ? "兜底开" : "");
-        String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + snapshot.droppedFrames());
+        String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + player.getDroppedFrames());
         String error = getErrorText(player, snapshot);
         String main = join("\n",
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
@@ -326,6 +328,8 @@ public class PlayerOsdController {
                 row("音频", audioText),
                 row("网络", network),
                 TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
+                TextUtils.isEmpty(renderDiagnostics) ? "" : row("MPV渲染", renderDiagnostics),
+                TextUtils.isEmpty(runtimeDiagnostics) ? "" : row("MPV运行", runtimeDiagnostics),
                 row("状态", playback),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())));
@@ -349,7 +353,7 @@ public class PlayerOsdController {
         long availableBitrate = snapshot.bandwidthEstimate() > 0 ? snapshot.bandwidthEstimate() : lastSpeedKBps * 1024 * 8;
         if (availableBitrate > 0 && mediaBitrate > 0 && availableBitrate < mediaBitrate * 13 / 10) return "网速可能低于资源码率";
         if (player.isLoading() && player.getBufferedDuration() < 3000) return "缓冲偏少，可能是网络或源响应慢";
-        if (snapshot.droppedFrames() >= 60) return "掉帧较多，可能是解码或渲染压力";
+        if (player.getDroppedFrames() >= 60) return "掉帧较多，可能是解码或渲染压力";
         if (formatBitrateValue(video) >= 30_000_000) return "资源码率较高，对网络和解码要求高";
         if (player.isExo() && audioTrack.hasTracks() && snapshot.audioFormat() == null) return "正在等待音频轨信息";
         return "正常";
