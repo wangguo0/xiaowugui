@@ -753,6 +753,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mFlagAdapter.addAll(item.getFlags());
         App.removeCallbacks(mR4);
         checkHistory(item);
+        if (item.getFlags().isEmpty()) {
+            mBinding.flag.setVisibility(View.GONE);
+            mBinding.episode.setVisibility(View.GONE);
+            showError(getString(R.string.error_play_flag));
+            setText(item);
+            updateKeep();
+            return;
+        }
         checkFlag(item);
         checkKeepImg();
         setText(item);
@@ -814,10 +822,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setPlayer(Result result) {
         if (isFinishing() || isDestroyed()) return;
+        mBinding.swipeLayout.setRefreshing(false);
+        if (result == null) {
+            onError(getString(R.string.error_play_url));
+            return;
+        }
         SpiderDebug.log("video-flow", "player finish cost=%dms useParse=%s multi=%s msg=%s", System.currentTimeMillis() - playerStartTime, result.shouldUseParse(), result.getUrl().isMulti(), result.getMsg());
+        if (result.hasMsg() || result.getRealUrl().isEmpty()) {
+            onError(result.hasMsg() ? result.getMsg() : getString(R.string.error_play_url));
+            return;
+        }
         mQualityAdapter.addAll(result);
         setUseParse(result.shouldUseParse());
-        mBinding.swipeLayout.setRefreshing(false);
         setQualityVisible(result.getUrl().isMulti());
         result.getUrl().set(mQualityAdapter.getPosition());
         if (result.hasArtwork() && !shouldKeepPushArtwork()) setArtwork(result.getArtwork());
