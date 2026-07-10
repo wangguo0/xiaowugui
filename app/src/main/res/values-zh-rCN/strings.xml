@@ -809,6 +809,7 @@
     <string name="player_performance">播放性能</string>
     <string name="player_performance_recommended">推荐</string>
     <string name="player_performance_compatible">兼容</string>
+    <string name="player_performance_lightweight">轻量</string>
     <string name="player_performance_help">说明</string>
     <string name="player_performance_help_title">播放性能参数说明</string>
     <string name="player_performance_help_close">关闭</string>
