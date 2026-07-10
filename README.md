@@ -227,21 +227,21 @@ adb install -r app/build/outputs/apk/mobileArm64_v8a/debug/app-mobile-arm64_v8a-
 
 仓库内置 `.github/workflows/android-release.yml`,只支持在 GitHub Actions 页面手动触发,不会在每次 push 代码时自动打包。默认 tag 会从 `app/build.gradle` 读取当前 `versionName`:稳定版生成 `v<versionName>-yyyyMMddHHmm`;在 `fongmi-sync` 分支选择 `auto` 通道时生成测试版 `v<versionName>-beta-yyyyMMddHHmm`,APK/JSON 文件名同步追加 `-beta`。
 
-工作流会构建 4 个 release APK,生成同名更新清单 JSON,发布到 GitHub Release,并可同步到 CNB 镜像仓库 `apk/` 目录。正式发布前建议在 GitHub Secrets 配置:
+工作流会构建 4 个 release APK,生成同名更新清单 JSON 并发布到 GitHub Release。启用 CNB 同步后,大 APK 会上传到同 tag 的 CNB Release 附件（单文件支持 64GB）,代码仓库的 `apk/` 目录只保存小型 JSON 清单,避免超过 100MB 时 Git 下载返回 413。正式发布前建议在 GitHub Secrets 配置:
 
 ```text
 RELEASE_KEYSTORE_BASE64  # release keystore 的 base64 内容
 RELEASE_KEY_ALIAS        # key alias
 RELEASE_STORE_PASSWORD   # store password,key password 复用该值
 RELEASE_KEY_PASSWORD     # 可选,key password 与 store password 不同时配置
-CNB_TOKEN                # 可选,用于同步 CNB
+CNB_TOKEN                # CNB 访问令牌,需要 repo-contents 读写权限
 ```
 
-CNB 默认同步到 `https://cnb.cool/fish2018/webhtv.git`,如需修改,在 GitHub 仓库变量中设置 `CNB_REPO_URL`。
+CNB 默认同步到 `https://cnb.cool/fish2018/webhtv.git`,仓库标识为 `fish2018/webhtv`。如需修改,在 GitHub 仓库变量中同时设置 `CNB_REPO_URL` 和 `CNB_REPO_SLUG`。更新 JSON 内的 APK 地址使用固定版本直链 `https://cnb.cool/<slug>/-/releases/download/<tag>/<apk>`，公开仓库可匿名下载并支持 Range/断点续传。
 
 GitHub Actions 正式发布必须配置签名 secrets,否则会直接失败,避免使用 runner 临时 debug key 生成无法覆盖安装的 APK。
 
-如果发布时忘记配置 `CNB_TOKEN` 或 CNB 同步失败,不需要重新打包。配置好 `CNB_TOKEN` 后,在 GitHub Actions 手动运行 `CNB Release Sync`,填写已有 `release_tag` 即可把该 GitHub Release 的 APK/JSON 补同步到 CNB；`release_tag` 留空时同步最新 release。
+如果 CNB 同步失败,不需要重新打包。修正 `CNB_TOKEN` 或网络问题后,在 GitHub Actions 手动运行 `CNB Release Sync`,填写已有 `release_tag` 即可把该 GitHub Release 的 APK 上传到 CNB Release 附件,并把改写为 CNB 绝对下载地址的 JSON 补同步到代码仓库；`release_tag` 留空时同步最新 release。
 
 ### 签名
 
