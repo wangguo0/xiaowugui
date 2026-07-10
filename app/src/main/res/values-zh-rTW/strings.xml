@@ -806,6 +806,7 @@
     <string name="mpv_config_default">預設</string>
     <string name="mpv_config_local">本機 mpv.conf</string>
     <string name="mpv_config_url">URL mpv.conf</string>
+    <string name="mpv_config_name_hint">名稱（可選）</string>
     <string name="mpv_config_history">歷史</string>
     <string name="mpv_config_history_empty">暫無 MPV 設定歷史</string>
     <string name="mpv_config_script_hint">腳本 URL 或選擇本機腳本</string>
