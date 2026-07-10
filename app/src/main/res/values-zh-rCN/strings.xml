@@ -373,7 +373,7 @@
     <string name="site_health_clear_done">站点健康记录已清空</string>
     <string name="setting_web_home_extension">WebHome 扩展</string>
     <string name="setting_web_home_fullscreen">WebHome 主页全屏</string>
-    <string name="setting_csp_warmup">CSP init 预热</string>
+    <string name="setting_csp_warmup">CSP预热</string>
     <string name="setting_csp_warmup_default">默认</string>
     <string name="setting_csp_warmup_custom">自定义</string>
     <string name="setting_csp_warmup_custom_count">自定义 · %1$d 个</string>

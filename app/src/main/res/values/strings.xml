@@ -375,7 +375,7 @@
     <string name="site_health_clear_done">Site health data cleared</string>
     <string name="setting_web_home_extension">WebHome extensions</string>
     <string name="setting_web_home_fullscreen">WebHome homepage fullscreen</string>
-    <string name="setting_csp_warmup">CSP init warmup</string>
+    <string name="setting_csp_warmup">CSP warmup</string>
     <string name="setting_csp_warmup_default">Default</string>
     <string name="setting_csp_warmup_custom">Custom</string>
     <string name="setting_csp_warmup_custom_count">Custom · %1$d sites</string>
