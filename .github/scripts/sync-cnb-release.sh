@@ -127,7 +127,8 @@ run_attachments_plugin() {
     -e PLUGIN_ATTACHMENTS="${plugin_attachments}" \
     -v "${WORKSPACE}:${WORKSPACE}" \
     -w "${WORKSPACE}" \
-    cnbcool/attachments:latest
+    cnbcool/attachments:latest \
+    | sed '/^##\[set-output FILES=/d'
 }
 
 if [ "${release_existed}" = "true" ]; then
