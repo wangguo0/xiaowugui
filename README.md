@@ -200,7 +200,16 @@ bash gradlew :app:assembleMobileArm64_v8aDebug :app:assembleLeanbackArmeabi_v7aD
 - FFmpeg 文件名、ELF `SONAME` 和所有 `DT_NEEDED` 都要从 `libav*`/`libsw*` 等长改为 `libmv*`/`libmw*`，不能只重命名文件，否则会和 `nextlib-media3ext` 内置 FFmpeg 发生 Android linker 复用冲突。
 - 更新后用 NDK `llvm-readelf -d` 确认没有残留 `libav*.so`/`libsw*.so` 依赖，再分别回归 OpenGL 普通播放、LUT 效果、预览分割线连续滑动、Vulkan、字幕切换和硬解。
 
-重建命令：
+从固定源码重新生成 arm64 MPV/FFmpeg `.so`：
+
+```bash
+scripts/build_mpv_native.sh --abi arm64-v8a --install
+bash gradlew :app:assembleMobileArm64_v8aRelease -PfastRelease=true
+```
+
+脚本读取 `third_party/mpv-native-lock.json`，自动下载固定 commit、构建依赖、修改 ELF 依赖名、strip并校验。普通 Gradle 和 GitHub Actions 不会调用该脚本，仍直接复用仓库已提交的 `.so`。完整环境准备、两 ABI 构建、输出目录和故障处理见 [MPV Native 可复现构建](third_party/mpv-native-build.md)。
+
+只重建 App JNI 桥接库 `libplayer.so`：
 
 ```bash
 export ANDROID_HOME="$HOME/Library/Android/sdk"
