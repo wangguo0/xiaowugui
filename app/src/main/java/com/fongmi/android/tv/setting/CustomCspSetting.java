@@ -240,8 +240,7 @@ public class CustomCspSetting {
             File file = Path.local(path);
             if (!file.isFile()) return false;
             String script = Path.read(file);
-            String lower = file.getName().toLowerCase(Locale.ROOT);
-            boolean live = lower.endsWith(".py") ? PYTHON_LIVE_METHOD.matcher(script).find() : lower.endsWith(".js") && JS_LIVE_METHOD.matcher(script).find();
+            boolean live = hasLiveMethod(api, script);
             if (live) SpiderDebug.log("custom-csp", "recognized live spider by method api=%s", api);
             return live;
         } catch (Exception e) {
@@ -251,6 +250,34 @@ public class CustomCspSetting {
 
     private static boolean isLocalHost(String host) {
         return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host);
+    }
+
+    public static boolean isRemoteScript(String api) {
+        if (TextUtils.isEmpty(api)) return false;
+        try {
+            Uri uri = Uri.parse(api.trim());
+            String scheme = uri.getScheme();
+            String path = uri.getPath();
+            if (!("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) || TextUtils.isEmpty(path)) return false;
+            String lower = path.toLowerCase(Locale.ROOT);
+            return lower.endsWith(".py") || lower.endsWith(".js");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static boolean hasLiveMethod(String api, String script) {
+        if (TextUtils.isEmpty(api) || TextUtils.isEmpty(script)) return false;
+        String path;
+        try {
+            path = Uri.parse(api.trim()).getPath();
+        } catch (Exception e) {
+            path = api;
+        }
+        String lower = TextUtils.isEmpty(path) ? api.toLowerCase(Locale.ROOT) : path.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".py")) return PYTHON_LIVE_METHOD.matcher(script).find();
+        if (lower.endsWith(".js")) return JS_LIVE_METHOD.matcher(script).find();
+        return false;
     }
 
     private static boolean hasLiveScriptConvention(String api) {
