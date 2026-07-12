@@ -112,12 +112,26 @@ public class Source {
             headers.put("User-Agent", "com.google.android.youtube/21.02.35 (Linux; U; Android 14) gzip");
             result.setHeader(headers);
         }
-        if (playerType == PlayerSetting.MPV && isDash(result, sanitized)) {
+        boolean dash = isDash(result, sanitized);
+        if (playerType == PlayerSetting.MPV && dash) {
             String resolved = MpdEdlResolver.resolve(sanitized, result.getHeader());
             if (!resolved.equals(sanitized)) result.setFormat(null);
             sanitized = resolved;
+        } else if (dash) {
+            sanitized = avoidStaleLocalManifest(sanitized);
         }
         return sanitized;
+    }
+
+    private String avoidStaleLocalManifest(String url) {
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            if (!"127.0.0.1".equals(host) && !"localhost".equalsIgnoreCase(host)) return url;
+            return uri.buildUpon().appendQueryParameter("player_ts", Long.toString(System.currentTimeMillis())).build().toString();
+        } catch (Throwable ignored) {
+            return url;
+        }
     }
 
     private boolean isDash(Result result, String url) {

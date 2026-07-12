@@ -154,7 +154,8 @@ public final class MpvHlsProxy extends NanoHTTPD {
             if (path == null) return error(Status.NOT_FOUND, "missing path");
             if (path.startsWith("/mpv/index.m3u8")) return servePlaylist(session);
             if (path.startsWith("/mpv/index.mpd")) return serveDash(session);
-            if (path.startsWith("/mpv/item")) return serveItem(session);
+            if (path.startsWith("/mpv/dash-item/")) return serveItem(session, dashItemId(path));
+            if (path.startsWith("/mpv/item")) return serveItem(session, null);
             return error(Status.NOT_FOUND, "not found");
         } catch (Throwable e) {
             SpiderDebug.log(TAG, e);
@@ -213,7 +214,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
             int count = 0;
             while (matcher.find()) {
                 String target = resolve(manifestUrl, decodeXml(matcher.group(2).trim()));
-                String local = proxyItemUrl(target, id, true).replace("&", "&amp;");
+                String local = proxyDashItemUrl(target, id).replace("&", "&amp;");
                 matcher.appendReplacement(rewritten, Matcher.quoteReplacement(matcher.group(1) + local + matcher.group(3)));
                 count++;
             }
@@ -224,8 +225,8 @@ public final class MpvHlsProxy extends NanoHTTPD {
         }
     }
 
-    private Response serveItem(IHTTPSession httpSession) throws IOException {
-        String id = httpSession.getParms().get("id");
+    private Response serveItem(IHTTPSession httpSession, @Nullable String forcedId) throws IOException {
+        String id = forcedId == null ? httpSession.getParms().get("id") : forcedId;
         if (id != null && id.endsWith("/")) id = id.substring(0, id.length() - 1);
         Target target = id == null ? null : targets.get(id);
         Session owner = target == null ? null : sessions.get(target.sessionId);
@@ -466,6 +467,21 @@ public final class MpvHlsProxy extends NanoHTTPD {
         String id = Long.toString(nextId.incrementAndGet());
         targets.put(id, new Target(session, targetUrl, System.currentTimeMillis(), cacheable));
         return baseUrl() + "/mpv/item?s=" + session + "&id=" + id;
+    }
+
+    private String proxyDashItemUrl(String targetUrl, int session) {
+        String id = Long.toString(nextId.incrementAndGet());
+        targets.put(id, new Target(session, targetUrl, System.currentTimeMillis(), true));
+        return baseUrl() + "/mpv/dash-item/" + id + "/media.m4s";
+    }
+
+    @Nullable
+    private String dashItemId(String path) {
+        String prefix = "/mpv/dash-item/";
+        if (path == null || !path.startsWith(prefix)) return null;
+        String value = path.substring(prefix.length());
+        int slash = value.indexOf('/');
+        return slash < 0 ? value : value.substring(0, slash);
     }
 
     private String decodeXml(String value) {
