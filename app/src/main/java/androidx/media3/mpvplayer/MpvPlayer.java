@@ -7,6 +7,7 @@ import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.Build;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.text.TextUtils;
@@ -37,6 +38,7 @@ import androidx.media3.common.util.UnstableApi;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.MpvPerformanceSetting;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.collect.ImmutableList;
 import com.google.common.net.HttpHeaders;
@@ -202,6 +204,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private double cachedAvSyncSeconds;
     private double cachedDisplayFps;
     private double cachedEstimatedDisplayFps;
+    private float cachedContentFrameRate;
     private long cachedDecoderDroppedFrames;
     private long cachedOutputDroppedFrames;
     private long cachedMistimedFrames;
@@ -695,7 +698,6 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setOption("sub-font-provider", "none");
         setOption("msg-level", config.logLevel());
         for (Map.Entry<String, String> entry : config.extraOptions().entrySet()) setOption(entry.getKey(), entry.getValue());
-        setOption("msg-level", "all=warn,cplayer=v,demux=v,mkv=v,sub=trace,osd/libass=trace");
     }
 
     private void applyPostInitOptions() {
@@ -817,7 +819,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 updateVideoSize("property:" + property);
                 refreshTracks();
             }
-            case "container-fps", "estimated-vf-fps", "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
+            case "container-fps", "estimated-vf-fps" -> {
+                cachedContentFrameRate = videoFrameRate();
+                applySurfaceFrameRate();
+                refreshTracks();
+            }
+            case "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
             case "current-vo" -> cachedCurrentVo = stringValue(value, cachedCurrentVo);
             case "current-gpu-context" -> cachedCurrentGpuContext = stringValue(value, cachedCurrentGpuContext);
             case "gpu-api" -> cachedGpuApi = stringValue(value, cachedGpuApi);
@@ -1328,6 +1335,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             if (surfaceAttached && attachedSurface == surface) {
                 setRuntimeString("force-window", "yes");
                 applyAndroidSurfaceSize();
+                applySurfaceFrameRate();
                 if (!TextUtils.equals(attachedVo, config.vo())) {
                     safeSetPropertyString("vo", config.vo());
                     attachedVo = config.vo();
@@ -1342,6 +1350,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             attachedSurface = surface;
             setRuntimeString("force-window", "yes");
             applyAndroidSurfaceSize();
+            applySurfaceFrameRate();
             safeSetPropertyString("vo", config.vo());
             attachedVo = config.vo();
             Log.d(SIZE_TAG, "mpv bind surface valid=" + surface.isValid() + " cached=" + surfaceWidth + "x" + surfaceHeight + " vo=" + config.vo());
@@ -1352,6 +1361,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void clearVideoOutput() {
+        clearSurfaceFrameRate();
         detachSurfaceHolder();
         detachMpvSurface();
         releaseOwnedSurface();
@@ -1412,6 +1422,26 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         } else {
             safeSetPropertyString("android-surface-size", "0x0");
             Log.d(SIZE_TAG, "mpv android-surface-size=0x0");
+        }
+    }
+
+    private void applySurfaceFrameRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || surface == null || !surface.isValid()) return;
+        float rate = MpvPerformanceSetting.getFrameRateMode() == MpvPerformanceSetting.FRAME_RATE_SEAMLESS ? cachedContentFrameRate : 0f;
+        if (rate < 0) rate = 0f;
+        try {
+            surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
+            SpiderDebug.log("mpv", "surface frame rate request=%.3f mode=%s", rate, MpvPerformanceSetting.getFrameRateText());
+        } catch (Throwable e) {
+            SpiderDebug.log("mpv", "surface frame rate request failed rate=%.3f error=%s", rate, e.getMessage());
+        }
+    }
+
+    private void clearSurfaceFrameRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || surface == null || !surface.isValid()) return;
+        try {
+            surface.setFrameRate(0f, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -2011,7 +2041,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void maybeSelectPreferredAac(List<TrackInfo> infos, String selectedAudio) {
-        if (!PlayerSetting.isPreferAAC() || preferAacApplied || audioTrackManuallySelected || !initialized) return;
+        if (!PlayerSetting.isPreferAAC(PlayerSetting.MPV) || preferAacApplied || audioTrackManuallySelected || !initialized) return;
         TrackInfo selected = findTrack(infos, C.TRACK_TYPE_AUDIO, selectedAudio);
         if (selected != null && isAacTrack(selected)) {
             preferAacApplied = true;
@@ -2465,6 +2495,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedAvSyncSeconds = 0;
         cachedDisplayFps = 0;
         cachedEstimatedDisplayFps = 0;
+        cachedContentFrameRate = 0;
         cachedDecoderDroppedFrames = 0;
         cachedOutputDroppedFrames = 0;
         cachedMistimedFrames = 0;

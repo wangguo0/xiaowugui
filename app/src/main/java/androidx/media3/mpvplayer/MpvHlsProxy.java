@@ -62,6 +62,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
     private static final Pattern CONTENT_RANGE = Pattern.compile("bytes\\s+(\\d+)-(\\d+)/(\\d+|\\*)", Pattern.CASE_INSENSITIVE);
 
     private final OkHttpClient client;
+    private final int kernel;
     private final Map<Integer, Session> sessions;
     private final Map<Integer, SessionStats> sessionStats;
     private final Map<String, Target> targets;
@@ -73,7 +74,12 @@ public final class MpvHlsProxy extends NanoHTTPD {
     private volatile boolean started;
 
     public MpvHlsProxy() {
+        this(PlayerSetting.MPV);
+    }
+
+    public MpvHlsProxy(int kernel) {
         super("127.0.0.1", 0);
+        this.kernel = PlayerSetting.sanitizePlayer(kernel);
         client = OkHttp.player().newBuilder()
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(30, TimeUnit.SECONDS)
@@ -482,13 +488,13 @@ public final class MpvHlsProxy extends NanoHTTPD {
     }
 
     private void preloadSegments(Session session, List<Segment> segments, double startSeconds) {
-        if (!PreloadSetting.isPreload() || !isCacheEnabled() || segments.isEmpty()) return;
+        if (!PreloadSetting.isPreload(kernel) || !isCacheEnabled() || segments.isEmpty()) return;
         double seconds = 0;
         for (Segment segment : segments) {
             if (segment.endSeconds() <= startSeconds) continue;
             if (segment.startSeconds <= startSeconds && segment.endSeconds() > startSeconds) continue;
             if (segment.byteRange) continue;
-            if (seconds >= PreloadSetting.getPreloadTimeSeconds()) break;
+            if (seconds >= PreloadSetting.getPreloadTimeSeconds(kernel)) break;
             seconds += Math.max(0, segment.durationSeconds);
             preloadSegment(session, segment.url);
         }
@@ -512,7 +518,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
     }
 
     private synchronized ExecutorService getPreloadExecutor() {
-        int threads = PreloadSetting.getPreloadThreads();
+        int threads = PreloadSetting.getPreloadThreads(kernel);
         if (preloadExecutor != null && preloadThreads == threads) return preloadExecutor;
         releasePreloadExecutor();
         preloadThreads = threads;
@@ -583,8 +589,8 @@ public final class MpvHlsProxy extends NanoHTTPD {
     }
 
     private long cacheLimitBytes() {
-        long playCache = Math.max(0, PlayerSetting.getPlayCacheSize());
-        long preloadCache = PreloadSetting.isPreload() ? Math.max(0, PreloadSetting.getPreloadSizeBytes()) : playCache;
+        long playCache = Math.max(0, PlayerSetting.getPlayCacheSize(kernel));
+        long preloadCache = PreloadSetting.isPreload(kernel) ? Math.max(0, PreloadSetting.getPreloadSizeBytes(kernel)) : playCache;
         return Math.max(0, Math.min(playCache, preloadCache));
     }
 

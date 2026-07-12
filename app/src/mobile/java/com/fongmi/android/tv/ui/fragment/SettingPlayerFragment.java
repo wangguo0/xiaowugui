@@ -160,6 +160,7 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
             mBinding.kernelText.setText(kernel[which]);
             PlayerSetting.putPlayer(which);
             setMpvRows();
+            setPerformanceText();
         });
     }
 

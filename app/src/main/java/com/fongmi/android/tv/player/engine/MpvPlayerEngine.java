@@ -22,6 +22,7 @@ import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.MpvPerformanceSetting;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.github.catvod.crawler.SpiderDebug;
 
@@ -371,12 +372,18 @@ public class MpvPlayerEngine implements PlayerEngine {
         SpiderDebug.log("player-engine", "mpv render requested=%s nativeVulkan=%s deviceVulkan=%s decode=%s actual=%s/%s", requestVulkan ? "vulkan" : "opengl", nativeVulkan, deviceVulkan, decode == HARD ? "hard" : "soft", useVulkan ? "vulkan" : "opengl", useGpuNext ? "gpu-next" : "gpu");
         MpvPlayerConfig.Builder builder = MpvPlayerConfig.builder(App.get())
                 .configDir(MpvConfigStore.configDir())
-                .hwdec(decode == HARD ? "mediacodec,mediacodec-copy" : "no")
+                .hwdec(decode == HARD ? MpvPerformanceSetting.getHwdecOption() : "no")
                 .audioSpdif(resolveAudioSpdifCodecs())
+                .logLevel(MpvPerformanceSetting.isVerboseLog() ? "all=v" : "all=warn")
                 .demuxerMaxBytes(getDemuxerMaxBytes())
                 .demuxerMaxBackBytes(getDemuxerMaxBackBytes())
                 .cacheSeconds(getDemuxerReadAheadSeconds())
-                .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds());
+                .demuxerReadaheadSeconds(getDemuxerReadAheadSeconds())
+                .option("framedrop", MpvPerformanceSetting.getFrameDropOption())
+                .option("video-sync", MpvPerformanceSetting.getSyncOption())
+                .option("interpolation", MpvPerformanceSetting.isInterpolation() ? "yes" : "no")
+                .option("hls-bitrate", MpvPerformanceSetting.getHlsBitrateOption());
+        applySoftDecodeOptions(builder);
         if (useVulkan) {
             builder.vo("gpu-next")
                     .gpuContext("androidvk")
@@ -391,20 +398,27 @@ public class MpvPlayerEngine implements PlayerEngine {
         return builder.build();
     }
 
+    private void applySoftDecodeOptions(MpvPlayerConfig.Builder builder) {
+        if (decode != SOFT || MpvPerformanceSetting.getSoftTuneMode() == MpvPerformanceSetting.SOFT_TUNE_OFF) return;
+        builder.option("vd-lavc-fast", "yes");
+        builder.option("vd-lavc-threads", "0");
+        builder.option("vd-lavc-skiploopfilter", MpvPerformanceSetting.getSoftTuneMode() == MpvPerformanceSetting.SOFT_TUNE_AGGRESSIVE ? "nonkey" : "nonref");
+    }
+
     private String resolveAudioSpdifCodecs() {
-        if (!PlayerSetting.isAudioPassThrough()) return "";
+        if (!PlayerSetting.isAudioPassThrough(PlayerSetting.MPV)) return "";
         return MpvAudioCapabilities.getAudioSpdifCodecs(App.get());
     }
 
     private long getDemuxerMaxBytes() {
-        int bytes = PlayerSetting.getBufferBytes();
+        int bytes = PlayerSetting.getBufferBytes(PlayerSetting.MPV);
         return bytes > 0 ? bytes : MpvPlayerConfig.DEFAULT_DEMUXER_BYTES;
     }
 
     private long getDemuxerMaxBackBytes() {
-        if (PlayerSetting.getBackBufferMs() <= 0) return 0;
+        if (PlayerSetting.getBackBufferMs(PlayerSetting.MPV) <= 0) return 0;
         long forward = getDemuxerMaxBytes();
-        return switch (PlayerSetting.getBackBufferOption()) {
+        return switch (PlayerSetting.getBackBufferOption(PlayerSetting.MPV)) {
             case 1 -> Math.max(16L * 1024 * 1024, forward / 4);
             case 2 -> Math.max(32L * 1024 * 1024, forward / 2);
             case 3 -> forward;
@@ -413,6 +427,6 @@ public class MpvPlayerEngine implements PlayerEngine {
     }
 
     private int getDemuxerReadAheadSeconds() {
-        return Math.min(60, Math.max(15, PlayerSetting.getBuffer() * 3));
+        return Math.min(60, Math.max(15, PlayerSetting.getBuffer(PlayerSetting.MPV) * 3));
     }
 }

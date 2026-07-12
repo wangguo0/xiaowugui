@@ -159,6 +159,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.kernelText.setText(kernel[index]);
         PlayerSetting.putPlayer(index);
         setMpvRows();
+        setPerformanceText();
     }
 
     private void setScale(View view) {

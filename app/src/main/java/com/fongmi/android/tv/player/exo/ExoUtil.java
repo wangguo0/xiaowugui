@@ -53,6 +53,7 @@ import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.track.LangUtil;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
+import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -103,7 +104,7 @@ public class ExoUtil {
                 .setTrackSelector(trackSelector)
                 .setRenderersFactory(buildPlaybackRenderersFactory(decode))
                 .setMediaSourceFactory(buildMediaSourceFactory())
-                .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS);
+                .setVideoChangeFrameRateStrategy(ExoPerformanceSetting.getFrameRateStrategy());
         if (PlaybackPerformanceSetting.isHighBufferEnabled()) builder.setLoadControl(buildEnhancedLoadControl());
         if (PlaybackPerformanceSetting.isBandwidthMeterEnabled()) builder.setBandwidthMeter(buildEnhancedBandwidthMeter(profile));
         if (PlaybackPerformanceSetting.isDynamicSchedulingEnabled()) {
@@ -156,7 +157,7 @@ public class ExoUtil {
     }
 
     private static boolean isAudioPrefer(int decode) {
-        return decode != PlayerEngine.SOFT && PlayerSetting.isAudioPrefer();
+        return decode != PlayerEngine.SOFT && PlayerSetting.isAudioPrefer(PlayerSetting.EXO);
     }
 
     private static CaptionStyleCompat getCaptionStyle() {
@@ -166,7 +167,7 @@ public class ExoUtil {
     private static DefaultTrackSelector buildTrackSelector(int decode) {
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(App.get());
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
-        if (PlayerSetting.isPreferAAC()) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
+        if (PlayerSetting.isPreferAAC(PlayerSetting.EXO)) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
         builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
         if (PlaybackPerformanceSetting.isTrackLimitEnabled()) {
@@ -337,15 +338,15 @@ public class ExoUtil {
 
     private static DefaultLoadControl buildEnhancedLoadControl() {
         return new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(getMinBufferMs(), getMaxBufferMs(), ENHANCED_BUFFER_FOR_PLAYBACK_MS, ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
+                .setBufferDurationsMs(getMinBufferMs(), getMaxBufferMs(), ExoPerformanceSetting.getStartBufferMs(), ExoPerformanceSetting.getRebufferMs())
                 .setTargetBufferBytes(getTargetBufferBytes())
-                .setBackBuffer(PlayerSetting.getBackBufferMs(), true)
-                .setPrioritizeTimeOverSizeThresholds(true)
+                .setBackBuffer(PlayerSetting.getBackBufferMs(PlayerSetting.EXO), true)
+                .setPrioritizeTimeOverSizeThresholds(ExoPerformanceSetting.isPrioritizeTime())
                 .build();
     }
 
     private static int getMinBufferMs() {
-        return Math.min(ENHANCED_MIN_BUFFER_MS, Math.max(15_000, PlayerSetting.getBuffer() * 3_000));
+        return Math.min(ENHANCED_MIN_BUFFER_MS, Math.max(15_000, PlayerSetting.getBuffer(PlayerSetting.EXO) * 3_000));
     }
 
     private static int getMaxBufferMs() {
@@ -353,7 +354,7 @@ public class ExoUtil {
     }
 
     private static int getTargetBufferBytes() {
-        int bytes = PlayerSetting.getBufferBytes();
+        int bytes = PlayerSetting.getBufferBytes(PlayerSetting.EXO);
         return bytes > 0 ? bytes : ENHANCED_TARGET_BUFFER_BYTES;
     }
 
@@ -376,11 +377,11 @@ public class ExoUtil {
     }
 
     private static RenderersFactory buildPlaybackRenderersFactory(int decode) {
-        return buildRenderersFactory(getAudioRenderMode(), getVideoRenderMode(decode), isAudioPrefer(decode), PlayerSetting.isVideoPrefer(), decode == PlayerEngine.SOFT && PlaybackPerformanceSetting.isSoftVideoTuneEnabled());
+        return buildRenderersFactory(getAudioRenderMode(), getVideoRenderMode(decode), isAudioPrefer(decode), PlayerSetting.isVideoPrefer(PlayerSetting.EXO), decode == PlayerEngine.SOFT && PlaybackPerformanceSetting.isSoftVideoTuneEnabled());
     }
 
     static RenderersFactory buildRenderersFactory() {
-        return buildRenderersFactory(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER, DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER, PlayerSetting.isAudioPrefer(), PlayerSetting.isVideoPrefer(), false);
+        return buildRenderersFactory(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER, DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER, PlayerSetting.isAudioPrefer(PlayerSetting.EXO), PlayerSetting.isVideoPrefer(PlayerSetting.EXO), false);
     }
 
     private static RenderersFactory buildRenderersFactory(int audioRenderMode, int videoRenderMode, boolean audioPrefer, boolean videoPrefer, boolean softVideoTune) {
@@ -390,15 +391,16 @@ public class ExoUtil {
                 return ExoUtil.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams);
             }
         };
-        if (PlaybackPerformanceSetting.isCodecAsyncQueueingEnabled()) factory.forceEnableMediaCodecAsynchronousQueueing();
-        if (PlaybackPerformanceSetting.isVideoDurationProgressEnabled()) factory.setEnableMediaCodecVideoRendererDurationToProgressUs(true);
+        if (ExoPerformanceSetting.getCodecQueueMode() == ExoPerformanceSetting.CODEC_QUEUE_ASYNC) factory.forceEnableMediaCodecAsynchronousQueueing();
+        else if (ExoPerformanceSetting.getCodecQueueMode() == ExoPerformanceSetting.CODEC_QUEUE_SYNC) factory.forceDisableMediaCodecAsynchronousQueueing();
+        if (PlaybackPerformanceSetting.isVideoDurationProgressEnabled() && ExoPerformanceSetting.getCodecQueueMode() != ExoPerformanceSetting.CODEC_QUEUE_SYNC) factory.setEnableMediaCodecVideoRendererDurationToProgressUs(true);
         if (PlaybackPerformanceSetting.isLateDropInputEnabled()) factory.experimentalSetLateThresholdToDropDecoderInputUs(ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US);
         return factory.setEnableDecoderFallback(PlaybackPerformanceSetting.isDecoderFallbackEnabled()).setExtensionRendererMode(Math.max(audioRenderMode, videoRenderMode));
     }
 
     private static AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams) {
         DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder(context).setEnableFloatOutput(enableFloatOutput).setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams);
-        if (!PlayerSetting.isAudioPassThrough()) builder.setAudioOutputProvider(new AudioTrackAudioOutputProvider.Builder(null).build());
+        if (!PlayerSetting.isAudioPassThrough(PlayerSetting.EXO)) builder.setAudioOutputProvider(new AudioTrackAudioOutputProvider.Builder(null).build());
         return builder.build();
     }
 
