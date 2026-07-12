@@ -94,6 +94,7 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         super(Looper.getMainLooper());
         this.decode = decode;
         ijk = new IjkMediaPlayer();
+        if (SpiderDebug.isEnabled()) IjkMediaPlayer.native_setLogLevel(IjkMediaPlayer.IJK_LOG_DEBUG);
         ijk.setListener(this);
         hlsProxy = new MpvHlsProxy(PlayerSetting.IJK);
         stateRefreshRunnable = this::refreshPlaybackState;
@@ -344,11 +345,16 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
             Uri sourceUri = mediaItem.localConfiguration.uri;
             Map<String, String> headers = ExoUtil.extractHeaders(mediaItem);
             String playableUrl = sourceUri.toString();
-            if (shouldProxyHls(mediaItem, playableUrl)) {
+            boolean dash = isLikelyDash(mediaItem, playableUrl);
+            if (dash) {
+                playableUrl = hlsProxy.proxyDash(playableUrl, headers);
+                SpiderDebug.log("ijk", "dash proxy enabled original=%s proxy=%s", sourceUri, playableUrl);
+            } else if (shouldProxyHls(mediaItem, playableUrl)) {
                 playableUrl = hlsProxy.proxy(playableUrl, headers);
                 SpiderDebug.log("ijk", "hls proxy enabled original=%s proxy=%s", sourceUri, playableUrl);
             }
-            configureOptions(sourceUri);
+            SpiderDebug.log("ijk", "open dash=%s decode=%d uri=%s mime=%s headers=%s", dash, decode, summarizeUri(), mediaItem.localConfiguration.mimeType, headers.keySet());
+            configureOptions(sourceUri, dash);
             bindVideoOutput();
             ijk.setDataSource(App.get(), Uri.parse(playableUrl), headers);
             ijk.setAudioStreamType(AudioManager.STREAM_MUSIC);
@@ -460,9 +466,10 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         ownsSurface = false;
     }
 
-    private void configureOptions(Uri uri) {
+    private void configureOptions(Uri uri, boolean dash) {
         String url = uri.toString();
         boolean realtime = isRealtimeUrl(url);
+        if (dash) ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "iformat", "dash");
         configureSoftDecodeOptions();
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_clear", 1);
         ijk.setOption(IjkMediaPlayer.OPT_CATEGORY_FORMAT, "dns_cache_timeout", -1);
@@ -550,6 +557,19 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         }
         String lower = uri == null ? "" : uri.toLowerCase(Locale.US);
         return lower.contains("m3u8");
+    }
+
+    private boolean isLikelyDash(MediaItem item, String uri) {
+        if (item.localConfiguration != null) {
+            String mimeType = item.localConfiguration.mimeType;
+            if (MimeTypes.APPLICATION_MPD.equals(mimeType)
+                    || "application/dash+xml".equalsIgnoreCase(mimeType)
+                    || "dash".equalsIgnoreCase(mimeType)) {
+                return true;
+            }
+        }
+        String lower = uri == null ? "" : uri.toLowerCase(Locale.US);
+        return lower.contains(".mpd") || lower.contains("type=mpd") || lower.contains("format=mpd");
     }
 
     private final SurfaceHolder.Callback surfaceCallback = new SurfaceHolder.Callback() {

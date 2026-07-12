@@ -59,6 +59,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
     private static final byte[] PNG_SIGNATURE = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
     private static final byte[] PNG_IEND = new byte[]{0x49, 0x45, 0x4E, 0x44, (byte) 0xAE, 0x42, 0x60, (byte) 0x82};
     private static final Pattern URI_ATTR = Pattern.compile("URI=\"([^\"]+)\"");
+    private static final Pattern DASH_BASE_URL = Pattern.compile("(<BaseURL\\b[^>]*>)(.*?)(</BaseURL>)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern CONTENT_RANGE = Pattern.compile("bytes\\s+(\\d+)-(\\d+)/(\\d+|\\*)", Pattern.CASE_INSENSITIVE);
 
     private final OkHttpClient client;
@@ -105,6 +106,18 @@ public final class MpvHlsProxy extends NanoHTTPD {
         return proxyUrl;
     }
 
+    public synchronized String proxyDash(String url, Map<String, String> headers) throws IOException {
+        ensureStarted();
+        int id = ++this.sessionId;
+        Session session = new Session(url, sanitize(headers), System.currentTimeMillis());
+        sessions.put(id, session);
+        sessionStats.put(id, new SessionStats());
+        pruneExpiredSessions(session.createdAtMs);
+        String proxyUrl = baseUrl() + "/mpv/index.mpd?s=" + id;
+        SpiderDebug.log(TAG, "dash enabled session=%d url=%s headers=%s proxy=%s", id, shortUrl(url), session.headers.keySet(), proxyUrl);
+        return proxyUrl;
+    }
+
     public synchronized void clear() {
         sessions.clear();
         sessionStats.clear();
@@ -140,6 +153,7 @@ public final class MpvHlsProxy extends NanoHTTPD {
             String path = session.getUri();
             if (path == null) return error(Status.NOT_FOUND, "missing path");
             if (path.startsWith("/mpv/index.m3u8")) return servePlaylist(session);
+            if (path.startsWith("/mpv/index.mpd")) return serveDash(session);
             if (path.startsWith("/mpv/item")) return serveItem(session);
             return error(Status.NOT_FOUND, "not found");
         } catch (Throwable e) {
@@ -184,8 +198,35 @@ public final class MpvHlsProxy extends NanoHTTPD {
         }
     }
 
+    private Response serveDash(IHTTPSession httpSession) throws IOException {
+        int id = parseSessionId(httpSession);
+        Session session = sessions.get(id);
+        if (session == null || TextUtils.isEmpty(session.url)) return error(Status.NOT_FOUND, "expired dash");
+        try (okhttp3.Response response = fetch(session, session.url, null, false)) {
+            ResponseBody body = response.body();
+            if (!response.isSuccessful() || body == null) return error(toStatus(response.code()), "dash http " + response.code());
+            String manifestUrl = response.request().url().toString();
+            String text = body.string();
+            if (!text.toLowerCase(Locale.US).contains("<mpd")) return error(Status.BAD_REQUEST, "invalid dash");
+            Matcher matcher = DASH_BASE_URL.matcher(text);
+            StringBuffer rewritten = new StringBuffer();
+            int count = 0;
+            while (matcher.find()) {
+                String target = resolve(manifestUrl, decodeXml(matcher.group(2).trim()));
+                String local = proxyItemUrl(target, id, true).replace("&", "&amp;");
+                matcher.appendReplacement(rewritten, Matcher.quoteReplacement(matcher.group(1) + local + matcher.group(3)));
+                count++;
+            }
+            matcher.appendTail(rewritten);
+            byte[] data = rewritten.toString().getBytes(StandardCharsets.UTF_8);
+            SpiderDebug.log(TAG, "dash manifest session=%d code=%d bytes=%d baseUrls=%d url=%s", id, response.code(), data.length, count, shortUrl(session.url));
+            return noCache(newFixedLengthResponse(Status.OK, "application/dash+xml; charset=utf-8", new ByteArrayInputStream(data), data.length));
+        }
+    }
+
     private Response serveItem(IHTTPSession httpSession) throws IOException {
         String id = httpSession.getParms().get("id");
+        if (id != null && id.endsWith("/")) id = id.substring(0, id.length() - 1);
         Target target = id == null ? null : targets.get(id);
         Session owner = target == null ? null : sessions.get(target.sessionId);
         if (target == null || owner == null) return error(Status.NOT_FOUND, "expired item");
@@ -425,6 +466,10 @@ public final class MpvHlsProxy extends NanoHTTPD {
         String id = Long.toString(nextId.incrementAndGet());
         targets.put(id, new Target(session, targetUrl, System.currentTimeMillis(), cacheable));
         return baseUrl() + "/mpv/item?s=" + session + "&id=" + id;
+    }
+
+    private String decodeXml(String value) {
+        return value.replace("&amp;", "&").replace("&quot;", "\"").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">");
     }
 
     @Nullable

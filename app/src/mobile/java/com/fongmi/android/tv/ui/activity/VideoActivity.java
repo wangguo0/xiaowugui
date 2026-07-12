@@ -1488,12 +1488,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         SpiderDebug.log("video-flow", "switch player refresh start type=%d key=%s flag=%s episode=%s", nextType, key, flag, episode);
         Task.execute(() -> {
             try {
-                Result result = SiteApi.playerContent(key, flag, episode);
+                Result result = SiteApi.playerContent(key, flag, episode, nextType);
                 App.post(() -> switchPlayerKernelWithResult(nextType, result, position, speed, repeat, metadata));
             } catch (Throwable e) {
                 App.post(() -> {
                     playerKernelSwitchRefreshing = false;
-                    player().togglePlayer();
                     setPlayerKernel();
                     setDecode();
                     setR1Callback();
@@ -1507,7 +1506,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void switchPlayerKernelWithResult(int type, Result result, long position, float speed, boolean repeat, MediaMetadata metadata) {
         playerKernelSwitchRefreshing = false;
         if (result == null || result.hasMsg() || result.getRealUrl().isEmpty()) {
-            player().togglePlayer();
+            Notify.show(result != null && result.hasMsg() ? result.getMsg() : getString(R.string.error_play_url));
         } else {
             player().switchPlayer(type, result, getHistoryKey(), metadata, isUseParse(), position, speed, repeat);
         }
