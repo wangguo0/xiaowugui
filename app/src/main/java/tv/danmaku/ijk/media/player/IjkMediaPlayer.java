@@ -6,7 +6,6 @@ import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -125,17 +124,10 @@ public final class IjkMediaPlayer extends AbstractMediaPlayer {
     private int mVideoSarNum;
     private int mVideoWidth;
     private PowerManager.WakeLock mWakeLock;
-    private static final IjkLibLoader LOADER = createLoader();
+    private static final IjkLibLoader LOADER = new AnonymousClass1("ijkffmpeg", "ijksdl", "ijkplayer");
     private static volatile boolean mIsNativeInitialized = false;
     private static volatile boolean mIsPropertyFloatAvailable = true;
     private static volatile boolean mIsVideoSurfaceAvailable = true;
-
-    private static IjkLibLoader createLoader() {
-        boolean arm64 = Build.SUPPORTED_ABIS.length > 0 && "arm64-v8a".equals(Build.SUPPORTED_ABIS[0]);
-        return arm64
-                ? new AnonymousClass1("ijkj4a", "ijkyuv", "ijksoundtouch", "ijksdl", "ijkplayer")
-                : new AnonymousClass1("ijkffmpeg", "ijksdl", "ijkplayer");
-    }
 
     /* renamed from: tv.danmaku.ijk.media.player.IjkMediaPlayer$1, reason: invalid class name */
     public static class AnonymousClass1 extends IjkLibLoader {

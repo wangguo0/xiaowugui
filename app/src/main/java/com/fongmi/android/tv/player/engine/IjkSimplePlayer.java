@@ -96,7 +96,6 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
         super(Looper.getMainLooper());
         this.decode = decode;
         ijk = new IjkMediaPlayer();
-        if (BuildConfig.DEBUG || SpiderDebug.isEnabled()) IjkMediaPlayer.native_setLogLevel(IjkMediaPlayer.IJK_LOG_DEBUG);
         ijk.setListener(this);
         hlsProxy = new MpvHlsProxy(PlayerSetting.IJK);
         stateRefreshRunnable = this::refreshPlaybackState;
