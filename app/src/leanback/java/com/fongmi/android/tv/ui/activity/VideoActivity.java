@@ -555,7 +555,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void setVideoView() {
-        mBinding.control.action.danmaku.setVisibility(DanmakuSetting.isLoad() ? View.VISIBLE : View.GONE);
+        mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         setupActionButtons();
     }
