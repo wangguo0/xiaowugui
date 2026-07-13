@@ -625,13 +625,36 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             applyAudioOffset();
             applySubtitleStyle();
             currentPlayableUri = playableUri(mediaItem);
-            if (isLikelyIso(mediaItem, currentPlayableUri)) {
-                currentIsoUri = IsoSessionManager.create(currentPlayableUri, headers);
-                currentPlayableUri = currentIsoUri;
+            logSourceDiagnostics(mediaItem, currentPlayableUri, headers);
+            boolean declaredIso = isLikelyIso(mediaItem, currentPlayableUri);
+            if (!declaredIso && isOpaqueLocalProxy(currentPlayableUri)) {
+                String probingUri = currentPlayableUri;
+                IsoSessionManager.probeAndCreateAsync(probingUri, headers, isoUri -> mainHandler.post(() -> {
+                    if (released || stopping || !TextUtils.equals(currentPlayableUri, probingUri)) {
+                        IsoSessionManager.closeUri(isoUri);
+                        return;
+                    }
+                    currentIsoUri = isoUri;
+                    if (currentIsoUri != null) currentPlayableUri = currentIsoUri;
+                    continueOpenCurrent(headers);
+                }));
+                return;
+            }
+            if (declaredIso) currentIsoUri = IsoSessionManager.create(currentPlayableUri, headers);
+            if (currentIsoUri != null) currentPlayableUri = currentIsoUri;
+            continueOpenCurrent(headers);
+        } catch (Throwable e) {
+            fail(classifyLoadError(e, e.getMessage()), PlaybackException.ERROR_CODE_IO_UNSPECIFIED);
+        }
+    }
+
+    private void continueOpenCurrent(Map<String, String> headers) {
+        try {
+            if (currentIsoUri != null) {
                 currentLikelyHls = false;
                 currentLikelyDash = false;
                 hlsProxy.clear();
-                SpiderDebug.log("iso-native", "load DVD ISO session uri=%s", currentPlayableUri);
+                Log.i(TAG, "load remote optical-disc ISO session");
             } else {
                 currentLikelyHls = isLikelyHls(mediaItem, currentPlayableUri);
                 currentLikelyDash = isLikelyDash(mediaItem, currentPlayableUri);
@@ -644,8 +667,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 hlsProxy.clear();
             }
             applyShaderPipeline(true);
-            Log.d(TAG, "load uri=" + currentPlayableUri + " hls=" + currentLikelyHls + " dash=" + currentLikelyDash);
-            SpiderDebug.log("mpv", "load uri=%s hls=%s dash=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", currentPlayableUri, currentLikelyHls, currentLikelyDash, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());
+            Log.d(TAG, "load scheme=" + safeScheme(currentPlayableUri) + " urlLen=" + (currentPlayableUri == null ? 0 : currentPlayableUri.length()) + " hls=" + currentLikelyHls + " dash=" + currentLikelyDash);
+            SpiderDebug.log("mpv", "load scheme=%s urlLen=%d hls=%s dash=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", safeScheme(currentPlayableUri), currentPlayableUri == null ? 0 : currentPlayableUri.length(), currentLikelyHls, currentLikelyDash, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());
             loadCurrentUri();
             scheduleLoadStartRetry();
             invalidateState();
@@ -1128,8 +1151,18 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         String path = stringProperty("path", "");
         if (!isImageUri(path)) return false;
         if (!TextUtils.isEmpty(currentPlayableUri) && sameUri(path, currentPlayableUri)) return false;
-        Log.w(TAG, "unexpected image path=" + path + " requested=" + currentPlayableUri);
+        Log.w(TAG, "unexpected image pathScheme=" + safeScheme(path)
+                + " requestedScheme=" + safeScheme(currentPlayableUri)
+                + " requestedLen=" + (currentPlayableUri == null ? 0 : currentPlayableUri.length()));
         return true;
+    }
+
+    private String safeScheme(String value) {
+        try {
+            return String.valueOf(Uri.parse(value).getScheme());
+        } catch (Throwable ignored) {
+            return "invalid";
+        }
     }
 
     private boolean isImageUri(String uri) {
@@ -2881,6 +2914,50 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (lower.contains(".iso?") || lower.contains("%2eiso")) return true;
         CharSequence title = item == null ? null : item.mediaMetadata.title;
         return title != null && title.toString().trim().toLowerCase(Locale.US).endsWith(".iso");
+    }
+
+    private void logSourceDiagnostics(MediaItem item, String uri, Map<String, String> headers) {
+        String scheme = "";
+        String host = "";
+        boolean loopback = false;
+        boolean pathIso = false;
+        try {
+            Uri parsed = Uri.parse(uri);
+            scheme = String.valueOf(parsed.getScheme());
+            host = String.valueOf(parsed.getHost());
+            loopback = "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "::1".equals(host);
+            String path = parsed.getPath();
+            pathIso = path != null && path.toLowerCase(Locale.US).endsWith(".iso");
+        } catch (Throwable ignored) {
+        }
+        String mime = item != null && item.localConfiguration != null ? item.localConfiguration.mimeType : null;
+        String mediaId = item == null ? null : item.mediaId;
+        CharSequence title = item == null ? null : item.mediaMetadata.title;
+        Log.i(TAG, "source diagnostic scheme=" + scheme
+                + " host=" + host
+                + " loopback=" + loopback
+                + " urlLen=" + (uri == null ? 0 : uri.length())
+                + " pathIso=" + pathIso
+                + " mime=" + mime
+                + " mediaIdLen=" + (mediaId == null ? 0 : mediaId.length())
+                + " mediaIdIso=" + containsIso(mediaId)
+                + " titleIso=" + containsIso(title == null ? null : title.toString())
+                + " headers=" + (headers == null ? 0 : headers.size()));
+    }
+
+    private boolean containsIso(String value) {
+        return value != null && value.toLowerCase(Locale.US).contains(".iso");
+    }
+
+    private boolean isOpaqueLocalProxy(String uri) {
+        try {
+            Uri parsed = Uri.parse(uri);
+            String host = parsed.getHost();
+            return ("http".equalsIgnoreCase(parsed.getScheme()) || "https".equalsIgnoreCase(parsed.getScheme()))
+                    && ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "::1".equals(host));
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private void copySupportAssets() throws IOException {

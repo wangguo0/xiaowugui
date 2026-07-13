@@ -1,16 +1,28 @@
 package com.fongmi.android.tv.player.iso;
 
+import android.util.Log;
+
 import com.github.catvod.crawler.SpiderDebug;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 public final class IsoSessionManager {
 
+    private static final String TAG = "TV-iso-native";
+
     private static final AtomicLong NEXT_ID = new AtomicLong(1000);
     private static final Map<Long, IsoPlaybackSession> SESSIONS = new ConcurrentHashMap<>();
+    private static final ExecutorService PROBE_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "iso-probe");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private IsoSessionManager() {
     }
@@ -21,6 +33,30 @@ public final class IsoSessionManager {
         SESSIONS.put(id, session);
         SpiderDebug.log("iso-native", "session create id=%d", id);
         return "webhtv-dvdiso://" + id + "/longest";
+    }
+
+    /** Probe opaque local pan-proxy URLs without relying on filename or MIME. */
+    public static String probeAndCreate(String url, Map<String, String> headers) {
+        long id = NEXT_ID.incrementAndGet();
+        IsoPlaybackSession session = new IsoPlaybackSession(id, url, headers);
+        try {
+            if (!session.hasDiscImageSignature()) {
+                session.close();
+                Log.i(TAG, "opaque source probe: not an ISO image");
+                return null;
+            }
+            SESSIONS.put(id, session);
+            Log.i(TAG, "opaque source probe: ISO signature found, session=" + id);
+            return "webhtv-dvdiso://" + id + "/longest";
+        } catch (Throwable e) {
+            session.close();
+            Log.w(TAG, "opaque source probe failed: " + e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    public static void probeAndCreateAsync(String url, Map<String, String> headers, Consumer<String> callback) {
+        PROBE_EXECUTOR.execute(() -> callback.accept(probeAndCreate(url, headers)));
     }
 
     public static void close(long id) {
