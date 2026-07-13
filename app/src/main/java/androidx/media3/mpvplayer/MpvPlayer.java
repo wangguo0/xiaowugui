@@ -36,6 +36,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
+import com.fongmi.android.tv.player.iso.IsoSessionManager;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.MpvPerformanceSetting;
@@ -136,6 +137,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private Object videoOutput;
     private MpvLutShader lutShader;
     private String currentPlayableUri;
+    private String currentIsoUri;
     private String appliedLutShaderPath;
     private PlaybackParameters playbackParameters;
     private PlaybackException playerError;
@@ -313,6 +315,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         preferAacApplied = false;
         audioTrackManuallySelected = false;
         currentPlayableUri = null;
+        closeIsoSession();
         currentLikelyHls = false;
         currentLikelyDash = false;
         currentChapter = C.INDEX_UNSET;
@@ -622,9 +625,18 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             applyAudioOffset();
             applySubtitleStyle();
             currentPlayableUri = playableUri(mediaItem);
-            currentLikelyHls = isLikelyHls(mediaItem, currentPlayableUri);
-            currentLikelyDash = isLikelyDash(mediaItem, currentPlayableUri);
-            if (shouldProxyHls(currentPlayableUri, currentLikelyHls)) {
+            if (isLikelyIso(mediaItem, currentPlayableUri)) {
+                currentIsoUri = IsoSessionManager.create(currentPlayableUri, headers);
+                currentPlayableUri = currentIsoUri;
+                currentLikelyHls = false;
+                currentLikelyDash = false;
+                hlsProxy.clear();
+                SpiderDebug.log("iso-native", "load DVD ISO session uri=%s", currentPlayableUri);
+            } else {
+                currentLikelyHls = isLikelyHls(mediaItem, currentPlayableUri);
+                currentLikelyDash = isLikelyDash(mediaItem, currentPlayableUri);
+            }
+            if (currentIsoUri == null && shouldProxyHls(currentPlayableUri, currentLikelyHls)) {
                 String originalUri = currentPlayableUri;
                 currentPlayableUri = hlsProxy.proxy(originalUri, headers);
                 SpiderDebug.log("mpv", "hls proxy enabled original=%s proxy=%s", originalUri, currentPlayableUri);
@@ -1526,6 +1538,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         pendingSeekPositionMs = C.TIME_UNSET;
         idleActive = false;
         currentPlayableUri = null;
+        closeIsoSession();
         currentLikelyHls = false;
         currentLikelyDash = false;
         currentChapter = C.INDEX_UNSET;
@@ -2844,6 +2857,30 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
         }
         contentFds.clear();
+    }
+
+    private void closeIsoSession() {
+        if (TextUtils.isEmpty(currentIsoUri)) return;
+        IsoSessionManager.closeUri(currentIsoUri);
+        currentIsoUri = null;
+    }
+
+    private boolean isLikelyIso(MediaItem item, String uri) {
+        if (item != null && item.localConfiguration != null) {
+            String mime = item.localConfiguration.mimeType;
+            if ("video/x-iso".equalsIgnoreCase(mime)
+                    || "application/x-iso9660-image".equalsIgnoreCase(mime)
+                    || "application/x-iso9660".equalsIgnoreCase(mime)) return true;
+        }
+        String lower = uri == null ? "" : uri.toLowerCase(Locale.US);
+        try {
+            String path = Uri.parse(uri).getPath();
+            if (path != null && path.toLowerCase(Locale.US).endsWith(".iso")) return true;
+        } catch (Throwable ignored) {
+        }
+        if (lower.contains(".iso?") || lower.contains("%2eiso")) return true;
+        CharSequence title = item == null ? null : item.mediaMetadata.title;
+        return title != null && title.toString().trim().toLowerCase(Locale.US).endsWith(".iso");
     }
 
     private void copySupportAssets() throws IOException {
