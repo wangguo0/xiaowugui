@@ -225,6 +225,53 @@ app/src/arm64_v8a/assets/mpv-libs/arm64-v8a/libplayer.so
 app/src/armeabi_v7a/assets/mpv-libs/armeabi-v7a/libplayer.so
 ```
 
+### IJK native/FFmpeg 重建
+
+普通 App 构建同样不会现场编译 IJK。仓库已经提交两套 ABI 的 `libijkffmpeg.so`、`libijksdl.so` 和 `libijkplayer.so`，Gradle 与 GitHub Actions 直接复用：
+
+```text
+app/src/main/jniLibs/arm64-v8a/
+app/src/main/jniLibs/armeabi-v7a/
+```
+
+`ijk-bilibili-grouped-seek-20260713-083211` 的最终稳定方案保留 TVBoxOSC FFmpeg 4.0 ABI，并在 App 的本地 DASH/HLS 代理层兼容 Bilibili。开发者修改 IJK C/C++、FFmpeg demuxer/protocol、MediaCodec 桥接或 native seek 行为时，才需要重建 `.so`。源码和工具链固定在 `third_party/ijk-native-lock.json`。
+
+安装 native 构建依赖：
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk" # Linux 通常为 $HOME/Android/Sdk
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+  "ndk;27.2.12479018" \
+  "ndk;21.4.7075529"
+
+# macOS
+brew install git yasm
+
+# Ubuntu
+sudo apt-get update
+sudo apt-get install -y git make yasm python3
+```
+
+重建并安装 arm64 IJK，然后打快速 Release：
+
+```bash
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+scripts/build_ijk_native.sh --abi arm64-v8a --install
+bash gradlew :app:assembleMobileArm64_v8aRelease -PfastRelease=true
+```
+
+Ubuntu 下重建 32 位 IJK：
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/21.4.7075529"
+scripts/build_ijk_native.sh --abi armeabi-v7a --install
+bash gradlew :app:assembleLeanbackArmeabi_v7aRelease -PfastRelease=true
+```
+
+脚本会拉取锁定的 IJK/FFmpeg 4.0 源码、编译 OpenSSL/FFmpeg/IJK、检查三项输出并按 `--install` 写入对应 ABI 目录。32 位 native 重建推荐 Ubuntu；只需打包 App 时不必安装这两套额外 NDK，也不要运行该脚本。
+
 ### APK 输出路径
 
 debug 原始输出：
