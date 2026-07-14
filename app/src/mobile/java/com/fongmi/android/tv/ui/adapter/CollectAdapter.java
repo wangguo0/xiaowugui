@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.adapter;
 
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -15,6 +16,8 @@ import java.util.List;
 public class CollectAdapter extends BaseDiffAdapter<Collect, CollectAdapter.ViewHolder> {
 
     private final OnClickListener listener;
+    private int progressCurrent;
+    private int progressTotal;
 
     public CollectAdapter(OnClickListener listener) {
         this.listener = listener;
@@ -28,6 +31,12 @@ public class CollectAdapter extends BaseDiffAdapter<Collect, CollectAdapter.View
     public void add(List<Vod> items) {
         if (getItemCount() == 0) return;
         getItem(0).getList().addAll(items);
+    }
+
+    public void setProgress(int current, int total) {
+        progressTotal = Math.max(0, total);
+        progressCurrent = Math.max(0, Math.min(current, progressTotal));
+        if (getItemCount() > 0) notifyItemChanged(0);
     }
 
     public int getPosition() {
@@ -53,8 +62,10 @@ public class CollectAdapter extends BaseDiffAdapter<Collect, CollectAdapter.View
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Collect item = getItem(position);
+        boolean all = "all".equals(item.getSite().getKey());
         holder.binding.text.setSelected(item.isSelected());
-        holder.binding.text.setText(item.getSite().getName());
+        holder.binding.text.setText(all && progressTotal > 0 ? progressCurrent + "/" + progressTotal : item.getSite().getName());
+        holder.binding.text.setTextSize(TypedValue.COMPLEX_UNIT_SP, all && progressTotal > 0 ? 13 : 14);
         holder.binding.text.setOnClickListener(v -> listener.onItemClick(position, item));
     }
 
