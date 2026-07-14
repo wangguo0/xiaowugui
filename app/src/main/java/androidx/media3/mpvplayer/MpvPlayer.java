@@ -2237,7 +2237,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             builder.append(" id=").append(info.id);
             builder.append(" rawSelected=").append(info.selected);
             builder.append(" finalSelected=").append(isTrackSelectedInSnapshot(tracks, info));
+            builder.append(" title=").append(info.title);
+            builder.append(" lang=").append(info.lang);
             builder.append(" codec=").append(info.codec);
+            Format format = info.toFormat();
+            builder.append(" label=").append(format.label);
+            builder.append(" formatLang=").append(format.language);
             builder.append(" size=").append(info.width).append("x").append(info.height);
             builder.append(" fps=").append(info.frameRate);
             builder.append(" sr=").append(info.sampleRate);
