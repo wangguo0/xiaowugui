@@ -5,6 +5,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 
 #include <mpv/client.h>
 #include <mpv/stream_cb.h>
@@ -38,10 +39,14 @@ struct DvdStream {
     IsoKind kind = IsoKind::NONE;
     std::atomic<bool> cancelled{false};
     std::mutex lock;
+    std::unordered_map<int, std::string> track_languages;
     uint8_t block[DVD_BLOCK];
     int block_offset = DVD_BLOCK;
     int block_size = 0;
 };
+
+std::mutex streams_lock;
+std::unordered_map<int64_t, DvdStream *> active_streams;
 
 JNIEnv *env_for_thread() {
     JNIEnv *env = nullptr;
@@ -217,6 +222,10 @@ void stream_close(void *opaque) {
     auto *stream = static_cast<DvdStream *>(opaque);
     if (!stream) return;
     stream->cancelled = true;
+    {
+        std::lock_guard<std::mutex> guard(streams_lock);
+        active_streams.erase(stream->session_id);
+    }
     if (stream->nav) dvdnav_close(stream->nav);
     if (stream->bluray) bd_close(stream->bluray);
     close_java_session(stream->session_id);
@@ -260,6 +269,24 @@ bool open_bluray(DvdStream *stream) {
         stream->bluray = nullptr;
         return false;
     }
+    BLURAY_TITLE_INFO *info = bd_get_playlist_info(stream->bluray, playlist, 0);
+    if (info) {
+        for (uint32_t clip_index = 0; clip_index < info->clip_count; ++clip_index) {
+            BLURAY_CLIP_INFO &clip = info->clips[clip_index];
+            auto collect = [&](BLURAY_STREAM_INFO *streams, uint8_t stream_count) {
+                if (!streams) return;
+                for (uint8_t i = 0; i < stream_count; ++i) {
+                    BLURAY_STREAM_INFO &item = streams[i];
+                    if (!item.pid || !item.lang[0]) continue;
+                    std::string language(reinterpret_cast<const char *>(item.lang), 3);
+                    if (!language.empty()) stream->track_languages.emplace(item.pid, language);
+                }
+            };
+            collect(clip.audio_streams, clip.audio_stream_count);
+            collect(clip.pg_streams, clip.pg_stream_count);
+        }
+        bd_free_title_info(info);
+    }
     stream->output_size = static_cast<int64_t>(bd_get_title_size(stream->bluray));
     if (stream->output_size <= 0) {
         bd_close(stream->bluray);
@@ -290,6 +317,10 @@ int stream_open(void *, char *uri, mpv_stream_cb_info *info) {
         delete stream;
         return MPV_ERROR_LOADING_FAILED;
     }
+    {
+        std::lock_guard<std::mutex> guard(streams_lock);
+        active_streams[stream->session_id] = stream;
+    }
     info->cookie = stream;
     info->read_fn = stream_read;
     info->seek_fn = stream_seek;
@@ -300,6 +331,16 @@ int stream_open(void *, char *uri, mpv_stream_cb_info *info) {
 }
 
 } // namespace
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_is_xyz_mpv_MPVLib_getIsoTrackLanguage(JNIEnv *env, jclass, jlong session_id, jint pid) {
+    std::lock_guard<std::mutex> guard(streams_lock);
+    auto stream = active_streams.find(session_id);
+    if (stream == active_streams.end() || !stream->second) return nullptr;
+    auto language = stream->second->track_languages.find(pid);
+    if (language == stream->second->track_languages.end() || language->second.empty()) return nullptr;
+    return env->NewStringUTF(language->second.c_str());
+}
 
 bool register_iso_protocol(JNIEnv *env) {
     jclass local = env->FindClass("com/fongmi/android/tv/player/iso/IsoSessionManager");

@@ -2356,6 +2356,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (TextUtils.isEmpty(id)) id = String.valueOf(intProperty(prefix + "id", index + 1));
         String title = stringProperty(prefix + "title", "");
         String lang = stringProperty(prefix + "lang", "");
+        int demuxId = intProperty(prefix + "demux-id", C.INDEX_UNSET);
+        if (TextUtils.isEmpty(lang) && demuxId >= 0 && !TextUtils.isEmpty(currentIsoUri)) {
+            lang = MPVLib.getIsoTrackLanguage(IsoSessionManager.parseId(currentIsoUri), demuxId);
+        }
         String codec = stringProperty(prefix + "codec", "");
         boolean selected = booleanProperty(prefix + "selected", false);
         int width = intProperty(prefix + "demux-w", C.LENGTH_UNSET);
