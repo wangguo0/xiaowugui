@@ -203,7 +203,9 @@ public final class MPVLib {
 
     public static native void setPropertyString(String property, String value);
 
-    public static native String getIsoTrackLanguage(long sessionId, int pid);
+    public static native void dumpTrackList();
+
+    public static native String getIsoTrackLanguage(long sessionId, int trackType, int trackIndex);
 
     public static native void observeProperty(String property, int format);
 

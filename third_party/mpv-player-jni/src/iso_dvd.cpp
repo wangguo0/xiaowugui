@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <mpv/client.h>
 #include <mpv/stream_cb.h>
@@ -40,6 +41,8 @@ struct DvdStream {
     std::atomic<bool> cancelled{false};
     std::mutex lock;
     std::unordered_map<int, std::string> track_languages;
+    std::vector<std::string> audio_languages;
+    std::vector<std::string> subtitle_languages;
     uint8_t block[DVD_BLOCK];
     int block_offset = DVD_BLOCK;
     int block_size = 0;
@@ -273,17 +276,23 @@ bool open_bluray(DvdStream *stream) {
     if (info) {
         for (uint32_t clip_index = 0; clip_index < info->clip_count; ++clip_index) {
             BLURAY_CLIP_INFO &clip = info->clips[clip_index];
-            auto collect = [&](BLURAY_STREAM_INFO *streams, uint8_t stream_count) {
+            auto collect = [&](BLURAY_STREAM_INFO *streams, uint8_t stream_count,
+                               std::vector<std::string> &languages) {
                 if (!streams) return;
                 for (uint8_t i = 0; i < stream_count; ++i) {
                     BLURAY_STREAM_INFO &item = streams[i];
+                    ALOGV("iso-bluray clip=%u kind=%s index=%u pid=%u coding=%u format=%u rate=%u char=%u lang=%.3s",
+                          clip_index, &languages == &stream->audio_languages ? "audio" : "subtitle", i,
+                          item.pid, item.coding_type, item.format, item.rate, item.char_code, item.lang);
                     if (!item.pid || !item.lang[0]) continue;
                     std::string language(reinterpret_cast<const char *>(item.lang), 3);
-                    if (!language.empty()) stream->track_languages.emplace(item.pid, language);
+                    if (language.empty()) continue;
+                    auto inserted = stream->track_languages.emplace(item.pid, language);
+                    if (inserted.second) languages.push_back(language);
                 }
             };
-            collect(clip.audio_streams, clip.audio_stream_count);
-            collect(clip.pg_streams, clip.pg_stream_count);
+            collect(clip.audio_streams, clip.audio_stream_count, stream->audio_languages);
+            collect(clip.pg_streams, clip.pg_stream_count, stream->subtitle_languages);
         }
         bd_free_title_info(info);
     }
@@ -333,13 +342,16 @@ int stream_open(void *, char *uri, mpv_stream_cb_info *info) {
 } // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_is_xyz_mpv_MPVLib_getIsoTrackLanguage(JNIEnv *env, jclass, jlong session_id, jint pid) {
+Java_is_xyz_mpv_MPVLib_getIsoTrackLanguage(JNIEnv *env, jclass, jlong session_id,
+                                           jint track_type, jint track_index) {
     std::lock_guard<std::mutex> guard(streams_lock);
     auto stream = active_streams.find(session_id);
     if (stream == active_streams.end() || !stream->second) return nullptr;
-    auto language = stream->second->track_languages.find(pid);
-    if (language == stream->second->track_languages.end() || language->second.empty()) return nullptr;
-    return env->NewStringUTF(language->second.c_str());
+    const std::vector<std::string> *languages = nullptr;
+    if (track_type == 1) languages = &stream->second->audio_languages;
+    if (track_type == 2) languages = &stream->second->subtitle_languages;
+    if (!languages || track_index < 0 || static_cast<size_t>(track_index) >= languages->size()) return nullptr;
+    return env->NewStringUTF((*languages)[track_index].c_str());
 }
 
 bool register_iso_protocol(JNIEnv *env) {
