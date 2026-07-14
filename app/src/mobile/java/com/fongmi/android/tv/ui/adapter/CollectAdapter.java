@@ -1,6 +1,5 @@
 package com.fongmi.android.tv.ui.adapter;
 
-import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -64,8 +63,7 @@ public class CollectAdapter extends BaseDiffAdapter<Collect, CollectAdapter.View
         Collect item = getItem(position);
         boolean all = "all".equals(item.getSite().getKey());
         holder.binding.text.setSelected(item.isSelected());
-        holder.binding.text.setText(all && progressTotal > 0 ? progressCurrent + "/" + progressTotal : item.getSite().getName());
-        holder.binding.text.setTextSize(TypedValue.COMPLEX_UNIT_SP, all && progressTotal > 0 ? 13 : 14);
+        holder.binding.text.setText(all && progressTotal > 0 ? item.getSite().getName() + " " + progressCurrent + "/" + progressTotal : item.getSite().getName());
         holder.binding.text.setOnClickListener(v -> listener.onItemClick(position, item));
     }
 
