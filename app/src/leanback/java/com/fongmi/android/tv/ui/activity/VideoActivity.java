@@ -2478,19 +2478,27 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 selectedTab,
                 index -> {
                     if (index == selectedTab) return;
-                    int height = root.getHeight();
+                    FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+                    int height = sheet == null ? 0 : sheet.getHeight();
                     renderLyricsSettingsPanel(dialog, root, index);
-                    if (height > 0) {
-                        root.setMinimumHeight(height);
-                        ViewGroup.LayoutParams params = root.getLayoutParams();
-                        if (params != null) {
-                            params.height = height;
-                            root.setLayoutParams(params);
-                        }
-                    }
                     root.requestLayout();
-                    root.post(() -> focusFirstChild(root));
+                    root.post(() -> {
+                        preserveLyricsSettingsSheetHeight(dialog, height);
+                        focusFirstChild(root);
+                    });
                 });
+    }
+
+    private void preserveLyricsSettingsSheetHeight(BottomSheetDialog dialog, int height) {
+        if (height <= 0) return;
+        FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (sheet == null) return;
+        ViewGroup.LayoutParams params = sheet.getLayoutParams();
+        params.height = height;
+        sheet.setLayoutParams(params);
+        BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
+        behavior.setPeekHeight(height);
+        behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
     }
 
     private void showKaraokeTrackAdvancedPanel() {
