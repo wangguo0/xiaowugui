@@ -1456,7 +1456,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mLyricsResultList = new LinearLayout(this);
         mLyricsResultList.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(mLyricsResultList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, lyricsResultSheetHeight(1)));
+        root.addView(scroll, lyricsResultSheetParams(1));
 
         showCompactPlaybackSheet(dialog);
         focusLyricsSearchTarget(input, searchButton);
@@ -4230,7 +4230,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mLyricsResultList = new LinearLayout(this);
         mLyricsResultList.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(mLyricsResultList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, lyricsResultSheetHeight(labels.length)));
+        root.addView(scroll, lyricsResultSheetParams(labels.length));
         dialog.setContentView(root);
         dialog.setOnCancelListener(d -> {
             if (seq == mLyricsSearchSeq) mLyricsSearchSeq++;
@@ -4853,6 +4853,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         return ResUtil.dp2px(rows * 64 + 8);
     }
 
+    private LinearLayout.LayoutParams lyricsResultSheetParams(int count) {
+        if (isLandscapeAudioSheet()) return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, lyricsResultSheetHeight(count));
+    }
+
     private int karaokeTrackResultSheetHeight(int count) {
         if (isLandscapeAudioSheet()) {
             int rows = Math.max(1, Math.min(5, count));
@@ -5082,7 +5087,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mLyricsResultList == null) return;
         if (!(mLyricsResultList.getParent() instanceof View scroll)) return;
         ViewGroup.LayoutParams params = scroll.getLayoutParams();
-        int height = lyricsResultSheetHeight(count);
+        int height = isLandscapeAudioSheet() ? 0 : lyricsResultSheetHeight(count);
         if (params != null && params.height != height) {
             params.height = height;
             scroll.setLayoutParams(params);
@@ -5110,6 +5115,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         item.setLineSpacing(ResUtil.dp2px(2), 1.0f);
         item.setTextColor(selected ? SHEET_TEXT_PRIMARY : SHEET_TEXT_SECONDARY);
         item.setBackground(lyricsResultItemBackground(selected));
+        setAudioSheetFocusable(item);
         item.setOnClickListener(v -> action.run());
         return item;
     }
