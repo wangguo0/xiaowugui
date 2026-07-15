@@ -1465,7 +1465,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1)
                 : lyricsResultSheetParams(1));
 
-        showCompactPlaybackSheet(dialog);
+        showLyricsSearchSheetDialog(dialog);
         focusLyricsSearchTarget(input, searchButton);
         dialog.setOnCancelListener(d -> mLyricsSearchSeq++);
         dialog.setOnDismissListener(d -> {
@@ -4921,6 +4921,40 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
     }
 
+    private void showLyricsSearchSheetDialog(BottomSheetDialog dialog) {
+        if (!ResUtil.isLand(this)) {
+            showCompactPlaybackSheet(dialog);
+            return;
+        }
+        dialog.setOnShowListener(d -> {
+            FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (sheet == null) return;
+            sheet.setBackgroundColor(Color.TRANSPARENT);
+            int height = audioDrawerHeight();
+            ViewGroup.LayoutParams params = sheet.getLayoutParams();
+            params.height = height;
+            sheet.setLayoutParams(params);
+            BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
+            behavior.setFitToContents(false);
+            behavior.setExpandedOffset(Math.max(0, ResUtil.getScreenHeight(this) - height));
+            behavior.setPeekHeight(height);
+            behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            behavior.setSkipCollapsed(true);
+            behavior.setDraggable(false);
+            hideSystemBarsForAudioSheet(dialog);
+        });
+        dialog.show();
+        applyAudioSheetWindowGlass(dialog);
+        hideSystemBarsForAudioSheet(dialog);
+        focusAudioSheetContent(dialog);
+        Window window = dialog.getWindow();
+        if (window == null) return;
+        WindowManager.LayoutParams params = window.getAttributes();
+        params.dimAmount = 0f;
+        window.setAttributes(params);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+    }
+
     private void showAudioDrawerSheet(BottomSheetDialog dialog, boolean atStart) {
         dialog.setOnShowListener(d -> {
             FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
@@ -5093,9 +5127,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void updateLyricsResultSheetHeight(int count) {
         if (mLyricsResultList == null) return;
         if (!(mLyricsResultList.getParent() instanceof View scroll)) return;
+        if (mLyricsSearchDialog == mLyricsResultDialog) return;
         ViewGroup.LayoutParams params = scroll.getLayoutParams();
-        boolean fixedSearchSheet = ResUtil.isLand(this) && mLyricsSearchDialog == mLyricsResultDialog;
-        int height = fixedSearchSheet || isLandscapeAudioSheet() ? 0 : lyricsResultSheetHeight(count);
+        int height = isLandscapeAudioSheet() ? 0 : lyricsResultSheetHeight(count);
         if (params != null && params.height != height) {
             params.height = height;
             scroll.setLayoutParams(params);
