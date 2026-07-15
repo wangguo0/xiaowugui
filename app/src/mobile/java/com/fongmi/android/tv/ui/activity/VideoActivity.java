@@ -1164,7 +1164,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onLock() {
         setLock(!isLock());
-        setRequestedOrientation(getLockOrient());
         mKeyDown.setLock(isLock());
         checkLockImg();
         showControl();
@@ -1173,7 +1172,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void onRotate() {
         setR1Callback();
         setRotate(!isRotate());
-        setRequestedOrientation(PlaybackOrientation.getRotateOrientation(this));
+        setRequestedOrientation(PlaybackOrientation.getRotateOrientation(isRotate()));
     }
 
     private void onFullscreen() {
@@ -1584,10 +1583,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private boolean shouldAnimateVideoFrameTransition() {
         return service() == null || !player().isNativePlayer();
-    }
-
-    private int getLockOrient() {
-        return PlaybackOrientation.getLockOrientation(this, isLock(), isRotate(), isPort() && isAutoRotate());
     }
 
     private void showProgress() {
