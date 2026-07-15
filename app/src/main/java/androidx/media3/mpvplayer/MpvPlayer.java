@@ -748,7 +748,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private void applyPostInitOptions() {
         setRuntimeString("save-position-on-quit", "no");
         setRuntimeString("force-window", "no");
-        setRuntimeString("idle", "once");
+        setRuntimeString("idle", "yes");
     }
 
     private void observeProperties() {
@@ -853,13 +853,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case "eof-reached" -> {
                 eofReached = Boolean.TRUE.equals(value);
-                if (eofReached) {
-                    playbackState = Player.STATE_ENDED;
-                    loading = false;
-                    stopStateRefresh();
-                }
+                if (eofReached) markPlaybackEnded("property:eof-reached");
             }
-            case "idle-active" -> idleActive = Boolean.TRUE.equals(value);
+            case "idle-active" -> {
+                idleActive = Boolean.TRUE.equals(value);
+                if (idleActive && fileLoaded && !stopping) markPlaybackEnded("property:idle-active");
+            }
             case "width", "height", "video-params/w", "video-params/h", "video-params/dw", "video-params/dh", "video-out-params/w", "video-out-params/h", "video-out-params/dw", "video-out-params/dh", "current-tracks/video/demux-w", "current-tracks/video/demux-h" -> {
                 updateVideoSize("property:" + property);
                 refreshTracks();
@@ -1076,7 +1075,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 return;
             }
             case MPVLib.MpvEvent.MPV_EVENT_IDLE -> {
-                if (loading && !fileLoaded && !stopping) {
+                if (fileLoaded && !stopping) {
+                    markPlaybackEnded("event:idle");
+                } else if (loading && !stopping) {
                     playbackState = Player.STATE_BUFFERING;
                     mainHandler.removeCallbacks(endFileValidationRunnable);
                     mainHandler.postDelayed(endFileValidationRunnable, END_FILE_VALIDATION_DELAY_MS);
@@ -1084,9 +1085,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 }
             }
             case MPVLib.MpvEvent.MPV_EVENT_SHUTDOWN -> {
-                playbackState = Player.STATE_IDLE;
-                loading = false;
-                stopStateRefresh();
+                if (fileLoaded && !stopping) {
+                    markPlaybackEnded("event:shutdown");
+                } else {
+                    playbackState = Player.STATE_IDLE;
+                    loading = false;
+                    stopStateRefresh();
+                }
             }
             default -> {
             }
@@ -1113,7 +1118,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             fail(new IOException(failedLoadedMediaMessage()), PlaybackException.ERROR_CODE_DECODING_FAILED);
             return;
         } else if (fileLoaded || eofReached) {
-            playbackState = Player.STATE_ENDED;
+            markPlaybackEnded("event:end-file");
         } else {
             loading = true;
             playbackState = Player.STATE_BUFFERING;
@@ -1122,6 +1127,17 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             startStateRefresh();
         }
         invalidateState();
+    }
+
+    private void markPlaybackEnded(String reason) {
+        if (playbackState == Player.STATE_ENDED) return;
+        eofReached = true;
+        loading = false;
+        playbackState = Player.STATE_ENDED;
+        stopStateRefresh();
+        mainHandler.removeCallbacks(endFileValidationRunnable);
+        mainHandler.removeCallbacks(loadStartRetryRunnable);
+        SpiderDebug.log("mpv", "playback ended reason=%s position=%d duration=%d", reason, cachedPositionMs, cachedDurationMs);
     }
 
     private boolean isLikelyHls(MediaItem item, String uri) {
