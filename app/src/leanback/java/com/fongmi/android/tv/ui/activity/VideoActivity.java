@@ -1408,6 +1408,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void showLyricsSearchSheet(String keyword, @Nullable LyricsRequest request, String signature, int sheetSeq) {
         BottomSheetDialog dialog = createAudioSheet();
         LinearLayout root = createAudioSheetRoot();
+        if (ResUtil.isLand(this)) {
+            int height = audioDrawerHeight();
+            root.setMinimumHeight(height);
+            root.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height));
+        }
         root.addView(createAudioSheetTitle(getString(R.string.player_lyrics_reload)), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(34)));
 
         LinearLayout row = new LinearLayout(this);
@@ -1456,7 +1461,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mLyricsResultList = new LinearLayout(this);
         mLyricsResultList.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(mLyricsResultList, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, lyricsResultSheetParams(1));
+        root.addView(scroll, ResUtil.isLand(this)
+                ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1)
+                : lyricsResultSheetParams(1));
 
         showCompactPlaybackSheet(dialog);
         focusLyricsSearchTarget(input, searchButton);
@@ -5087,7 +5094,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mLyricsResultList == null) return;
         if (!(mLyricsResultList.getParent() instanceof View scroll)) return;
         ViewGroup.LayoutParams params = scroll.getLayoutParams();
-        int height = isLandscapeAudioSheet() ? 0 : lyricsResultSheetHeight(count);
+        boolean fixedSearchSheet = ResUtil.isLand(this) && mLyricsSearchDialog == mLyricsResultDialog;
+        int height = fixedSearchSheet || isLandscapeAudioSheet() ? 0 : lyricsResultSheetHeight(count);
         if (params != null && params.height != height) {
             params.height = height;
             scroll.setLayoutParams(params);
