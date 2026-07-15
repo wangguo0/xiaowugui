@@ -623,7 +623,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             currentPlayableUri = playableUri(mediaItem);
             logSourceDiagnostics(mediaItem, currentPlayableUri, headers);
             boolean declaredIso = isLikelyIso(mediaItem, currentPlayableUri);
-            if (!declaredIso && isOpaqueLocalProxy(currentPlayableUri)) {
+            if (!declaredIso && shouldProbeOpaqueIso(mediaItem, currentPlayableUri)) {
                 String probingUri = currentPlayableUri;
                 IsoSessionManager.probeAndCreateAsync(probingUri, headers, isoUri -> mainHandler.post(() -> {
                     if (released || stopping || !TextUtils.equals(currentPlayableUri, probingUri)) {
@@ -3018,6 +3018,15 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    private boolean shouldProbeOpaqueIso(MediaItem item, String uri) {
+        if (!isOpaqueLocalProxy(uri)) return false;
+        if (containsIso(uri)) return true;
+        if (item == null) return false;
+        if (containsIso(item.mediaId)) return true;
+        CharSequence title = item.mediaMetadata.title;
+        return title != null && containsIso(title.toString());
     }
 
     private void copySupportAssets() throws IOException {
