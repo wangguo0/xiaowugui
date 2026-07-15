@@ -17,4 +17,13 @@
     <string name="push_clip">推送剪貼簿內容</string>
     <string name="push_info">使用手機掃描 QR Code，或於瀏覽器輸入網址\n<xliff:g name="name">%s</xliff:g></string>
 
+    <string name="device_select">選擇裝置</string>
+    <string name="device_offline">裝置已離線</string>
+    <string name="device_scan">請掃描 WebHTV QRCode 進行綁定</string>
+    <string name="timer_5">5 分鐘</string>
+    <string name="timer_15">15 分鐘</string>
+    <string name="timer_30">30 分鐘</string>
+    <string name="timer_60">1 小時</string>
+    <string name="timer_delay">延長 5 分鐘</string>
+    <string name="timer_cancel">取消定時器</string>
 </resources>

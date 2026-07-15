@@ -74,6 +74,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.tunnelText.setText(getSwitch(PlayerSetting.isTunnel()));
         setPerformanceText();
         setPlayerButtonsText();
+        mBinding.immersiveAudioText.setText(getSwitch(PlayerSetting.isImmersiveAudioMode()));
         mBinding.adblockText.setText(getSwitch(Setting.isAdblock()));
         mBinding.speedText.setText(format.format(PlayerSetting.getSpeed()));
         mBinding.bufferText.setText(String.valueOf(PlayerSetting.getBuffer()));
@@ -109,6 +110,7 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         mBinding.mpvRender.setOnClickListener(this::setMpvRender);
         mBinding.osd.setOnClickListener(this::onOsd);
         mBinding.playerButtons.setOnClickListener(view -> PlayerButtonConfigDialog.show(this, this::setPlayerButtonsText));
+        mBinding.immersiveAudio.setOnClickListener(this::setImmersiveAudioMode);
         mBinding.speed.setOnClickListener(this::onSpeed);
         mBinding.buffer.setOnClickListener(this::onBuffer);
         mBinding.bufferBytes.setOnClickListener(this::setBufferBytes);
@@ -152,6 +154,11 @@ public class SettingPlayerActivity extends BaseActivity implements UaListener, B
         PlaybackPerformanceSetting.markCustom();
         mBinding.aacText.setText(getSwitch(PlayerSetting.isPreferAAC()));
         setPerformanceText();
+    }
+
+    private void setImmersiveAudioMode(View view) {
+        PlayerSetting.putImmersiveAudioMode(!PlayerSetting.isImmersiveAudioMode());
+        mBinding.immersiveAudioText.setText(getSwitch(PlayerSetting.isImmersiveAudioMode()));
     }
 
     private void setKernel(View view) {
