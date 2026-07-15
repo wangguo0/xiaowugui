@@ -5590,6 +5590,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         }
     }
 
+    @Override
+    public void onImmersiveAudioModeChanged() {
+        if (PlayerSetting.isImmersiveAudioMode()) {
+            ensureImmersiveAudioControllers();
+            refreshLyrics();
+        } else {
+            setAudioStageVisible(false);
+            if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) player().restoreVideoTrack();
+        }
+    }
+
     private View getFocus1() {
         return mFocus1 == null || mFocus1.getVisibility() != View.VISIBLE ? mBinding.video : mFocus1;
     }

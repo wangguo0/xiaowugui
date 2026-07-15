@@ -134,6 +134,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.opening.setText(parent.control.action.opening.getText());
         binding.repeat.setSelected(parent.control.action.repeat.isSelected());
         binding.karaoke.setSelected(PlayerSetting.isKaraokeMode());
+        binding.immersiveAudio.setSelected(PlayerSetting.isImmersiveAudioMode());
         setKaraokeVisible();
         binding.timer.setSelected(Timer.get().isRunning());
         setTrackVisible();
@@ -156,6 +157,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     protected void initEvent() {
         binding.timer.setOnClickListener(this::onTimer);
         binding.karaoke.setOnClickListener(v -> setKaraoke());
+        binding.immersiveAudio.setOnClickListener(v -> setImmersiveAudio());
         binding.speed.addOnChangeListener(this::setSpeed);
         for (TextView view : speeds) view.setOnClickListener(this::setSpeedPreset);
         for (TextView view : scales) view.setOnClickListener(this::setScale);
@@ -188,7 +190,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     private void bindRemoteFocus() {
         List<View> views = Arrays.asList(
                 binding.fullscreen, binding.lut, binding.reset, binding.repeat, binding.timer, binding.karaoke,
-                binding.player, binding.decode, binding.opening, binding.ending,
+                binding.player, binding.decode, binding.opening, binding.ending, binding.immersiveAudio,
                 binding.text, binding.audio, binding.video, binding.danmaku, binding.title,
                 binding.episodeColumn1, binding.episodeColumn2, binding.compactEpisodeTitle
         );
@@ -232,6 +234,12 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         PlayerSetting.putKaraokeMode(!PlayerSetting.isKaraokeMode());
         binding.karaoke.setSelected(PlayerSetting.isKaraokeMode());
         ((Listener) requireActivity()).onKaraokeModeChanged();
+    }
+
+    private void setImmersiveAudio() {
+        PlayerSetting.putImmersiveAudioMode(!PlayerSetting.isImmersiveAudioMode());
+        binding.immersiveAudio.setSelected(PlayerSetting.isImmersiveAudioMode());
+        ((Listener) requireActivity()).onImmersiveAudioModeChanged();
     }
 
     private void onTrack(View view) {
@@ -470,6 +478,8 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         void onTitlePanel();
 
         void onDanmakuPanel();
+
+        void onImmersiveAudioModeChanged();
 
         void onKaraokeModeChanged();
 
