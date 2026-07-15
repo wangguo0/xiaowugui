@@ -84,6 +84,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private static final int RECENT_LOG_LIMIT = 32;
     private static final String HEADER_ACCEPT = "Accept";
     private static final String HEADER_ORIGIN = "Origin";
+    private static final Object NATIVE_CONTEXT_LOCK = new Object();
+    @Nullable
+    private static MpvPlayer nativeContextOwner;
 
     public static final String ERROR_HLS_PLAYBACK_FAILED = "MPV_HLS_PLAYBACK_FAILED";
     public static final String ERROR_LOAD_FAILED = "MPV_LOAD_FAILED";
@@ -386,15 +389,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         clearVideoOutput();
         mainHandler.removeCallbacks(stateRefreshRunnable);
         mainHandler.removeCallbacks(endFileValidationRunnable);
-        if (initialized) {
-            try {
-                MPVLib.removeObserver(this);
-                MPVLib.removeLogObserver(this);
-                MPVLib.destroy();
-            } catch (Throwable ignored) {
-            }
-            initialized = false;
-        }
+        releaseNativeContext("release");
         return Futures.immediateVoidFuture();
     }
 
@@ -680,23 +675,33 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void ensureInitialized() throws IOException {
-        if (initialized) return;
-        if (!MPVLib.ensureLoaded(context)) {
-            Throwable e = MPVLib.getLoadError();
-            if (e instanceof IOException io) throw io;
-            if (e instanceof RuntimeException runtime) throw runtime;
-            throw new IOException(e == null ? "MPV native libraries are unavailable" : e.getMessage(), e);
+        synchronized (NATIVE_CONTEXT_LOCK) {
+            if (initialized && nativeContextOwner == this) return;
+            if (nativeContextOwner != null && nativeContextOwner != this) {
+                SpiderDebug.log("mpv", "native context takeover old=%s new=%s", identity(nativeContextOwner), identity(this));
+                nativeContextOwner.released = true;
+                nativeContextOwner.releaseNativeContextLocked("takeover");
+            }
+            if (!MPVLib.ensureLoaded(context)) {
+                Throwable e = MPVLib.getLoadError();
+                if (e instanceof IOException io) throw io;
+                if (e instanceof RuntimeException runtime) throw runtime;
+                throw new IOException(e == null ? "MPV native libraries are unavailable" : e.getMessage(), e);
+            }
+            copySupportAssets();
+            nativeContextOwner = this;
+            if (!MPVLib.tryCreate(context)) {
+                throw new IOException("MPV native context creation is already in progress");
+            }
+            applyPreInitOptions();
+            MPVLib.init();
+            initialized = true;
+            MPVLib.addObserver(this);
+            MPVLib.addLogObserver(this);
+            applyPostInitOptions();
+            applyShaderPipeline(true);
+            observeProperties();
         }
-        copySupportAssets();
-        MPVLib.create(context);
-        applyPreInitOptions();
-        MPVLib.init();
-        initialized = true;
-        MPVLib.addObserver(this);
-        MPVLib.addLogObserver(this);
-        applyPostInitOptions();
-        applyShaderPipeline(true);
-        observeProperties();
     }
 
     private void applyPreInitOptions() {
@@ -1597,28 +1602,45 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void resetMpvContextForNewMedia() {
-        if (!initialized) return;
         mainHandler.removeCallbacks(stateRefreshRunnable);
         mainHandler.removeCallbacks(endFileValidationRunnable);
         mainHandler.removeCallbacks(loadStartRetryRunnable);
+        releaseNativeContext("new media");
+    }
+
+    private void releaseNativeContext(String reason) {
+        synchronized (NATIVE_CONTEXT_LOCK) {
+            releaseNativeContextLocked(reason);
+        }
+    }
+
+    private void releaseNativeContextLocked(String reason) {
+        if (!initialized) return;
+        boolean ownsNativeContext = nativeContextOwner == this;
         try {
-            if (surfaceAttached) MPVLib.detachSurface();
+            if (ownsNativeContext && surfaceAttached) MPVLib.detachSurface();
         } catch (Throwable ignored) {
         }
         try {
             MPVLib.removeObserver(this);
             MPVLib.removeLogObserver(this);
-            MPVLib.destroy();
+            if (ownsNativeContext) MPVLib.destroyCreatedContext();
         } catch (Throwable ignored) {
+        } finally {
+            if (ownsNativeContext) nativeContextOwner = null;
+            initialized = false;
+            surfaceAttached = false;
+            attachedSurface = null;
+            attachedVo = null;
+            stopping = false;
+            loadStarted = false;
+            loadStartRetryCount = 0;
         }
-        initialized = false;
-        surfaceAttached = false;
-        attachedSurface = null;
-        attachedVo = null;
-        stopping = false;
-        loadStarted = false;
-        loadStartRetryCount = 0;
-        SpiderDebug.log("mpv", "context reset for new media");
+        SpiderDebug.log("mpv", "context released reason=%s owner=%s player=%s", reason, ownsNativeContext, identity(this));
+    }
+
+    private static String identity(MpvPlayer player) {
+        return Integer.toHexString(System.identityHashCode(player));
     }
 
     private void seekMpv(long positionMs) {
