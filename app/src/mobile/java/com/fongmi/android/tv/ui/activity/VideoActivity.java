@@ -4435,6 +4435,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void syncKaraokeStageVisibility() {
         if (mBinding == null) return;
+        if (!PlayerSetting.isImmersiveAudioMode()) {
+            if (mBinding.karaoke != null) mBinding.karaoke.setVisibility(View.GONE);
+            mBinding.audioKaraoke.setSpectrumMode(false);
+            mBinding.audioKaraoke.setVisibility(View.GONE);
+            return;
+        }
         if (mAudioStageVisible) {
             if (mBinding.karaoke != null) mBinding.karaoke.setVisibility(View.GONE);
             boolean karaokeMode = PlayerSetting.isKaraokeMode();
