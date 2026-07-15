@@ -2346,8 +2346,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (service() == null) return;
         BottomSheetDialog dialog = createAudioSheet();
         LinearLayout root = createAudioSheetRoot();
+        renderLyricsSettingsPanel(dialog, root, selectedTab);
+        dialog.setContentView(root);
+        showLyricsSettingsSheet(dialog);
+    }
+
+    private void renderLyricsSettingsPanel(BottomSheetDialog dialog, LinearLayout root, int selectedTab) {
+        while (root.getChildCount() > 1) root.removeViewAt(1);
         int tab = Math.max(LYRICS_TAB_LYRICS, Math.min(LYRICS_TAB_TRACK, selectedTab));
-        root.addView(createLyricsSettingsTabs(dialog, tab), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(34)));
+        root.addView(createLyricsSettingsTabs(dialog, root, tab), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ResUtil.dp2px(34)));
         if (tab == LYRICS_TAB_KARAOKE) {
             root.addView(createKaraokeModeHeader(), lyricsSettingRowParams(8, 38));
             root.addView(createKaraokeDelayControl(), lyricsSettingRowParams(6, 42));
@@ -2396,8 +2403,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                     },
                     3), karaokeActionGridParams(8));
         }
-        dialog.setContentView(root);
-        showLyricsSettingsSheet(dialog);
     }
 
     private void showLyricsRowsPanel() {
@@ -2467,14 +2472,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         void onChoice(int which);
     }
 
-    private LinearLayout createLyricsSettingsTabs(BottomSheetDialog dialog, int selectedTab) {
+    private LinearLayout createLyricsSettingsTabs(BottomSheetDialog dialog, LinearLayout root, int selectedTab) {
         return createSegmentedControl(
                 new String[]{getString(R.string.player_audio_badge_lyrics), getString(R.string.player_karaoke_mode), getString(R.string.player_karaoke_track)},
                 selectedTab,
                 index -> {
                     if (index == selectedTab) return;
-                    dialog.dismiss();
-                    showLyricsSettingsPanel(index);
+                    renderLyricsSettingsPanel(dialog, root, index);
+                    root.requestLayout();
+                    root.post(() -> focusFirstChild(root));
                 });
     }
 
