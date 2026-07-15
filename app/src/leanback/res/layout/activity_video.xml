@@ -398,7 +398,7 @@
                                     android:layout_height="18dp"
                                     android:gravity="center"
                                     android:singleLine="true"
-                                    android:text="@string/player_karaoke_mode"
+                                    android:text="@string/player_audio_options"
                                     android:textColor="@color/white_80"
                                     android:textSize="12sp" />
 
