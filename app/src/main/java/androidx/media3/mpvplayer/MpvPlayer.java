@@ -2049,6 +2049,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private long bufferedPositionMs(long position, long duration) {
         if (duration == C.TIME_UNSET || duration <= 0) return position;
         if (cachedCacheDurationMs > 0) return Math.min(duration, position + cachedCacheDurationMs);
+        if (!TextUtils.isEmpty(currentIsoUri)) return position;
         return playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED ? duration : position;
     }
 
