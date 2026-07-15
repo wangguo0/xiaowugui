@@ -2478,7 +2478,16 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 selectedTab,
                 index -> {
                     if (index == selectedTab) return;
+                    int height = root.getHeight();
                     renderLyricsSettingsPanel(dialog, root, index);
+                    if (height > 0) {
+                        root.setMinimumHeight(height);
+                        ViewGroup.LayoutParams params = root.getLayoutParams();
+                        if (params != null) {
+                            params.height = height;
+                            root.setLayoutParams(params);
+                        }
+                    }
                     root.requestLayout();
                     root.post(() -> focusFirstChild(root));
                 });
