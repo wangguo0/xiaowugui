@@ -4407,6 +4407,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         row.setPadding(ResUtil.dp2px(12), 0, ResUtil.dp2px(10), 0);
         row.setBackground(roundRect(0x12FFFFFF, SHEET_BUTTON_RADIUS_DP, 1, 0x22FFFFFF));
         TextView title = createAudioSheetText(label, 15, false);
+        title.setGravity(Gravity.CENTER_VERTICAL);
         TextView value = createAudioSheetText(valueText, 13, true);
         value.setTextColor(SHEET_TEXT_SECONDARY);
         row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
