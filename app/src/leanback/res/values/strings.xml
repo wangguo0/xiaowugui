@@ -7,6 +7,13 @@
     <string name="home_keep">Keep</string>
     <string name="home_push">Push</string>
     <string name="home_setting">Setting</string>
+    <string name="control_speed">Speed</string>
+    <string name="control_scale">Scale</string>
+    <string name="control_episode_column">Long title columns</string>
+    <string name="control_episode_column_single">Single</string>
+    <string name="control_episode_column_double">Double</string>
+    <string name="control_compact_episode_title">Compact title</string>
+    <string name="control_track">Track</string>
     <string name="home_history">History</string>
     <string name="home_recommend">Recommend</string>
 

@@ -124,6 +124,7 @@ import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.dialog.CodecCapabilityDialog;
 import com.fongmi.android.tv.ui.dialog.CastDialog;
 import com.fongmi.android.tv.ui.dialog.ContentDialog;
+import com.fongmi.android.tv.ui.dialog.ControlDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeListDialog;
 import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
@@ -161,7 +162,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.Listener, TrackDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, Clock.Callback {
+public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.Listener, TrackDialog.Listener, ControlDialog.Listener, ArrayAdapter.OnClickListener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, Clock.Callback {
 
     private static final long LYRICS_OFFSET_MIN_MS = -5000L;
     private static final long LYRICS_OFFSET_MAX_MS = 5000L;
@@ -1587,7 +1588,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void onSetting() {
-        SettingPlayerActivity.start(this);
+        ControlDialog.create().parent(mBinding).history(mHistory).parse(isUseParse()).player(player()).show(this);
     }
 
     private void onCast() {
@@ -2190,7 +2191,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         ArrayList<String> items = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
         addAudioMoreItem(items, actions, getString(R.string.keep), this::onKeep);
-        addAudioMoreItem(items, actions, getString(R.string.setting_player), this::onSetting);
+        addAudioMoreItem(items, actions, getString(R.string.home_setting), this::onSetting);
         addAudioMoreItem(items, actions, getString(R.string.play_cast), this::onCast);
         addAudioMoreItem(items, actions, getString(R.string.play_timer), this::onTimer);
         addAudioMoreItem(items, actions, getString(R.string.player_audio_background), this::showAudioBackgroundPanel);

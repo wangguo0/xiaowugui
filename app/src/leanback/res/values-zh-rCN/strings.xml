@@ -7,6 +7,13 @@
     <string name="home_keep">收藏</string>
     <string name="home_push">推送</string>
     <string name="home_setting">设置</string>
+    <string name="control_speed">倍速</string>
+    <string name="control_scale">缩放</string>
+    <string name="control_episode_column">长标题列数</string>
+    <string name="control_episode_column_single">单列</string>
+    <string name="control_episode_column_double">双列</string>
+    <string name="control_compact_episode_title">精简标题</string>
+    <string name="control_track">轨道</string>
     <string name="home_history">最近观看</string>
     <string name="home_recommend">更新推荐</string>
 
