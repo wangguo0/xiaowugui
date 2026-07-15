@@ -498,34 +498,34 @@ public class ExoUtil {
 
         @Override
         public String getName() {
-            return "MediaCodecVideoRenderer-DV7-HDR10";
+            return "MediaCodecVideoRenderer-DV-HDR10";
         }
 
         @Override
         protected int supportsFormat(MediaCodecSelector mediaCodecSelector, Format format) throws androidx.media3.exoplayer.mediacodec.MediaCodecUtil.DecoderQueryException {
-            if (isDolbyVisionProfile5(format)) {
-                if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV5 HDR10 fallback rejected: profile 5 has no HDR10-compatible base layer codecs=%s", format.codecs);
-                return C.FORMAT_UNSUPPORTED_SUBTYPE;
-            }
-            if (!isDolbyVisionProfile7(format)) return C.FORMAT_UNSUPPORTED_TYPE;
+            if (!isDolbyVisionHdr10Fallback(format)) return C.FORMAT_UNSUPPORTED_TYPE;
             Format hdr10 = asHdr10Hevc(format);
             int support = super.supportsFormat(mediaCodecSelector, hdr10);
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV7 HDR10 fallback support=%d codecs=%s size=%dx%d color=%s", support, format.codecs, format.width, format.height, hdr10.colorInfo);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV HDR10 forced fallback support=%d codecs=%s size=%dx%d color=%s", support, format.codecs, format.width, format.height, hdr10.colorInfo);
             return support;
         }
 
         @Override
         protected List<MediaCodecInfo> getDecoderInfos(MediaCodecSelector mediaCodecSelector, Format format, boolean requiresSecureDecoder) throws androidx.media3.exoplayer.mediacodec.MediaCodecUtil.DecoderQueryException {
-            if (!isDolbyVisionProfile7(format)) return List.of();
+            if (!isDolbyVisionHdr10Fallback(format)) return List.of();
             List<MediaCodecInfo> infos = super.getDecoderInfos(mediaCodecSelector, asHdr10Hevc(format), requiresSecureDecoder);
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV7 HDR10 fallback decoders=%s", decoderNames(infos));
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV HDR10 forced fallback codecs=%s decoders=%s", format.codecs, decoderNames(infos));
             return infos;
         }
 
         @Override
         protected MediaCodecAdapter.Configuration getMediaCodecConfiguration(MediaCodecInfo codecInfo, Format format, MediaCrypto crypto, float codecOperatingRate) {
-            if (isDolbyVisionProfile7(format) && SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV7 configure as HDR10 HEVC decoder=%s codecMime=%s", codecInfo.name, codecInfo.codecMimeType);
-            return super.getMediaCodecConfiguration(codecInfo, isDolbyVisionProfile7(format) ? asHdr10Hevc(format) : format, crypto, codecOperatingRate);
+            if (isDolbyVisionHdr10Fallback(format) && SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV configure as HDR10 HEVC codecs=%s decoder=%s codecMime=%s", format.codecs, codecInfo.name, codecInfo.codecMimeType);
+            return super.getMediaCodecConfiguration(codecInfo, isDolbyVisionHdr10Fallback(format) ? asHdr10Hevc(format) : format, crypto, codecOperatingRate);
+        }
+
+        private static boolean isDolbyVisionHdr10Fallback(Format format) {
+            return isDolbyVisionProfile5(format) || isDolbyVisionProfile7(format);
         }
 
         private static boolean isDolbyVisionProfile5(Format format) {
