@@ -3860,8 +3860,14 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         AudioPlayerBackgroundDrawable drawable = new AudioPlayerBackgroundDrawable(PlayerSetting.getAudioBackground(), mAudioArtworkColor, PlayerSetting.isAudioBackgroundDecorated(), PlayerSetting.isAudioBackgroundLightEffect(), mAudioLightEffectAnimated, PlayerSetting.getAudioBackgroundSeed(), PlayerSetting.getAudioBackgroundDecorationSeed());
         syncAudioBackgroundHalo(drawable);
         mBinding.audioStage.setBackground(drawable);
-        mBinding.audioStage.post(() -> syncAudioBackgroundHalo(drawable));
+        scheduleAudioBackgroundHaloSync(drawable);
         mBinding.audioStage.invalidate();
+    }
+
+    private void scheduleAudioBackgroundHaloSync(AudioPlayerBackgroundDrawable drawable) {
+        mBinding.audioStage.post(() -> syncAudioBackgroundHalo(drawable));
+        mBinding.audioStage.postDelayed(() -> syncAudioBackgroundHalo(drawable), 120);
+        mBinding.audioStage.postDelayed(() -> syncAudioBackgroundHalo(drawable), 360);
     }
 
     private void scheduleAudioBackground(long delayMs) {
@@ -3923,12 +3929,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mBinding == null || drawable == null) return;
         View anchor = mBinding.audioCover != null ? mBinding.audioCover : mBinding.audioDisc;
         if (mBinding.audioStage.getWidth() <= 0 || anchor.getWidth() <= 0 || anchor.getHeight() <= 0) return;
-        int[] stage = new int[2];
-        int[] view = new int[2];
-        mBinding.audioStage.getLocationOnScreen(stage);
-        anchor.getLocationOnScreen(view);
-        float cx = view[0] - stage[0] + anchor.getWidth() / 2f;
-        float cy = view[1] - stage[1] + anchor.getHeight() / 2f - ResUtil.dp2px(5);
+        if (mBinding.audioStage.getBackground() != drawable) return;
+        Rect bounds = new Rect(0, 0, anchor.getWidth(), anchor.getHeight());
+        mBinding.audioStage.offsetDescendantRectToMyCoords(anchor, bounds);
+        float cx = bounds.exactCenterX();
+        float cy = bounds.exactCenterY();
         float radius = Math.max(anchor.getWidth(), anchor.getHeight()) * 0.56f;
         drawable.setRecordHaloAnchor(cx, cy, radius);
     }
