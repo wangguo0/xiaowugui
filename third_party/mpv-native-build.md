@@ -37,13 +37,13 @@ third_party/mpv-native-lock.json
 
 | 组件 | 固定版本 |
 | --- | --- |
-| 构建框架 | `marlboro-advance/mpv-android@eb6d70c8c291bea72b7cab0df8bfc09de0cad23c` |
+| 构建框架 | `marlboro-advance/mpv-android@f712d4dcf56c00d04e7dd05e157d953d665a6890` |
 | NDK | `28.2.13676358`（r28c），API 24 |
-| MPV | `9ce79bcaa0132660a2e45b6bfc1fb0c199665277` |
-| FFmpeg | `5ba2525c7affc29cbd99e6266946b382d3fffe8b` |
-| libplacebo | `82224764a98164ce9d2d9a10e4fefca934e475fb` |
-| libass | `fadc390583f24eb5cf98f16925fd3adee50bca88` |
-| dav1d | `daef39627713a3e09873e78df65b268386cb4c20` |
+| MPV | `94335ab87ab225ca3e36e0faeac831639d3e1d4e` |
+| FFmpeg | `38b88335f99e76ed89ff3c93f877fdefce736c13`（8.1.2） |
+| libplacebo | `a7a18af88ff0a17c04840dcb3246047bb6b46df3`（7.371.0） |
+| libass | `4a05d8127f525943ebf45fdc6497c9e665947f0d`（0.17.5） |
+| dav1d | `54706fc6bc0cdecab7e9593974a4039cc038fca7`（1.5.4） |
 
 其他字体、TLS、Lua 和构建工具版本也在 lock 文件中，不要只修改脚本里的单个组件。
 
