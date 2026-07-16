@@ -308,12 +308,12 @@ prepare_sources() {
   checkout_repo mpv "$MPV_REPO" "$MPV_COMMIT" "$deps/mpv"
   # The initial exact-commit fetch is shallow. Fetch enough ancestry and the
   # release tag so MPV embeds the stable v0.41.0-556-g... version string.
-  if [ "$(git -C "$deps/mpv" describe --abbrev=9 --tags HEAD 2>/dev/null || true)" != "v$MPV_VERSION" ]; then
+  if [ "$(git -C "$deps/mpv" describe --abbrev=9 --tags --match "$MPV_DESCRIBE_TAG" HEAD 2>/dev/null || true)" != "v$MPV_VERSION" ]; then
     git -C "$deps/mpv" fetch --deepen="$MPV_HISTORY_DEPTH" origin "$MPV_COMMIT"
     git -C "$deps/mpv" fetch --depth=1 origin \
       "refs/tags/$MPV_DESCRIBE_TAG:refs/tags/$MPV_DESCRIBE_TAG"
   fi
-  [ "$(git -C "$deps/mpv" describe --abbrev=9 --tags HEAD)" = "v$MPV_VERSION" ] || die "MPV describe version mismatch"
+  [ "$(git -C "$deps/mpv" describe --abbrev=9 --tags --match "$MPV_DESCRIBE_TAG" HEAD)" = "v$MPV_VERSION" ] || die "MPV describe version mismatch"
   [ -f "$MPV_DISC_PATCH" ] || die "missing MPV disc controls patch: $MPV_DISC_PATCH"
   git -C "$deps/mpv" apply --check "$MPV_DISC_PATCH"
   git -C "$deps/mpv" apply "$MPV_DISC_PATCH"
