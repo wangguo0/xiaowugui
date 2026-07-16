@@ -770,7 +770,6 @@ public final class MpvConfigStore {
                 + "demuxer-max-bytes=64MiB\n"
                 + "demuxer-max-back-bytes=64MiB\n"
                 + "demuxer-readahead-secs=20\n"
-                + "http-allow-redirect=yes\n"
                 + "sub-ass=yes\n"
                 + "sub-ass-override=yes\n"
                 + "embeddedfonts=yes\n"
