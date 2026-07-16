@@ -676,6 +676,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.playParams.setOnClickListener(view -> onPlayParams());
         mBinding.control.action.codecCapability.setOnClickListener(view -> onCodecCapability());
+        mBinding.control.action.immersiveAudio.setOnClickListener(view -> toggleImmersiveAudioMode());
         mBinding.control.action.ending.setOnClickListener(view -> onEnding());
         mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
         mBinding.control.action.change2.setOnClickListener(view -> onChange());
@@ -824,6 +825,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.danmaku.setVisibility(View.VISIBLE);
         mBinding.control.action.reset.setText(ResUtil.getStringArray(R.array.select_reset)[Setting.getReset()]);
         mBinding.control.action.karaoke.setVisibility(View.GONE);
+        updateImmersiveAudioAction();
         updateAudioStageControls();
         setupActionButtons();
     }
@@ -860,6 +862,19 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void applyActionButtonVisibility() {
         if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
+        updateImmersiveAudioAction();
+    }
+
+    private void updateImmersiveAudioAction() {
+        if (mBinding == null) return;
+        boolean audioContent = isAudioOnly() || isMusicLike();
+        mBinding.control.action.immersiveAudio.setVisibility(isFullscreen() && audioContent ? View.VISIBLE : View.GONE);
+        mBinding.control.action.immersiveAudio.setSelected(PlayerSetting.isImmersiveAudioMode());
+    }
+
+    private void toggleImmersiveAudioMode() {
+        PlayerSetting.putImmersiveAudioMode(!PlayerSetting.isImmersiveAudioMode());
+        onImmersiveAudioModeChanged();
     }
 
     private int getEpisodeColumn() {
@@ -2819,8 +2834,6 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void applyKaraokeTrackChange(boolean enableMode) {
         if (enableMode && !PlayerSetting.isKaraokeMode()) {
             PlayerSetting.putKaraokeMode(true);
-            mBinding.control.action.karaoke.setSelected(true);
-            mBinding.audioKaraokeAction.setSelected(true);
         }
         refreshLyrics();
         reloadKaraokeTrack();
@@ -3716,8 +3729,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void syncAudioStageSurface(boolean visible) {
+        boolean immersiveEnabled = PlayerSetting.isImmersiveAudioMode();
         mBinding.lyrics.setAudioStageMode(visible);
-        mBinding.lyrics.setSuppressed(visible);
+        mBinding.lyrics.setSuppressed(visible || !immersiveEnabled);
         mBinding.audioLyrics.setSuppressed(!visible);
         syncKaraokeStageVisibility();
         setVideoDetailsVisible(!visible);
@@ -3742,6 +3756,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void syncKaraokeStageVisibility() {
         if (mBinding == null) return;
+        if (!PlayerSetting.isImmersiveAudioMode()) {
+            mBinding.karaoke.setVisibility(View.GONE);
+            mBinding.audioKaraoke.setVisibility(View.GONE);
+            return;
+        }
         if (mAudioStageVisible) {
             mBinding.karaoke.setVisibility(View.GONE);
             if (PlayerSetting.isKaraokeMode() && mBinding.audioKaraoke.getVisibility() == View.GONE) mBinding.audioKaraoke.setVisibility(View.INVISIBLE);
@@ -3798,7 +3817,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setAudioToolEnabled(mBinding.audioSubtitleAction, service() != null && player().haveTrack(C.TRACK_TYPE_TEXT));
         setAudioToolEnabled(mBinding.audioInfoAction, service() != null && !player().isEmpty());
         setAudioRepeatSelected(service() != null && player().isRepeatOne());
-        mBinding.audioKaraokeAction.setSelected(PlayerSetting.isKaraokeMode());
+        mBinding.audioKaraokeAction.setSelected(false);
         checkKeepImg();
         checkAudioPlayImg(service() != null && player().isPlaying());
         syncAudioCoverRotation();
@@ -5627,8 +5646,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public void onKaraokeModeChanged() {
-        mBinding.control.action.karaoke.setSelected(PlayerSetting.isKaraokeMode());
-        mBinding.audioKaraokeAction.setSelected(PlayerSetting.isKaraokeMode());
+        mBinding.control.action.karaoke.setSelected(false);
+        mBinding.audioKaraokeAction.setSelected(false);
         updateAudioStageText();
         if (PlayerSetting.isKaraokeMode()) {
             mKaraokeResultShown = false;
@@ -5647,6 +5666,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             setAudioStageVisible(false);
             if (service() != null && player().haveTrack(C.TRACK_TYPE_VIDEO)) player().restoreVideoTrack();
         }
+        updateImmersiveAudioAction();
     }
 
     private View getFocus1() {
