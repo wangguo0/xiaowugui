@@ -67,8 +67,8 @@
     },
     "mpv": {
       "repo": "https://github.com/mpv-player/mpv.git",
-      "commit": "94335ab87ab225ca3e36e0faeac831639d3e1d4e",
-      "version": "0.41.0-878-g94335ab87",
+      "commit": "9ce79bcaa0132660a2e45b6bfc1fb0c199665277",
+      "version": "0.41.0-556-g9ce79bcaa",
       "describe_tag": "v0.41.0",
       "history_depth": 600
     }
