@@ -26,6 +26,7 @@ Options:
   --install              Replace the matching app/src/*/assets/mpv-libs files
   --prepare-only         Download and pin all sources without compiling
   --incremental          Keep build prefixes instead of doing a clean rebuild
+  --lock-file PATH       Use an alternate dependency lock for compatibility tests
   --work-dir PATH        Build/cache directory (default: build/mpv-native)
   --jobs N               Parallel compiler jobs
   -h, --help             Show this help
@@ -67,6 +68,11 @@ while [ "$#" -gt 0 ]; do
     --incremental)
       INCREMENTAL=1
       shift
+      ;;
+    --lock-file)
+      [ "$#" -ge 2 ] || die "--lock-file requires a value"
+      LOCK_FILE="$2"
+      shift 2
       ;;
     --work-dir)
       [ "$#" -ge 2 ] || die "--work-dir requires a value"
