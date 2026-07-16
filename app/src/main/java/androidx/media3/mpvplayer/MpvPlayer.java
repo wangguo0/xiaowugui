@@ -1678,7 +1678,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         mainHandler.removeCallbacks(stateRefreshRunnable);
         mainHandler.removeCallbacks(endFileValidationRunnable);
         mainHandler.removeCallbacks(loadStartRetryRunnable);
-        releaseNativeContext("new media");
+        // Keep the initialized MPV context across media changes. Destroying it
+        // here and immediately creating another context can race MPV/Android
+        // worker teardown, causing pthreads to touch an already destroyed
+        // mutex. A synchronous stop is sufficient because engine rebuild and
+        // final player release still destroy the context when configuration or
+        // ownership actually changes.
+        stopMpv(true);
+        stopping = false;
     }
 
     private void releaseNativeContext(String reason) {
