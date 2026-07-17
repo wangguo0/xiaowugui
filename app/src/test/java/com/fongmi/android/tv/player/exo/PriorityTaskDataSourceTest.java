@@ -27,15 +27,40 @@ import static org.junit.Assert.fail;
 public class PriorityTaskDataSourceTest {
 
     @Test
-    public void preloadWaitsUntilPlaybackCloses() throws Exception {
+    public void preloadCanReadWhilePlaybackConnectionIsOpenButIdle() throws Exception {
         PriorityTaskManager manager = new PriorityTaskManager();
         PriorityTaskDataSource preload = source(new StubDataSource(), manager, C.PRIORITY_PLAYBACK_PRELOAD, true);
         PriorityTaskDataSource playback = source(new StubDataSource(), manager, C.PRIORITY_PLAYBACK, false);
         preload.open(null);
         playback.open(null);
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+        assertEquals(C.RESULT_END_OF_INPUT, preload.read(new byte[1], 0, 1));
+
+        playback.close();
+        preload.close();
+    }
+
+    @Test
+    public void preloadWaitsOnlyWhilePlaybackReadIsActive() throws Exception {
+        PriorityTaskManager manager = new PriorityTaskManager();
+        BlockingDataSource playbackUpstream = new BlockingDataSource();
+        PriorityTaskDataSource preload = source(new StubDataSource(), manager, C.PRIORITY_PLAYBACK_PRELOAD, true);
+        PriorityTaskDataSource playback = source(playbackUpstream, manager, C.PRIORITY_PLAYBACK, false);
+        preload.open(null);
+        playback.open(null);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch playbackCompleted = new CountDownLatch(1);
         CountDownLatch completed = new CountDownLatch(1);
+        executor.execute(() -> {
+            try {
+                playback.read(new byte[1], 0, 1);
+            } catch (IOException ignored) {
+            } finally {
+                playbackCompleted.countDown();
+            }
+        });
+        assertTrue(playbackUpstream.readStarted.await(2, TimeUnit.SECONDS));
         executor.execute(() -> {
             try {
                 preload.read(new byte[1], 0, 1);
@@ -46,8 +71,10 @@ public class PriorityTaskDataSourceTest {
         });
 
         assertFalse(completed.await(200, TimeUnit.MILLISECONDS));
-        playback.close();
+        playbackUpstream.releaseRead.countDown();
+        assertTrue(playbackCompleted.await(2, TimeUnit.SECONDS));
         assertTrue(completed.await(2, TimeUnit.SECONDS));
+        playback.close();
         preload.close();
         executor.shutdownNow();
     }
@@ -70,13 +97,21 @@ public class PriorityTaskDataSourceTest {
     @Test
     public void closingPreloadUnblocksPriorityWait() throws Exception {
         PriorityTaskManager manager = new PriorityTaskManager();
+        BlockingDataSource playbackUpstream = new BlockingDataSource();
         PriorityTaskDataSource preload = source(new StubDataSource(), manager, C.PRIORITY_PLAYBACK_PRELOAD, true);
-        PriorityTaskDataSource playback = source(new StubDataSource(), manager, C.PRIORITY_PLAYBACK, false);
+        PriorityTaskDataSource playback = source(playbackUpstream, manager, C.PRIORITY_PLAYBACK, false);
         preload.open(null);
         playback.open(null);
 
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch completed = new CountDownLatch(1);
+        executor.execute(() -> {
+            try {
+                playback.read(new byte[1], 0, 1);
+            } catch (IOException ignored) {
+            }
+        });
+        assertTrue(playbackUpstream.readStarted.await(2, TimeUnit.SECONDS));
         executor.execute(() -> {
             try {
                 preload.read(new byte[1], 0, 1);
@@ -89,6 +124,7 @@ public class PriorityTaskDataSourceTest {
         assertFalse(completed.await(200, TimeUnit.MILLISECONDS));
         preload.close();
         assertTrue(completed.await(2, TimeUnit.SECONDS));
+        playbackUpstream.releaseRead.countDown();
         playback.close();
         executor.shutdownNow();
     }
@@ -122,6 +158,47 @@ public class PriorityTaskDataSourceTest {
         public int read(byte[] buffer, int offset, int length) throws IOException {
             if (readError != null) throw readError;
             return C.RESULT_END_OF_INPUT;
+        }
+
+        @Override
+        public Uri getUri() {
+            return null;
+        }
+
+        @Override
+        public Map<String, List<String>> getResponseHeaders() {
+            return Collections.emptyMap();
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private static final class BlockingDataSource implements DataSource {
+
+        private final CountDownLatch readStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseRead = new CountDownLatch(1);
+
+        @Override
+        public void addTransferListener(TransferListener transferListener) {
+        }
+
+        @Override
+        public long open(DataSpec dataSpec) {
+            return C.LENGTH_UNSET;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            readStarted.countDown();
+            try {
+                releaseRead.await();
+                return C.RESULT_END_OF_INPUT;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException(e);
+            }
         }
 
         @Override

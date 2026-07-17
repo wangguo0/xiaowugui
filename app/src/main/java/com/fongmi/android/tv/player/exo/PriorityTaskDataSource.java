@@ -39,9 +39,10 @@ final class PriorityTaskDataSource implements DataSource {
 
     @Override
     public long open(DataSpec dataSpec) throws IOException {
+        if (!waitWhenPreempted) return runWithPriority(() -> upstream.open(dataSpec));
         register();
         try {
-            proceed();
+            waitForPriority();
             return upstream.open(dataSpec);
         } catch (IOException | RuntimeException e) {
             unregister();
@@ -51,7 +52,8 @@ final class PriorityTaskDataSource implements DataSource {
 
     @Override
     public int read(byte[] buffer, int offset, int length) throws IOException {
-        proceed();
+        if (!waitWhenPreempted) return runWithPriority(() -> upstream.read(buffer, offset, length));
+        waitForPriority();
         return upstream.read(buffer, offset, length);
     }
 
@@ -75,11 +77,7 @@ final class PriorityTaskDataSource implements DataSource {
         }
     }
 
-    private void proceed() throws IOException {
-        if (!waitWhenPreempted) {
-            taskManager.proceedOrThrow(priority);
-            return;
-        }
+    private void waitForPriority() throws IOException {
         while (registered.get() && !taskManager.proceedNonBlocking(priority)) {
             try {
                 Thread.sleep(PRIORITY_WAIT_MS);
@@ -89,6 +87,16 @@ final class PriorityTaskDataSource implements DataSource {
             }
         }
         if (!registered.get()) throw interrupted(null);
+    }
+
+    private <T> T runWithPriority(IoOperation<T> operation) throws IOException {
+        taskManager.add(priority);
+        try {
+            taskManager.proceedOrThrow(priority);
+            return operation.run();
+        } finally {
+            taskManager.remove(priority);
+        }
     }
 
     private InterruptedIOException interrupted(@Nullable InterruptedException cause) {
@@ -103,6 +111,11 @@ final class PriorityTaskDataSource implements DataSource {
 
     private void unregister() {
         if (registered.compareAndSet(true, false)) taskManager.remove(priority);
+    }
+
+    private interface IoOperation<T> {
+
+        T run() throws IOException;
     }
 
     static final class Factory implements DataSource.Factory {
