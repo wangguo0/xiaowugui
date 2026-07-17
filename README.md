@@ -191,32 +191,32 @@ bash gradlew :app:assembleMobileArm64_v8aDebug :app:assembleLeanbackArmeabi_v7aD
 
 | ABI | MPV | FFmpeg | libplacebo | 说明 |
 | --- | --- | --- | --- | --- |
-| `arm64-v8a` | 已验证二进制 `0.41.0-556-g9ce79bcaa` | `38b88335f99e`（8.1.2） | `7.362.0` / `82224764a981` | Android 15 真机止崩组合；OpenGL 播放已验证 |
-| `armeabi-v7a` | 已验证二进制 `0.41.0-556-g9ce79bcaa` | `38b88335f99e`（8.1.2） | `7.362.0` / `82224764a981` | 与 arm64 使用相同兼容策略，保留独立 32 位产物 |
+| `arm64-v8a` | `0.41.0-878-g94335ab87` | `894da5ca7d74`（n8.0.1） | `7.371.0` / `a7a18af88ff0` | vivo Android 15 OpenGL 网络播放已验证，未再出现 destroyed-mutex 崩溃 |
+| `armeabi-v7a` | `0.41.0-878-g94335ab87` | `894da5ca7d74`（n8.0.1） | `7.371.0` / `a7a18af88ff0` | 同一 lock 独立构建并通过版本、补丁和 ELF 依赖校验；待 32 位真机播放回归 |
 
 替换或升级 MPV native 时必须遵守：
 
-- 常规升级仍应让 `libmpv.so`、FFmpeg（codec/device/filter/format/util/swresample/swscale）、libplacebo 和 `libc++_shared.so` 按同一 ABI、同一兼容构建成套更新。当前仓库是经过 Android 15 真机验证的临时兼容例外：恢复升级前 `libmpv.so`，保留 FFmpeg 8.1.2 动态库，用于规避重新编译组合的 native mutex 崩溃。
-- 当前已提交 assets 使用 MPV `0.41.0-556-g9ce79bcaa` 的已验证二进制、FFmpeg `38b88335f99e76ed89ff3c93f877fdefce736c13`（8.1.2）、libplacebo `82224764a98164ce9d2d9a10e4fefca934e475fb`（7.362.0）和 NDK r28c。Android 15 上按当前实验 lock 重新生成的 `libmpv.so` 会触发 `pthread_mutex_lock called on a destroyed mutex`，不能直接覆盖稳定 assets。
+- `libmpv.so`、FFmpeg（codec/device/filter/format/util/swresample/swscale）、静态链接进 MPV 的 libplacebo 和 `libc++_shared.so` 必须按同一 ABI、同一 lock 成套构建，不能再混用旧 `libmpv.so` 与新依赖作为正式方案。
+- 当前已提交 assets 使用 MPV `94335ab87ab225ca3e36e0faeac831639d3e1d4e`、FFmpeg n8.0.1 `894da5ca7d742e4429ffb2af534fcda0103ef593`、libplacebo `a7a18af88ff0a17c04840dcb3246047bb6b46df3`（7.371.0）和 NDK r28c。FFmpeg 8.1.2 组合在 vivo Android 15 播放初始化时可触发 `pthread_mutex_lock called on a destroyed mutex`，因此没有进入正式 lock。
 - FFmpeg 文件名、ELF `SONAME` 和所有 `DT_NEEDED` 都要从 `libav*`/`libsw*` 等长改为 `libmv*`/`libmw*`，不能只重命名文件，否则会和 `nextlib-media3ext` 内置 FFmpeg 发生 Android linker 复用冲突。
 - 固定 MPV 源码会应用 `third_party/patches/mpv-stream-cb-disc-controls.patch`。该补丁扩展 `stream_cb` 光盘控制并接入 `demux_disc`；修改补丁或 `stream_cb.h` 后必须同时重建 `libmpv.so` 和 `libplayer.so`。
 - 更新后用 NDK `llvm-readelf -d` 确认没有残留 `libav*.so`/`libsw*.so` 依赖，再分别回归 OpenGL、Vulkan、硬解/软解、LUT、字幕、线路切换、连续起播/退出和 Blu-ray ISO。Android 15 必须同时检查 crash buffer 中是否出现 destroyed mutex。
 
-从固定源码生成候选 MPV/FFmpeg `.so`（当前仅用于隔离验证，不要直接加 `--install` 覆盖稳定 assets）：
+从固定源码重新生成 MPV/FFmpeg `.so`：
 
 ```bash
 scripts/build_mpv_native.sh --abi arm64-v8a
 bash gradlew :app:assembleMobileArm64_v8aRelease -PfastRelease=true
 ```
 
-完成 Android 15 真机回归后，才允许同步安装两套 ARM ABI 和匹配的 JNI 桥：
+需要更新仓库 assets 时，同步安装两套 ARM ABI；只有 JNI 源码、MPV client API 或 `stream_cb.h` 变化时才重建 JNI 桥：
 
 ```bash
 scripts/build_mpv_native.sh --abi all --install
-scripts/build_mpv_player_jni.sh
+# 按需执行：scripts/build_mpv_player_jni.sh
 ```
 
-脚本读取 `third_party/mpv-native-lock.json`，自动下载固定 commit、应用 MPV 光盘控制补丁、构建依赖、修改 ELF 依赖名、strip 并校验。当前 lock 是继续定位兼容组合的源码实验基线，尚不能复现已提交的稳定 `libmpv.so`；普通 Gradle 和 GitHub Actions 不会调用该脚本，仍直接复用仓库已提交的热修复 `.so`。完整排查记录见本地 `plans/MPV原生依赖升级与Android崩溃排查记录.md`。
+脚本读取 `third_party/mpv-native-lock.json`，自动下载固定 commit、应用 MPV 光盘控制补丁、构建依赖、修改 ELF 依赖名、strip 并校验。当前 lock 与两套已提交 assets 一致，可复现正式 native 组合；普通 Gradle 和 GitHub Actions 不会调用该脚本，直接复用仓库已提交的 `.so`。完整排查记录见本地 `plans/MPV原生依赖升级与Android崩溃排查记录.md`。
 
 只重建 App JNI 桥接库 `libplayer.so`：
 
