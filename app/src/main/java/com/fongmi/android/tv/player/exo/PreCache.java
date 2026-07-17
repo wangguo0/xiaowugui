@@ -35,6 +35,7 @@ public class PreCache implements Player.Listener {
     private int threads;
     private long lastStartMs;
     private long seekStartMs;
+    private boolean playable;
 
     public PreCache() {
         task = this::check;
@@ -49,6 +50,7 @@ public class PreCache implements Player.Listener {
         this.player.addListener(this);
         clearSeek();
         lastStartMs = C.TIME_UNSET;
+        playable = false;
         check();
     }
 
@@ -61,6 +63,7 @@ public class PreCache implements Player.Listener {
         player = null;
         clearSeek();
         lastStartMs = C.TIME_UNSET;
+        playable = false;
     }
 
     public void release() {
@@ -85,8 +88,23 @@ public class PreCache implements Player.Listener {
 
     @Override
     public void onPlaybackStateChanged(int state) {
-        if (state == Player.STATE_READY) check();
+        if (state == Player.STATE_READY && playable) check();
         else if (isStopped(state)) cancel();
+    }
+
+    @Override
+    public void onRenderedFirstFrame() {
+        playable = true;
+        check();
+    }
+
+    @Override
+    public void onIsPlayingChanged(boolean isPlaying) {
+        if (!isPlaying || playable || player == null) return;
+        if (!player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO) && player.getCurrentTracks().containsType(C.TRACK_TYPE_AUDIO)) {
+            playable = true;
+            check();
+        }
     }
 
     @Override
@@ -111,6 +129,7 @@ public class PreCache implements Player.Listener {
         int state = player.getPlaybackState();
         if (isStopped(state)) return false;
         if (state != Player.STATE_READY) return true;
+        if (!playable) return true;
         if (player.isCurrentMediaItemLive()) {
             stop();
             return false;
