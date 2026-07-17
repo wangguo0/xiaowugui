@@ -27,6 +27,7 @@ import com.fongmi.android.tv.bean.Parse;
 import com.fongmi.android.tv.databinding.ActivityVideoBinding;
 import com.fongmi.android.tv.databinding.DialogControlBinding;
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.lyrics.LyricsController;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
@@ -136,6 +137,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.karaoke.setSelected(PlayerSetting.isKaraokeMode());
         binding.immersiveAudio.setSelected(PlayerSetting.isImmersiveAudioMode());
         setKaraokeVisible();
+        setImmersiveAudioVisible();
         binding.timer.setSelected(Timer.get().isRunning());
         setTrackVisible();
         setTitleVisible();
@@ -352,6 +354,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.decode.setVisibility(parent.control.action.decode.getVisibility());
         binding.danmaku.setVisibility(parent.control.action.danmaku.getVisibility());
         setKaraokeVisible();
+        setImmersiveAudioVisible();
         setTrackVisible();
     }
 
@@ -376,6 +379,10 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private void setKaraokeVisible() {
         binding.karaoke.setVisibility(parent.control.action.karaoke.getVisibility());
+    }
+
+    private void setImmersiveAudioVisible() {
+        binding.immersiveAudio.setVisibility(LyricsController.isAudioOnly(player) ? View.VISIBLE : View.GONE);
     }
 
     @Override

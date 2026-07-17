@@ -26,6 +26,7 @@ import com.fongmi.android.tv.bean.Parse;
 import com.fongmi.android.tv.databinding.ActivityVideoBinding;
 import com.fongmi.android.tv.databinding.DialogControlBinding;
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.lyrics.LyricsController;
 import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
@@ -135,6 +136,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.opening.setText(parent.control.action.opening.getText());
         binding.repeat.setSelected(parent.control.action.repeat.isSelected());
         binding.immersiveAudio.setSelected(PlayerSetting.isImmersiveAudioMode());
+        setImmersiveAudioVisible();
         binding.timer.setSelected(Timer.get().isRunning());
         setTrackVisible();
         setTitleVisible();
@@ -297,6 +299,7 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         setEpisodeColumn();
         binding.decode.setVisibility(parent.control.action.decode.getVisibility());
         binding.danmaku.setVisibility(parent.control.action.danmaku.getVisibility());
+        setImmersiveAudioVisible();
         setTrackVisible();
     }
 
@@ -328,6 +331,10 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         boolean visible = binding.text.getVisibility() != View.GONE || binding.audio.getVisibility() != View.GONE || binding.video.getVisibility() != View.GONE || binding.title.getVisibility() != View.GONE || binding.danmaku.getVisibility() != View.GONE;
         binding.trackText.setVisibility(visible ? View.VISIBLE : View.GONE);
         binding.trackRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void setImmersiveAudioVisible() {
+        binding.immersiveAudio.setVisibility(LyricsController.isAudioOnly(player) ? View.VISIBLE : View.GONE);
     }
 
     @Override
