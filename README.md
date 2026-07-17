@@ -187,17 +187,18 @@ bash gradlew :app:assembleMobileArm64_v8aDebug :app:assembleLeanbackArmeabi_v7aD
 - `third_party/mpv-player-jni/include/mpv/stream_cb.h`
 - 升级 MPV client API，或新的 `libmpv.so` 与现有 JNI 头文件/API 不兼容
 
-当前 `libmpv.so` 同时启用 OpenGL 和 Vulkan；`libplayer.so` 由本仓库 `third_party/mpv-player-jni` 构建，用于保留 END_FILE reason/error 等本地桥接能力。当前 native 基线：
+当前 `libmpv.so` 同时启用 OpenGL、Vulkan、libcurl 和 HTTP/2；`libplayer.so` 由本仓库 `third_party/mpv-player-jni` 构建，用于保留 END_FILE reason/error 等本地桥接能力。当前 native 基线：
 
-| ABI | MPV | FFmpeg | libplacebo | 说明 |
-| --- | --- | --- | --- | --- |
-| `arm64-v8a` | `0.41.0-878-g94335ab87` | `894da5ca7d74`（n8.0.1） | `7.371.0` / `a7a18af88ff0` | vivo Android 15 OpenGL 网络播放已验证，未再出现 destroyed-mutex 崩溃 |
-| `armeabi-v7a` | `0.41.0-878-g94335ab87` | `894da5ca7d74`（n8.0.1） | `7.371.0` / `a7a18af88ff0` | 同一 lock 独立构建并通过版本、补丁和 ELF 依赖校验；待 32 位真机播放回归 |
+| ABI | MPV | FFmpeg | libplacebo | 网络后端 | 说明 |
+| --- | --- | --- | --- | --- | --- |
+| `arm64-v8a` | `0.41.0-878-g94335ab87` | `8ae0b34901ba`（n8.0.3） | `7.371.0` / `a7a18af88ff0` | curl 8.21.0 + nghttp2 1.69.0 | vivo Android 15 MPV 网络播放已验证，未出现 destroyed-mutex、SIGABRT 或 SIGSEGV |
+| `armeabi-v7a` | `0.41.0-878-g94335ab87` | `8ae0b34901ba`（n8.0.3） | `7.371.0` / `a7a18af88ff0` | curl 8.21.0 + nghttp2 1.69.0 | 同一 lock 独立构建并通过版本、补丁、HTTP/2 和 ELF 依赖校验；待 32 位真机播放回归 |
 
 替换或升级 MPV native 时必须遵守：
 
-- `libmpv.so`、FFmpeg（codec/device/filter/format/util/swresample/swscale）、静态链接进 MPV 的 libplacebo 和 `libc++_shared.so` 必须按同一 ABI、同一 lock 成套构建，不能再混用旧 `libmpv.so` 与新依赖作为正式方案。
-- 当前已提交 assets 使用 MPV `94335ab87ab225ca3e36e0faeac831639d3e1d4e`、FFmpeg n8.0.1 `894da5ca7d742e4429ffb2af534fcda0103ef593`、libplacebo `a7a18af88ff0a17c04840dcb3246047bb6b46df3`（7.371.0）和 NDK r28c。FFmpeg 8.1.2 组合在 vivo Android 15 播放初始化时可触发 `pthread_mutex_lock called on a destroyed mutex`，因此没有进入正式 lock。
+- `libmpv.so`、FFmpeg（codec/device/filter/format/util/swresample/swscale）、静态链接进 MPV 的 libplacebo、curl、nghttp2、MbedTLS 和 `libc++_shared.so` 必须按同一 ABI、同一 lock 成套构建，不能再混用旧 `libmpv.so` 与新依赖作为正式方案。
+- 当前已提交 assets 使用 MPV `94335ab87ab225ca3e36e0faeac831639d3e1d4e`、FFmpeg n8.0.3 `8ae0b34901ba60a802f183ee75a250a9fc3e09a5`、libplacebo `a7a18af88ff0a17c04840dcb3246047bb6b46df3`（7.371.0）、curl 8.21.0、nghttp2 1.69.0 和 NDK r28c。curl 使用 MbedTLS，只启用 HTTP/HTTPS 与 HTTP/2，不包含 HTTP/3、ngtcp2、nghttp3 或 quiche。FFmpeg 8.1.2 组合在 vivo Android 15 播放初始化时可触发 `pthread_mutex_lock called on a destroyed mutex`，因此没有进入正式 lock。
+- curl 与 nghttp2 静态链接进 `libmpv.so`，APK 不新增独立网络 `.so`。它增强 MPV 直接远程 HTTP/HTTPS 输入；App 自己处理的本地 HLS 代理、`stream_cb` 和 FFmpeg/lavf 路径仍按各自实现工作，不能把启用 curl 理解为所有播放请求都强制走同一后端。
 - FFmpeg 文件名、ELF `SONAME` 和所有 `DT_NEEDED` 都要从 `libav*`/`libsw*` 等长改为 `libmv*`/`libmw*`，不能只重命名文件，否则会和 `nextlib-media3ext` 内置 FFmpeg 发生 Android linker 复用冲突。
 - 固定 MPV 源码会应用 `third_party/patches/mpv-stream-cb-disc-controls.patch`。该补丁扩展 `stream_cb` 光盘控制并接入 `demux_disc`；修改补丁或 `stream_cb.h` 后必须同时重建 `libmpv.so` 和 `libplayer.so`。
 - 更新后用 NDK `llvm-readelf -d` 确认没有残留 `libav*.so`/`libsw*.so` 依赖，再分别回归 OpenGL、Vulkan、硬解/软解、LUT、字幕、线路切换、连续起播/退出和 Blu-ray ISO。Android 15 必须同时检查 crash buffer 中是否出现 destroyed mutex。
