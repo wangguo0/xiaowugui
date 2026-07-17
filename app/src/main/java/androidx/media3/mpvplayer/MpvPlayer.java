@@ -2348,6 +2348,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             builder.append(" type=").append(trackTypeName(info.type));
             builder.append(" id=").append(info.id);
             builder.append(" demuxId=").append(info.demuxId);
+            builder.append(" srcId=").append(info.srcId);
             builder.append(" rawSelected=").append(info.selected);
             builder.append(" finalSelected=").append(isTrackSelectedInSnapshot(tracks, info));
             builder.append(" title=").append(info.title);
@@ -2470,10 +2471,12 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         String title = stringProperty(prefix + "title", "");
         String lang = stringProperty(prefix + "lang", "");
         int demuxId = intProperty(prefix + "demux-id", C.INDEX_UNSET);
+        int srcId = intProperty(prefix + "src-id", C.INDEX_UNSET);
         if (TextUtils.isEmpty(lang) && typeIndex >= 0 && !TextUtils.isEmpty(currentIsoUri)) {
             int isoTrackType = type == C.TRACK_TYPE_AUDIO ? 1 : type == C.TRACK_TYPE_TEXT ? 2 : 0;
             if (isoTrackType != 0) {
-                lang = IsoSessionManager.getTrackLanguage(IsoSessionManager.parseId(currentIsoUri), isoTrackType, demuxId, typeIndex);
+                int isoTrackId = demuxId > 0 ? demuxId : srcId;
+                lang = IsoSessionManager.getTrackLanguage(IsoSessionManager.parseId(currentIsoUri), isoTrackType, isoTrackId, typeIndex);
             }
         }
         String codec = stringProperty(prefix + "codec", "");
@@ -2491,7 +2494,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (bitrate <= 0 && type == C.TRACK_TYPE_VIDEO) bitrate = intProperty("video-bitrate", C.LENGTH_UNSET);
         if (bitrate <= 0 && type == C.TRACK_TYPE_AUDIO) bitrate = intProperty("audio-bitrate", C.LENGTH_UNSET);
         ColorInfo colorInfo = type == C.TRACK_TYPE_VIDEO ? videoColorInfo() : null;
-        return new TrackInfo(type, id, demuxId, title, lang, codec, selected, width, height, frameRate, sampleRate, channels, bitrate, colorInfo);
+        return new TrackInfo(type, id, demuxId, srcId, title, lang, codec, selected, width, height, frameRate, sampleRate, channels, bitrate, colorInfo);
     }
 
     private float videoFrameRate() {
@@ -3189,6 +3192,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         final int type;
         final String id;
         final int demuxId;
+        final int srcId;
         final String title;
         final String lang;
         final String codec;
@@ -3201,10 +3205,11 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         final int bitrate;
         final ColorInfo colorInfo;
 
-        TrackInfo(int type, String id, int demuxId, String title, String lang, String codec, boolean selected, int width, int height, float frameRate, int sampleRate, int channels, int bitrate, @Nullable ColorInfo colorInfo) {
+        TrackInfo(int type, String id, int demuxId, int srcId, String title, String lang, String codec, boolean selected, int width, int height, float frameRate, int sampleRate, int channels, int bitrate, @Nullable ColorInfo colorInfo) {
             this.type = type;
             this.id = id;
             this.demuxId = demuxId;
+            this.srcId = srcId;
             this.title = title;
             this.lang = lang;
             this.codec = codec;

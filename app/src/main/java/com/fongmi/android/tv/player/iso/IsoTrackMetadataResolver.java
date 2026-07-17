@@ -41,43 +41,45 @@ final class IsoTrackMetadataResolver {
         if (mplsEntry == null) throw new IOException("Blu-ray playlist not found: " + playlistName);
         Playlist playlist = MplsParser.parse(readEntry(reader, mplsEntry), playlistName);
 
-        List<MutableTrack> tracks = collectPlaylistTracks(playlist);
-        Map<Integer, String> clpiLanguages = new HashMap<>();
+        List<MutableTrack> playlistTracks = collectPlaylistTracks(playlist);
         List<StreamInfo> firstClipStreams = new ArrayList<>();
         Map<String, Boolean> parsedClips = new HashMap<>();
-        if (tracks.isEmpty() || hasUnresolvedLanguages(tracks, clpiLanguages)) {
-            for (PlayItem item : playlist.playItems) {
-                if (parsedClips.put(item.clipName, Boolean.TRUE) != null) continue;
-                IsoFileEntry clpiEntry = udf.findFile("BDMV/CLIPINF/" + item.clipName + ".clpi");
-                if (clpiEntry == null) continue;
-                try {
-                    ClpiInfo clpi = ClpiParser.parse(readEntry(reader, clpiEntry), item.clipName);
-                    if (firstClipStreams.isEmpty()) firstClipStreams.addAll(clpi.streams);
-                    for (StreamInfo stream : clpi.streams) {
-                        if (!isEmpty(stream.languageCode)) clpiLanguages.putIfAbsent(stream.pid, stream.languageCode);
-                    }
-                    if (tracks.isEmpty() || !hasUnresolvedLanguages(tracks, clpiLanguages)) break;
-                } catch (IOException ignored) {
-                }
+        for (PlayItem item : playlist.playItems) {
+            if (parsedClips.put(item.clipName, Boolean.TRUE) != null) continue;
+            IsoFileEntry clpiEntry = udf.findFile("BDMV/CLIPINF/" + item.clipName + ".clpi");
+            if (clpiEntry == null) continue;
+            try {
+                ClpiInfo clpi = ClpiParser.parse(readEntry(reader, clpiEntry), item.clipName);
+                firstClipStreams.addAll(clpi.streams);
+                if (!firstClipStreams.isEmpty()) break;
+            } catch (IOException ignored) {
             }
         }
-        for (MutableTrack track : tracks) {
-            if (isEmpty(track.language)) track.language = clpiLanguages.get(track.pid);
-        }
-        if (tracks.isEmpty()) addClpiFallbackTracks(tracks, firstClipStreams);
 
-        List<Track> snapshot = new ArrayList<>(tracks.size());
-        for (MutableTrack track : tracks) {
-            snapshot.add(new Track(track.type, track.pid, track.streamGroup, track.codingType, track.language));
+        List<Track> playlistSnapshot = new ArrayList<>(playlistTracks.size());
+        for (MutableTrack track : playlistTracks) {
+            playlistSnapshot.add(new Track(track.type, track.pid, track.streamGroup, track.codingType, track.language));
         }
-        return new Snapshot(snapshot);
+        return snapshotFromClpi(firstClipStreams, playlistSnapshot);
     }
 
-    private static boolean hasUnresolvedLanguages(List<MutableTrack> tracks, Map<Integer, String> fallbackLanguages) {
-        for (MutableTrack track : tracks) {
-            if (track.pid > 0 && isEmpty(track.language) && isEmpty(fallbackLanguages.get(track.pid))) return true;
+    static Snapshot snapshotFromClpi(List<StreamInfo> streams, List<Track> playlistTracks) {
+        if (streams.isEmpty()) return new Snapshot(playlistTracks);
+        Map<Long, Track> playlistByPid = new HashMap<>();
+        for (Track track : playlistTracks) {
+            if (track.pid > 0) playlistByPid.putIfAbsent(trackKey(track.type, track.pid), track);
         }
-        return false;
+        List<Track> clpiTracks = new ArrayList<>();
+        for (StreamInfo stream : streams) {
+            int type = trackTypeForCoding(stream.streamType);
+            if (type == 0) continue;
+            long key = trackKey(type, stream.pid);
+            Track playlistTrack = playlistByPid.get(key);
+            String language = !isEmpty(stream.languageCode) ? stream.languageCode : playlistTrack == null ? null : playlistTrack.language;
+            int streamGroup = playlistTrack == null ? 0 : playlistTrack.streamGroup;
+            clpiTracks.add(new Track(type, stream.pid, streamGroup, stream.streamType, language));
+        }
+        return clpiTracks.isEmpty() ? new Snapshot(playlistTracks) : new Snapshot(clpiTracks);
     }
 
     private static List<MutableTrack> collectPlaylistTracks(Playlist playlist) {
@@ -103,13 +105,6 @@ final class IsoTrackMetadataResolver {
             }
         }
         return result;
-    }
-
-    private static void addClpiFallbackTracks(List<MutableTrack> tracks, List<StreamInfo> streams) {
-        for (StreamInfo stream : streams) {
-            int type = trackTypeForCoding(stream.streamType);
-            if (type != 0) tracks.add(new MutableTrack(type, stream.pid, 0, stream.streamType, stream.languageCode));
-        }
     }
 
     private static int trackTypeForGroup(int group) {
@@ -144,6 +139,10 @@ final class IsoTrackMetadataResolver {
 
     private static boolean isEmpty(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static long trackKey(int type, int pid) {
+        return (((long) type) << 32) | (pid & 0xffffffffL);
     }
 
     static final class Snapshot {
@@ -186,7 +185,7 @@ final class IsoTrackMetadataResolver {
         }
 
         private static long pidKey(int type, int pid) {
-            return (((long) type) << 32) | (pid & 0xffffffffL);
+            return trackKey(type, pid);
         }
     }
 
