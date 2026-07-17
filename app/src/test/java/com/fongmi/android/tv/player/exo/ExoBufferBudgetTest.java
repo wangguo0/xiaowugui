@@ -3,6 +3,7 @@ package com.fongmi.android.tv.player.exo;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class ExoBufferBudgetTest {
 
@@ -32,12 +33,47 @@ public class ExoBufferBudgetTest {
     }
 
     @Test
+    public void requestedCapacityIsPreservedWhenEffectiveCapacityIsReduced() {
+        ExoBufferBudget.Budget normal = budget(256, 256, false);
+        ExoBufferBudget.Budget lowRam = budget(256, 256, true);
+
+        assertEquals(mib(256), normal.requestedTargetBytes());
+        assertEquals(mib(256), lowRam.requestedTargetBytes());
+        assertTrue(normal.effectiveTargetBytes() < normal.requestedTargetBytes());
+        assertTrue(lowRam.effectiveTargetBytes() < lowRam.requestedTargetBytes());
+    }
+
+    @Test
+    public void requestedCapacityRemainsIndependentFromHeapBudget() {
+        ExoBufferBudget.Budget sixtyFour = budget(64, 128, true);
+        ExoBufferBudget.Budget oneTwentyEight = budget(128, 256, false);
+
+        assertEquals(mib(64), sixtyFour.requestedTargetBytes());
+        assertEquals(mib(128), oneTwentyEight.requestedTargetBytes());
+        assertTrue(sixtyFour.effectiveTargetBytes() <= sixtyFour.requestedTargetBytes());
+        assertTrue(oneTwentyEight.effectiveTargetBytes() <= oneTwentyEight.requestedTargetBytes());
+    }
+
+    @Test
+    public void budgetRetainsInputsForDiagnostics() {
+        ExoBufferBudget.Budget budget = budget(256, 256, true);
+
+        assertEquals(percentOfMib(256, 20), budget.heapBudgetBytes());
+        assertEquals(mibLong(256), budget.heapLimitBytes());
+        assertTrue(budget.lowRamDevice());
+    }
+
+    @Test
     public void smallHeapDoesNotAllocateBeyondHeapLimit() {
         assertEquals(mib(16), effective(256, 16, true));
     }
 
     private static int effective(int requestedMib, int heapMib, boolean lowRamDevice) {
         return ExoBufferBudget.calculateEffectiveTargetBytes(mib(requestedMib), mibLong(heapMib), lowRamDevice);
+    }
+
+    private static ExoBufferBudget.Budget budget(int requestedMib, int heapMib, boolean lowRamDevice) {
+        return ExoBufferBudget.calculate(mib(requestedMib), mibLong(heapMib), lowRamDevice);
     }
 
     private static int percentOfMib(int heapMib, int percent) {

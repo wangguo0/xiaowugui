@@ -355,9 +355,10 @@ public class ExoUtil {
     }
 
     private static int getTargetBufferBytes() {
-        int bytes = PlayerSetting.getBufferBytes(PlayerSetting.EXO);
-        int requested = bytes > 0 ? bytes : ENHANCED_TARGET_BUFFER_BYTES;
-        return ExoBufferBudget.getEffectiveTargetBytes(App.get(), requested);
+        int configured = PlayerSetting.getBufferBytes(PlayerSetting.EXO);
+        int requested = configured > 0 ? configured : ENHANCED_TARGET_BUFFER_BYTES;
+        ExoBufferBudget.Budget budget = ExoBufferBudget.resolve(App.get(), requested);
+        return budget.effectiveTargetBytes();
     }
 
     private static DefaultBandwidthMeter buildEnhancedBandwidthMeter(EnhancedVideoProfile profile) {

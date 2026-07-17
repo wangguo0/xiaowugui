@@ -13,19 +13,31 @@ final class ExoBufferBudget {
     private ExoBufferBudget() {
     }
 
-    static int getEffectiveTargetBytes(Context context, int requestedTargetBytes) {
+    static Budget resolve(Context context, int requestedTargetBytes) {
         ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         boolean lowRamDevice = manager != null && manager.isLowRamDevice();
-        return calculateEffectiveTargetBytes(requestedTargetBytes, Runtime.getRuntime().maxMemory(), lowRamDevice);
+        return calculate(requestedTargetBytes, Runtime.getRuntime().maxMemory(), lowRamDevice);
+    }
+
+    static int getEffectiveTargetBytes(Context context, int requestedTargetBytes) {
+        return resolve(context, requestedTargetBytes).effectiveTargetBytes();
     }
 
     static int calculateEffectiveTargetBytes(int requestedTargetBytes, long heapLimitBytes, boolean lowRamDevice) {
+        return calculate(requestedTargetBytes, heapLimitBytes, lowRamDevice).effectiveTargetBytes();
+    }
+
+    static Budget calculate(int requestedTargetBytes, long heapLimitBytes, boolean lowRamDevice) {
         long heapLimit = Math.max(0, heapLimitBytes);
         int percent = lowRamDevice ? LOW_RAM_PERCENT : NORMAL_RAM_PERCENT;
         long proportionalBudget = heapLimit * percent / 100;
         long minimumBudget = Math.min(MIN_TARGET_BYTES, heapLimit);
         long heapBudget = Math.min(MAX_TARGET_BYTES, Math.max(minimumBudget, proportionalBudget));
-        long requested = requestedTargetBytes > 0 ? requestedTargetBytes : MAX_TARGET_BYTES;
-        return (int) Math.min(requested, heapBudget);
+        int requested = requestedTargetBytes > 0 ? requestedTargetBytes : MAX_TARGET_BYTES;
+        int effective = (int) Math.min(requested, heapBudget);
+        return new Budget(requested, effective, (int) heapBudget, heapLimit, lowRamDevice);
+    }
+
+    record Budget(int requestedTargetBytes, int effectiveTargetBytes, int heapBudgetBytes, long heapLimitBytes, boolean lowRamDevice) {
     }
 }
