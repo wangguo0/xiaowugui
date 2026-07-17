@@ -103,7 +103,7 @@ public final class ExoPerformanceSetting {
     }
 
     public static boolean isPrioritizeTime() {
-        return Prefers.getBoolean(KEY_PRIORITIZE_TIME, true);
+        return Prefers.getBoolean(KEY_PRIORITIZE_TIME, prioritizeTimeForPreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED));
     }
 
     public static void putPrioritizeTime(boolean value) {
@@ -116,7 +116,7 @@ public final class ExoPerformanceSetting {
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
         Prefers.put(KEY_START_BUFFER_MS, 1_500);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED);
-        Prefers.put(KEY_PRIORITIZE_TIME, true);
+        applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED);
     }
 
     public static void applyCompatible() {
@@ -124,7 +124,7 @@ public final class ExoPerformanceSetting {
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_OFF);
         Prefers.put(KEY_START_BUFFER_MS, 2_000);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_COMPATIBLE);
-        Prefers.put(KEY_PRIORITIZE_TIME, true);
+        applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_COMPATIBLE);
     }
 
     public static void applyLightweight() {
@@ -132,7 +132,7 @@ public final class ExoPerformanceSetting {
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
         Prefers.put(KEY_START_BUFFER_MS, 1_000);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT);
-        Prefers.put(KEY_PRIORITIZE_TIME, false);
+        applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT);
     }
 
     static void applyRebufferPreset(int profile) {
@@ -143,6 +143,14 @@ public final class ExoPerformanceSetting {
         } else {
             Prefers.put(KEY_REBUFFER_MS, 10_000);
         }
+    }
+
+    static void applyPrioritizeTimePreset(int profile) {
+        Prefers.put(KEY_PRIORITIZE_TIME, prioritizeTimeForPreset(profile));
+    }
+
+    static boolean prioritizeTimeForPreset(int profile) {
+        return false;
     }
 
     private static int normalizeStart(int value) {

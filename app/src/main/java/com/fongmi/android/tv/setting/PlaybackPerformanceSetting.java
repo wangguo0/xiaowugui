@@ -16,6 +16,7 @@ public class PlaybackPerformanceSetting {
     private static final String KEY_PROFILE_IJK = "perf_ijk_profile";
     private static final String KEY_INITIALIZED = "playback_performance_initialized";
     private static final String KEY_BUFFER_WATERMARKS_MIGRATED = "playback_performance_buffer_watermarks_v2";
+    private static final String KEY_EXO_SIZE_PRIORITY_MIGRATED = "playback_performance_exo_size_priority_v1";
     private static final String KEY_CODEC_ASYNC_QUEUEING = "perf_codec_async_queueing";
     private static final String KEY_DYNAMIC_SCHEDULING = "perf_dynamic_scheduling";
     private static final String KEY_VIDEO_DURATION_PROGRESS = "perf_video_duration_progress";
@@ -36,6 +37,7 @@ public class PlaybackPerformanceSetting {
         }
         migrateProfiles();
         migrateBufferWatermarks();
+        migrateExoSizePriority();
     }
 
     public static int getProfile() {
@@ -325,6 +327,17 @@ public class PlaybackPerformanceSetting {
         if (exoProfile != PROFILE_CUSTOM) ExoPerformanceSetting.applyRebufferPreset(exoProfile);
         if (mpvProfile != PROFILE_CUSTOM) MpvPerformanceSetting.applyRebufferPreset(mpvProfile);
         Prefers.put(KEY_BUFFER_WATERMARKS_MIGRATED, true);
+    }
+
+    private static void migrateExoSizePriority() {
+        if (Prefers.getBoolean(KEY_EXO_SIZE_PRIORITY_MIGRATED)) return;
+        int exoProfile = clampProfile(Prefers.getInt(profileKey(PlayerSetting.EXO), PROFILE_RECOMMENDED));
+        if (shouldMigrateExoSizePriority(exoProfile)) ExoPerformanceSetting.applyPrioritizeTimePreset(exoProfile);
+        Prefers.put(KEY_EXO_SIZE_PRIORITY_MIGRATED, true);
+    }
+
+    static boolean shouldMigrateExoSizePriority(int profile) {
+        return clampProfile(profile) != PROFILE_CUSTOM;
     }
 
     private static void applyKernelSpecificPreset(int kernel, int profile) {
