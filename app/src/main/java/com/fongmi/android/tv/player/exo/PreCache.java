@@ -22,6 +22,7 @@ public class PreCache implements Player.Listener {
     private static final long TICK_MS = 5000;
     private static final long MIN_STEP_MS = 5000;
     private static final long MAX_STEP_MS = 30000;
+    private static final long BUFFER_GAP_MS = 1250;
     private static final int STEP_DIV = 4;
 
     private final Runnable task;
@@ -149,7 +150,10 @@ public class PreCache implements Player.Listener {
     }
 
     private long getStart() {
-        return Math.max(0, hasSeek() ? seekStartMs : player.getCurrentPosition());
+        if (hasSeek()) return Math.max(0, seekStartMs);
+        long bufferedPositionMs = player.getBufferedPosition();
+        if (bufferedPositionMs < 0) return Math.max(0, player.getCurrentPosition());
+        return bufferedPositionMs > Long.MAX_VALUE - BUFFER_GAP_MS ? bufferedPositionMs : bufferedPositionMs + BUFFER_GAP_MS;
     }
 
     private boolean shouldPreCache(long startMs) {
