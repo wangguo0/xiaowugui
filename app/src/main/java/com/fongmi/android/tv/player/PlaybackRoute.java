@@ -28,7 +28,10 @@ public enum PlaybackRoute {
 
     public int effectivePreloadThreads(int requestedThreads) {
         int requested = Math.min(Math.max(requestedThreads, PreloadSetting.MIN_THREADS), PreloadSetting.MAX_THREADS);
-        return this == EXTERNAL_LOOPBACK_PROXY ? PreloadSetting.MIN_THREADS : requested;
+        return switch (this) {
+            case DIRECT_REMOTE_HTTP, APP_LOCAL_SERVICE -> requested;
+            case EXTERNAL_LOOPBACK_PROXY, OTHER -> PreloadSetting.MIN_THREADS;
+        };
     }
 
     private static boolean isLoopback(String host) {
