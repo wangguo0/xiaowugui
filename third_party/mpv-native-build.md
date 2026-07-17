@@ -39,13 +39,15 @@ third_party/mpv-native-lock.json
 | --- | --- |
 | 构建框架 | `marlboro-advance/mpv-android@f712d4dcf56c00d04e7dd05e157d953d665a6890` |
 | NDK | `28.2.13676358`（r28c），API 24 |
-| MPV | `9ce79bcaa0132660a2e45b6bfc1fb0c199665277`（Android 15 实机稳定版本） |
-| FFmpeg | `38b88335f99e76ed89ff3c93f877fdefce736c13`（8.1.2） |
-| libplacebo | `82224764a98164ce9d2d9a10e4fefca934e475fb`（7.362.0） |
+| MPV | `94335ab87ab225ca3e36e0faeac831639d3e1d4e`（`0.41.0-878-g94335ab87`） |
+| FFmpeg | `894da5ca7d742e4429ffb2af534fcda0103ef593`（n8.0.1） |
+| libplacebo | `a7a18af88ff0a17c04840dcb3246047bb6b46df3`（7.371.0） |
 | libass | `4a05d8127f525943ebf45fdc6497c9e665947f0d`（0.17.5） |
 | dav1d | `54706fc6bc0cdecab7e9593974a4039cc038fca7`（1.5.4） |
 
 其他字体、TLS、Lua 和构建工具版本也在 lock 文件中，不要只修改脚本里的单个组件。
+
+验证状态：ARM64 已在 vivo V2453A / Android 15 使用此前可稳定触发崩溃的网络播放场景验证正常，监听日志未再出现 destroyed-mutex、SIGABRT 或 SIGSEGV；ARMv7 已完成独立源码构建、版本字符串、补丁标记、SONAME 和 `DT_NEEDED` 校验，仍需独立 32 位真机播放回归。
 
 ## 主机准备
 
@@ -148,7 +150,15 @@ build/mpv-native/output/armeabi-v7a/
 dlopen failed: cannot locate symbol "av_dynamic_hdr_smpte2094_app5_alloc"
 ```
 
-MPV `9ce79bcaa` 还要求 libplacebo `>= 7.360.1`。不能通过篡改 pkg-config 版本号让它链接旧 libplacebo。
+当前 MPV `94335ab87` 与 libplacebo 7.371.0 按同一 lock 构建。不能通过篡改 pkg-config 版本号让 MPV 链接不满足版本要求的旧 libplacebo。
+
+此前测试过的 FFmpeg 8.1.2 重新构建组合会在 vivo Android 15 播放初始化阶段触发：
+
+```text
+FORTIFY: pthread_mutex_lock called on a destroyed mutex
+```
+
+最新 MPV 与 FFmpeg n8.0.1、libplacebo 7.371.0 的组合在同一场景正常，因此正式 lock 固定 n8.0.1。现有证据只能把不兼容范围锁定在 FFmpeg 8.1.x 或其构建组合，不能据此把某个 FFmpeg 源文件认定为唯一根因。
 
 最终目录必须包含：
 
@@ -197,8 +207,16 @@ bash gradlew :app:assembleMobileArm64_v8aRelease -PfastRelease=true
 - Vulkan普通播放和 LUT。
 - 文本字幕、图形字幕以及播放中切换。
 - 播放成功前切换播放器内核。
+- 连续起播、退出、换线路，并检查 crash buffer 中没有 destroyed-mutex。
+- 大型 MKV/REMUX、硬解/软解以及前后台切换。
 
 不要提交 `build/mpv-native/`。只提交 lock、脚本、文档和最终 assets 中发生变化的 `.so`。
+
+当前完整稳定基线 tag：
+
+```text
+mpv-native-latest-stable-20260717-101605
+```
 
 ## 常见错误
 
