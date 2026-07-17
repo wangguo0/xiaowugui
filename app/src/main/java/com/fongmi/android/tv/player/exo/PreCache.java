@@ -10,6 +10,7 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.source.preload.PreCacheHelper;
 
+import com.fongmi.android.tv.player.PlaybackRoute;
 import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
@@ -31,6 +32,7 @@ public class PreCache implements Player.Listener {
     private Handler handler;
     private HandlerThread worker;
     private Player player;
+    private PlaybackRoute route;
     private Runnable scheduledTask;
     private int threads;
     private long generation;
@@ -44,6 +46,7 @@ public class PreCache implements Player.Listener {
         if (!PreloadSetting.isPreload(PlayerSetting.EXO) || !canPreCache(mediaItem)) return;
         this.player = player;
         this.handler = new Handler(player.getApplicationLooper());
+        this.route = PlaybackRoute.classify(mediaItem.localConfiguration.uri.toString());
         this.helper = createHelper(mediaItem);
         this.player.addListener(this);
         clearSeek();
@@ -60,6 +63,7 @@ public class PreCache implements Player.Listener {
         handler = null;
         helper = null;
         player = null;
+        route = null;
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
@@ -239,7 +243,8 @@ public class PreCache implements Player.Listener {
     }
 
     private Executor getExecutor() {
-        int count = PreloadSetting.getPreloadThreads(PlayerSetting.EXO);
+        int requested = PreloadSetting.getPreloadThreads(PlayerSetting.EXO);
+        int count = route == null ? requested : route.effectivePreloadThreads(requested);
         if (executor != null && threads == count) return executor;
         retireExecutor();
         threads = count;

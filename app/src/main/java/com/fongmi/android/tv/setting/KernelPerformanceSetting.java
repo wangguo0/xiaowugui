@@ -164,7 +164,7 @@ public final class KernelPerformanceSetting {
             putBackBufferOption(kernel, 2);
             putPlayCacheOption(kernel, 2);
             putPreload(kernel, true);
-            putPreloadThreads(kernel, Math.max(2, Math.min(3, Runtime.getRuntime().availableProcessors() / 2)));
+            putPreloadThreads(kernel, 2);
             putPreloadSizeMb(kernel, 512);
             putPreloadTimeSeconds(kernel, 120);
             putAudioPassThrough(kernel, false);
