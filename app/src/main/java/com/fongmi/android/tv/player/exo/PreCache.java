@@ -10,6 +10,7 @@ import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.source.preload.PreCacheHelper;
 
+import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 
@@ -36,6 +37,7 @@ public class PreCache implements Player.Listener {
     private long lastStartMs;
     private long seekStartMs;
     private boolean playable;
+    private boolean waitingForSafeBuffer;
 
     public PreCache() {
         task = this::check;
@@ -51,6 +53,7 @@ public class PreCache implements Player.Listener {
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
+        waitingForSafeBuffer = false;
         check();
     }
 
@@ -64,6 +67,7 @@ public class PreCache implements Player.Listener {
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
+        waitingForSafeBuffer = false;
     }
 
     public void release() {
@@ -88,9 +92,14 @@ public class PreCache implements Player.Listener {
 
     @Override
     public void onPlaybackStateChanged(int state) {
-        if (state == Player.STATE_BUFFERING) stopCurrentTask();
-        else if (state == Player.STATE_READY && playable) check();
-        else if (isStopped(state)) cancel();
+        if (state == Player.STATE_BUFFERING) {
+            waitingForSafeBuffer = playable;
+            stopCurrentTask();
+        } else if (state == Player.STATE_READY && playable) {
+            check();
+        } else if (isStopped(state)) {
+            cancel();
+        }
     }
 
     @Override
@@ -131,6 +140,8 @@ public class PreCache implements Player.Listener {
         if (isStopped(state)) return false;
         if (state != Player.STATE_READY) return true;
         if (!playable) return true;
+        if (waitingForSafeBuffer && !hasSafeBuffer()) return true;
+        waitingForSafeBuffer = false;
         if (player.isCurrentMediaItemLive()) {
             stop();
             return false;
@@ -160,6 +171,14 @@ public class PreCache implements Player.Listener {
         cancel();
         if (helper != null) helper.stop();
         lastStartMs = C.TIME_UNSET;
+    }
+
+    private boolean hasSafeBuffer() {
+        long requiredMs = ExoPerformanceSetting.getRebufferMs();
+        long durationMs = player.getDuration();
+        long positionMs = player.getCurrentPosition();
+        if (durationMs > 0 && positionMs >= 0) requiredMs = Math.min(requiredMs, Math.max(0, durationMs - positionMs));
+        return player.getTotalBufferedDuration() >= requiredMs;
     }
 
     private PreCacheHelper createHelper(MediaItem mediaItem) {
