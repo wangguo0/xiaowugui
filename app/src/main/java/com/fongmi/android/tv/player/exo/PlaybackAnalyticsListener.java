@@ -14,11 +14,13 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime;
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer;
 
 import com.fongmi.android.tv.setting.ExoPerformanceSetting;
+import com.fongmi.android.tv.player.PlaybackTrace;
 import com.github.catvod.crawler.SpiderDebug;
 
 public class PlaybackAnalyticsListener implements AnalyticsListener {
 
     private static volatile Snapshot snapshot = Snapshot.empty();
+    private static volatile String playbackTraceId = PlaybackTrace.NONE;
     private static volatile long totalDroppedFrames;
     private static volatile long lastBandwidthLogMs;
     private static volatile boolean loading;
@@ -28,11 +30,21 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         return snapshot;
     }
 
+    public static void beginSession(String traceId) {
+        reset();
+        playbackTraceId = PlaybackTrace.normalize(traceId);
+    }
+
+    public static String getPlaybackTraceId() {
+        return playbackTraceId;
+    }
+
     public static void reset() {
         snapshot = Snapshot.empty();
         totalDroppedFrames = 0;
         lastBandwidthLogMs = 0;
         loading = false;
+        playbackTraceId = PlaybackTrace.NONE;
     }
 
     public static void finishSession(long finalPositionMs) {
@@ -59,11 +71,11 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         boolean rebufferStarted = previous.rebufferStartMs() <= 0 && next.rebufferStartMs() > 0;
         boolean rebufferEnded = previous.rebufferStartMs() > 0 && next.rebufferStartMs() <= 0;
         if (rebufferStarted) {
-            SpiderDebug.log("playback-metrics", "rebuffer start count=%d position=%d buffered=%d loading=%s", next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
+            traceLog("rebuffer start count=%d position=%d buffered=%d loading=%s", next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
         } else if (rebufferEnded) {
-            SpiderDebug.log("playback-metrics", "rebuffer end duration=%dms total=%dms count=%d position=%d buffered=%d loading=%s", Math.max(0, now - previous.rebufferStartMs()), next.rebufferTotalMs(), next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
+            traceLog("rebuffer end duration=%dms total=%dms count=%d position=%d buffered=%d loading=%s", Math.max(0, now - previous.rebufferStartMs()), next.rebufferTotalMs(), next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
         } else {
-            SpiderDebug.log("playback-metrics", "state=%s position=%d buffered=%d loading=%s", stateName(state), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
+            traceLog("state=%s position=%d buffered=%d loading=%s", stateName(state), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
         }
     }
 
@@ -71,21 +83,21 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     public void onIsLoadingChanged(EventTime eventTime, boolean isLoading) {
         if (loading == isLoading) return;
         loading = isLoading;
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-metrics", "loading=%s state=%s position=%d buffered=%d", isLoading, snapshot.state(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs);
+        if (SpiderDebug.isEnabled()) traceLog("loading=%s state=%s position=%d buffered=%d", isLoading, snapshot.state(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs);
     }
 
     @Override
     public void onVideoDecoderInitialized(EventTime eventTime, String decoderName, long initializedTimestampMs, long initializationDurationMs) {
         snapshot = snapshot.withVideoDecoder(decoderName);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "video decoder=%s init=%dms", decoderName, initializationDurationMs);
+        traceLog("video decoder=%s init=%dms", decoderName, initializationDurationMs);
     }
 
     @Override
     public void onVideoInputFormatChanged(EventTime eventTime, Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
         snapshot = snapshot.withVideoFormat(format);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "video format mime=%s codecs=%s size=%dx%d fps=%.3f bitrate=%d bitrateSource=%s color=%s", format.sampleMimeType, format.codecs, format.width, format.height, format.frameRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.colorInfo);
+        traceLog("video format mime=%s codecs=%s size=%dx%d fps=%.3f bitrate=%d bitrateSource=%s color=%s", format.sampleMimeType, format.codecs, format.width, format.height, format.frameRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.colorInfo);
         ExoPlaybackDiagnostics.logTrackFormats(snapshot.videoFormat(), snapshot.audioFormat(), ExoUtil.getBufferBudget().effectiveTargetBytes());
     }
 
@@ -93,21 +105,21 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     public void onAudioDecoderInitialized(EventTime eventTime, String decoderName, long initializedTimestampMs, long initializationDurationMs) {
         snapshot = snapshot.withAudioDecoder(decoderName);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "audio decoder=%s init=%dms", decoderName, initializationDurationMs);
+        traceLog("audio decoder=%s init=%dms", decoderName, initializationDurationMs);
     }
 
     @Override
     public void onAudioInputFormatChanged(EventTime eventTime, Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
         snapshot = snapshot.withAudioFormat(format);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "audio format mime=%s codecs=%s channels=%d sampleRate=%d bitrate=%d bitrateSource=%s language=%s", format.sampleMimeType, format.codecs, format.channelCount, format.sampleRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.language);
+        traceLog("audio format mime=%s codecs=%s channels=%d sampleRate=%d bitrate=%d bitrateSource=%s language=%s", format.sampleMimeType, format.codecs, format.channelCount, format.sampleRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.language);
         ExoPlaybackDiagnostics.logTrackFormats(snapshot.videoFormat(), snapshot.audioFormat(), ExoUtil.getBufferBudget().effectiveTargetBytes());
     }
 
     @Override
     public void onVideoSizeChanged(EventTime eventTime, VideoSize videoSize) {
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "video size=%dx%d unappliedRotation=%d ratio=%.3f", videoSize.width, videoSize.height, videoSize.unappliedRotationDegrees, videoSize.pixelWidthHeightRatio);
+        traceLog("video size=%dx%d unappliedRotation=%d ratio=%.3f", videoSize.width, videoSize.height, videoSize.unappliedRotationDegrees, videoSize.pixelWidthHeightRatio);
     }
 
     @Override
@@ -115,7 +127,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         totalDroppedFrames += droppedFrames;
         snapshot = snapshot.withDroppedFrames(totalDroppedFrames);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "droppedFrames=%d total=%d elapsed=%dms position=%d", droppedFrames, totalDroppedFrames, elapsedMs, eventTime.currentPlaybackPositionMs);
+        traceLog("droppedFrames=%d total=%d elapsed=%dms position=%d", droppedFrames, totalDroppedFrames, elapsedMs, eventTime.currentPlaybackPositionMs);
     }
 
     @Override
@@ -125,7 +137,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         long now = SystemClock.elapsedRealtime();
         if (now - lastBandwidthLogMs < BANDWIDTH_LOG_INTERVAL_MS) return;
         lastBandwidthLogMs = now;
-        SpiderDebug.log("playback-metrics", "bandwidth=%d loadTime=%dms bytes=%d", bitrateEstimate, totalLoadTimeMs, totalBytesLoaded);
+        traceLog("bandwidth=%d loadTime=%dms bytes=%d", bitrateEstimate, totalLoadTimeMs, totalBytesLoaded);
     }
 
     @Override
@@ -134,7 +146,11 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         ErrorDetails details = ErrorDetails.from(error);
         snapshot = snapshot.withError(code, error.getMessage(), details);
         if (!SpiderDebug.isEnabled()) return;
-        SpiderDebug.log("playback-metrics", "error code=%s message=%s details=%s", code, error.getMessage(), details.summary());
+        traceLog("error code=%s message=%s details=%s", code, error.getMessage(), details.summary());
+    }
+
+    private static void traceLog(String format, Object... args) {
+        PlaybackTrace.log("playback-metrics", playbackTraceId, format, args);
     }
 
     private static String stateName(int state) {

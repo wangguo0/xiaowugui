@@ -86,6 +86,7 @@ public class PlayerManager implements ParseCallback {
     private final BroadcastReceiver noisyReceiver;
     private DanmakuController danmakuController;
     private PlayerEngine engine;
+    private final PlaybackTrace playbackTrace;
     private VideoSize videoSize;
     private ParseJob parseJob;
     private PlaySpec spec;
@@ -128,6 +129,7 @@ public class PlayerManager implements ParseCallback {
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
+        this.playbackTrace = new PlaybackTrace();
         this.dynamicLutEffect = new DynamicLutEffect();
         this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
         this.noisyReceiver = new BroadcastReceiver() {
@@ -164,6 +166,7 @@ public class PlayerManager implements ParseCallback {
         lutWarmupReloadPreviewPending = false;
         clearLutWarmupRecovery();
         clearDanmakuState();
+        playbackTrace.clear();
     }
 
     private void onPlaybackTimeout() {
@@ -210,6 +213,10 @@ public class PlayerManager implements ParseCallback {
 
     public MediaItem getCurrentMediaItem() {
         return player.getCurrentMediaItem();
+    }
+
+    public String getPlaybackTraceId() {
+        return playbackTrace.current();
     }
 
     public int getPlaybackState() {
@@ -599,6 +606,7 @@ public class PlayerManager implements ParseCallback {
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
         clearLutWarmupRecovery();
+        playbackTrace.clear();
     }
 
     public void resetTrack() {
@@ -613,6 +621,7 @@ public class PlayerManager implements ParseCallback {
         int next = engine.isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD;
         boolean resetVideoSurface = playerType == PlayerSetting.EXO && next == PlayerEngine.HARD;
         hardDecodeSwitchRetryArmed = next == PlayerEngine.HARD;
+        beginPlaybackTrace("switch-decode");
         engine.setDecode(next);
         rebuildPlayer(resetVideoSurface);
         setMediaItem();
@@ -620,6 +629,7 @@ public class PlayerManager implements ParseCallback {
 
     public void switchDecode(PlaySpec freshSpec, long position, float speed, boolean repeat) {
         if (engine == null || player == null || freshSpec == null) return;
+        beginPlaybackTrace("switch-decode-fresh");
         int next = engine.isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD;
         boolean resetVideoSurface = playerType == PlayerSetting.EXO && next == PlayerEngine.HARD;
         boolean wasPlayWhenReady = player.getPlayWhenReady();
@@ -628,6 +638,7 @@ public class PlayerManager implements ParseCallback {
         stopNativeAudioSession();
         engine.release();
         spec = freshSpec;
+        bindPlaybackTrace();
         hardDecodeSwitchRetryArmed = next == PlayerEngine.HARD;
         engine = buildEngine(playerType, next);
         player = engine.getPlayer();
@@ -642,6 +653,7 @@ public class PlayerManager implements ParseCallback {
 
     public void switchDecode(Result result, String key, MediaMetadata metadata, boolean useParse, long position, float speed, boolean repeat) {
         if (engine == null || player == null || result == null || result.hasMsg() || result.getRealUrl().isEmpty()) return;
+        beginPlaybackTrace("switch-decode-result");
         int next = engine.isHard() ? PlayerEngine.SOFT : PlayerEngine.HARD;
         boolean resetVideoSurface = playerType == PlayerSetting.EXO && next == PlayerEngine.HARD;
         boolean wasPlayWhenReady = player.getPlayWhenReady();
@@ -661,10 +673,12 @@ public class PlayerManager implements ParseCallback {
             pendingSwitchSpeed = speed;
             pendingSwitchRepeat = repeat;
             spec = PlaySpec.fromParse(result, key, metadata, useParse);
+            bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh parse decode=%d position=%d useParse=%s spec=%s", next, position, useParse, debugSpec());
             parseJob = ParseJob.create(this).start(result, useParse);
         } else {
             spec = PlaySpec.from(result, key, metadata);
+            bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh result decode=%d position=%d spec=%s", next, position, debugSpec());
             setMediaItem(Constant.TIMEOUT_PLAY);
             if (position > 0) seekTo(position);
@@ -683,6 +697,7 @@ public class PlayerManager implements ParseCallback {
 
     public void switchPlayer(int type, PlaySpec freshSpec, long position, float speed, boolean repeat) {
         if (engine == null || player == null || freshSpec == null) return;
+        beginPlaybackTrace("switch-player-fresh");
         type = PlayerSetting.sanitizePlayer(type);
         boolean wasPlayWhenReady = player.getPlayWhenReady();
         int decode = engine.getDecode();
@@ -693,6 +708,7 @@ public class PlayerManager implements ParseCallback {
         playerType = type;
         PlayerSetting.putPlayer(type);
         spec = freshSpec;
+        bindPlaybackTrace();
         playWhenReady = wasPlayWhenReady;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player fresh type=%d position=%d spec=%s", type, position, debugSpec());
         engine = buildEngine(playerType, decode);
@@ -706,6 +722,7 @@ public class PlayerManager implements ParseCallback {
 
     public void switchPlayer(int type, Result result, String key, MediaMetadata metadata, boolean useParse, long position, float speed, boolean repeat) {
         if (engine == null || player == null || result == null || result.hasMsg() || result.getRealUrl().isEmpty()) return;
+        beginPlaybackTrace("switch-player-result");
         type = PlayerSetting.sanitizePlayer(type);
         boolean wasPlayWhenReady = player.getPlayWhenReady();
         int decode = engine.getDecode();
@@ -726,10 +743,12 @@ public class PlayerManager implements ParseCallback {
             pendingSwitchSpeed = speed;
             pendingSwitchRepeat = repeat;
             spec = PlaySpec.fromParse(result, key, metadata, useParse);
+            bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player fresh parse type=%d position=%d useParse=%s spec=%s", type, position, useParse, debugSpec());
             parseJob = ParseJob.create(this).start(result, useParse);
         } else {
             spec = PlaySpec.from(result, key, metadata);
+            bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player fresh result type=%d position=%d spec=%s", type, position, debugSpec());
             setMediaItem(Constant.TIMEOUT_PLAY);
             if (position > 0) seekTo(position);
@@ -742,6 +761,7 @@ public class PlayerManager implements ParseCallback {
         if (engine == null || player == null) return;
         type = PlayerSetting.sanitizePlayer(type);
         if (type == playerType) return;
+        beginPlaybackTrace("switch-player");
         long position = getPosition();
         float speed = getSpeed();
         boolean repeat = isRepeatOne();
@@ -808,6 +828,7 @@ public class PlayerManager implements ParseCallback {
     public void start(PlaySpec spec, long timeout, boolean playWhenReady) {
         clearPendingSwitchRestore();
         this.spec = spec;
+        beginPlaybackTrace("start");
         this.playWhenReady = playWhenReady;
         retry = 0;
         localProxyRetry = 0;
@@ -824,6 +845,7 @@ public class PlayerManager implements ParseCallback {
         stopParse();
         clearPendingSwitchRestore();
         spec = PlaySpec.fromParse(result, key, metadata, useParse);
+        beginPlaybackTrace("parse");
         this.playWhenReady = playWhenReady;
         retry = 0;
         localProxyRetry = 0;
@@ -850,6 +872,7 @@ public class PlayerManager implements ParseCallback {
         stopParse();
         if (spec.isParseSource()) {
             spec = PlaySpec.fromParse(result, key, metadata, useParse);
+            bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player reparse type=%d position=%d useParse=%s spec=%s", playerType, position, useParse, debugSpec());
             parseJob = ParseJob.create(this).start(result, useParse);
         } else {
@@ -881,10 +904,12 @@ public class PlayerManager implements ParseCallback {
         }
         if (result.needParse()) {
             spec = PlaySpec.fromParse(result, key, metadata, false);
+            bindPlaybackTrace();
             parseJob = ParseJob.create(this).start(result, false);
             return;
         }
         spec = PlaySpec.from(result, key, metadata);
+        bindPlaybackTrace();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player refreshed direct spec=%s", debugSpec());
         setMediaItem(Constant.TIMEOUT_PLAY);
         restoreAfterSwitchReparse();
@@ -943,6 +968,7 @@ public class PlayerManager implements ParseCallback {
 
     private void setMediaItemNow(long timeout, boolean notifyPrepare) {
         if (spec == null || spec.getUrl() == null || engine == null) return;
+        spec.setPlaybackTraceId(playbackTrace.ensure());
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
         App.removeCallbacks(runnable);
         setDanmakus(spec.getDanmakus());
@@ -1607,7 +1633,7 @@ public class PlayerManager implements ParseCallback {
     @Override
     public void onParseSuccess(Map<String, String> headers, String url, String from) {
         if (!TextUtils.isEmpty(from)) Notify.show(ResUtil.getString(R.string.parse_from, from));
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "parseSuccess from=%s url=%s headers=%s", from, summarizeUrl(url), headers == null ? 0 : headers.size());
+        PlaybackTrace.log("player", playbackTrace.current(), "parseSuccess from=%s url=%s headers=%s", from, summarizeUrl(url), headers == null ? 0 : headers.size());
         if (headers != null) headers.remove(HttpHeaders.RANGE);
         if (spec != null) spec.setHeaders(headers);
         if (spec != null) spec.setUrl(url);
@@ -1623,12 +1649,23 @@ public class PlayerManager implements ParseCallback {
 
     private String debugSpec() {
         if (spec == null) return "null";
-        return "key=" + spec.getKey() +
+        return "trace=" + playbackTrace.current() +
+                ", key=" + spec.getKey() +
                 ", url=" + summarizeUrl(spec.getUrl()) +
                 ", format=" + spec.getFormat() +
                 ", headers=" + (spec.getHeaders() == null ? 0 : spec.getHeaders().size()) +
                 ", subs=" + (spec.getSubs() == null ? 0 : spec.getSubs().size()) +
                 ", danmakus=" + (spec.getDanmakus() == null ? 0 : spec.getDanmakus().size());
+    }
+
+    private void beginPlaybackTrace(String reason) {
+        String traceId = playbackTrace.begin();
+        bindPlaybackTrace();
+        PlaybackTrace.log("playback-trace", traceId, "begin reason=%s player=%d decode=%d", reason, playerType, engine == null ? -1 : engine.getDecode());
+    }
+
+    private void bindPlaybackTrace() {
+        if (spec != null) spec.setPlaybackTraceId(playbackTrace.current());
     }
 
     private static String summarizeUrl(String url) {

@@ -13,6 +13,7 @@ import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.source.preload.PreCacheHelper;
 
 import com.fongmi.android.tv.player.PlaybackRoute;
+import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
@@ -36,6 +37,7 @@ public class PreCache implements Player.Listener {
     private HandlerThread worker;
     private Player player;
     private PlaybackRoute route;
+    private String playbackTraceId = PlaybackTrace.NONE;
     private Runnable scheduledTask;
     private int threads;
     private long generation;
@@ -46,8 +48,9 @@ public class PreCache implements Player.Listener {
     private AutoPreloadPolicy autoPolicy;
     private DiagnosticState diagnosticState = DiagnosticState.STOPPED;
 
-    public void start(Player player, MediaItem mediaItem) {
+    public void start(Player player, MediaItem mediaItem, String playbackTraceId) {
         stop();
+        this.playbackTraceId = PlaybackTrace.normalize(playbackTraceId);
         PriorityTaskDataSource.resetDiagnostics();
         if (!PreloadSetting.isPreload(PlayerSetting.EXO) || !canPreCache(mediaItem)) return;
         this.player = player;
@@ -77,6 +80,7 @@ public class PreCache implements Player.Listener {
         helper = null;
         player = null;
         route = null;
+        playbackTraceId = PlaybackTrace.NONE;
         autoPolicy = null;
         clearSeek();
         lastStartMs = C.TIME_UNSET;
@@ -370,7 +374,7 @@ public class PreCache implements Player.Listener {
     private void diagnostic(DiagnosticState state, String format, Object... args) {
         if (diagnosticState == state) return;
         diagnosticState = state;
-        ExoPlaybackDiagnostics.logPreload(format, args);
+        PlaybackTrace.log("exo-preload", playbackTraceId, format, args);
     }
 
     private record SafeBufferStatus(boolean safe, boolean recovery, long requiredMs, long bufferedMs, boolean loading, long bitrate, int effectiveCapacityBytes, long capacityDurationMs) {

@@ -37,6 +37,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
+import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.iso.IsoSessionManager;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.player.mpv.MpvNetworkRecoveryPolicy;
@@ -144,6 +145,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private Object videoOutput;
     private MpvLutShader lutShader;
     private String currentPlayableUri;
+    private String playbackTraceId = PlaybackTrace.NONE;
     private String currentIsoUri;
     private boolean isoTrackListDumped;
     private long isoMetadataListenerSessionId = -1;
@@ -466,6 +468,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return config.audioSpdif();
     }
 
+    public void setPlaybackTraceId(String playbackTraceId) {
+        this.playbackTraceId = PlaybackTrace.normalize(playbackTraceId);
+    }
+
+    public String getPlaybackTraceId() {
+        return playbackTraceId;
+    }
+
     public void setLutShader(@Nullable MpvLutShader shader) {
         lutShader = shader;
         applyShaderPipeline(false);
@@ -589,7 +599,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             markFailureSignal(line);
             String lower = line.toLowerCase(Locale.US);
             if (lower.contains("sub") || lower.contains("font") || lower.contains("track switched") || lower.contains("mkv: select track")) appendSubtitleDiagnostic("native " + line);
-            if (shouldDebugLogMpvLine(line)) SpiderDebug.log("mpv", "%s", line);
+            if (shouldDebugLogMpvLine(line)) PlaybackTrace.log("mpv", playbackTraceId, "%s", line);
         });
     }
 
@@ -670,15 +680,15 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             if (currentIsoUri == null && shouldProxyHls(currentPlayableUri, currentLikelyHls)) {
                 String originalUri = currentPlayableUri;
                 currentPlayableUri = hlsProxy.proxy(originalUri, headers);
-                if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "hls proxy enabled original=%s proxy=%s", MpvDiagnosticsPolicy.sourceSummary(originalUri), MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
+                if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "hls proxy enabled original=%s proxy=%s", MpvDiagnosticsPolicy.sourceSummary(originalUri), MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
             } else {
                 hlsProxy.clear();
             }
             MpvNetworkRecoveryPolicy.Decision recovery = MpvNetworkRecoveryPolicy.resolve(currentPlayableUri);
-            SpiderDebug.log("mpv", "network recovery route=%s owner=%s nativeRemote=%s proxyUpstream=%s appOverlay=%s", recovery.route(), recovery.recoveryOwner(), recovery.nativeRemoteRecovery(), recovery.proxyOwnsUpstreamRecovery(), recovery.appReconnectOverlay());
+            PlaybackTrace.log("mpv", playbackTraceId, "network recovery route=%s owner=%s nativeRemote=%s proxyUpstream=%s appOverlay=%s", recovery.route(), recovery.recoveryOwner(), recovery.nativeRemoteRecovery(), recovery.proxyOwnsUpstreamRecovery(), recovery.appReconnectOverlay());
             applyShaderPipeline(true);
             Log.d(TAG, "load scheme=" + safeScheme(currentPlayableUri) + " urlLen=" + (currentPlayableUri == null ? 0 : currentPlayableUri.length()) + " hls=" + currentLikelyHls + " dash=" + currentLikelyDash);
-            SpiderDebug.log("mpv", "load scheme=%s urlLen=%d hls=%s dash=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", safeScheme(currentPlayableUri), currentPlayableUri == null ? 0 : currentPlayableUri.length(), currentLikelyHls, currentLikelyDash, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());
+            PlaybackTrace.log("mpv", playbackTraceId, "load scheme=%s urlLen=%d hls=%s dash=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", safeScheme(currentPlayableUri), currentPlayableUri == null ? 0 : currentPlayableUri.length(), currentLikelyHls, currentLikelyDash, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());
             loadCurrentUri();
             scheduleLoadStartRetry();
             invalidateState();
@@ -767,7 +777,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setRuntimeString("force-window", "no");
         setRuntimeString("idle", "yes");
         int overlayCount = applyPerformanceOptionOverlay();
-        if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "option priority=%s overlayCount=%d effective cache maxBytes=%s backBytes=%s cacheSecs=%s readaheadSecs=%s initial=%s rebufferWait=%s", MpvOptionPriorityPolicy.priorityName(config.performanceOptionsPriority()), overlayCount, stringProperty("demuxer-max-bytes", "?"), stringProperty("demuxer-max-back-bytes", "?"), stringProperty("cache-secs", "?"), stringProperty("demuxer-readahead-secs", "?"), stringProperty("cache-pause-initial", "?"), stringProperty("cache-pause-wait", "?"));
+        if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "option priority=%s overlayCount=%d effective cache maxBytes=%s backBytes=%s cacheSecs=%s readaheadSecs=%s initial=%s rebufferWait=%s", MpvOptionPriorityPolicy.priorityName(config.performanceOptionsPriority()), overlayCount, stringProperty("demuxer-max-bytes", "?"), stringProperty("demuxer-max-back-bytes", "?"), stringProperty("cache-secs", "?"), stringProperty("demuxer-readahead-secs", "?"), stringProperty("cache-pause-initial", "?"), stringProperty("cache-pause-wait", "?"));
     }
 
     private int applyPerformanceOptionOverlay() {
@@ -854,7 +864,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             return;
         }
         boolean firstObservedCacheMetric = cacheObserverState.record(property, value, SystemClock.elapsedRealtime()) && cacheObserverState.observedCount() == 1;
-        if (firstObservedCacheMetric) SpiderDebug.log("mpv", "cache source=observer-first property=%s", property);
+        if (firstObservedCacheMetric) PlaybackTrace.log("mpv", playbackTraceId, "cache source=observer-first property=%s", property);
         switch (property) {
             case "time-pos", "time-pos/full" -> cachedPositionMs = doubleSecondsToMs(value, cachedPositionMs);
             case "duration", "duration/full" -> cachedDurationMs = doubleSecondsToMs(value, cachedDurationMs);
@@ -1069,7 +1079,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 eofReached = false;
                 idleActive = false;
                 resetFailureSignals();
-                if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "event=start-file source=%s", MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
+                if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "event=start-file source=%s", MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
                 mainHandler.removeCallbacks(endFileValidationRunnable);
                 mainHandler.removeCallbacks(loadStartRetryRunnable);
                 startStateRefresh();
@@ -1088,7 +1098,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 updateVideoSize("event=file-loaded");
                 refreshTracks();
                 refreshChapters();
-                if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "event=file-loaded duration=%d size=%dx%d path=%s", cachedDurationMs, videoSize.width, videoSize.height, MpvDiagnosticsPolicy.sourceSummary(stringProperty("path", "")));
+                if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "event=file-loaded duration=%d size=%dx%d path=%s", cachedDurationMs, videoSize.width, videoSize.height, MpvDiagnosticsPolicy.sourceSummary(stringProperty("path", "")));
                 addSubtitleConfigurations();
                 if (pendingSeekPositionMs != C.TIME_UNSET) {
                     seekMpv(pendingSeekPositionMs);
@@ -1102,7 +1112,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 updateVideoSize("event=playback-restart");
                 refreshTracks();
                 refreshChapters();
-                if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "event=playback-restart position=%d duration=%d size=%dx%d", positionMs(), durationMs(), videoSize.width, videoSize.height);
+                if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "event=playback-restart position=%d duration=%d size=%dx%d", positionMs(), durationMs(), videoSize.width, videoSize.height);
                 if (playbackState != Player.STATE_ENDED) {
                     playbackState = Player.STATE_READY;
                     loading = false;
@@ -1147,7 +1157,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         lastEndFileReason = reason;
         lastEndFileError = error;
         lastEndFileErrorText = errorText;
-        if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "event=end-file reason=%s(%d) error=%s(%d) text=%s loaded=%s restart=%s eof=%s stopping=%s source=%s",
+        if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "event=end-file reason=%s(%d) error=%s(%d) text=%s loaded=%s restart=%s eof=%s stopping=%s source=%s",
                 endFileReasonName(reason), reason, mpvErrorName(error), error, TextUtils.isEmpty(errorText) ? "-" : MpvDiagnosticsPolicy.redactSensitive(errorText),
                 fileLoaded, playbackRestarted, eofReached, stopping, MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
         stopStateRefresh();
@@ -1747,7 +1757,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (playbackState != Player.STATE_BUFFERING || TextUtils.isEmpty(currentPlayableUri)) return;
         if (loadStartRetryCount >= MAX_LOAD_START_RETRIES) return;
         loadStartRetryCount++;
-        if (shouldCollectDebugDetails()) SpiderDebug.log("mpv", "load retry attempt=%d source=%s idle=%s", loadStartRetryCount, MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri), booleanProperty("idle-active", idleActive));
+        if (shouldCollectDebugDetails()) PlaybackTrace.log("mpv", playbackTraceId, "load retry attempt=%d source=%s idle=%s", loadStartRetryCount, MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri), booleanProperty("idle-active", idleActive));
         try {
             loadCurrentUri();
             scheduleLoadStartRetry();
@@ -1830,7 +1840,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         if (text.equals(lastVideoSizeCandidateLog)) return;
         lastVideoSizeCandidateLog = text;
         Log.d(SIZE_TAG, text);
-        SpiderDebug.log("mpv", "%s", text);
+        PlaybackTrace.log("mpv", playbackTraceId, "%s", text);
     }
 
     private String candidateText(@Nullable SizeCandidate candidate) {
@@ -2369,7 +2379,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         }
         String text = builder.toString();
         Log.d(TAG, text);
-        SpiderDebug.log("mpv", "%s", text);
+        PlaybackTrace.log("mpv", playbackTraceId, "%s", text);
     }
 
     private boolean isTrackSelectedInSnapshot(Tracks tracks, TrackInfo info) {
@@ -2795,12 +2805,13 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         closeContentFds();
         mainHandler.removeCallbacks(endFileValidationRunnable);
         stopStateRefresh();
-        if (MpvDiagnosticsPolicy.allowsSynchronousProperties(MpvDiagnosticsPolicy.Request.ERROR_DETAILED, SpiderDebug.isEnabled())) SpiderDebug.log("mpv", "fail code=%d message=%s diagnostics=%s", errorCode, MpvDiagnosticsPolicy.redactSensitive(e.getMessage()), diagnosticSummary());
+        if (MpvDiagnosticsPolicy.allowsSynchronousProperties(MpvDiagnosticsPolicy.Request.ERROR_DETAILED, SpiderDebug.isEnabled())) PlaybackTrace.log("mpv", playbackTraceId, "fail code=%d message=%s diagnostics=%s", errorCode, MpvDiagnosticsPolicy.redactSensitive(e.getMessage()), diagnosticSummary());
         invalidateState();
     }
 
     private String diagnosticSummary() {
         List<String> parts = new ArrayList<>();
+        parts.add("trace=" + playbackTraceId);
         parts.add("source=" + MpvDiagnosticsPolicy.sourceSummary(currentPlayableUri));
         parts.add("hls=" + currentLikelyHls);
         parts.add("dash=" + currentLikelyDash);
@@ -3093,7 +3104,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         String mime = item != null && item.localConfiguration != null ? item.localConfiguration.mimeType : null;
         String mediaId = item == null ? null : item.mediaId;
         CharSequence title = item == null ? null : item.mediaMetadata.title;
-        SpiderDebug.log("mpv", "source diagnostic scheme=" + scheme
+        PlaybackTrace.log("mpv", playbackTraceId, "source diagnostic scheme=" + scheme
                 + " loopback=" + loopback
                 + " urlLen=" + (uri == null ? 0 : uri.length())
                 + " pathIso=" + pathIso

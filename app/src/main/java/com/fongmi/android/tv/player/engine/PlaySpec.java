@@ -9,6 +9,7 @@ import com.fongmi.android.tv.bean.Drm;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Sub;
 import com.fongmi.android.tv.player.PlayerHelper;
+import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.google.common.net.HttpHeaders;
@@ -27,6 +28,7 @@ public class PlaySpec {
     private Result parseResult;
     private String format;
     private String key;
+    private String playbackTraceId = PlaybackTrace.NONE;
     private String url;
     private Drm drm;
     private boolean parseSource;
@@ -96,7 +98,17 @@ public class PlaySpec {
     }
 
     public PlaySpec copyWithFormat(String format) {
-        return new PlaySpec(key, url, headers, format, drm, subs, danmakus, metadata).setSource(parseResult, parseSource, parseUseParse);
+        PlaySpec copy = new PlaySpec(key, url, headers, format, drm, subs, danmakus, metadata).setSource(parseResult, parseSource, parseUseParse);
+        copy.playbackTraceId = playbackTraceId;
+        return copy;
+    }
+
+    public String getPlaybackTraceId() {
+        return PlaybackTrace.normalize(playbackTraceId);
+    }
+
+    public void setPlaybackTraceId(String playbackTraceId) {
+        this.playbackTraceId = PlaybackTrace.normalize(playbackTraceId);
     }
 
     public Drm getDrm() {

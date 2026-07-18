@@ -9,6 +9,7 @@ import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 
 import com.fongmi.android.tv.bean.Track;
+import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 
 import java.util.Collections;
@@ -104,6 +105,10 @@ public interface PlayerEngine {
 
     default long getDroppedFrames() {
         return 0;
+    }
+
+    default String getPlaybackTraceId() {
+        return PlaybackTrace.NONE;
     }
 
     default boolean supportsSubtitleStyle() {
