@@ -36,8 +36,9 @@ import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 
-import com.fongmi.android.tv.player.engine.PlayerCacheState;
+import com.fongmi.android.tv.player.PlaybackRoute;
 import com.fongmi.android.tv.player.PlaybackTrace;
+import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.iso.IsoSessionManager;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.player.mpv.MpvNetworkRecoveryPolicy;
@@ -474,6 +475,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     public String getPlaybackTraceId() {
         return playbackTraceId;
+    }
+
+    public PlaybackRoute.Resolution getPlaybackRouteResolution() {
+        return PlaybackRoute.resolve(currentPlayableUri);
     }
 
     public void setLutShader(@Nullable MpvLutShader shader) {

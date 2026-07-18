@@ -9,6 +9,7 @@ import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 
 import com.fongmi.android.tv.bean.Track;
+import com.fongmi.android.tv.player.PlaybackRoute;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 
@@ -146,6 +147,10 @@ public interface PlayerEngine {
 
     default List<MediaEdition> getCurrentMediaEditions() {
         return Collections.emptyList();
+    }
+
+    default PlaybackRoute.Resolution getEffectivePlaybackRoute() {
+        return null;
     }
 
     default boolean selectEdition(MediaEdition edition) {
