@@ -61,7 +61,7 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     @Override
     public Player rebuild(Player.Listener listener) {
-        preCache.stop();
+        preCache.stop("engine-rebuild");
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "rebuild decode=%d", decode);
@@ -130,14 +130,14 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.playWhenReady = playWhenReady;
         resetAttemptedFormats();
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "restart decode=%d format=%s position=%d play=%s headers=%s urlLen=%d", decode, spec.getFormat(), position, playWhenReady, spec.getHeaders() == null ? 0 : spec.getHeaders().size(), spec.getUrl() == null ? 0 : spec.getUrl().length());
-        preCache.stop();
+        preCache.stop("engine-restart");
         player.stop();
         startInternal(position, playWhenReady);
     }
 
     @Override
     public void stop() {
-        preCache.stop();
+        preCache.stop("player-stop");
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.stop();
     }
