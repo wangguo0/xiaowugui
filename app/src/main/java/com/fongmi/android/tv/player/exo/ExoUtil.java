@@ -339,7 +339,7 @@ public class ExoUtil {
     private static DefaultLoadControl buildEnhancedLoadControl() {
         return new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(getMinBufferMs(), getMaxBufferMs(), ExoPerformanceSetting.getStartBufferMs(), ExoPerformanceSetting.getRebufferMs())
-                .setTargetBufferBytes(getTargetBufferBytes())
+                .setTargetBufferBytes(getBufferBudget().effectiveTargetBytes())
                 .setBackBuffer(PlayerSetting.getBackBufferMs(PlayerSetting.EXO), true)
                 .setPrioritizeTimeOverSizeThresholds(ExoPerformanceSetting.isPrioritizeTime())
                 .build();
@@ -353,11 +353,10 @@ public class ExoUtil {
         return Math.max(ENHANCED_MAX_BUFFER_MS / 2, Math.min(ENHANCED_MAX_BUFFER_MS, getMinBufferMs() * 4));
     }
 
-    private static int getTargetBufferBytes() {
+    static ExoBufferBudget.Budget getBufferBudget() {
         int configured = PlayerSetting.getBufferBytes(PlayerSetting.EXO);
         int requested = configured > 0 ? configured : ENHANCED_TARGET_BUFFER_BYTES;
-        ExoBufferBudget.Budget budget = ExoBufferBudget.resolve(App.get(), requested);
-        return budget.effectiveTargetBytes();
+        return ExoBufferBudget.resolve(App.get(), requested);
     }
 
     private static DefaultBandwidthMeter buildEnhancedBandwidthMeter(EnhancedVideoProfile profile) {

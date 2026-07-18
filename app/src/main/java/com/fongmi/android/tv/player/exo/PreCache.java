@@ -5,13 +5,13 @@ import android.os.HandlerThread;
 
 import androidx.annotation.NonNull;
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.exoplayer.source.preload.PreCacheHelper;
 
 import com.fongmi.android.tv.player.PlaybackRoute;
-import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 
@@ -39,7 +39,7 @@ public class PreCache implements Player.Listener {
     private long lastStartMs;
     private long seekStartMs;
     private boolean playable;
-    private boolean waitingForSafeBuffer;
+    private BufferGate bufferGate;
 
     public void start(Player player, MediaItem mediaItem) {
         stop();
@@ -48,11 +48,11 @@ public class PreCache implements Player.Listener {
         this.handler = new Handler(player.getApplicationLooper());
         this.route = PlaybackRoute.classify(mediaItem.localConfiguration.uri.toString());
         this.helper = createHelper(mediaItem);
-        this.player.addListener(this);
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
-        waitingForSafeBuffer = false;
+        bufferGate = BufferGate.FIRST_FRAME;
+        this.player.addListener(this);
         check();
     }
 
@@ -67,7 +67,7 @@ public class PreCache implements Player.Listener {
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
-        waitingForSafeBuffer = false;
+        bufferGate = BufferGate.FIRST_FRAME;
     }
 
     public void release() {
@@ -93,7 +93,7 @@ public class PreCache implements Player.Listener {
     @Override
     public void onPlaybackStateChanged(int state) {
         if (state == Player.STATE_BUFFERING) {
-            waitingForSafeBuffer = playable;
+            if (playable) bufferGate = BufferGate.RECOVERY;
             stopCurrentTask();
         } else if (state == Player.STATE_READY && playable) {
             check();
@@ -104,17 +104,20 @@ public class PreCache implements Player.Listener {
 
     @Override
     public void onRenderedFirstFrame() {
-        playable = true;
-        check();
+        markPlayable();
     }
 
     @Override
     public void onIsPlayingChanged(boolean isPlaying) {
         if (!isPlaying || playable || player == null) return;
         if (!player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO) && player.getCurrentTracks().containsType(C.TRACK_TYPE_AUDIO)) {
-            playable = true;
-            check();
+            markPlayable();
         }
+    }
+
+    @Override
+    public void onIsLoadingChanged(boolean isLoading) {
+        if (playable && bufferGate != BufferGate.OPEN) check();
     }
 
     @Override
@@ -122,6 +125,7 @@ public class PreCache implements Player.Listener {
         if (!isSeek(reason) || helper == null) return;
         stopCurrentTask();
         markSeek(newPosition.positionMs);
+        if (playable) bufferGate = BufferGate.RECOVERY;
         check();
     }
 
@@ -145,8 +149,8 @@ public class PreCache implements Player.Listener {
         if (isStopped(state)) return false;
         if (state != Player.STATE_READY) return true;
         if (!playable) return true;
-        if (waitingForSafeBuffer && !hasSafeBuffer()) return true;
-        waitingForSafeBuffer = false;
+        if (bufferGate != BufferGate.OPEN && !hasSafeBuffer()) return true;
+        bufferGate = BufferGate.OPEN;
         if (player.isCurrentMediaItemLive()) {
             stop();
             return false;
@@ -183,11 +187,34 @@ public class PreCache implements Player.Listener {
     }
 
     private boolean hasSafeBuffer() {
-        long requiredMs = ExoPerformanceSetting.getRebufferMs();
         long durationMs = player.getDuration();
         long positionMs = player.getCurrentPosition();
-        if (durationMs > 0 && positionMs >= 0) requiredMs = Math.min(requiredMs, Math.max(0, durationMs - positionMs));
-        return player.getTotalBufferedDuration() >= requiredMs;
+        long remainingMs = durationMs > 0 && positionMs >= 0 ? Math.max(0, durationMs - positionMs) : C.TIME_UNSET;
+        boolean recovery = bufferGate == BufferGate.RECOVERY;
+        long requiredMs = PreCachePolicy.safeBufferTargetMs(recovery, remainingMs, getSelectedBitrate(), ExoUtil.getBufferBudget().effectiveTargetBytes());
+        return PreCachePolicy.hasSafeBuffer(player.getTotalBufferedDuration(), player.isLoading(), requiredMs, recovery);
+    }
+
+    private long getSelectedBitrate() {
+        long bitrate = getBitrate(TrackUtil.selectedFormat(player.getCurrentTracks(), C.TRACK_TYPE_VIDEO));
+        long audioBitrate = getBitrate(TrackUtil.selectedFormat(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO));
+        return bitrate > Long.MAX_VALUE - audioBitrate ? Long.MAX_VALUE : bitrate + audioBitrate;
+    }
+
+    private int getBitrate(Format format) {
+        if (format == null) return 0;
+        if (format.bitrate > 0) return format.bitrate;
+        if (format.averageBitrate > 0) return format.averageBitrate;
+        if (format.peakBitrate > 0) return format.peakBitrate;
+        return 0;
+    }
+
+    private void markPlayable() {
+        if (!playable) {
+            playable = true;
+            bufferGate = BufferGate.INITIAL;
+        }
+        check();
     }
 
     private PreCacheHelper createHelper(MediaItem mediaItem) {
@@ -273,5 +300,12 @@ public class PreCache implements Player.Listener {
 
     private boolean isSeek(int reason) {
         return reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT;
+    }
+
+    private enum BufferGate {
+        FIRST_FRAME,
+        INITIAL,
+        RECOVERY,
+        OPEN
     }
 }
