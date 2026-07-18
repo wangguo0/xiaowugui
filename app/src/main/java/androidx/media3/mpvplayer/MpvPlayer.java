@@ -1873,7 +1873,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void refreshCacheState() {
-        if (!initialized) return;
+        if (!initialized || !cacheObserverState.shouldQueryFallback(fileLoaded)) return;
         if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.DURATION)) cachedCacheDurationMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-duration", doublePropertyMs("demuxer-cache-duration", cachedCacheDurationMs)));
         if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.END)) cachedCacheEndMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-end", doublePropertyMs("demuxer-cache-time", cachedCacheEndMs)));
         if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.READER_POSITION)) cachedCacheReaderPositionMs = Math.max(0, doublePropertyMs("demuxer-cache-state/reader-pts", cachedCacheReaderPositionMs));

@@ -17,6 +17,7 @@ final class MpvCacheObserverState {
         EOF
     }
 
+    private static final int ALL_OBSERVED_MASK = (1 << Metric.values().length) - 1;
     private int observedMask;
 
     boolean record(String property, Object value) {
@@ -30,6 +31,10 @@ final class MpvCacheObserverState {
 
     boolean needsFallback(Metric metric) {
         return (observedMask & bit(metric)) == 0;
+    }
+
+    boolean shouldQueryFallback(boolean fileLoaded) {
+        return fileLoaded && observedMask != ALL_OBSERVED_MASK;
     }
 
     int observedCount() {
