@@ -1647,7 +1647,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void onCast() {
-        if (service() == null || player().isEmpty()) return;
+        if (mHistory == null || TextUtils.isEmpty(mHistory.getVodId()) || service() == null || player().isEmpty() || TextUtils.isEmpty(player().getUrl())) {
+            Notify.show(R.string.cast_not_ready);
+            return;
+        }
         CastVideo video = new CastVideo(Objects.toString(mBinding.widget.title.getText(), ""), player().getUrl(), player().getPosition(), player().getHeaders());
         CastDialog.create().history(mHistory).video(video).fm(true).show(this);
     }

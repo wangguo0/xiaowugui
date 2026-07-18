@@ -685,6 +685,7 @@
     <!-- Device Sync -->
     <string name="device_select">選擇設備</string>
     <string name="device_offline">設備已離線</string>
+    <string name="cast_not_ready">播放資訊尚未就緒，請稍後重試</string>
     <string name="sync_success">同步完成</string>
     <string name="sync_progress">正在同步...</string>
     <string name="sync_failed">同步失敗</string>

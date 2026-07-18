@@ -703,6 +703,7 @@
     <!-- Device Sync -->
     <string name="device_select">Select devices</string>
     <string name="device_offline">Device is offline</string>
+    <string name="cast_not_ready">Playback information is not ready. Try again shortly.</string>
     <string name="sync_success">Sync completed</string>
     <string name="sync_progress">Syncing...</string>
     <string name="sync_failed">Sync failed</string>
