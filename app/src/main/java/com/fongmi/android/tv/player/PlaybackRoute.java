@@ -123,7 +123,8 @@ public enum PlaybackRoute {
                     " evidence=" + evidence.label() +
                     " confidence=" + confidence.label() +
                     " scheme=" + scheme +
-                    " loopback=" + loopback;
+                    " loopback=" + loopback +
+                    " " + PlaybackRouteCapabilities.resolve(this).logSummary();
         }
     }
 }

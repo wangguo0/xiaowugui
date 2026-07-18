@@ -29,9 +29,11 @@ public class MpvNetworkRecoveryPolicyTest {
     public void directRemoteHttpReliesOnNativeCurlRecoveryOnly() {
         MpvNetworkRecoveryPolicy.Decision decision = MpvNetworkRecoveryPolicy.resolve("https://cdn.example.com/movie.mkv");
         assertEquals(PlaybackRoute.DIRECT_REMOTE_HTTP, decision.route());
-        assertEquals("mpv-native-curl", decision.recoveryOwner());
+        assertEquals("player-to-remote-http", decision.observedLeg());
+        assertEquals("request-level-only", decision.upstreamVisibility());
+        assertEquals("mpv-native-curl", decision.recoveryBoundary());
+        assertTrue(decision.upstreamRecoveryPolicyKnown());
         assertTrue(decision.nativeRemoteRecovery());
-        assertFalse(decision.proxyOwnsUpstreamRecovery());
         assertFalse(decision.appReconnectOverlay());
     }
 
@@ -41,9 +43,12 @@ public class MpvNetworkRecoveryPolicyTest {
         assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, decision.route());
         assertEquals("app-main-server", decision.routeOwner());
         assertEquals("registered-app-port", decision.routeEvidence());
-        assertEquals("app-local-service", decision.recoveryOwner());
+        assertEquals("app-to-owned-local-service", decision.observedLeg());
+        assertEquals("app-service-path", decision.upstreamVisibility());
+        assertEquals("app-owned-service-code", decision.controlScope());
+        assertEquals("app-owned-local-service", decision.recoveryBoundary());
+        assertTrue(decision.upstreamRecoveryPolicyKnown());
         assertFalse(decision.nativeRemoteRecovery());
-        assertTrue(decision.proxyOwnsUpstreamRecovery());
         assertFalse(decision.appReconnectOverlay());
     }
 
@@ -53,9 +58,12 @@ public class MpvNetworkRecoveryPolicyTest {
         assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, decision.route());
         assertEquals("external-or-unknown-loopback", decision.routeOwner());
         assertEquals("inferred", decision.routeConfidence());
-        assertEquals("external-or-unknown-loopback", decision.recoveryOwner());
+        assertEquals("app-to-local-endpoint-only", decision.observedLeg());
+        assertEquals("opaque-external-process", decision.upstreamVisibility());
+        assertEquals("none", decision.controlScope());
+        assertEquals("external-policy-unknown", decision.recoveryBoundary());
+        assertFalse(decision.upstreamRecoveryPolicyKnown());
         assertFalse(decision.nativeRemoteRecovery());
-        assertTrue(decision.proxyOwnsUpstreamRecovery());
         assertFalse(decision.appReconnectOverlay());
     }
 
@@ -63,9 +71,9 @@ public class MpvNetworkRecoveryPolicyTest {
     public void nonHttpSourcesDoNotReceiveReconnectOptions() {
         MpvNetworkRecoveryPolicy.Decision decision = MpvNetworkRecoveryPolicy.resolve("file:///storage/emulated/0/movie.mkv");
         assertEquals(PlaybackRoute.OTHER, decision.route());
-        assertEquals("not-applicable", decision.recoveryOwner());
+        assertEquals("not-applicable", decision.recoveryBoundary());
+        assertFalse(decision.upstreamRecoveryPolicyKnown());
         assertFalse(decision.nativeRemoteRecovery());
-        assertFalse(decision.proxyOwnsUpstreamRecovery());
         assertFalse(decision.appReconnectOverlay());
     }
 }

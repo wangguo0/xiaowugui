@@ -1895,7 +1895,9 @@ public class PlayerManager implements ParseCallback {
                 case APP_MAIN_SERVER, APP_HLS_PROXY -> ResUtil.getString(R.string.error_play_stage_app_local);
                 default -> ResUtil.getString(R.string.error_play_stage_external_local);
             };
-            case NETWORK_IO -> ResUtil.getString(R.string.error_play_stage_network);
+            case NETWORK_IO -> PlaybackRouteCapabilities.resolve(failure.route()).externalUpstreamOpaque()
+                    ? ResUtil.getString(R.string.error_play_stage_external_supply)
+                    : ResUtil.getString(R.string.error_play_stage_network);
             case MEDIA_PARSING -> ResUtil.getString(R.string.error_play_stage_media);
             case DECODER -> ResUtil.getString(R.string.error_play_stage_decoder);
             case OUTPUT -> ResUtil.getString(R.string.error_play_stage_output);

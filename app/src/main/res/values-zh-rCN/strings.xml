@@ -981,6 +981,7 @@
     <string name="error_play_mpv_video_output">MPV 视频输出初始化失败，请尝试切换解码或重新进入播放</string>
     <string name="error_play_stage_app_local">App 本地播放服务连接失败，请重新进入播放或重启应用</string>
     <string name="error_play_stage_external_local">本地代理端口连接失败，请重启代理或更换线路</string>
+    <string name="error_play_stage_external_supply">外部或未知本地代理未能持续提供数据，App 无法判断其内部 CDN、鉴权或缓存状态，请检查代理或更换线路</string>
     <string name="error_play_stage_network">网络读取失败，请检查网络、请求头或更换线路</string>
     <string name="error_play_stage_media">媒体解析失败或没有有效音视频轨道，请更换线路或播放器</string>
     <string name="error_play_stage_decoder">音视频解码失败，请尝试切换软硬解或播放器</string>
