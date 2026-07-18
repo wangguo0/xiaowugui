@@ -72,7 +72,6 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegVideoRenderer;
 
 public class ExoUtil {
 
-    private static final int ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000;
     private static final int ENHANCED_TARGET_BUFFER_BYTES = 128 * 1024 * 1024;
     private static final long ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US = 5_000L;
     private static final long ENHANCED_ADAPT_COOLDOWN_MS = 15_000L;

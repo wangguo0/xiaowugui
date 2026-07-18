@@ -19,6 +19,7 @@ public class PlaybackPerformanceSetting {
     private static final String KEY_EXO_SIZE_PRIORITY_MIGRATED = "playback_performance_exo_size_priority_v1";
     private static final String KEY_PRELOAD_DEFAULTS_MIGRATED = "playback_performance_preload_defaults_v1";
     private static final String KEY_EXO_LOAD_CONTROL_MIGRATED = "playback_performance_exo_load_control_v1";
+    private static final String KEY_EXO_REBUFFER_MIGRATED = "playback_performance_exo_rebuffer_v3";
     private static final String KEY_CODEC_ASYNC_QUEUEING = "perf_codec_async_queueing";
     private static final String KEY_DYNAMIC_SCHEDULING = "perf_dynamic_scheduling";
     private static final String KEY_VIDEO_DURATION_PROGRESS = "perf_video_duration_progress";
@@ -42,6 +43,7 @@ public class PlaybackPerformanceSetting {
         migrateExoSizePriority();
         migratePreloadDefaults();
         migrateExoLoadControl();
+        migrateExoRebuffer();
     }
 
     public static int getProfile() {
@@ -372,6 +374,17 @@ public class PlaybackPerformanceSetting {
     }
 
     static boolean shouldMigrateExoLoadControl(int profile) {
+        return clampProfile(profile) != PROFILE_CUSTOM;
+    }
+
+    private static void migrateExoRebuffer() {
+        if (Prefers.getBoolean(KEY_EXO_REBUFFER_MIGRATED)) return;
+        int profile = clampProfile(Prefers.getInt(profileKey(PlayerSetting.EXO), PROFILE_RECOMMENDED));
+        if (shouldMigrateExoRebuffer(profile)) ExoPerformanceSetting.applyRebufferPreset(profile);
+        Prefers.put(KEY_EXO_REBUFFER_MIGRATED, true);
+    }
+
+    static boolean shouldMigrateExoRebuffer(int profile) {
         return clampProfile(profile) != PROFILE_CUSTOM;
     }
 

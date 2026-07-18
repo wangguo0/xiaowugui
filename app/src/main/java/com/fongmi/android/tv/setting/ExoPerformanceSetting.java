@@ -82,7 +82,7 @@ public final class ExoPerformanceSetting {
     }
 
     public static int getRebufferMs() {
-        return normalizeRebuffer(Prefers.getInt(KEY_REBUFFER_MS, 10_000));
+        return normalizeRebuffer(Prefers.getInt(KEY_REBUFFER_MS, rebufferForPreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED)));
     }
 
     public static void putRebufferMs(int value) {
@@ -148,13 +148,15 @@ public final class ExoPerformanceSetting {
     }
 
     static void applyRebufferPreset(int profile) {
-        if (profile == PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT) {
-            Prefers.put(KEY_REBUFFER_MS, 2_000);
-        } else if (profile == PlaybackPerformanceSetting.PROFILE_COMPATIBLE) {
-            Prefers.put(KEY_REBUFFER_MS, 5_000);
-        } else {
-            Prefers.put(KEY_REBUFFER_MS, 10_000);
-        }
+        Prefers.put(KEY_REBUFFER_MS, rebufferForPreset(profile));
+    }
+
+    static int rebufferForPreset(int profile) {
+        return switch (profile) {
+            case PlaybackPerformanceSetting.PROFILE_COMPATIBLE -> 5_000;
+            case PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT -> 2_000;
+            default -> 3_000;
+        };
     }
 
     static void applyPrioritizeTimePreset(int profile) {
