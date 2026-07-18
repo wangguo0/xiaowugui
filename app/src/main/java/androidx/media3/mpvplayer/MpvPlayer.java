@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Build;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Surface;
@@ -413,6 +414,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         cachedPositionMs = Math.max(0, positionMs);
         pendingSeekPositionMs = cachedPositionMs;
         if (initialized && playbackState != Player.STATE_IDLE) {
+            if (fileLoaded) cacheObserverState.onPlaybackDiscontinuity(SystemClock.elapsedRealtime());
             seekMpv(cachedPositionMs);
             if (currentLikelyHls && playbackRestarted) hlsProxy.preloadAround(cachedPositionMs);
             if (playbackState == Player.STATE_ENDED) playbackState = Player.STATE_BUFFERING;
@@ -851,7 +853,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             loading = false;
             return;
         }
-        boolean firstObservedCacheMetric = cacheObserverState.record(property, value) && cacheObserverState.observedCount() == 1;
+        boolean firstObservedCacheMetric = cacheObserverState.record(property, value, SystemClock.elapsedRealtime()) && cacheObserverState.observedCount() == 1;
         if (firstObservedCacheMetric) SpiderDebug.log("mpv", "cache source=observer-first property=%s", property);
         switch (property) {
             case "time-pos", "time-pos/full" -> cachedPositionMs = doubleSecondsToMs(value, cachedPositionMs);
@@ -1078,6 +1080,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                     return;
                 }
                 fileLoaded = true;
+                cacheObserverState.onFileLoaded(SystemClock.elapsedRealtime());
                 mainHandler.removeCallbacks(endFileValidationRunnable);
                 playbackState = Player.STATE_BUFFERING;
                 loading = true;
@@ -1873,19 +1876,23 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void refreshCacheState() {
-        if (!initialized || !cacheObserverState.shouldQueryFallback(fileLoaded)) return;
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.DURATION)) cachedCacheDurationMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-duration", doublePropertyMs("demuxer-cache-duration", cachedCacheDurationMs)));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.END)) cachedCacheEndMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-end", doublePropertyMs("demuxer-cache-time", cachedCacheEndMs)));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.READER_POSITION)) cachedCacheReaderPositionMs = Math.max(0, doublePropertyMs("demuxer-cache-state/reader-pts", cachedCacheReaderPositionMs));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.SPEED)) cachedCacheSpeedBytesPerSecond = Math.max(0, longProperty("demuxer-cache-state/raw-input-rate", longProperty("cache-speed", cachedCacheSpeedBytesPerSecond)));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.FORWARD_BYTES)) cachedCacheForwardBytes = Math.max(0, longProperty("demuxer-cache-state/fw-bytes", cachedCacheForwardBytes));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.TOTAL_BYTES)) cachedCacheTotalBytes = Math.max(0, longProperty("demuxer-cache-state/total-bytes", cachedCacheTotalBytes));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.FILE_BYTES)) cachedCacheFileBytes = Math.max(0, longProperty("demuxer-cache-state/file-cache-bytes", cachedCacheFileBytes));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.BUFFERING_STATE)) cachedCacheBufferingState = Math.max(0, Math.min(100, (int) longProperty("cache-buffering-state", cachedCacheBufferingState)));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.IDLE)) cachedCacheIdle = booleanProperty("demuxer-cache-state/idle", booleanProperty("demuxer-cache-idle", cachedCacheIdle));
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.UNDERRUN)) cachedCacheUnderrun = booleanProperty("demuxer-cache-state/underrun", cachedCacheUnderrun);
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.BOF)) cachedCacheBof = booleanProperty("demuxer-cache-state/bof-cached", cachedCacheBof);
-        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.EOF)) cachedCacheEof = booleanProperty("demuxer-cache-state/eof-cached", cachedCacheEof);
+        if (!initialized) return;
+        long nowMs = SystemClock.elapsedRealtime();
+        boolean cacheActive = loading || !cachedCacheIdle;
+        if (!cacheObserverState.shouldQueryFallback(fileLoaded, cacheActive, nowMs)) return;
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.DURATION, cacheActive, nowMs)) cachedCacheDurationMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-duration", doublePropertyMs("demuxer-cache-duration", cachedCacheDurationMs)));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.END, cacheActive, nowMs)) cachedCacheEndMs = Math.max(0, doublePropertyMs("demuxer-cache-state/cache-end", doublePropertyMs("demuxer-cache-time", cachedCacheEndMs)));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.READER_POSITION, cacheActive, nowMs)) cachedCacheReaderPositionMs = Math.max(0, doublePropertyMs("demuxer-cache-state/reader-pts", cachedCacheReaderPositionMs));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.SPEED, cacheActive, nowMs)) cachedCacheSpeedBytesPerSecond = Math.max(0, longProperty("demuxer-cache-state/raw-input-rate", longProperty("cache-speed", cachedCacheSpeedBytesPerSecond)));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.FORWARD_BYTES, cacheActive, nowMs)) cachedCacheForwardBytes = Math.max(0, longProperty("demuxer-cache-state/fw-bytes", cachedCacheForwardBytes));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.TOTAL_BYTES, cacheActive, nowMs)) cachedCacheTotalBytes = Math.max(0, longProperty("demuxer-cache-state/total-bytes", cachedCacheTotalBytes));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.FILE_BYTES, cacheActive, nowMs)) cachedCacheFileBytes = Math.max(0, longProperty("demuxer-cache-state/file-cache-bytes", cachedCacheFileBytes));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.BUFFERING_STATE, cacheActive, nowMs)) cachedCacheBufferingState = Math.max(0, Math.min(100, (int) longProperty("cache-buffering-state", cachedCacheBufferingState)));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.IDLE, cacheActive, nowMs)) cachedCacheIdle = booleanProperty("demuxer-cache-state/idle", booleanProperty("demuxer-cache-idle", cachedCacheIdle));
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.UNDERRUN, cacheActive, nowMs)) cachedCacheUnderrun = booleanProperty("demuxer-cache-state/underrun", cachedCacheUnderrun);
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.BOF, cacheActive, nowMs)) cachedCacheBof = booleanProperty("demuxer-cache-state/bof-cached", cachedCacheBof);
+        if (cacheObserverState.needsFallback(MpvCacheObserverState.Metric.EOF, cacheActive, nowMs)) cachedCacheEof = booleanProperty("demuxer-cache-state/eof-cached", cachedCacheEof);
+        cacheObserverState.onFallbackQuery(nowMs);
     }
 
     private void validateEarlyEndFile() {
