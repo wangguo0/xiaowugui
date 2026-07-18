@@ -8,7 +8,7 @@ public enum PanProvider {
     UC("UC"),
     ALI("阿里"),
     XUNLEI("迅雷"),
-    GENERIC("通用网盘");
+    GENERIC("通用资源");
 
     private final String label;
 

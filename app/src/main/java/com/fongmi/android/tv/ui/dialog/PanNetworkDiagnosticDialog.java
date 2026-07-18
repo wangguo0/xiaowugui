@@ -167,7 +167,7 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
         closeParams.leftMargin = dp(10);
         bar.addView(close, closeParams);
         root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
-        subtitle = text("定位网盘、代理、App供数与播放层瓶颈", 12, SECONDARY, false);
+        subtitle = text("定位源站、代理、App供数与播放层瓶颈", 12, SECONDARY, false);
         root.addView(subtitle, matchWrap(0, 0));
     }
 
@@ -404,7 +404,7 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
         card.setBackground(round(Color.rgb(232, 240, 254), 12, 0, Color.TRANSPARENT));
         if (endpoint == null) {
             card.addView(text("未识别到可诊断的 HTTP 播放地址", 15, WARNING, true));
-            card.addView(text("请在百度、夸克、UC、阿里、迅雷或 pvideo 网盘资源正在播放时打开。", 13, SECONDARY, false));
+            card.addView(text("请在网盘、HTTP直链或 M3U8 等资源正在播放时打开。", 13, SECONDARY, false));
         } else {
             card.addView(text(endpoint.provider().label() + " · " + player.getPlayerText(), 16, BLUE_DARK, true));
             String route = endpoint.hasDirectUpstream() ? endpoint.playbackHost() + " → " + endpoint.upstreamHost() : endpoint.playbackHost() + "（直链）";
@@ -442,7 +442,7 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
                 + PanBenchmarkPlan.roundBudgetBytes(required, maxThreads, mode);
         new MaterialAlertDialogBuilder(requireContext(), R.style.ThemeOverlay_WebHTV_LightDialog)
                 .setTitle("确认高线程诊断")
-                .setMessage("将测试到 " + maxThreads + " 线程，预计流量上限约 " + PanNetworkDiagnosticRunner.formatBytes(bytes) + "。高线程可能增加耗电、内存占用，并触发网盘限流或风控。")
+                .setMessage("将测试到 " + maxThreads + " 线程，预计流量上限约 " + PanNetworkDiagnosticRunner.formatBytes(bytes) + "。高线程可能增加耗电、内存占用，并触发源站或网盘限流、风控。")
                 .setNegativeButton("返回调整", null)
                 .setPositiveButton("继续诊断", (dialog, which) -> {
                     highThreadConfirmed = true;
@@ -514,7 +514,7 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
         progress.setProgressCompat(Math.min(1000, Math.round((base + within) * 1000f / total)), true);
         liveSpeed.setText(PanNetworkDiagnosticRunner.formatMbps(value.bitsPerSecond()));
         String thread;
-        if (value.stage().contains("网盘单连接")) thread = " · 单连接直测";
+        if (value.stage().contains("上游单连接")) thread = " · 单连接直测";
         else if (value.stage().contains("直链并发")) thread = " · " + value.threads() + "路并发";
         else if (value.stage().contains("App DataSource")) thread = " · App供数层";
         else thread = value.threads() <= 0 ? "" : " · " + value.threads() + "线程";
@@ -571,14 +571,14 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
         content.addView(verdictCard, matchWrap(0, 0));
 
         addResultSectionTitle("分层证据链");
-        addLayer("网盘单连接基准", report.upstream().bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(report.upstream(), "单个真实HTTP连接；使用独立Range"));
+        addLayer("上游单连接基准", report.upstream().bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(report.upstream(), "单个真实HTTP连接；使用独立Range"));
         PanNetworkDiagnosticRunner.Measurement chainProxy = report.appProxy();
         PanNetworkDiagnosticRunner.Measurement direct = chainProxy == null ? report.primaryDirectComparison() : report.directForThreads(chainProxy.threads());
-        if (direct != null && direct.threads() > 1) addLayer(direct.label(), direct.bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(direct, "App直接并发请求同一网盘；不经过Go"));
+        if (direct != null && direct.threads() > 1) addLayer(direct.label(), direct.bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(direct, "App直接并发请求同一上游；不经过Go"));
         if (chainProxy != null && chainProxy.successful()) addLayer("Go代理 · " + chainProxy.threads() + "线程", chainProxy.bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(chainProxy, "并发聚合后的完整网络读取；使用独立Range"));
         else if (chainProxy != null) addLayer(chainProxy.label(), 0, report.requiredBitsPerSecond(), measurementDetail(chainProxy, "所选代理线程均未完成测量"));
         else if (!report.proxies().isEmpty()) addLayer(report.proxies().get(0).label(), 0, report.requiredBitsPerSecond(), measurementDetail(report.proxies().get(0), "所选代理线程均未完成测量"));
-        else addLayer("Go代理", 0, report.requiredBitsPerSecond(), "当前播放地址为网盘直链，无独立代理层");
+        else addLayer("Go代理", 0, report.requiredBitsPerSecond(), "当前播放地址为直链，无独立代理层");
         addLayer("App完整链路", report.dataSource().bitsPerSecond(), report.requiredBitsPerSecond(), measurementDetail(report.dataSource(), "播放器同类Media3 DataSource读取；使用独立Range"));
         addObservationRow("播放观察", "重缓冲 " + report.rebufferCount() + " 次 / " + report.rebufferTotalMs() + " ms · 掉帧 " + report.droppedFrames());
 
@@ -666,7 +666,7 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
 
     private void copyReport(PanNetworkDiagnosticRunner.Report report) {
         ClipboardManager manager = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        manager.setPrimaryClip(ClipData.newPlainText("网盘链路诊断报告", report.redactedText()));
+        manager.setPrimaryClip(ClipData.newPlainText("播放链路诊断报告", report.redactedText()));
         Notify.show("脱敏报告已复制");
     }
 
@@ -847,12 +847,12 @@ public final class PanNetworkDiagnosticDialog extends DialogFragment implements 
     private static String verdictTitle(PanDiagnosticVerdict.Cause cause) {
         return switch (cause) {
             case DEVICE_NETWORK -> "本机公共网络不足";
-            case UPSTREAM_PROVIDER -> "网盘账号或节点受限";
+            case UPSTREAM_PROVIDER -> "上游源站或节点受限";
             case EXTERNAL_PROXY -> "Go代理层是主要瓶颈";
             case APP_DATA_SOURCE -> "App供数层存在明显损耗";
             case UPSTREAM_CAPACITY -> "瓶颈位于Go之前";
             case MULTIPLE_BOTTLENECKS -> "检测到多重瓶颈";
-            case SINGLE_CONNECTION_LIMIT -> "网盘单连接受限，并发可改善";
+            case SINGLE_CONNECTION_LIMIT -> "上游单连接受限，并发可改善";
             case PLAYER_BUFFERING -> "播放器缓冲策略需要排查";
             case DECODE_RENDER -> "解码或渲染性能不足";
             case SUFFICIENT -> "本次完整链路满足播放需求";

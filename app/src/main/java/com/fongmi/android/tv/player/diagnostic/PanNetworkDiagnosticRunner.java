@@ -110,12 +110,12 @@ public final class PanNetworkDiagnosticRunner {
             int totalRounds = repeats * (2 + (proxied ? threads.size() + directGroups : 0)) + pairedValidationRounds;
             int round = 0;
 
-            post(listener, new Progress("正在探测文件与鉴权", round, totalRounds, 0, 0, 0, 0, 0, Collections.emptyList()));
+            post(listener, new Progress("正在探测资源与鉴权", round, totalRounds, 0, 0, 0, 0, 0, Collections.emptyList()));
             String probeUrl = proxied ? endpoint.playbackUrl() : directUrl;
             Map<String, String> probeHeaders = proxied ? config.playbackHeaders : directHeaders;
             Probe probe;
             try {
-                probe = probe(probeUrl, probeHeaders, proxied ? "本地Go代理探测" : "网盘直链探测");
+                probe = probe(probeUrl, probeHeaders, proxied ? "本地Go代理探测" : "播放直链探测");
             } catch (IOException error) {
                 probe = new Probe(-1, 0, "");
                 post(listener, new Progress("文件探测受限，改用当前媒体码率继续", round, totalRounds, 0, 0, 0, 0, 0, Collections.emptyList()));
@@ -137,7 +137,7 @@ public final class PanNetworkDiagnosticRunner {
             for (int repeat = 0; repeat < repeats; repeat++) {
                 round++;
                 long upstreamPosition = isolatedRangePosition(preferredPosition, probe.length, upstreamBudget, round - 1, totalRounds);
-                upstreamRuns.add(measureHttpSafe("网盘单连接基准", directUrl, directHeaders, upstreamPosition, upstreamBudget,
+                upstreamRuns.add(measureHttpSafe("上游单连接基准", directUrl, directHeaders, upstreamPosition, upstreamBudget,
                         roundTimeLimitMs, 1, round, totalRounds, listener));
                 ensureRunning();
 
@@ -169,7 +169,7 @@ public final class PanNetworkDiagnosticRunner {
                 }
             }
 
-            Measurement upstream = aggregate("网盘单连接基准", 1, upstreamRuns, repeats);
+            Measurement upstream = aggregate("上游单连接基准", 1, upstreamRuns, repeats);
             List<Measurement> directMeasurements = aggregateByThread("直链并发", threads, directRuns, repeats);
             List<Measurement> proxyMeasurements = proxied ? aggregateByThread("Go代理", threads, proxyRuns, repeats) : new ArrayList<>();
             Measurement bestProxy = best(proxyMeasurements);
@@ -750,7 +750,7 @@ public final class PanNetworkDiagnosticRunner {
         int code = response.code();
         String hint = switch (code) {
             case 401, 403 -> "鉴权已失效或请求头不完整";
-            case 412 -> "请求条件与网盘真实播放请求不一致，已停止本层测试";
+            case 412 -> "请求条件与真实播放请求不一致，已停止本层测试";
             case 416 -> "服务端拒绝Range范围";
             case 429 -> "请求过于频繁，已停止以避免触发风控";
             default -> "HTTP " + code;
@@ -980,11 +980,11 @@ public final class PanNetworkDiagnosticRunner {
 
         public String redactedText() {
             StringBuilder text = new StringBuilder();
-            text.append("网盘链路诊断报告\n");
-            text.append("网盘：").append(endpoint.provider().label()).append('\n');
+            text.append("播放链路诊断报告\n");
+            text.append("资源来源：").append(endpoint.provider().label()).append('\n');
             text.append("播放域名：").append(endpoint.playbackHost()).append('\n');
             text.append("上游域名：").append(endpoint.upstreamHost()).append('\n');
-            text.append("文件大小：").append(formatBytes(fileBytes)).append('\n');
+            text.append("资源大小：").append(formatBytes(fileBytes)).append('\n');
             text.append("资源需求：").append(formatMbps(requiredBitsPerSecond)).append('\n');
             text.append("直链单连接基准：").append(measurementText(upstream)).append('\n');
             for (Measurement item : directComparisons) if (item.threads > 1) text.append(item.label).append("：").append(measurementText(item)).append('\n');

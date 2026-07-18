@@ -51,11 +51,11 @@ public final class PanDiagnosticVerdict {
         if (known(input.directConcurrentBitsPerSecond) && input.directConcurrentBitsPerSecond < required
                 && known(input.proxyBitsPerSecond) && input.proxyBitsPerSecond < required
                 && known(input.dataSourceBitsPerSecond) && input.dataSourceBitsPerSecond < required) {
-            return result(Cause.UPSTREAM_CAPACITY, cap(Confidence.MEDIUM, input.evidenceConfidence), "瓶颈位于Go之前；无公共网络基准时不能继续区分本机网络与网盘账号/节点");
+            return result(Cause.UPSTREAM_CAPACITY, cap(Confidence.MEDIUM, input.evidenceConfidence), "瓶颈位于Go之前；无公共网络基准时不能继续区分本机网络与上游源站/节点");
         }
         if (known(input.upstreamBitsPerSecond) && known(input.directConcurrentBitsPerSecond)
                 && input.upstreamBitsPerSecond < required && input.directConcurrentBitsPerSecond >= required) {
-            return result(Cause.SINGLE_CONNECTION_LIMIT, cap(Confidence.MEDIUM, input.evidenceConfidence), "网盘单连接受限，但直链并发可以明显改善吞吐");
+            return result(Cause.SINGLE_CONNECTION_LIMIT, cap(Confidence.MEDIUM, input.evidenceConfidence), "上游单连接受限，但直链并发可以明显改善吞吐");
         }
         return result(Cause.INCONCLUSIVE, Confidence.LOW, "证据层级不完整，不能可靠归因");
     }
