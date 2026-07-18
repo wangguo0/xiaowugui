@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 
@@ -61,7 +62,14 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
     protected void initEvent() {
         binding.close.setOnClickListener(view -> dismiss());
         binding.textOption.setOnClickListener(view -> createText());
+        binding.urlOption.setOnClickListener(view -> showUrlInput());
         binding.importOption.setOnClickListener(view -> chooseFile());
+        binding.urlBack.setOnClickListener(view -> showOptions());
+        binding.urlImport.setOnClickListener(view -> importUrl());
+        binding.url.setOnEditorActionListener((view, actionId, event) -> {
+            importUrl();
+            return true;
+        });
     }
 
     private String name() {
@@ -79,6 +87,45 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
     private void chooseFile() {
         String mime = MpvConfigStore.TARGET_SCRIPTS.equals(target) ? "application/octet-stream" : "text/*";
         FileChooser.from(launcher).show(mime, new String[]{"text/*", "application/octet-stream", "*/*"});
+    }
+
+    private void showUrlInput() {
+        binding.chooseAction.setVisibility(View.GONE);
+        binding.textOption.setVisibility(View.GONE);
+        binding.urlOption.setVisibility(View.GONE);
+        binding.importOption.setVisibility(View.GONE);
+        binding.urlPanel.setVisibility(View.VISIBLE);
+        binding.url.requestFocus();
+    }
+
+    private void showOptions() {
+        binding.urlLayout.setError(null);
+        binding.urlPanel.setVisibility(View.GONE);
+        binding.chooseAction.setVisibility(View.VISIBLE);
+        binding.textOption.setVisibility(View.VISIBLE);
+        binding.urlOption.setVisibility(View.VISIBLE);
+        binding.importOption.setVisibility(View.VISIBLE);
+        binding.urlOption.requestFocus();
+    }
+
+    private void importUrl() {
+        String url = binding.url.getText() == null ? "" : binding.url.getText().toString().trim();
+        if (!isHttpUrl(url)) {
+            binding.urlLayout.setError(getString(R.string.mpv_config_url_invalid));
+            binding.url.requestFocus();
+            return;
+        }
+        binding.urlLayout.setError(null);
+        String name = name();
+        dismissAllowingStateLoss();
+        App.post(() -> {
+            if (listener != null) listener.onImport(name, url);
+        });
+    }
+
+    private static boolean isHttpUrl(String value) {
+        return !TextUtils.isEmpty(value) && (value.regionMatches(true, 0, "http://", 0, 7)
+                || value.regionMatches(true, 0, "https://", 0, 8));
     }
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -109,6 +156,7 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.getDecorView().setPadding(0, 0, 0, 0);
         window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
     }

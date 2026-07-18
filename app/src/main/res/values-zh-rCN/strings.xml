@@ -862,6 +862,10 @@
     <string name="mpv_config_text_edit_desc">打开编辑器，输入并保存配置内容</string>
     <string name="mpv_config_import_file">导入配置文件</string>
     <string name="mpv_config_import_file_desc">从本地选择已有配置文件</string>
+    <string name="mpv_config_import_url">通过 URL 导入</string>
+    <string name="mpv_config_import_url_desc">下载远程配置并保存为新配置</string>
+    <string name="mpv_config_url_hint">https://example.com/mpv.conf</string>
+    <string name="mpv_config_import">导入</string>
     <string name="mpv_config_editor_new">新建配置</string>
     <string name="mpv_config_editor_edit">编辑配置</string>
     <string name="mpv_config_save">保存</string>

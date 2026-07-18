@@ -864,6 +864,10 @@
     <string name="mpv_config_text_edit_desc">Open the editor to enter and save config content</string>
     <string name="mpv_config_import_file">Import config file</string>
     <string name="mpv_config_import_file_desc">Choose an existing config file from this device</string>
+    <string name="mpv_config_import_url">Import from URL</string>
+    <string name="mpv_config_import_url_desc">Download a remote config and save it as a new profile</string>
+    <string name="mpv_config_url_hint">https://example.com/mpv.conf</string>
+    <string name="mpv_config_import">Import</string>
     <string name="mpv_config_editor_new">New config</string>
     <string name="mpv_config_editor_edit">Edit config</string>
     <string name="mpv_config_save">Save</string>
