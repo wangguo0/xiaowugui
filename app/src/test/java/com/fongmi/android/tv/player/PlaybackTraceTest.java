@@ -46,4 +46,37 @@ public class PlaybackTraceTest {
 
         assertEquals(PlaybackTrace.NONE, trace.current());
     }
+
+    @Test
+    public void startupStagesUseMonotonicElapsedTimeAndIgnoreDuplicates() {
+        PlaybackTrace trace = new PlaybackTrace();
+        trace.begin(1_000);
+
+        assertTrue(trace.mark(PlaybackTrace.Stage.REQUEST, 1_000, "reason=start"));
+        assertTrue(trace.mark(PlaybackTrace.Stage.PREPARE, 1_125, "player=0"));
+        assertFalse(trace.mark(PlaybackTrace.Stage.PREPARE, 1_500, "retry"));
+
+        assertEquals(0, trace.stageElapsedMs(PlaybackTrace.Stage.REQUEST));
+        assertEquals(125, trace.stageElapsedMs(PlaybackTrace.Stage.PREPARE));
+        assertTrue(trace.hasStage(PlaybackTrace.Stage.PREPARE));
+    }
+
+    @Test
+    public void newTraceClearsPreviousStartupStages() {
+        PlaybackTrace trace = new PlaybackTrace();
+        trace.begin(100);
+        trace.mark(PlaybackTrace.Stage.READY, 200, "player=0");
+
+        trace.begin(300);
+
+        assertFalse(trace.hasStage(PlaybackTrace.Stage.READY));
+        assertEquals(-1, trace.stageElapsedMs(PlaybackTrace.Stage.READY));
+    }
+
+    @Test
+    public void stageCannotBeRecordedWithoutActiveTrace() {
+        PlaybackTrace trace = new PlaybackTrace();
+
+        assertFalse(trace.mark(PlaybackTrace.Stage.REQUEST, 100, "reason=start"));
+    }
 }

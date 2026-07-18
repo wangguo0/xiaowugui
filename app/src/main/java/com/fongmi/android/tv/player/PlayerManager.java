@@ -976,6 +976,7 @@ public class PlayerManager implements ParseCallback {
         initTrack = false;
         waitingLutBeforePlay = false;
         applySubtitleStyle();
+        playbackTrace.mark(PlaybackTrace.Stage.PREPARE, "player=" + playerType + " decode=" + engine.getDecode());
         engine.start(spec.checkUa(), playWhenReady);
         startNativeAudioSession(playWhenReady);
         App.post(runnable, timeout);
@@ -1633,6 +1634,7 @@ public class PlayerManager implements ParseCallback {
     @Override
     public void onParseSuccess(Map<String, String> headers, String url, String from) {
         if (!TextUtils.isEmpty(from)) Notify.show(ResUtil.getString(R.string.parse_from, from));
+        playbackTrace.mark(PlaybackTrace.Stage.PARSE_COMPLETE, "headers=" + (headers == null ? 0 : headers.size()));
         PlaybackTrace.log("player", playbackTrace.current(), "parseSuccess from=%s url=%s headers=%s", from, summarizeUrl(url), headers == null ? 0 : headers.size());
         if (headers != null) headers.remove(HttpHeaders.RANGE);
         if (spec != null) spec.setHeaders(headers);
@@ -1659,9 +1661,9 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void beginPlaybackTrace(String reason) {
-        String traceId = playbackTrace.begin();
+        playbackTrace.begin();
         bindPlaybackTrace();
-        PlaybackTrace.log("playback-trace", traceId, "begin reason=%s player=%d decode=%d", reason, playerType, engine == null ? -1 : engine.getDecode());
+        playbackTrace.mark(PlaybackTrace.Stage.REQUEST, "reason=" + reason + " player=" + playerType + " decode=" + (engine == null ? -1 : engine.getDecode()));
     }
 
     private void bindPlaybackTrace() {
@@ -1691,6 +1693,25 @@ public class PlayerManager implements ParseCallback {
             case Player.STATE_ENDED -> "ENDED";
             default -> String.valueOf(state);
         };
+    }
+
+    private void markStartupCompletion(boolean ready, Tracks tracks) {
+        if (tracks == null) return;
+        boolean hasVideo = tracks.containsType(C.TRACK_TYPE_VIDEO);
+        boolean hasAudio = tracks.containsType(C.TRACK_TYPE_AUDIO);
+        PlaybackStartupPolicy.Completion completion = PlaybackStartupPolicy.resolve(ready, playerType == PlayerSetting.MPV, hasVideo, hasAudio);
+        if (completion == PlaybackStartupPolicy.Completion.FIRST_FRAME) {
+            playbackTrace.mark(PlaybackTrace.Stage.FIRST_FRAME, "source=mpv-playback-restart player=" + playerType);
+        } else if (completion == PlaybackStartupPolicy.Completion.AUDIO_PLAYABLE) {
+            playbackTrace.mark(PlaybackTrace.Stage.AUDIO_PLAYABLE, "source=ready player=" + playerType);
+        }
+    }
+
+    private static String trackSummary(Tracks tracks) {
+        return "video=" + tracks.containsType(C.TRACK_TYPE_VIDEO) +
+                " audio=" + tracks.containsType(C.TRACK_TYPE_AUDIO) +
+                " text=" + tracks.containsType(C.TRACK_TYPE_TEXT) +
+                " groups=" + tracks.getGroups().size();
     }
 
     private static String causeChain(Throwable error) {
@@ -1729,6 +1750,8 @@ public class PlayerManager implements ParseCallback {
             if (state != Player.STATE_IDLE) App.removeCallbacks(runnable);
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "state=%s spec=%s", stateName(state), debugSpec());
             if (state == Player.STATE_READY) {
+                playbackTrace.mark(PlaybackTrace.Stage.READY, "player=" + playerType);
+                markStartupCompletion(true, getCurrentTracks());
                 hardDecodeSwitchRetryArmed = false;
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
@@ -1744,11 +1767,18 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onTracksChanged(@NonNull Tracks tracks) {
             if (!tracks.isEmpty() && !initTrack) {
+                playbackTrace.mark(PlaybackTrace.Stage.TRACKS, trackSummary(tracks));
                 setTrack(Track.find(getKey()));
                 callback.onTracksChanged();
                 initTrack = true;
             }
+            markStartupCompletion(player != null && player.getPlaybackState() == Player.STATE_READY, tracks);
             applyLutForCurrentItem();
+        }
+
+        @Override
+        public void onRenderedFirstFrame() {
+            playbackTrace.mark(PlaybackTrace.Stage.FIRST_FRAME, "source=media3 player=" + playerType);
         }
 
         @Override
