@@ -84,9 +84,10 @@ public class PlayerManager implements ParseCallback {
     private final DynamicLutEffect dynamicLutEffect;
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
     private final BroadcastReceiver noisyReceiver;
+    private final PlaybackBufferingTracker playbackBufferingTracker;
+    private final PlaybackTrace playbackTrace;
     private DanmakuController danmakuController;
     private PlayerEngine engine;
-    private final PlaybackTrace playbackTrace;
     private VideoSize videoSize;
     private ParseJob parseJob;
     private PlaySpec spec;
@@ -129,6 +130,7 @@ public class PlayerManager implements ParseCallback {
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
+        this.playbackBufferingTracker = new PlaybackBufferingTracker();
         this.playbackTrace = new PlaybackTrace();
         this.dynamicLutEffect = new DynamicLutEffect();
         this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
@@ -166,6 +168,7 @@ public class PlayerManager implements ParseCallback {
         lutWarmupReloadPreviewPending = false;
         clearLutWarmupRecovery();
         clearDanmakuState();
+        playbackBufferingTracker.reset();
         playbackTrace.clear();
     }
 
@@ -606,6 +609,7 @@ public class PlayerManager implements ParseCallback {
         pendingLutPreview = false;
         waitingLutBeforePlay = false;
         clearLutWarmupRecovery();
+        playbackBufferingTracker.reset();
         playbackTrace.clear();
     }
 
@@ -1661,6 +1665,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void beginPlaybackTrace(String reason) {
+        playbackBufferingTracker.reset();
         playbackTrace.begin();
         bindPlaybackTrace();
         playbackTrace.mark(PlaybackTrace.Stage.REQUEST, "reason=" + reason + " player=" + playerType + " decode=" + (engine == null ? -1 : engine.getDecode()));
@@ -1705,6 +1710,58 @@ public class PlayerManager implements ParseCallback {
         } else if (completion == PlaybackStartupPolicy.Completion.AUDIO_PLAYABLE) {
             playbackTrace.mark(PlaybackTrace.Stage.AUDIO_PLAYABLE, "source=ready player=" + playerType);
         }
+    }
+
+    private void recordBufferingState(int state) {
+        if (player == null || (playerType != PlayerSetting.EXO && playerType != PlayerSetting.MPV)) return;
+        boolean startupComplete = playbackTrace.hasStage(PlaybackTrace.Stage.FIRST_FRAME) || playbackTrace.hasStage(PlaybackTrace.Stage.AUDIO_PLAYABLE);
+        PlaybackBufferingTracker.Event event = playbackBufferingTracker.update(
+                state == Player.STATE_BUFFERING,
+                startupComplete,
+                SystemClock.elapsedRealtime(),
+                state,
+                currentPositionSnapshot(),
+                forwardBufferedSnapshot(),
+                loadingSnapshot());
+        if (event == null) return;
+        PlaybackTrace.log("playback-buffer", playbackTrace.current(),
+                "event=%s phase=%s outcome=%s duration=%dms count=%d total=%dms position=%d forward=%d state=%s loading=%s",
+                event.type().label(), event.phase().label(), bufferingOutcome(event), event.durationMs(), event.rebufferCount(), event.rebufferTotalMs(),
+                event.positionMs(), event.forwardBufferedMs(), stateName(event.playbackState()), event.loading());
+    }
+
+    private long currentPositionSnapshot() {
+        try {
+            return Math.max(0, player.getCurrentPosition());
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    private long forwardBufferedSnapshot() {
+        try {
+            return Math.max(0, player.getTotalBufferedDuration());
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    private boolean loadingSnapshot() {
+        try {
+            return player.isLoading();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static String bufferingOutcome(PlaybackBufferingTracker.Event event) {
+        if (event.type() == PlaybackBufferingTracker.Type.START) return "-";
+        return switch (event.playbackState()) {
+            case Player.STATE_READY -> "ready";
+            case Player.STATE_ENDED -> "ended";
+            case Player.STATE_IDLE -> "idle";
+            default -> "left-buffering";
+        };
     }
 
     private static String trackSummary(Tracks tracks) {
@@ -1756,6 +1813,7 @@ public class PlayerManager implements ParseCallback {
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
             }
+            recordBufferingState(state);
         }
 
         @Override
