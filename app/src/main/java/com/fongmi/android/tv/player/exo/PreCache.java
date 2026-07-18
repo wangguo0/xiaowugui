@@ -250,7 +250,8 @@ public class PreCache implements Player.Listener {
     private long getLength(long startMs) {
         long durationMs = player.getDuration();
         if (durationMs <= 0) return 0;
-        return Math.min(PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), durationMs - startMs);
+        long remainingMs = Math.max(0, durationMs - startMs);
+        return PreCachePolicy.preloadLengthMs(PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), remainingMs, getSelectedBitrate(), MediaSourceFactory.getCacheCapacityBytes());
     }
 
     private long getStep() {

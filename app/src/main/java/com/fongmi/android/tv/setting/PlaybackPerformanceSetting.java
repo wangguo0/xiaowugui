@@ -17,6 +17,7 @@ public class PlaybackPerformanceSetting {
     private static final String KEY_INITIALIZED = "playback_performance_initialized";
     private static final String KEY_BUFFER_WATERMARKS_MIGRATED = "playback_performance_buffer_watermarks_v2";
     private static final String KEY_EXO_SIZE_PRIORITY_MIGRATED = "playback_performance_exo_size_priority_v1";
+    private static final String KEY_PRELOAD_DEFAULTS_MIGRATED = "playback_performance_preload_defaults_v1";
     private static final String KEY_CODEC_ASYNC_QUEUEING = "perf_codec_async_queueing";
     private static final String KEY_DYNAMIC_SCHEDULING = "perf_dynamic_scheduling";
     private static final String KEY_VIDEO_DURATION_PROGRESS = "perf_video_duration_progress";
@@ -38,6 +39,7 @@ public class PlaybackPerformanceSetting {
         migrateProfiles();
         migrateBufferWatermarks();
         migrateExoSizePriority();
+        migratePreloadDefaults();
     }
 
     public static int getProfile() {
@@ -337,6 +339,19 @@ public class PlaybackPerformanceSetting {
     }
 
     static boolean shouldMigrateExoSizePriority(int profile) {
+        return clampProfile(profile) != PROFILE_CUSTOM;
+    }
+
+    private static void migratePreloadDefaults() {
+        if (Prefers.getBoolean(KEY_PRELOAD_DEFAULTS_MIGRATED)) return;
+        for (int kernel : new int[]{PlayerSetting.EXO, PlayerSetting.MPV, PlayerSetting.IJK}) {
+            int profile = clampProfile(Prefers.getInt(profileKey(kernel), PROFILE_RECOMMENDED));
+            if (shouldMigratePreloadDefaults(profile)) KernelPerformanceSetting.applyPreloadPreset(kernel, profile);
+        }
+        Prefers.put(KEY_PRELOAD_DEFAULTS_MIGRATED, true);
+    }
+
+    static boolean shouldMigratePreloadDefaults(int profile) {
         return clampProfile(profile) != PROFILE_CUSTOM;
     }
 

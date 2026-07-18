@@ -33,7 +33,7 @@ public class PlaybackRouteTest {
     }
 
     @Test
-    public void externalProxyAlwaysUsesOnePreloadThread() {
+    public void externalProxyAlwaysUsesOnePreloadThreadWhileAppRouteKeepsCustomValue() {
         assertEquals(1, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY.effectivePreloadThreads(4));
         assertEquals(4, PlaybackRoute.APP_LOCAL_SERVICE.effectivePreloadThreads(10));
     }
@@ -45,6 +45,12 @@ public class PlaybackRouteTest {
         assertEquals(3, PlaybackRoute.DIRECT_REMOTE_HTTP.effectivePreloadThreads(3));
         assertEquals(4, PlaybackRoute.DIRECT_REMOTE_HTTP.effectivePreloadThreads(4));
         assertEquals(4, PlaybackRoute.DIRECT_REMOTE_HTTP.effectivePreloadThreads(10));
+    }
+
+    @Test
+    public void appOwnedAndDirectRoutesDefaultToOneThread() {
+        assertEquals(1, PlaybackRoute.APP_LOCAL_SERVICE.effectivePreloadThreads(1));
+        assertEquals(1, PlaybackRoute.DIRECT_REMOTE_HTTP.effectivePreloadThreads(1));
     }
 
     @Test

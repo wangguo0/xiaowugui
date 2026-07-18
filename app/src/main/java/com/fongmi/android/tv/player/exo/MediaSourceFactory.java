@@ -84,6 +84,10 @@ public class MediaSourceFactory implements MediaSource.Factory {
         return Math.min(PreloadSetting.getPreloadSizeBytes(PlayerSetting.EXO), storageBudget);
     }
 
+    static long getCacheCapacityBytes() {
+        return getMaxCacheSize(Path.exoCache());
+    }
+
     static boolean isConcatenatingUrl(String url) {
         return url != null && url.contains(CONCAT_SOURCE_SEPARATOR) && url.contains(CONCAT_DURATION_SEPARATOR);
     }

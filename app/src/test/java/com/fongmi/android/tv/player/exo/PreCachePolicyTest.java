@@ -41,9 +41,28 @@ public class PreCachePolicyTest {
         assertTrue(PreCachePolicy.hasSafeBuffer(3_000, false, 8_000, true));
     }
 
+    @Test
+    public void preloadRangeUsesAtMostHalfOfDiskCache() {
+        assertEquals(20_000, preloadLength(20_000, -1, 50, 512));
+        assertEquals(10_737, preloadLength(20_000, -1, 100, 256));
+        assertEquals(5_368, preloadLength(120_000, -1, 100, 128));
+    }
+
+    @Test
+    public void unknownBitrateUsesConservativeRangeEstimate() {
+        assertEquals(10_737, preloadLength(20_000, -1, 0, 512));
+        assertEquals(3_000, preloadLength(20_000, 3_000, 0, 512));
+    }
+
     private static long target(boolean recovery, long remainingMs, double bitrateMbps, double capacityMib) {
         long bitrate = Math.round(bitrateMbps * 1_000_000);
         int capacity = (int) Math.round(capacityMib * 1024 * 1024);
         return PreCachePolicy.safeBufferTargetMs(recovery, remainingMs, bitrate, capacity);
+    }
+
+    private static long preloadLength(long configuredMs, long remainingMs, double bitrateMbps, double capacityMib) {
+        long bitrate = Math.round(bitrateMbps * 1_000_000);
+        long capacity = Math.round(capacityMib * 1024 * 1024);
+        return PreCachePolicy.preloadLengthMs(configuredMs, remainingMs, bitrate, capacity);
     }
 }
