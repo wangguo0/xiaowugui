@@ -103,6 +103,7 @@ public class ExoUtil {
                 .setMediaSourceFactory(buildMediaSourceFactory())
                 .setVideoChangeFrameRateStrategy(ExoPerformanceSetting.getFrameRateStrategy());
         if (PlaybackPerformanceSetting.isHighBufferEnabled()) builder.setLoadControl(buildEnhancedLoadControl());
+        else ExoPlaybackDiagnostics.logDefaultLoadControl(PlaybackPerformanceSetting.getProfile(PlayerSetting.EXO));
         if (PlaybackPerformanceSetting.isBandwidthMeterEnabled()) builder.setBandwidthMeter(buildEnhancedBandwidthMeter(profile));
         if (PlaybackPerformanceSetting.isDynamicSchedulingEnabled()) {
             builder.experimentalSetDynamicSchedulingEnabled(true);
@@ -334,12 +335,19 @@ public class ExoUtil {
     }
 
     private static DefaultLoadControl buildEnhancedLoadControl() {
+        int profile = PlaybackPerformanceSetting.getProfile(PlayerSetting.EXO);
         ExoLoadControlPolicy.BufferDurations durations = getBufferDurations();
+        ExoBufferBudget.Budget budget = getBufferBudget();
+        int startBufferMs = ExoPerformanceSetting.getStartBufferMs();
+        int rebufferMs = ExoPerformanceSetting.getRebufferMs();
+        int backBufferMs = PlayerSetting.getBackBufferMs(PlayerSetting.EXO);
+        boolean prioritizeTime = ExoPerformanceSetting.isPrioritizeTime();
+        ExoPlaybackDiagnostics.logLoadControl(profile, durations, budget, startBufferMs, rebufferMs, backBufferMs, prioritizeTime);
         return new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(durations.minBufferMs(), durations.maxBufferMs(), ExoPerformanceSetting.getStartBufferMs(), ExoPerformanceSetting.getRebufferMs())
-                .setTargetBufferBytes(getBufferBudget().effectiveTargetBytes())
-                .setBackBuffer(PlayerSetting.getBackBufferMs(PlayerSetting.EXO), true)
-                .setPrioritizeTimeOverSizeThresholds(ExoPerformanceSetting.isPrioritizeTime())
+                .setBufferDurationsMs(durations.minBufferMs(), durations.maxBufferMs(), startBufferMs, rebufferMs)
+                .setTargetBufferBytes(budget.effectiveTargetBytes())
+                .setBackBuffer(backBufferMs, true)
+                .setPrioritizeTimeOverSizeThresholds(prioritizeTime)
                 .build();
     }
 

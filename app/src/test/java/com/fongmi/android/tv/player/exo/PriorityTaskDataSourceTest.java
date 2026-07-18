@@ -8,6 +8,7 @@ import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DataSpec;
 import androidx.media3.datasource.TransferListener;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -25,6 +26,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class PriorityTaskDataSourceTest {
+
+    @Before
+    public void setUp() {
+        PriorityTaskDataSource.resetDiagnostics();
+    }
 
     @Test
     public void preloadCanReadWhilePlaybackConnectionIsOpenButIdle() throws Exception {
@@ -74,6 +80,9 @@ public class PriorityTaskDataSourceTest {
         playbackUpstream.releaseRead.countDown();
         assertTrue(playbackCompleted.await(2, TimeUnit.SECONDS));
         assertTrue(completed.await(2, TimeUnit.SECONDS));
+        PriorityTaskDataSource.DiagnosticSnapshot diagnostics = PriorityTaskDataSource.getDiagnosticSnapshot();
+        assertEquals(1, diagnostics.waitCount());
+        assertTrue(diagnostics.waitTotalMs() >= 50);
         playback.close();
         preload.close();
         executor.shutdownNow();
@@ -124,6 +133,7 @@ public class PriorityTaskDataSourceTest {
         assertFalse(completed.await(200, TimeUnit.MILLISECONDS));
         preload.close();
         assertTrue(completed.await(2, TimeUnit.SECONDS));
+        assertEquals(1, PriorityTaskDataSource.getDiagnosticSnapshot().waitCount());
         playbackUpstream.releaseRead.countDown();
         playback.close();
         executor.shutdownNow();

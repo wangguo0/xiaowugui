@@ -2,6 +2,7 @@ package com.fongmi.android.tv.player.exo;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 
 final class ExoBufferBudget {
 
@@ -18,7 +19,11 @@ final class ExoBufferBudget {
     static Budget resolve(Context context, int requestedTargetBytes) {
         ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
         boolean lowRamDevice = manager != null && manager.isLowRamDevice();
-        return calculate(requestedTargetBytes, Runtime.getRuntime().maxMemory(), lowRamDevice);
+        Budget budget = calculate(requestedTargetBytes, Runtime.getRuntime().maxMemory(), lowRamDevice);
+        int memoryClassMb = manager == null ? 0 : manager.getMemoryClass();
+        int largeMemoryClassMb = manager == null ? 0 : manager.getLargeMemoryClass();
+        boolean largeHeap = (context.getApplicationInfo().flags & ApplicationInfo.FLAG_LARGE_HEAP) != 0;
+        return budget.withDeviceMemory(memoryClassMb, largeMemoryClassMb, largeHeap);
     }
 
     static int getEffectiveTargetBytes(Context context, int requestedTargetBytes) {
@@ -41,9 +46,13 @@ final class ExoBufferBudget {
         long heapBudget = Math.min(heapLimit, Math.min(MAX_TARGET_BYTES, Math.min(percentageBudget, headroomBudget)));
         int requested = requestedTargetBytes > 0 ? requestedTargetBytes : MAX_TARGET_BYTES;
         int effective = (int) Math.min(requested, heapBudget);
-        return new Budget(requested, effective, (int) heapBudget, heapLimit, reservedHeadroom, (int) Math.min(Integer.MAX_VALUE, availableAfterReserve), lowRamDevice);
+        return new Budget(requested, effective, (int) heapBudget, heapLimit, reservedHeadroom, (int) Math.min(Integer.MAX_VALUE, availableAfterReserve), lowRamDevice, 0, 0, false);
     }
 
-    record Budget(int requestedTargetBytes, int effectiveTargetBytes, int heapBudgetBytes, long heapLimitBytes, int reservedHeadroomBytes, int availableAfterReserveBytes, boolean lowRamDevice) {
+    record Budget(int requestedTargetBytes, int effectiveTargetBytes, int heapBudgetBytes, long heapLimitBytes, int reservedHeadroomBytes, int availableAfterReserveBytes, boolean lowRamDevice, int memoryClassMb, int largeMemoryClassMb, boolean largeHeap) {
+
+        Budget withDeviceMemory(int memoryClassMb, int largeMemoryClassMb, boolean largeHeap) {
+            return new Budget(requestedTargetBytes, effectiveTargetBytes, heapBudgetBytes, heapLimitBytes, reservedHeadroomBytes, availableAfterReserveBytes, lowRamDevice, memoryClassMb, largeMemoryClassMb, largeHeap);
+        }
     }
 }

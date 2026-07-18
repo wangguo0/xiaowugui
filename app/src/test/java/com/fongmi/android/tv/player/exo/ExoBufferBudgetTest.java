@@ -66,6 +66,17 @@ public class ExoBufferBudgetTest {
     }
 
     @Test
+    public void deviceMemoryMetadataDoesNotChangeEffectiveBudget() {
+        ExoBufferBudget.Budget base = budget(128, 512, false);
+        ExoBufferBudget.Budget diagnostics = base.withDeviceMemory(256, 512, true);
+
+        assertEquals(base.effectiveTargetBytes(), diagnostics.effectiveTargetBytes());
+        assertEquals(256, diagnostics.memoryClassMb());
+        assertEquals(512, diagnostics.largeMemoryClassMb());
+        assertTrue(diagnostics.largeHeap());
+    }
+
+    @Test
     public void smallHeapDoesNotAllocateBeyondHeapLimit() {
         assertEquals(mib(16), effective(256, 16, true));
     }

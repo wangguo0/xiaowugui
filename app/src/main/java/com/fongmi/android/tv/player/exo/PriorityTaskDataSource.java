@@ -13,10 +13,13 @@ import java.io.InterruptedIOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 final class PriorityTaskDataSource implements DataSource {
 
     private static final long PRIORITY_WAIT_MS = 50;
+    private static final AtomicLong WAIT_COUNT = new AtomicLong();
+    private static final AtomicLong WAIT_TOTAL_MS = new AtomicLong();
 
     private final DataSource upstream;
     private final PriorityTaskManager taskManager;
@@ -78,15 +81,21 @@ final class PriorityTaskDataSource implements DataSource {
     }
 
     private void waitForPriority() throws IOException {
-        while (registered.get() && !taskManager.proceedNonBlocking(priority)) {
-            try {
-                Thread.sleep(PRIORITY_WAIT_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw interrupted(e);
+        long waitStartNs = 0;
+        try {
+            while (registered.get() && !taskManager.proceedNonBlocking(priority)) {
+                if (waitStartNs == 0) waitStartNs = System.nanoTime();
+                try {
+                    Thread.sleep(PRIORITY_WAIT_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw interrupted(e);
+                }
             }
+            if (!registered.get()) throw interrupted(null);
+        } finally {
+            if (waitStartNs != 0) recordWait(waitStartNs);
         }
-        if (!registered.get()) throw interrupted(null);
     }
 
     private <T> T runWithPriority(IoOperation<T> operation) throws IOException {
@@ -111,6 +120,23 @@ final class PriorityTaskDataSource implements DataSource {
 
     private void unregister() {
         if (registered.compareAndSet(true, false)) taskManager.remove(priority);
+    }
+
+    static void resetDiagnostics() {
+        WAIT_COUNT.set(0);
+        WAIT_TOTAL_MS.set(0);
+    }
+
+    static DiagnosticSnapshot getDiagnosticSnapshot() {
+        return new DiagnosticSnapshot(WAIT_COUNT.get(), WAIT_TOTAL_MS.get());
+    }
+
+    private static void recordWait(long waitStartNs) {
+        WAIT_COUNT.incrementAndGet();
+        WAIT_TOTAL_MS.addAndGet(Math.max(0, (System.nanoTime() - waitStartNs) / 1_000_000L));
+    }
+
+    record DiagnosticSnapshot(long waitCount, long waitTotalMs) {
     }
 
     private interface IoOperation<T> {
