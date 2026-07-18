@@ -32,6 +32,14 @@ public class AutoRebufferPolicyTest {
         assertResult(5_000, 0, second);
     }
 
+    @Test
+    public void startupBufferFollowsLockedSessionRecoveryLevel() {
+        assertEquals(1_500, AutoRebufferPolicy.startBufferMs(2_000));
+        assertEquals(1_500, AutoRebufferPolicy.startBufferMs(3_000));
+        assertEquals(3_000, AutoRebufferPolicy.startBufferMs(5_000));
+        assertEquals(5_000, AutoRebufferPolicy.startBufferMs(8_000));
+    }
+
     private static void assertResult(int rebufferMs, int cleanStreak, AutoRebufferPolicy.Result result) {
         assertEquals(rebufferMs, result.rebufferMs());
         assertEquals(cleanStreak, result.cleanStreak());

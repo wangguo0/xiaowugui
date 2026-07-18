@@ -3,6 +3,7 @@ package com.fongmi.android.tv.setting;
 final class AutoRebufferPolicy {
 
     static final int DEFAULT_REBUFFER_MS = 3_000;
+    static final int DEFAULT_START_BUFFER_MS = 1_500;
     private static final long CLEAN_SESSION_MIN_POSITION_MS = 180_000;
     private static final int CLEAN_SESSIONS_TO_LOWER = 2;
 
@@ -27,6 +28,14 @@ final class AutoRebufferPolicy {
         if (value <= 3_000) return 3_000;
         if (value <= 5_000) return 5_000;
         return 8_000;
+    }
+
+    static int startBufferMs(int rebufferMs) {
+        return switch (normalize(rebufferMs)) {
+            case 8_000 -> 5_000;
+            case 5_000 -> 3_000;
+            default -> DEFAULT_START_BUFFER_MS;
+        };
     }
 
     private static int lower(int value) {

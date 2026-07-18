@@ -147,6 +147,10 @@ public final class ExoPerformanceSetting {
         return AutoRebufferPolicy.normalize(autoSessionRebufferMs);
     }
 
+    public static int getAutoSessionStartBufferMs() {
+        return AutoRebufferPolicy.startBufferMs(autoSessionRebufferMs);
+    }
+
     static int getAutoRebufferMs() {
         return AutoRebufferPolicy.normalize(Prefers.getInt(KEY_AUTO_REBUFFER_MS, AutoRebufferPolicy.DEFAULT_REBUFFER_MS));
     }
