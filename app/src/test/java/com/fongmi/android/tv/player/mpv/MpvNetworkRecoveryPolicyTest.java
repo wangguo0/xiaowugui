@@ -1,8 +1,9 @@
 package com.fongmi.android.tv.player.mpv;
 
 import com.fongmi.android.tv.player.PlaybackRoute;
-import com.github.catvod.Proxy;
+import com.fongmi.android.tv.player.PlaybackRouteRegistry;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -12,9 +13,16 @@ import static org.junit.Assert.assertTrue;
 
 public class MpvNetworkRecoveryPolicyTest {
 
+    private PlaybackRouteRegistry.Registration registration;
+
     @Before
     public void setUp() {
-        Proxy.set(9988);
+        registration = PlaybackRouteRegistry.registerAppService(9988, PlaybackRouteRegistry.AppOwner.MAIN_SERVER);
+    }
+
+    @After
+    public void tearDown() {
+        registration.close();
     }
 
     @Test
@@ -31,6 +39,8 @@ public class MpvNetworkRecoveryPolicyTest {
     public void appLocalServiceOwnsItsUpstreamRecovery() {
         MpvNetworkRecoveryPolicy.Decision decision = MpvNetworkRecoveryPolicy.resolve("http://127.0.0.1:9988/proxy/video");
         assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, decision.route());
+        assertEquals("app-main-server", decision.routeOwner());
+        assertEquals("registered-app-port", decision.routeEvidence());
         assertEquals("app-local-service", decision.recoveryOwner());
         assertFalse(decision.nativeRemoteRecovery());
         assertTrue(decision.proxyOwnsUpstreamRecovery());
@@ -41,7 +51,9 @@ public class MpvNetworkRecoveryPolicyTest {
     public void externalLoopbackProxyDoesNotReceiveRemoteReconnectOverlay() {
         MpvNetworkRecoveryPolicy.Decision decision = MpvNetworkRecoveryPolicy.resolve("http://127.0.0.1:7777/video");
         assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, decision.route());
-        assertEquals("external-loopback-proxy", decision.recoveryOwner());
+        assertEquals("external-or-unknown-loopback", decision.routeOwner());
+        assertEquals("inferred", decision.routeConfidence());
+        assertEquals("external-or-unknown-loopback", decision.recoveryOwner());
         assertFalse(decision.nativeRemoteRecovery());
         assertTrue(decision.proxyOwnsUpstreamRecovery());
         assertFalse(decision.appReconnectOverlay());

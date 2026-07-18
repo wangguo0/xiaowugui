@@ -8,15 +8,20 @@ public final class MpvNetworkRecoveryPolicy {
     }
 
     public static Decision resolve(String playableUri) {
-        PlaybackRoute route = PlaybackRoute.classify(playableUri);
+        PlaybackRoute.Resolution resolution = PlaybackRoute.resolve(playableUri);
+        PlaybackRoute route = resolution.route();
         return switch (route) {
-            case DIRECT_REMOTE_HTTP -> new Decision(route, "mpv-native-curl", true, false, false);
-            case APP_LOCAL_SERVICE -> new Decision(route, "app-local-service", false, true, false);
-            case EXTERNAL_LOOPBACK_PROXY -> new Decision(route, "external-loopback-proxy", false, true, false);
-            default -> new Decision(route, "not-applicable", false, false, false);
+            case DIRECT_REMOTE_HTTP -> decision(resolution, "mpv-native-curl", true, false, false);
+            case APP_LOCAL_SERVICE -> decision(resolution, "app-local-service", false, true, false);
+            case EXTERNAL_LOOPBACK_PROXY -> decision(resolution, "external-or-unknown-loopback", false, true, false);
+            default -> decision(resolution, "not-applicable", false, false, false);
         };
     }
 
-    public record Decision(PlaybackRoute route, String recoveryOwner, boolean nativeRemoteRecovery, boolean proxyOwnsUpstreamRecovery, boolean appReconnectOverlay) {
+    private static Decision decision(PlaybackRoute.Resolution resolution, String recoveryOwner, boolean nativeRemoteRecovery, boolean proxyOwnsUpstreamRecovery, boolean appReconnectOverlay) {
+        return new Decision(resolution.route(), resolution.owner().label(), resolution.evidence().label(), resolution.confidence().label(), recoveryOwner, nativeRemoteRecovery, proxyOwnsUpstreamRecovery, appReconnectOverlay);
+    }
+
+    public record Decision(PlaybackRoute route, String routeOwner, String routeEvidence, String routeConfidence, String recoveryOwner, boolean nativeRemoteRecovery, boolean proxyOwnsUpstreamRecovery, boolean appReconnectOverlay) {
     }
 }

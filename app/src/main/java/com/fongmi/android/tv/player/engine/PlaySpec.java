@@ -9,6 +9,7 @@ import com.fongmi.android.tv.bean.Drm;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Sub;
 import com.fongmi.android.tv.player.PlayerHelper;
+import com.fongmi.android.tv.player.PlaybackRoute;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.UrlUtil;
@@ -28,6 +29,7 @@ public class PlaySpec {
     private Result parseResult;
     private String format;
     private String key;
+    private PlaybackRoute.Resolution playbackRoute = PlaybackRoute.resolve(null);
     private String playbackTraceId = PlaybackTrace.NONE;
     private String url;
     private Drm drm;
@@ -52,7 +54,7 @@ public class PlaySpec {
 
     private PlaySpec(String key, String url, Map<String, String> headers, String format, Drm drm, List<Sub> subs, List<Danmaku> danmakus, MediaMetadata metadata) {
         this.key = key;
-        this.url = url;
+        setUrl(url);
         this.drm = drm;
         this.subs = subs;
         this.format = format;
@@ -75,6 +77,7 @@ public class PlaySpec {
 
     public void setUrl(String url) {
         this.url = url;
+        this.playbackRoute = PlaybackRoute.resolve(url);
     }
 
     public Uri getUri() {
@@ -99,8 +102,17 @@ public class PlaySpec {
 
     public PlaySpec copyWithFormat(String format) {
         PlaySpec copy = new PlaySpec(key, url, headers, format, drm, subs, danmakus, metadata).setSource(parseResult, parseSource, parseUseParse);
+        copy.playbackRoute = playbackRoute;
         copy.playbackTraceId = playbackTraceId;
         return copy;
+    }
+
+    public PlaybackRoute.Resolution getPlaybackRoute() {
+        return playbackRoute;
+    }
+
+    public void refreshPlaybackRoute() {
+        playbackRoute = PlaybackRoute.resolve(url);
     }
 
     public String getPlaybackTraceId() {

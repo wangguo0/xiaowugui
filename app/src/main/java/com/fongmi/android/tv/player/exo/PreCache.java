@@ -62,6 +62,7 @@ public class PreCache implements Player.Listener {
     private HandlerThread worker;
     private Player player;
     private PlaybackRoute route;
+    private PlaybackRoute.Resolution routeResolution = PlaybackRoute.resolve(null);
     private volatile String playbackTraceId = PlaybackTrace.NONE;
     private Runnable scheduledTask;
     private int threads;
@@ -72,14 +73,15 @@ public class PreCache implements Player.Listener {
     private BufferGate bufferGate;
     private AutoPreloadPolicy autoPolicy;
 
-    public void start(Player player, MediaItem mediaItem, String playbackTraceId) {
+    public void start(Player player, MediaItem mediaItem, String playbackTraceId, PlaybackRoute.Resolution routeResolution) {
         stop("replace-media");
         this.playbackTraceId = PlaybackTrace.normalize(playbackTraceId);
         PriorityTaskDataSource.resetDiagnostics();
         if (!PreloadSetting.isPreload(PlayerSetting.EXO) || !canPreCache(mediaItem)) return;
         this.player = player;
         this.handler = new Handler(player.getApplicationLooper());
-        this.route = PlaybackRoute.classify(mediaItem.localConfiguration.uri.toString());
+        this.routeResolution = routeResolution == null ? PlaybackRoute.resolve(mediaItem.localConfiguration.uri.toString()) : routeResolution;
+        this.route = this.routeResolution.route();
         this.autoPolicy = PlaybackPerformanceSetting.isAuto(PlayerSetting.EXO) ? new AutoPreloadPolicy() : null;
         this.helper = createHelper(mediaItem);
         clearSeek();
@@ -87,7 +89,7 @@ public class PreCache implements Player.Listener {
         playable = false;
         bufferGate = BufferGate.FIRST_FRAME;
         this.player.addListener(this);
-        logSession(lifecycle.beginSession(), "generation=%d route=%s configuredThreads=%d effectiveThreads=%d durationTargetMs=%d cacheCapacityBytes=%d", generation, route, PreloadSetting.getPreloadThreads(PlayerSetting.EXO), threads, PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), MediaSourceFactory.getCacheCapacityBytes());
+        logSession(lifecycle.beginSession(), "generation=%d %s configuredThreads=%d effectiveThreads=%d durationTargetMs=%d cacheCapacityBytes=%d", generation, this.routeResolution.logSummary(), PreloadSetting.getPreloadThreads(PlayerSetting.EXO), threads, PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), MediaSourceFactory.getCacheCapacityBytes());
         transition(PreloadLifecycleTracker.State.WAIT_FIRST_FRAME, "session-start", "generation=%d position=%d buffered=%d loading=%s", generation, player.getCurrentPosition(), player.getTotalBufferedDuration(), player.isLoading());
         check();
     }
@@ -110,6 +112,7 @@ public class PreCache implements Player.Listener {
         helper = null;
         player = null;
         route = null;
+        routeResolution = PlaybackRoute.resolve(null);
         playbackTraceId = PlaybackTrace.NONE;
         autoPolicy = null;
         clearSeek();

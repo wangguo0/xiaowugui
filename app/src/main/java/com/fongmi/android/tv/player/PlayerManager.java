@@ -95,6 +95,7 @@ public class PlayerManager implements ParseCallback {
     private String currentDanmakuUrl;
     private String currentDanmakuKey;
     private String loadingDanmakuKey;
+    private String lastLoggedRouteTraceId = PlaybackTrace.NONE;
     private long danmakuLoadStartedAtMs;
     private long pendingSwitchPositionMs = C.TIME_UNSET;
     private float pendingSwitchSpeed = 1f;
@@ -170,6 +171,7 @@ public class PlayerManager implements ParseCallback {
         clearDanmakuState();
         playbackBufferingTracker.reset();
         playbackTrace.clear();
+        lastLoggedRouteTraceId = PlaybackTrace.NONE;
     }
 
     private void onPlaybackTimeout() {
@@ -611,6 +613,7 @@ public class PlayerManager implements ParseCallback {
         clearLutWarmupRecovery();
         playbackBufferingTracker.reset();
         playbackTrace.clear();
+        lastLoggedRouteTraceId = PlaybackTrace.NONE;
     }
 
     public void resetTrack() {
@@ -973,6 +976,8 @@ public class PlayerManager implements ParseCallback {
     private void setMediaItemNow(long timeout, boolean notifyPrepare) {
         if (spec == null || spec.getUrl() == null || engine == null) return;
         spec.setPlaybackTraceId(playbackTrace.ensure());
+        spec.refreshPlaybackRoute();
+        logPlaybackRoute();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
         App.removeCallbacks(runnable);
         setDanmakus(spec.getDanmakus());
@@ -1667,12 +1672,22 @@ public class PlayerManager implements ParseCallback {
     private void beginPlaybackTrace(String reason) {
         playbackBufferingTracker.reset();
         playbackTrace.begin();
+        lastLoggedRouteTraceId = PlaybackTrace.NONE;
         bindPlaybackTrace();
         playbackTrace.mark(PlaybackTrace.Stage.REQUEST, "reason=" + reason + " player=" + playerType + " decode=" + (engine == null ? -1 : engine.getDecode()));
     }
 
     private void bindPlaybackTrace() {
         if (spec != null) spec.setPlaybackTraceId(playbackTrace.current());
+    }
+
+    private void logPlaybackRoute() {
+        if (spec == null) return;
+        String traceId = playbackTrace.current();
+        if (traceId.equals(lastLoggedRouteTraceId)) return;
+        PlaybackRoute.Resolution resolution = spec.getPlaybackRoute();
+        PlaybackTrace.log("playback-route", traceId, "%s", resolution.logSummary());
+        lastLoggedRouteTraceId = traceId;
     }
 
     private static String summarizeUrl(String url) {

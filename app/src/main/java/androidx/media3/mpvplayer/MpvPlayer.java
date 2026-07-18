@@ -685,7 +685,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 hlsProxy.clear();
             }
             MpvNetworkRecoveryPolicy.Decision recovery = MpvNetworkRecoveryPolicy.resolve(currentPlayableUri);
-            PlaybackTrace.log("mpv", playbackTraceId, "network recovery route=%s owner=%s nativeRemote=%s proxyUpstream=%s appOverlay=%s", recovery.route(), recovery.recoveryOwner(), recovery.nativeRemoteRecovery(), recovery.proxyOwnsUpstreamRecovery(), recovery.appReconnectOverlay());
+            PlaybackTrace.log("mpv", playbackTraceId, "network recovery route=%s routeOwner=%s evidence=%s confidence=%s recoveryOwner=%s nativeRemote=%s proxyUpstream=%s appOverlay=%s", recovery.route(), recovery.routeOwner(), recovery.routeEvidence(), recovery.routeConfidence(), recovery.recoveryOwner(), recovery.nativeRemoteRecovery(), recovery.proxyOwnsUpstreamRecovery(), recovery.appReconnectOverlay());
             applyShaderPipeline(true);
             Log.d(TAG, "load scheme=" + safeScheme(currentPlayableUri) + " urlLen=" + (currentPlayableUri == null ? 0 : currentPlayableUri.length()) + " hls=" + currentLikelyHls + " dash=" + currentLikelyDash);
             PlaybackTrace.log("mpv", playbackTraceId, "load scheme=%s urlLen=%d hls=%s dash=%s surface=%s attached=%s hwdec=%s vo=%s gpuContext=%s gpuApi=%s", safeScheme(currentPlayableUri), currentPlayableUri == null ? 0 : currentPlayableUri.length(), currentLikelyHls, currentLikelyDash, surface != null && surface.isValid(), surfaceAttached, config.hwdec(), config.vo(), config.gpuContext(), config.gpuApi());

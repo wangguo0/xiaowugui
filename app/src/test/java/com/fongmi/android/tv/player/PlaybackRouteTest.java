@@ -1,28 +1,52 @@
 package com.fongmi.android.tv.player;
 
-import com.github.catvod.Proxy;
-
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class PlaybackRouteTest {
 
+    private PlaybackRouteRegistry.Registration registration;
+
     @Before
     public void setUp() {
-        Proxy.set(9988);
+        registration = PlaybackRouteRegistry.registerAppService(9988, PlaybackRouteRegistry.AppOwner.MAIN_SERVER);
+    }
+
+    @After
+    public void tearDown() {
+        registration.close();
     }
 
     @Test
     public void classifiesAppLocalServiceByOwnedPort() {
-        assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, PlaybackRoute.classify("http://127.0.0.1:9988/media"));
+        PlaybackRoute.Resolution resolution = PlaybackRoute.resolve("http://127.0.0.1:9988/media");
+        assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, resolution.route());
+        assertEquals(PlaybackRoute.Owner.APP_MAIN_SERVER, resolution.owner());
+        assertEquals(PlaybackRoute.Evidence.REGISTERED_APP_PORT, resolution.evidence());
         assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, PlaybackRoute.classify("http://localhost:9988/proxy"));
     }
 
     @Test
+    public void classifiesRegisteredDynamicHlsProxyAsAppOwned() {
+        try (PlaybackRouteRegistry.Registration hls = PlaybackRouteRegistry.registerAppService(7788, PlaybackRouteRegistry.AppOwner.HLS_PROXY)) {
+            PlaybackRoute.Resolution resolution = PlaybackRoute.resolve("http://127.0.0.1:7788/mpv/index.m3u8?token=secret");
+
+            assertEquals(PlaybackRoute.APP_LOCAL_SERVICE, resolution.route());
+            assertEquals(PlaybackRoute.Owner.APP_HLS_PROXY, resolution.owner());
+            assertEquals(PlaybackRoute.Confidence.CONFIRMED, resolution.confidence());
+        }
+    }
+
+    @Test
     public void classifiesOtherLoopbackPortAsExternalProxy() {
-        assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, PlaybackRoute.classify("http://127.0.0.1:7777/video"));
+        PlaybackRoute.Resolution resolution = PlaybackRoute.resolve("http://127.0.0.1:7777/video");
+        assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, resolution.route());
+        assertEquals(PlaybackRoute.Owner.EXTERNAL_OR_UNKNOWN_LOOPBACK, resolution.owner());
+        assertEquals(PlaybackRoute.Confidence.INFERRED, resolution.confidence());
         assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, PlaybackRoute.classify("http://localhost:8080/video"));
     }
 
@@ -56,5 +80,26 @@ public class PlaybackRouteTest {
     @Test
     public void unknownRouteUsesConservativeSingleThread() {
         assertEquals(1, PlaybackRoute.OTHER.effectivePreloadThreads(4));
+    }
+
+    @Test
+    public void staleRegistrationCannotRemoveNewOwnerForSamePort() {
+        PlaybackRouteRegistry.Registration first = PlaybackRouteRegistry.registerAppService(8899, PlaybackRouteRegistry.AppOwner.MAIN_SERVER);
+        PlaybackRouteRegistry.Registration second = PlaybackRouteRegistry.registerAppService(8899, PlaybackRouteRegistry.AppOwner.HLS_PROXY);
+
+        first.close();
+        assertEquals(PlaybackRoute.Owner.APP_HLS_PROXY, PlaybackRoute.resolve("http://127.0.0.1:8899/video").owner());
+        second.close();
+        assertEquals(PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, PlaybackRoute.classify("http://127.0.0.1:8899/video"));
+    }
+
+    @Test
+    public void routeLogSummaryDoesNotContainHostPathOrToken() {
+        String summary = PlaybackRoute.resolve("https://secret.example.com/private/movie.mkv?token=abc").logSummary();
+
+        assertFalse(summary.contains("secret.example.com"));
+        assertFalse(summary.contains("private"));
+        assertFalse(summary.contains("token"));
+        assertFalse(summary.contains("abc"));
     }
 }

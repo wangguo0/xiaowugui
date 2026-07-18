@@ -257,7 +257,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         if (!playWhenReady) player.pause();
         MediaItem item = ExoUtil.getMediaItem(spec.copyWithFormat(activeFormat), decode);
         player.setMediaItem(item, position);
-        preCache.start(player, item, spec.getPlaybackTraceId());
+        preCache.start(player, item, spec.getPlaybackTraceId(), spec.getPlaybackRoute());
         player.prepare();
         if (playWhenReady) player.play();
     }
