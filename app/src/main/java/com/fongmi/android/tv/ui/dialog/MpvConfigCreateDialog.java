@@ -23,6 +23,7 @@ import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class MpvConfigCreateDialog extends BaseAlertDialog {
@@ -56,6 +57,7 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
 
     @Override
     protected void initView() {
+        setupTvFocus();
     }
 
     @Override
@@ -70,6 +72,42 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
             importUrl();
             return true;
         });
+        binding.name.setOnEditorActionListener((view, actionId, event) -> {
+            if (!Util.isLeanback()) return false;
+            binding.textOption.requestFocus();
+            return true;
+        });
+    }
+
+    private void setupTvFocus() {
+        if (!Util.isLeanback()) return;
+        tvFocusable(binding.close);
+        tvFocusable(binding.name);
+        tvFocusable(binding.textOption);
+        tvFocusable(binding.urlOption);
+        tvFocusable(binding.importOption);
+        tvFocusable(binding.url);
+        tvFocusable(binding.urlBack);
+        tvFocusable(binding.urlImport);
+        binding.close.setNextFocusDownId(R.id.name);
+        binding.name.setNextFocusUpId(R.id.close);
+        binding.name.setNextFocusDownId(R.id.textOption);
+        binding.textOption.setNextFocusUpId(R.id.name);
+        binding.textOption.setNextFocusDownId(R.id.urlOption);
+        binding.urlOption.setNextFocusUpId(R.id.textOption);
+        binding.urlOption.setNextFocusDownId(R.id.importOption);
+        binding.importOption.setNextFocusUpId(R.id.urlOption);
+        binding.url.setNextFocusUpId(R.id.close);
+        binding.url.setNextFocusDownId(R.id.urlBack);
+        binding.urlBack.setNextFocusUpId(R.id.url);
+        binding.urlBack.setNextFocusRightId(R.id.urlImport);
+        binding.urlImport.setNextFocusUpId(R.id.url);
+        binding.urlImport.setNextFocusLeftId(R.id.urlBack);
+    }
+
+    private static void tvFocusable(View view) {
+        view.setFocusable(true);
+        view.setFocusableInTouchMode(true);
     }
 
     private String name() {
@@ -95,7 +133,7 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
         binding.urlOption.setVisibility(View.GONE);
         binding.importOption.setVisibility(View.GONE);
         binding.urlPanel.setVisibility(View.VISIBLE);
-        binding.url.requestFocus();
+        binding.url.post(() -> binding.url.requestFocus());
     }
 
     private void showOptions() {
@@ -159,5 +197,6 @@ public class MpvConfigCreateDialog extends BaseAlertDialog {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
+        if (Util.isLeanback()) binding.textOption.post(() -> binding.textOption.requestFocus());
     }
 }
