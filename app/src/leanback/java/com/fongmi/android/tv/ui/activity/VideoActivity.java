@@ -88,6 +88,7 @@ import com.fongmi.android.tv.model.SearchProgress;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
+import com.fongmi.android.tv.player.diagnostic.PanEndpointParser;
 import com.fongmi.android.tv.player.karaoke.KaraokeController;
 import com.fongmi.android.tv.player.karaoke.KaraokePitchTrackGenerator;
 import com.fongmi.android.tv.player.karaoke.KaraokeResult;
@@ -127,6 +128,7 @@ import com.fongmi.android.tv.ui.dialog.ContentDialog;
 import com.fongmi.android.tv.ui.dialog.ControlDialog;
 import com.fongmi.android.tv.ui.dialog.DanmakuDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeListDialog;
+import com.fongmi.android.tv.ui.dialog.PanNetworkDiagnosticDialog;
 import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
@@ -275,6 +277,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private Clock mClock;
     private View mFocus1;
     private View mFocus2;
+    private View mDialogReturnFocus;
     private Result mPendingDetail;
     private Result mPendingPlayer;
     private String mContextWallUrl;
@@ -675,6 +678,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.playParams.setOnClickListener(view -> onPlayParams());
+        mBinding.control.action.panDiagnostic.setOnClickListener(view -> onPanDiagnostic());
         mBinding.control.action.codecCapability.setOnClickListener(view -> onCodecCapability());
         mBinding.control.action.immersiveAudio.setOnClickListener(view -> toggleImmersiveAudioMode());
         mBinding.control.action.ending.setOnClickListener(view -> onEnding());
@@ -854,6 +858,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         addActionButton(PlayerButtonSetting.TITLE, mBinding.control.action.title);
         addActionButton(PlayerButtonSetting.REPEAT, mBinding.control.action.repeat);
         PlayerButtonSetting.applyOrder(mBinding.control.action.container, mActionButtons);
+        placePanDiagnosticAction();
+        updatePanDiagnosticAction();
     }
 
     private void addActionButton(String id, View view) {
@@ -863,6 +869,31 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void applyActionButtonVisibility() {
         if (mActionButtons != null) PlayerButtonSetting.applyVisibility(mActionButtons);
         updateImmersiveAudioAction();
+        updatePanDiagnosticAction();
+    }
+
+    private void placePanDiagnosticAction() {
+        ViewGroup container = mBinding.control.action.container;
+        View diagnostic = mBinding.control.action.panDiagnostic;
+        View anchor = mBinding.control.action.playParams;
+        if (diagnostic.getParent() != container || anchor.getParent() != container) return;
+        container.removeView(diagnostic);
+        container.addView(diagnostic, Math.min(container.getChildCount(), container.indexOfChild(anchor) + 1));
+    }
+
+    private void updatePanDiagnosticAction() {
+        if (mBinding == null) return;
+        mBinding.control.action.panDiagnostic.setVisibility(isFullscreen() && canRunPanDiagnostic() ? View.VISIBLE : View.GONE);
+    }
+
+    private boolean canRunPanDiagnostic() {
+        if (service() == null || player().isEmpty()) return false;
+        try {
+            PanEndpointParser.parse(player().getUrl(), player().getHeaders());
+            return true;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private void updateImmersiveAudioAction() {
@@ -2907,6 +2938,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mOsd.setDiagnosticsVisible(visible);
         setPlayParamsState();
         hideControl();
+    }
+
+    private void onPanDiagnostic() {
+        if (!canRunPanDiagnostic()) return;
+        mDialogReturnFocus = mBinding.control.action.panDiagnostic;
+        App.removeCallbacks(mR1);
+        PanNetworkDiagnosticDialog.show(this, player());
     }
 
     private void setPlayParamsState() {
@@ -5593,6 +5631,18 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mBinding.control.action.fullscreen.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
         mBinding.control.action.fullscreen.setText(R.string.play_fullscreen);
         applyActionButtonVisibility();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus || mDialogReturnFocus == null) return;
+        View target = mDialogReturnFocus;
+        mDialogReturnFocus = null;
+        App.post(() -> {
+            if (isFinishing() || isDestroyed() || !isFullscreen() || target.getVisibility() != View.VISIBLE) return;
+            showControl(target);
+        }, 120);
     }
 
     private boolean isInitAuto() {
