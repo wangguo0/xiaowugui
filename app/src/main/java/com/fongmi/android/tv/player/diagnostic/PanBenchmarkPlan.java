@@ -10,6 +10,7 @@ public final class PanBenchmarkPlan {
 
     public static final int DEFAULT_MAX_THREADS = 8;
     public static final int MAX_THREADS = 256;
+    public static final int MAX_DIRECT_CONCURRENCY = 32;
     private static final long MIB = 1024L * 1024L;
     private static final long MIN_BYTES_PER_WORKER = 4L * MIB;
     private static final int[] STANDARD_STEPS = {1, 2, 4, 8, 16, 32, 64, 128, 256};
@@ -49,6 +50,19 @@ public final class PanBenchmarkPlan {
         return Math.max(normalBudget, workerFloor);
     }
 
+    public static long roundTimeLimitMs(Mode mode) {
+        Mode actualMode = mode == null ? Mode.STANDARD : mode;
+        return actualMode.maxDurationSeconds * 1000L;
+    }
+
+    public static int repeats(Mode mode) {
+        return (mode == null ? Mode.STANDARD : mode).repeats;
+    }
+
+    public static int directConcurrency(int requestedThreads) {
+        return Math.min(normalizeThreads(requestedThreads), MAX_DIRECT_CONCURRENCY);
+    }
+
     public static long estimateTotalBytes(long requiredBitsPerSecond, Collection<Integer> threads, Mode mode, int measuredRepeats) {
         long total = 0;
         for (int value : sanitizeThreads(threads)) total = addSaturated(total, roundBudgetBytes(requiredBitsPerSecond, value, mode));
@@ -81,17 +95,21 @@ public final class PanBenchmarkPlan {
     }
 
     public enum Mode {
-        QUICK(6, 32 * MIB, 128 * MIB, 64 * MIB),
-        STANDARD(12, 64 * MIB, 512 * MIB, 128 * MIB),
-        DEEP(20, 128 * MIB, 2L * 1024L * MIB, 256 * MIB);
+        QUICK(6, 8, 1, 32 * MIB, 128 * MIB, 64 * MIB),
+        STANDARD(8, 10, 2, 64 * MIB, 512 * MIB, 128 * MIB),
+        DEEP(10, 12, 3, 128 * MIB, 2L * 1024L * MIB, 256 * MIB);
 
         private final long targetSeconds;
+        private final long maxDurationSeconds;
+        private final int repeats;
         private final long minBytes;
         private final long maxBytes;
         private final long defaultBytes;
 
-        Mode(long targetSeconds, long minBytes, long maxBytes, long defaultBytes) {
+        Mode(long targetSeconds, long maxDurationSeconds, int repeats, long minBytes, long maxBytes, long defaultBytes) {
             this.targetSeconds = targetSeconds;
+            this.maxDurationSeconds = maxDurationSeconds;
+            this.repeats = repeats;
             this.minBytes = minBytes;
             this.maxBytes = maxBytes;
             this.defaultBytes = defaultBytes;

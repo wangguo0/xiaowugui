@@ -21,12 +21,12 @@ public final class PanEndpointParser {
     public static PanEndpoint parse(String playbackUrl, Map<String, String> playbackHeaders) {
         if (!isHttp(playbackUrl)) throw new IllegalArgumentException("HTTP playback URL required");
         Map<String, String> query = query(playbackUrl);
-        String upstreamUrl = decode(query.get("url"));
-        Map<String, String> upstreamHeaders = parseHeaders(decode(query.get("header")));
+        String upstreamUrl = decodeUrl(query.get("url"));
+        Map<String, String> upstreamHeaders = parseEncodedHeaders(query.get("header"));
         if (upstreamHeaders.isEmpty() && playbackHeaders != null) upstreamHeaders.putAll(playbackHeaders);
         if (!isRemoteHttp(upstreamUrl)) upstreamUrl = "";
         int configuredThreads = parseThreads(query.get("thread"));
-        PanProvider provider = PanProvider.fromHost(host(upstreamUrl));
+        PanProvider provider = PanProvider.fromHost(host(upstreamUrl.isEmpty() ? playbackUrl : upstreamUrl));
         return new PanEndpoint(playbackUrl, upstreamUrl, upstreamHeaders, provider, configuredThreads);
     }
 
@@ -36,51 +36,70 @@ public final class PanEndpointParser {
         Map<String, String> values = new LinkedHashMap<>();
         for (String pair : raw.split("&")) {
             int split = pair.indexOf('=');
-            String key = decode(split < 0 ? pair : pair.substring(0, split));
+            String key = decodeOnce(split < 0 ? pair : pair.substring(0, split));
             String value = split < 0 ? "" : pair.substring(split + 1);
             if (!values.containsKey(key)) values.put(key, value);
         }
         return values;
     }
 
+    private static Map<String, String> parseEncodedHeaders(String value) {
+        if (value == null || value.isEmpty()) return new LinkedHashMap<>();
+        String current = value;
+        for (int i = 0; i < MAX_DECODE_PASSES; i++) {
+            current = decodeOnce(current);
+            Map<String, String> parsed = parseHeaders(current);
+            if (parsed != null) return parsed;
+        }
+        return new LinkedHashMap<>();
+    }
+
     private static Map<String, String> parseHeaders(String value) {
         Map<String, String> headers = new LinkedHashMap<>();
-        if (value == null || value.isEmpty()) return headers;
+        if (value == null || value.isEmpty()) return null;
         try {
             JsonElement element = JsonParser.parseString(value);
-            if (!element.isJsonObject()) return headers;
+            if (!element.isJsonObject()) return null;
             JsonObject object = element.getAsJsonObject();
             for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
                 if (!entry.getValue().isJsonPrimitive()) continue;
                 headers.put(entry.getKey(), entry.getValue().getAsString());
             }
         } catch (RuntimeException ignored) {
+            return null;
         }
         return headers;
     }
 
     private static int parseThreads(String value) {
-        try {
-            return PanBenchmarkPlan.normalizeThreads(Integer.parseInt(decode(value)));
-        } catch (RuntimeException e) {
-            return 0;
+        String current = value;
+        for (int i = 0; i < MAX_DECODE_PASSES; i++) {
+            current = decodeOnce(current);
+            try {
+                return PanBenchmarkPlan.normalizeThreads(Integer.parseInt(current));
+            } catch (RuntimeException ignored) {
+            }
         }
+        return 0;
     }
 
-    private static String decode(String value) {
+    private static String decodeUrl(String value) {
         if (value == null || value.isEmpty()) return "";
         String current = value;
         for (int i = 0; i < MAX_DECODE_PASSES; i++) {
-            String decoded;
-            try {
-                decoded = URLDecoder.decode(current, StandardCharsets.UTF_8);
-            } catch (IllegalArgumentException e) {
-                return current;
-            }
-            if (decoded.equals(current)) break;
-            current = decoded;
+            current = decodeOnce(current);
+            if (isRemoteHttp(current)) return current;
         }
         return current;
+    }
+
+    private static String decodeOnce(String value) {
+        if (value == null || value.isEmpty()) return "";
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException e) {
+            return value;
+        }
     }
 
     private static boolean isHttp(String value) {

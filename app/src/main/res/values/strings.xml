@@ -817,6 +817,9 @@
     <string name="player_performance_help">Guide</string>
     <string name="player_performance_help_title">Playback performance guide</string>
     <string name="player_performance_help_close">Close</string>
+    <string name="pan_diagnostic_section">Diagnostics</string>
+    <string name="pan_diagnostic_entry">Drive test</string>
+    <string name="pan_diagnostic_title">Cloud-drive link diagnostics</string>
     <string name="player_kernel">Player engine</string>
     <string name="player_scale">Scale</string>
     <string name="player_lut">LUT color</string>

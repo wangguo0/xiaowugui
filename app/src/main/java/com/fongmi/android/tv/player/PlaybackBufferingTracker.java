@@ -38,6 +38,14 @@ public final class PlaybackBufferingTracker {
         rebufferTotalMs = 0;
     }
 
+    public int getRebufferCount() {
+        return rebufferCount;
+    }
+
+    public long getRebufferTotalMs() {
+        return rebufferTotalMs;
+    }
+
     public enum Type {
         START("start"),
         END("end");

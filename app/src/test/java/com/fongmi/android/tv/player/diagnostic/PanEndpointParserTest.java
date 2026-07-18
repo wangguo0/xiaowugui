@@ -45,6 +45,16 @@ public class PanEndpointParserTest {
         assertEquals("UA", endpoint.upstreamHeaders().get("User-Agent"));
     }
 
+    @Test
+    public void stopsDecodingAfterHeaderJsonIsValidSoCookieEscapesStayIntact() {
+        String upstream = "https://dl-pc-zb.drive.quark.cn/file?token=abc%2Fdef";
+        String headers = "{\"Cookie\":\"session=abc%2Fdef%3D\",\"Referer\":\"https://pan.quark.cn\"}";
+        PanEndpoint endpoint = PanEndpointParser.parse(local(upstream, headers, 8), Map.of());
+
+        assertEquals(upstream, endpoint.upstreamUrl());
+        assertEquals("session=abc%2Fdef%3D", endpoint.upstreamHeaders().get("Cookie"));
+    }
+
     private static String local(String upstream, String headers, int threads) {
         return "http://127.0.0.1:1314/?url=" + encode(upstream) + "&header=" + encode(headers) + "&thread=" + threads;
     }

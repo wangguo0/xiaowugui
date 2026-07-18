@@ -30,6 +30,6 @@ public class PanBenchmarkPlanTest {
     @Test
     public void standardBudgetTracksRequiredBitrate() {
         long budget = PanBenchmarkPlan.roundBudgetBytes(100_000_000L, 8, PanBenchmarkPlan.Mode.STANDARD);
-        assertEquals(187_500_000L, budget);
+        assertEquals(125_000_000L, budget);
     }
 }

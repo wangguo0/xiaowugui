@@ -357,6 +357,14 @@ public class PlayerManager implements ParseCallback {
         return engine == null ? 0 : engine.getDroppedFrames();
     }
 
+    public int getRebufferCount() {
+        return playbackBufferingTracker.getRebufferCount();
+    }
+
+    public long getRebufferTotalMs() {
+        return playbackBufferingTracker.getRebufferTotalMs();
+    }
+
     public boolean supportsSubtitleStyle() {
         return engine != null && engine.supportsSubtitleStyle();
     }
