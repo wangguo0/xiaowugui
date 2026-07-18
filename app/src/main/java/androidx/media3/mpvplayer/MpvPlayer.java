@@ -762,30 +762,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         setRuntimeString("save-position-on-quit", "no");
         setRuntimeString("force-window", "no");
         setRuntimeString("idle", "yes");
-        if (MpvStartupBufferPolicy.shouldApplyPerformanceOverlay(config.performanceOptionsPriority())) applyPerformanceOptionOverlay();
-        SpiderDebug.log("mpv", "option priority=%s effective cache maxBytes=%s backBytes=%s cacheSecs=%s readaheadSecs=%s initial=%s rebufferWait=%s", config.performanceOptionsPriority() ? "performance" : "mpv.conf", stringProperty("demuxer-max-bytes", "?"), stringProperty("demuxer-max-back-bytes", "?"), stringProperty("cache-secs", "?"), stringProperty("demuxer-readahead-secs", "?"), stringProperty("cache-pause-initial", "?"), stringProperty("cache-pause-wait", "?"));
+        int overlayCount = applyPerformanceOptionOverlay();
+        SpiderDebug.log("mpv", "option priority=%s overlayCount=%d effective cache maxBytes=%s backBytes=%s cacheSecs=%s readaheadSecs=%s initial=%s rebufferWait=%s", MpvOptionPriorityPolicy.priorityName(config.performanceOptionsPriority()), overlayCount, stringProperty("demuxer-max-bytes", "?"), stringProperty("demuxer-max-back-bytes", "?"), stringProperty("cache-secs", "?"), stringProperty("demuxer-readahead-secs", "?"), stringProperty("cache-pause-initial", "?"), stringProperty("cache-pause-wait", "?"));
     }
 
-    private void applyPerformanceOptionOverlay() {
-        setRuntimeString("vo", config.vo());
-        setRuntimeString("gpu-context", config.gpuContext());
-        if (!TextUtils.isEmpty(config.gpuApi())) setRuntimeString("gpu-api", config.gpuApi());
-        if (config.openglEs()) setRuntimeString("opengl-es", "yes");
-        setRuntimeString("hwdec", config.hwdec());
-        setRuntimeString("hwdec-codecs", "h264,hevc,mpeg4,mpeg2video,vp8,vp9,av1");
-        setRuntimeString("ao", config.ao());
-        setRuntimeString("audio-spdif", config.audioSpdif());
-        setRuntimeString("cache", config.cache() ? "yes" : "no");
-        setRuntimeString("cache-secs", String.valueOf(config.cacheSeconds()));
-        setRuntimeString("cache-pause", MpvStartupBufferPolicy.CACHE_PAUSE);
-        setRuntimeString("cache-pause-initial", MpvStartupBufferPolicy.CACHE_PAUSE_INITIAL);
-        setRuntimeString("cache-pause-wait", String.format(Locale.US, "%.3f", config.rebufferMs() / SECONDS_TO_MS));
-        setRuntimeString("demuxer-thread", "yes");
-        setRuntimeString("demuxer-seekable-cache", "auto");
-        setRuntimeString("demuxer-max-bytes", String.valueOf(config.demuxerMaxBytes()));
-        setRuntimeString("demuxer-max-back-bytes", String.valueOf(config.demuxerMaxBackBytes()));
-        setRuntimeString("demuxer-readahead-secs", String.valueOf(config.demuxerReadaheadSeconds()));
-        for (Map.Entry<String, String> entry : config.extraOptions().entrySet()) setRuntimeString(entry.getKey(), entry.getValue());
+    private int applyPerformanceOptionOverlay() {
+        Map<String, String> overlay = MpvOptionPriorityPolicy.resolvePerformanceOverlay(config);
+        for (Map.Entry<String, String> entry : overlay.entrySet()) setRuntimeString(entry.getKey(), entry.getValue());
+        return overlay.size();
     }
 
     private void observeProperties() {
