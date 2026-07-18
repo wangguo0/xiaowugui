@@ -72,10 +72,8 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegVideoRenderer;
 
 public class ExoUtil {
 
-    private static final int ENHANCED_MIN_BUFFER_MS = 30_000;
-    private static final int ENHANCED_MAX_BUFFER_MS = 120_000;
     private static final int ENHANCED_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 5_000;
-    private static final int ENHANCED_TARGET_BUFFER_BYTES = 256 * 1024 * 1024;
+    private static final int ENHANCED_TARGET_BUFFER_BYTES = 128 * 1024 * 1024;
     private static final long ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US = 5_000L;
     private static final long ENHANCED_ADAPT_COOLDOWN_MS = 15_000L;
     private static final int ENHANCED_DROPPED_FRAMES_THRESHOLD = 24;
@@ -337,20 +335,17 @@ public class ExoUtil {
     }
 
     private static DefaultLoadControl buildEnhancedLoadControl() {
+        ExoLoadControlPolicy.BufferDurations durations = getBufferDurations();
         return new DefaultLoadControl.Builder()
-                .setBufferDurationsMs(getMinBufferMs(), getMaxBufferMs(), ExoPerformanceSetting.getStartBufferMs(), ExoPerformanceSetting.getRebufferMs())
+                .setBufferDurationsMs(durations.minBufferMs(), durations.maxBufferMs(), ExoPerformanceSetting.getStartBufferMs(), ExoPerformanceSetting.getRebufferMs())
                 .setTargetBufferBytes(getBufferBudget().effectiveTargetBytes())
                 .setBackBuffer(PlayerSetting.getBackBufferMs(PlayerSetting.EXO), true)
                 .setPrioritizeTimeOverSizeThresholds(ExoPerformanceSetting.isPrioritizeTime())
                 .build();
     }
 
-    private static int getMinBufferMs() {
-        return Math.min(ENHANCED_MIN_BUFFER_MS, Math.max(15_000, PlayerSetting.getBuffer(PlayerSetting.EXO) * 3_000));
-    }
-
-    private static int getMaxBufferMs() {
-        return Math.max(ENHANCED_MAX_BUFFER_MS / 2, Math.min(ENHANCED_MAX_BUFFER_MS, getMinBufferMs() * 4));
+    private static ExoLoadControlPolicy.BufferDurations getBufferDurations() {
+        return ExoLoadControlPolicy.resolve(PlaybackPerformanceSetting.getProfile(PlayerSetting.EXO), PlayerSetting.getBuffer(PlayerSetting.EXO));
     }
 
     static ExoBufferBudget.Budget getBufferBudget() {

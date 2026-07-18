@@ -18,6 +18,7 @@ public class PlaybackPerformanceSetting {
     private static final String KEY_BUFFER_WATERMARKS_MIGRATED = "playback_performance_buffer_watermarks_v2";
     private static final String KEY_EXO_SIZE_PRIORITY_MIGRATED = "playback_performance_exo_size_priority_v1";
     private static final String KEY_PRELOAD_DEFAULTS_MIGRATED = "playback_performance_preload_defaults_v1";
+    private static final String KEY_EXO_LOAD_CONTROL_MIGRATED = "playback_performance_exo_load_control_v1";
     private static final String KEY_CODEC_ASYNC_QUEUEING = "perf_codec_async_queueing";
     private static final String KEY_DYNAMIC_SCHEDULING = "perf_dynamic_scheduling";
     private static final String KEY_VIDEO_DURATION_PROGRESS = "perf_video_duration_progress";
@@ -40,11 +41,16 @@ public class PlaybackPerformanceSetting {
         migrateBufferWatermarks();
         migrateExoSizePriority();
         migratePreloadDefaults();
+        migrateExoLoadControl();
     }
 
     public static int getProfile() {
+        return getProfile(PlayerSetting.getPlayer());
+    }
+
+    public static int getProfile(int kernel) {
         ensureInitialized();
-        return clampProfile(Prefers.getInt(profileKey(PlayerSetting.getPlayer()), Prefers.getInt(KEY_PROFILE, PROFILE_RECOMMENDED)));
+        return clampProfile(Prefers.getInt(profileKey(PlayerSetting.sanitizePlayer(kernel)), Prefers.getInt(KEY_PROFILE, PROFILE_RECOMMENDED)));
     }
 
     public static void applyRecommended() {
@@ -352,6 +358,20 @@ public class PlaybackPerformanceSetting {
     }
 
     static boolean shouldMigratePreloadDefaults(int profile) {
+        return clampProfile(profile) != PROFILE_CUSTOM;
+    }
+
+    private static void migrateExoLoadControl() {
+        if (Prefers.getBoolean(KEY_EXO_LOAD_CONTROL_MIGRATED)) return;
+        int profile = clampProfile(Prefers.getInt(profileKey(PlayerSetting.EXO), PROFILE_RECOMMENDED));
+        if (shouldMigrateExoLoadControl(profile)) {
+            KernelPerformanceSetting.applyExoLoadControlPreset(profile);
+            ExoPerformanceSetting.applyPrioritizeTimePreset(profile);
+        }
+        Prefers.put(KEY_EXO_LOAD_CONTROL_MIGRATED, true);
+    }
+
+    static boolean shouldMigrateExoLoadControl(int profile) {
         return clampProfile(profile) != PROFILE_CUSTOM;
     }
 

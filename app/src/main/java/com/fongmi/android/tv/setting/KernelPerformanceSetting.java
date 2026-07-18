@@ -133,8 +133,8 @@ public final class KernelPerformanceSetting {
 
     public static void applyPreset(int kernel, int profile) {
         if (profile == PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT) {
-            putBuffer(kernel, 5);
-            putBufferBytesOption(kernel, 1);
+            putBuffer(kernel, kernel == PlayerSetting.EXO ? exoBufferForPreset(profile) : 5);
+            putBufferBytesOption(kernel, kernel == PlayerSetting.EXO ? exoBufferBytesOptionForPreset(profile) : 1);
             putBackBufferOption(kernel, 0);
             putPlayCacheOption(kernel, 0);
             putPreload(kernel, false);
@@ -146,8 +146,8 @@ public final class KernelPerformanceSetting {
             putAudioPrefer(kernel, false);
             putVideoPrefer(kernel, false);
         } else if (profile == PlaybackPerformanceSetting.PROFILE_COMPATIBLE) {
-            putBuffer(kernel, 5);
-            putBufferBytesOption(kernel, 1);
+            putBuffer(kernel, kernel == PlayerSetting.EXO ? exoBufferForPreset(profile) : 5);
+            putBufferBytesOption(kernel, kernel == PlayerSetting.EXO ? exoBufferBytesOptionForPreset(profile) : 1);
             putBackBufferOption(kernel, 1);
             putPlayCacheOption(kernel, 1);
             putPreload(kernel, false);
@@ -159,8 +159,8 @@ public final class KernelPerformanceSetting {
             putAudioPrefer(kernel, false);
             putVideoPrefer(kernel, false);
         } else {
-            putBuffer(kernel, 10);
-            putBufferBytesOption(kernel, 3);
+            putBuffer(kernel, kernel == PlayerSetting.EXO ? exoBufferForPreset(profile) : 10);
+            putBufferBytesOption(kernel, kernel == PlayerSetting.EXO ? exoBufferBytesOptionForPreset(profile) : 3);
             putBackBufferOption(kernel, 2);
             putPlayCacheOption(kernel, 2);
             putPreload(kernel, true);
@@ -192,6 +192,23 @@ public final class KernelPerformanceSetting {
 
     static int preloadTimeForPreset(int profile) {
         return PreloadSetting.DEFAULT_TIME_SECONDS;
+    }
+
+    static void applyExoLoadControlPreset(int profile) {
+        putBuffer(PlayerSetting.EXO, exoBufferForPreset(profile));
+        putBufferBytesOption(PlayerSetting.EXO, exoBufferBytesOptionForPreset(profile));
+    }
+
+    static int exoBufferForPreset(int profile) {
+        return switch (profile) {
+            case PlaybackPerformanceSetting.PROFILE_COMPATIBLE -> 4;
+            case PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT -> 1;
+            default -> 10;
+        };
+    }
+
+    static int exoBufferBytesOptionForPreset(int profile) {
+        return profile == PlaybackPerformanceSetting.PROFILE_RECOMMENDED ? 2 : 1;
     }
 
     private static synchronized void ensureMigrated() {

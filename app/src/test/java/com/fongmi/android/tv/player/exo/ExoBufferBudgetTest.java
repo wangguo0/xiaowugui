@@ -60,12 +60,20 @@ public class ExoBufferBudgetTest {
 
         assertEquals(percentOfMib(256, 20), budget.heapBudgetBytes());
         assertEquals(mibLong(256), budget.heapLimitBytes());
+        assertEquals(mib(48), budget.reservedHeadroomBytes());
+        assertEquals(mib(208), budget.availableAfterReserveBytes());
         assertTrue(budget.lowRamDevice());
     }
 
     @Test
     public void smallHeapDoesNotAllocateBeyondHeapLimit() {
         assertEquals(mib(16), effective(256, 16, true));
+    }
+
+    @Test
+    public void reservedHeadroomCapsConstrainedHeap() {
+        assertEquals(mib(16), effective(256, 80, false));
+        assertEquals(mib(16), effective(256, 64, true));
     }
 
     private static int effective(int requestedMib, int heapMib, boolean lowRamDevice) {
