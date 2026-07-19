@@ -55,16 +55,16 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +      if (writeIdx > 0 || !livePending.isEmpty()) {
 @@ -490,0 +515,15 @@
 +  private void activateLiveItems(long currentMs) {
-+    while (!livePending.isEmpty() && activeItems.size() < config.maxOnScreen) {
-+      Danmaku danmaku = livePending.peekFirst();
++    int attempts = livePending.size();
++    while (attempts-- > 0 && !livePending.isEmpty() && activeItems.size() < config.maxOnScreen) {
++      Danmaku danmaku = livePending.removeFirst();
 +      if (!isTypeVisible(danmaku.type) || !isPoolVisible(danmaku.pool)) {
-+        livePending.removeFirst();
 +        continue;
 +      }
 +      if (!tryActivate(danmaku, currentMs)) {
-+        break;
++        livePending.addLast(danmaku);
++        continue;
 +      }
-+      livePending.removeFirst();
 +      activeItems.add(danmaku);
 +    }
 +  }
