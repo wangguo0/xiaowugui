@@ -1679,7 +1679,7 @@ public class PlayerManager implements ParseCallback {
     private void connectLiveDanmakuSession(String url) {
         if (TextUtils.isEmpty(url)) return;
         if (liveDanmakuSession == null) {
-            liveDanmakuSession = new LiveDanmakuWebSocketSession(new LiveDanmakuWebSocketSession.Listener() {
+            liveDanmakuSession = new LiveDanmakuWebSocketSession(App.get(), new LiveDanmakuWebSocketSession.Listener() {
                 @Override
                 public void onStateChanged(LiveDanmakuWebSocketSession.State state, long generation, String sourceUrl, int code, String detail) {
                     liveDanmakuGeneration = generation;
