@@ -41,6 +41,7 @@ import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuBatcher;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuBuffer;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuMessage;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuParser;
@@ -91,6 +92,7 @@ public class PlayerManager implements ParseCallback {
     private final BroadcastReceiver noisyReceiver;
     private final PlaybackBufferingTracker playbackBufferingTracker;
     private final PlaybackTrace playbackTrace;
+    private final LiveDanmakuBatcher liveDanmakuBatcher;
     private final LiveDanmakuBuffer liveDanmakuBuffer;
     private DanmakuController danmakuController;
     private LiveDanmakuWebSocketSession liveDanmakuSession;
@@ -142,6 +144,7 @@ public class PlayerManager implements ParseCallback {
         this.playbackBufferingTracker = new PlaybackBufferingTracker();
         this.playbackTrace = new PlaybackTrace();
         this.liveDanmakuBuffer = new LiveDanmakuBuffer();
+        this.liveDanmakuBatcher = new LiveDanmakuBatcher(liveDanmakuBuffer, this::onLiveDanmakuBatch);
         this.dynamicLutEffect = new DynamicLutEffect();
         this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
         this.noisyReceiver = new BroadcastReceiver() {
@@ -165,6 +168,7 @@ public class PlayerManager implements ParseCallback {
         stopNativeAudioSession();
         clearDanmaku("release");
         releaseLiveDanmakuSession();
+        liveDanmakuBatcher.release();
         if (danmakuController != null) danmakuController.setListener(null);
         danmakuController = null;
         if (engine == null) return;
@@ -1677,6 +1681,7 @@ public class PlayerManager implements ParseCallback {
     private void clearDanmaku(String reason) {
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, DanmakuUrlPolicy.logSummary(currentDanmakuUrl));
         stopLiveDanmakuSession(reason);
+        liveDanmakuBatcher.clear();
         liveDanmakuBuffer.clear();
         if (danmakuController != null) danmakuController.clearItems();
         clearDanmakuState();
@@ -1691,7 +1696,9 @@ public class PlayerManager implements ParseCallback {
                     liveDanmakuGeneration = generation;
                     if (state == LiveDanmakuWebSocketSession.State.CONNECTING) {
                         liveDanmakuBuffer.reset(generation);
+                        liveDanmakuBatcher.reset(generation);
                     } else if (state == LiveDanmakuWebSocketSession.State.RETRY_WAIT || state == LiveDanmakuWebSocketSession.State.STOPPED || state == LiveDanmakuWebSocketSession.State.RELEASED) {
+                        liveDanmakuBatcher.clear();
                         liveDanmakuBuffer.clear();
                     }
                     if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "state=%s generation=%d code=%d detail=%s %s", state, generation, code, detail, DanmakuUrlPolicy.logSummary(sourceUrl));
@@ -1708,7 +1715,8 @@ public class PlayerManager implements ParseCallback {
                         liveDanmakuBuffer.updateOnline(generation, result.online());
                     } else {
                         LiveDanmakuMessage message = result.message();
-                        liveDanmakuBuffer.offer(message);
+                        LiveDanmakuBuffer.OfferResult offer = liveDanmakuBuffer.offer(message);
+                        if (offer != LiveDanmakuBuffer.OfferResult.STALE) liveDanmakuBatcher.requestDrain(generation);
                     }
                 }
             });
@@ -1724,6 +1732,13 @@ public class PlayerManager implements ParseCallback {
         if (liveDanmakuSession == null) return;
         liveDanmakuSession.release();
         liveDanmakuSession = null;
+    }
+
+    private void onLiveDanmakuBatch(long generation, List<LiveDanmakuMessage> messages) {
+        App.post(() -> {
+            if (generation != liveDanmakuGeneration || messages.isEmpty()) return;
+            // Media3 live batch delivery is added after the renderer exposes its bounded realtime API.
+        });
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
