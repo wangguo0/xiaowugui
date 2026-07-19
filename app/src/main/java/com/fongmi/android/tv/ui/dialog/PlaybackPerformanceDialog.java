@@ -342,6 +342,8 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         tabs.setUnboundedRipple(false);
         int[] labels = {R.string.player_performance_auto, R.string.player_performance_recommended, R.string.player_performance_compatible, R.string.player_performance_lightweight};
         for (int label : labels) tabs.addTab(tabs.newTab().setText(label), false);
+        tabs.setFocusable(false);
+        tabs.post(() -> configureProfileTabFocus(tabs));
         tabs.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
             @Override
             public void onTabSelected(TabLayout.Tab tab) {
@@ -354,6 +356,18 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         });
         syncProfileTabs(tabs);
         return tabs;
+    }
+
+    private void configureProfileTabFocus(TabLayout tabs) {
+        if (!Util.isLeanback() || tabs.getChildCount() == 0) return;
+        View strip = tabs.getChildAt(0);
+        if (!(strip instanceof ViewGroup tabStrip)) return;
+        for (int i = 0; i < tabStrip.getChildCount(); i++) {
+            View tab = tabStrip.getChildAt(i);
+            tab.setFocusable(true);
+            tab.setFocusableInTouchMode(true);
+            tab.setBackgroundResource(R.drawable.selector_mpv_tab_focus);
+        }
     }
 
     private void syncProfileTabs() {
@@ -421,7 +435,6 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
 
     private String optionValue(String id) {
         return switch (id) {
-            case PlaybackPerformanceCatalog.KERNEL -> playerName();
             case PlaybackPerformanceCatalog.PROFILE -> PlaybackPerformanceSetting.getProfileName();
             case PlaybackPerformanceCatalog.RENDER -> renderText();
             case PlaybackPerformanceCatalog.TRACK_LIMIT -> onOff(PlaybackPerformanceSetting.isTrackLimitEnabled());
@@ -480,7 +493,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
 
     private Runnable optionAction(String id) {
         return switch (id) {
-            case PlaybackPerformanceCatalog.KERNEL, PlaybackPerformanceCatalog.PROFILE -> null;
+            case PlaybackPerformanceCatalog.PROFILE -> null;
             case PlaybackPerformanceCatalog.RENDER -> this::toggleRender;
             case PlaybackPerformanceCatalog.TRACK_LIMIT -> () -> toggle(PlaybackPerformanceSetting::isTrackLimitEnabled, PlaybackPerformanceSetting::putTrackLimitEnabled);
             case PlaybackPerformanceCatalog.ADAPTIVE_DOWNGRADE -> () -> toggle(PlaybackPerformanceSetting::isAdaptiveDowngradeEnabled, PlaybackPerformanceSetting::putAdaptiveDowngradeEnabled);

@@ -5,7 +5,6 @@ import java.util.List;
 
 public final class PlaybackPerformanceCatalog {
 
-    public static final String KERNEL = "kernel";
     public static final String PROFILE = "profile";
     public static final String RENDER = "render";
     public static final String TRACK_LIMIT = "track_limit";
@@ -70,7 +69,6 @@ public final class PlaybackPerformanceCatalog {
 
     public static List<PlaybackPerformanceOption> forKernel(int kernel) {
         List<PlaybackPerformanceOption> options = new ArrayList<>();
-        options.add(option(KERNEL, BASIC, "播放器内核", "显示当前正在配置的播放器内核。EXO、MPV 和 IJK 使用相互独立的性能参数与预设，切换内核不会把其他内核专用参数伪装成当前可用。"));
         options.add(option(PROFILE, BASIC, "性能配置", profileDescription(kernel)));
         if (kernel == PlayerSetting.EXO) addExo(options);
         else if (kernel == PlayerSetting.MPV) addMpv(options);
