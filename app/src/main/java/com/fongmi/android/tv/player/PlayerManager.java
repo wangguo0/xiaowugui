@@ -41,6 +41,7 @@ import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuWebSocketSession;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
 import com.fongmi.android.tv.player.lut.LutEffectFactory;
 import com.fongmi.android.tv.player.lut.LutEligibility;
@@ -88,6 +89,7 @@ public class PlayerManager implements ParseCallback {
     private final PlaybackBufferingTracker playbackBufferingTracker;
     private final PlaybackTrace playbackTrace;
     private DanmakuController danmakuController;
+    private LiveDanmakuWebSocketSession liveDanmakuSession;
     private PlayerEngine engine;
     private VideoSize videoSize;
     private ParseJob parseJob;
@@ -156,6 +158,7 @@ public class PlayerManager implements ParseCallback {
         App.removeCallbacks(runnable);
         stopNativeAudioSession();
         clearDanmaku("release");
+        releaseLiveDanmakuSession();
         if (danmakuController != null) danmakuController.setListener(null);
         danmakuController = null;
         if (engine == null) return;
@@ -534,6 +537,11 @@ public class PlayerManager implements ParseCallback {
 
     public void setDanmakuEnabled(boolean enabled) {
         if (danmakuController != null) danmakuController.setEnabled(enabled);
+        if (!enabled) {
+            stopLiveDanmakuSession("hidden");
+        } else if (DanmakuUrlPolicy.classify(currentDanmakuUrl).isLive()) {
+            connectLiveDanmakuSession(currentDanmakuUrl);
+        }
     }
 
     public void sendDanmaku(String text) {
@@ -1627,8 +1635,10 @@ public class PlayerManager implements ParseCallback {
             danmakuLoadStartedAtMs = 0;
             danmakuLoadInProgress = false;
             if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "select live source pending websocket connection %s", DanmakuUrlPolicy.logSummary(url));
+            if (DanmakuSetting.isShow()) connectLiveDanmakuSession(url);
             return;
         }
+        stopLiveDanmakuSession("static_source");
         loadingDanmakuKey = key;
         danmakuLoadStartedAtMs = SystemClock.elapsedRealtime();
         danmakuLoadInProgress = true;
@@ -1660,8 +1670,47 @@ public class PlayerManager implements ParseCallback {
 
     private void clearDanmaku(String reason) {
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, DanmakuUrlPolicy.logSummary(currentDanmakuUrl));
+        stopLiveDanmakuSession(reason);
         if (danmakuController != null) danmakuController.clearItems();
         clearDanmakuState();
+    }
+
+    private void connectLiveDanmakuSession(String url) {
+        if (TextUtils.isEmpty(url)) return;
+        if (liveDanmakuSession == null) {
+            liveDanmakuSession = new LiveDanmakuWebSocketSession(new LiveDanmakuWebSocketSession.Listener() {
+                @Override
+                public void onOpen() {
+                    if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "open %s", DanmakuUrlPolicy.logSummary(currentDanmakuUrl));
+                }
+
+                @Override
+                public void onMessage(String text) {
+                    // Parsing and bounded delivery are added by the following implementation batch.
+                }
+
+                @Override
+                public void onClosed(int code, String reason) {
+                    if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "closed code=%d reason=%s", code, reason);
+                }
+
+                @Override
+                public void onFailure(Throwable throwable, int httpCode) {
+                    if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "failure http=%d error=%s", httpCode, throwable == null ? "unknown" : throwable.getClass().getSimpleName());
+                }
+            });
+        }
+        liveDanmakuSession.connect(url);
+    }
+
+    private void stopLiveDanmakuSession(String reason) {
+        if (liveDanmakuSession != null) liveDanmakuSession.stop(reason);
+    }
+
+    private void releaseLiveDanmakuSession() {
+        if (liveDanmakuSession == null) return;
+        liveDanmakuSession.release();
+        liveDanmakuSession = null;
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
