@@ -96,11 +96,14 @@ public final class AppBackup {
             Backup backup = Backup.create();
             if (backup.getConfig().isEmpty()) throw new IOException("没有可备份的接口配置");
             notifyProgress(progress, "整理共享数据文件", 15, 0, 0);
+            int customCspSourceFiles = SyncFiles.countFiles(SyncFiles.CUSTOM_CSP_PATH);
             shared = SyncFiles.createArchive(SyncFiles.getPaths(SyncFiles.DEFAULT_PATHS));
+            int customCspFiles = SyncFiles.countArchiveFiles(shared == null ? null : shared.getFile(), SyncFiles.CUSTOM_CSP_PATH);
+            if (customCspFiles < customCspSourceFiles) throw new IOException("站点注入文件未完整写入备份");
             notifyProgress(progress, "整理登录态和云盘凭据", 30, shared == null ? 0 : shared.getZipSize(), 0);
             login = LoginStateSync.createArchive();
             byte[] data = backup.toString().getBytes(StandardCharsets.UTF_8);
-            byte[] manifest = manifest(shared, login).getBytes(StandardCharsets.UTF_8);
+            byte[] manifest = manifest(shared, login, customCspFiles, backup.getWebHomeExtensionPreferenceCount(), backup.getWebHomeExtensionSourceCount()).getBytes(StandardCharsets.UTF_8);
             long total = data.length + manifest.length + appFilesSize(Path.files(), Path.files());
             if (shared != null) total += shared.getFile().length();
             if (login != null) total += login.getFile().length();
@@ -135,6 +138,7 @@ public final class AppBackup {
         File shared = null;
         File login = null;
         String json = "";
+        String manifestJson = "";
         int appFiles = 0;
         byte[] buffer = new byte[BUFFER_SIZE];
         try {
@@ -148,6 +152,8 @@ public final class AppBackup {
                     }
                     if (DATA.equals(name)) {
                         json = new String(readEntry(input, buffer), StandardCharsets.UTF_8);
+                    } else if (MANIFEST.equals(name)) {
+                        manifestJson = new String(readEntry(input, buffer), StandardCharsets.UTF_8);
                     } else if (SHARED.equals(name)) {
                         shared = extractTemp(input, "webhtv-shared-restore-", buffer);
                     } else if (LOGIN.equals(name)) {
@@ -173,14 +179,15 @@ public final class AppBackup {
             throw new IOException(e);
         }
         Backup backup = Backup.objectFrom(json);
-        if (backup.getConfig().isEmpty()) throw new IOException("备份缺少接口配置数据");
         try {
+            if (backup.getConfig().isEmpty()) throw new IOException("备份缺少接口配置数据");
+            validateManifest(manifestJson, shared, backup);
             notifyProgress(progress, "恢复共享数据文件", 55, sourceSize, sourceSize);
             int sharedFiles = shared == null ? 0 : SyncFiles.restoreArchive(shared);
             notifyProgress(progress, "恢复登录态和云盘凭据", 70, sourceSize, sourceSize);
             int loginFiles = login == null ? 0 : LoginStateSync.restoreArchive(login);
             notifyProgress(progress, "恢复数据库和设置", 85, sourceSize, sourceSize);
-            backup.restore();
+            backup.restore(manifestVersion(manifestJson) < 3);
             reload();
             notifyProgress(progress, "恢复完成", 100, sourceSize, sourceSize);
             SpiderDebug.log("backup", "restore complete shared=%d login=%d app=%d", sharedFiles, loginFiles, appFiles);
@@ -216,16 +223,56 @@ public final class AppBackup {
         RefreshEvent.keep();
         RefreshEvent.history();
         RefreshEvent.home();
+        Backup.refreshWebHomeExtensions();
     }
 
-    private static String manifest(SyncFiles.Archive shared, LoginStateSync.Archive login) {
+    private static String manifest(SyncFiles.Archive shared, LoginStateSync.Archive login, int customCspFiles, int webHomeExtensionPrefs, int webHomeExtensionSources) {
         JsonObject object = new JsonObject();
         object.addProperty("app", "WebHTV");
-        object.addProperty("version", 2);
+        object.addProperty("version", 3);
         object.addProperty("createdAt", System.currentTimeMillis());
         object.addProperty("sharedFiles", shared == null ? 0 : shared.getCount());
         object.addProperty("loginStateFiles", login == null ? 0 : login.getCount());
+        object.addProperty("customCspFiles", customCspFiles);
+        object.addProperty("webHomeExtensionPrefs", webHomeExtensionPrefs);
+        object.addProperty("webHomeExtensionSources", webHomeExtensionSources);
         return App.gson().toJson(object);
+    }
+
+    private static void validateManifest(String text, File shared, Backup backup) throws IOException {
+        if (text == null || text.isEmpty()) return;
+        JsonObject object;
+        try {
+            object = App.gson().fromJson(text, JsonObject.class);
+        } catch (Throwable e) {
+            throw new IOException("备份清单损坏", e);
+        }
+        if (object == null || integer(object, "version") < 3) return;
+        int expectedCustomCsp = integer(object, "customCspFiles");
+        int actualCustomCsp = SyncFiles.countArchiveFiles(shared, SyncFiles.CUSTOM_CSP_PATH);
+        if (actualCustomCsp < expectedCustomCsp) throw new IOException("备份中的站点注入文件不完整");
+        int expectedWebHomePrefs = integer(object, "webHomeExtensionPrefs");
+        if (backup.getWebHomeExtensionPreferenceCount() < expectedWebHomePrefs) throw new IOException("备份中的 WebHome 扩展数据不完整");
+        int expectedWebHomeSources = integer(object, "webHomeExtensionSources");
+        if (backup.getWebHomeExtensionSourceCount() < expectedWebHomeSources) throw new IOException("备份中的 WebHome 扩展源不完整");
+    }
+
+    private static int integer(JsonObject object, String key) {
+        try {
+            return object.has(key) ? Math.max(0, object.get(key).getAsInt()) : 0;
+        } catch (Throwable e) {
+            return 0;
+        }
+    }
+
+    private static int manifestVersion(String text) {
+        if (text == null || text.isEmpty()) return 0;
+        try {
+            JsonObject object = App.gson().fromJson(text, JsonObject.class);
+            return object == null ? 0 : integer(object, "version");
+        } catch (Throwable e) {
+            return 0;
+        }
     }
 
     private static void addAppFiles(ZipOutputStream output, File root, File file, Counter counter) throws IOException {
