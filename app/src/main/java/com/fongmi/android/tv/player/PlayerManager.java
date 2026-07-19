@@ -1741,7 +1741,9 @@ public class PlayerManager implements ParseCallback {
             List<androidx.media3.ui.danmaku.Danmaku> batch = new ArrayList<>(messages.size());
             for (LiveDanmakuMessage message : messages) {
                 int pool = message.type() == LiveDanmakuMessage.Type.SUPER_CHAT ? androidx.media3.ui.danmaku.Danmaku.POOL_SPECIAL : androidx.media3.ui.danmaku.Danmaku.POOL_NORMAL;
-                batch.add(new androidx.media3.ui.danmaku.Danmaku(message.text(), 0L, androidx.media3.ui.danmaku.Danmaku.TYPE_SCROLL, message.colorArgb(), 0f, pool, "", 0L));
+                long ttlMs = message.type() == LiveDanmakuMessage.Type.SUPER_CHAT ? LiveDanmakuBuffer.DEFAULT_PRIORITY_TTL_MS : LiveDanmakuBuffer.DEFAULT_NORMAL_TTL_MS;
+                batch.add(new androidx.media3.ui.danmaku.Danmaku(message.text(), 0L, androidx.media3.ui.danmaku.Danmaku.TYPE_SCROLL, message.colorArgb(), 0f, pool, "", 0L)
+                        .setLiveExpiryElapsedRealtimeMs(message.receivedAtMs() + ttlMs));
             }
             danmakuController.offerLiveBatch(batch);
         });

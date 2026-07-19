@@ -1,3 +1,14 @@
+diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
+--- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
++++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
+@@ -67,0 +68 @@
++  long liveExpiryElapsedRealtimeMs;
+@@ -108,0 +110,5 @@
++  public Danmaku setLiveExpiryElapsedRealtimeMs(long expiryElapsedRealtimeMs) {
++    this.liveExpiryElapsedRealtimeMs = Math.max(0L, expiryElapsedRealtimeMs);
++    return this;
++  }
++
 diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
 --- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
 +++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
@@ -8,70 +19,102 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +  public void offerLiveBatch(List<Danmaku> items) {
 +    if (danmakuView != null && items != null && !items.isEmpty()) {
 +      danmakuView.offerLiveBatch(items);
+@@ -538,0 +545,4 @@
++  }
++
++  public DanmakuView.LiveStats getLiveStats() {
++    return danmakuView == null ? DanmakuView.LiveStats.EMPTY : danmakuView.getLiveStats();
 diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
 --- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
 +++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
-@@ -38,0 +39 @@
+@@ -28,0 +29 @@
++import android.os.SystemClock;
+@@ -38,0 +40 @@
 +import java.util.ArrayDeque;
-@@ -52,0 +54 @@
+@@ -52,0 +55,2 @@
 +  private static final int LIVE_PENDING_CAPACITY = 144;
-@@ -56,0 +59 @@
++  private static final int MAX_LIVE_ACTIVATION_ATTEMPTS_PER_FRAME = 16;
+@@ -56,0 +61 @@
 +  private final ArrayDeque<Danmaku> livePending = new ArrayDeque<>(LIVE_PENDING_CAPACITY);
-@@ -57,0 +61 @@
+@@ -57,0 +63 @@
 +  private final Paint measurePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-@@ -60,0 +65 @@
+@@ -60,0 +67 @@
 +  private final AtomicInteger liveGeneration = new AtomicInteger();
-@@ -183,0 +189 @@
+@@ -80,0 +88,6 @@
++  private long liveOffered;
++  private long liveAdmitted;
++  private long liveDroppedOverflow;
++  private long liveDroppedExpired;
++  private long liveTrackWaits;
++  private int liveHighWaterMark;
+@@ -183,0 +197 @@
 +    remeasureLivePending();
-@@ -204 +209,0 @@
+@@ -204 +217,0 @@
 -      Paint measurePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-@@ -278,0 +284 @@
+@@ -278,0 +292 @@
 +    clearLivePending();
-@@ -305,0 +312,6 @@
-+    }
-+  }
-+
+@@ -308,0 +323,11 @@
 +  public void offerLiveBatch(List<Danmaku> items) {
 +    if (released || items.isEmpty()) {
 +      return;
-@@ -306,0 +319,5 @@
++    }
 +    List<Danmaku> copy = new ArrayList<>(items);
 +    float defaultSizePx = textSizePx;
 +    float textScale = config.textScale;
 +    int generation = liveGeneration.get();
 +    measureLiveBatch(copy, defaultSizePx, textScale, generation);
-@@ -310,0 +328 @@
++  }
++
+@@ -310,0 +336 @@
 +    clearLivePending();
-@@ -330,0 +349,5 @@
+@@ -330,0 +357,11 @@
 +  }
 +
 +  private void clearLivePending() {
 +    liveGeneration.incrementAndGet();
 +    livePending.clear();
-@@ -412,0 +436 @@
++    liveOffered = 0L;
++    liveAdmitted = 0L;
++    liveDroppedOverflow = 0L;
++    liveDroppedExpired = 0L;
++    liveTrackWaits = 0L;
++    liveHighWaterMark = 0;
+@@ -412,0 +450 @@
 +    activateLiveItems(currentMs);
-@@ -431 +455 @@
+@@ -431 +469 @@
 -      if (writeIdx > 0) {
 +      if (writeIdx > 0 || !livePending.isEmpty()) {
-@@ -490,0 +515,15 @@
+@@ -488,0 +527,22 @@
++  }
++
 +  private void activateLiveItems(long currentMs) {
-+    int attempts = livePending.size();
++    int attempts = Math.min(livePending.size(), MAX_LIVE_ACTIVATION_ATTEMPTS_PER_FRAME);
++    long elapsedRealtimeMs = SystemClock.elapsedRealtime();
 +    while (attempts-- > 0 && !livePending.isEmpty() && activeItems.size() < config.maxOnScreen) {
 +      Danmaku danmaku = livePending.removeFirst();
++      if (danmaku.liveExpiryElapsedRealtimeMs > 0 && elapsedRealtimeMs > danmaku.liveExpiryElapsedRealtimeMs) {
++        liveDroppedExpired++;
++        continue;
++      }
 +      if (!isTypeVisible(danmaku.type) || !isPoolVisible(danmaku.pool)) {
 +        continue;
 +      }
 +      if (!tryActivate(danmaku, currentMs)) {
++        liveTrackWaits++;
 +        livePending.addLast(danmaku);
 +        continue;
 +      }
 +      activeItems.add(danmaku);
++      liveAdmitted++;
 +    }
+@@ -865 +924,0 @@
+-      Paint measurePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+@@ -873,0 +933,22 @@
++        }
++      }
++    });
 +  }
 +
-@@ -865 +903,0 @@
--      Paint measurePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-@@ -878,0 +917,45 @@
 +  private void remeasureLivePending() {
 +    if (livePending.isEmpty()) {
 +      liveGeneration.incrementAndGet();
@@ -89,15 +132,13 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +        Danmaku danmaku = items.get(i);
 +        if (danmaku == null || danmaku.text.isEmpty()) {
 +          continue;
-+        }
+@@ -874,0 +956,3 @@
 +        float sizePx = danmaku.textSizeSp > 0 ? spToPx(danmaku.textSizeSp * textScale) : defaultSizePx;
 +        measurePaint.setTextSize(sizePx);
 +        danmaku.measuredWidth = measurePaint.measureText(danmaku.text);
-+      }
+@@ -875,0 +960 @@
 +      post(() -> addMeasuredLiveBatch(items, generation));
-+    });
-+  }
-+
+@@ -878,0 +964,49 @@
 +  private void addMeasuredLiveBatch(List<Danmaku> items, int generation) {
 +    if (released || liveGeneration.get() != generation) {
 +      return;
@@ -109,11 +150,41 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +      }
 +      if (livePending.size() >= LIVE_PENDING_CAPACITY) {
 +        livePending.removeFirst();
++        liveDroppedOverflow++;
 +      }
 +      livePending.addLast(danmaku);
++      liveOffered++;
++      liveHighWaterMark = Math.max(liveHighWaterMark, livePending.size());
 +    }
 +    if (clock.started && !clock.paused && !livePending.isEmpty()) {
 +      postInvalidateOnAnimation();
++    }
++  }
++
++  public LiveStats getLiveStats() {
++    return new LiveStats(liveOffered, liveAdmitted, liveDroppedOverflow, liveDroppedExpired, liveTrackWaits, livePending.size(), liveHighWaterMark, activeItems.size());
++  }
++
++  public static final class LiveStats {
++    public static final LiveStats EMPTY = new LiveStats(0L, 0L, 0L, 0L, 0L, 0, 0, 0);
++    public final long offered;
++    public final long admitted;
++    public final long droppedOverflow;
++    public final long droppedExpired;
++    public final long trackWaits;
++    public final int pending;
++    public final int highWaterMark;
++    public final int active;
++
++    public LiveStats(long offered, long admitted, long droppedOverflow, long droppedExpired, long trackWaits, int pending, int highWaterMark, int active) {
++      this.offered = offered;
++      this.admitted = admitted;
++      this.droppedOverflow = droppedOverflow;
++      this.droppedExpired = droppedExpired;
++      this.trackWaits = trackWaits;
++      this.pending = pending;
++      this.highWaterMark = highWaterMark;
++      this.active = active;
 +    }
 +  }
 +
