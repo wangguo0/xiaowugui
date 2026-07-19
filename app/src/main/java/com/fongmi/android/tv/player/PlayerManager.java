@@ -154,6 +154,7 @@ public class PlayerManager implements ParseCallback {
         player.removeListener(listener);
         App.removeCallbacks(runnable);
         stopNativeAudioSession();
+        clearDanmaku("release");
         if (engine == null) return;
         engine.release();
         engine = null;
@@ -168,7 +169,6 @@ public class PlayerManager implements ParseCallback {
         waitingLutBeforePlay = false;
         lutWarmupReloadPreviewPending = false;
         clearLutWarmupRecovery();
-        clearDanmakuState();
         playbackBufferingTracker.reset();
         playbackTrace.clear();
         lastLoggedRouteTraceId = PlaybackTrace.NONE;
@@ -559,12 +559,14 @@ public class PlayerManager implements ParseCallback {
 
     public void stop() {
         stopNativeAudioSession();
+        clearDanmaku("stop");
         engine.stop();
         stopParse();
     }
 
     public void clearMediaItems() {
         stopNativeAudioSession();
+        clearDanmaku("clear_media_items");
         player.clearMediaItems();
     }
 
@@ -611,7 +613,7 @@ public class PlayerManager implements ParseCallback {
         lutApplySeq++;
         spec = null;
         clearPendingSwitchRestore();
-        clearDanmakuState();
+        clearDanmaku("clear");
         lutAppliedForItem = false;
         lutApplyInProgress = false;
         lutPipelineReadyForItem = false;
@@ -842,13 +844,13 @@ public class PlayerManager implements ParseCallback {
 
     public void start(PlaySpec spec, long timeout, boolean playWhenReady) {
         clearPendingSwitchRestore();
+        clearDanmaku("start");
         this.spec = spec;
         beginPlaybackTrace("start");
         this.playWhenReady = playWhenReady;
         retry = 0;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
-        clearDanmakuState();
         setMediaItem(timeout);
     }
 
@@ -859,13 +861,13 @@ public class PlayerManager implements ParseCallback {
     public void parse(String key, Result result, boolean useParse, MediaMetadata metadata, boolean playWhenReady) {
         stopParse();
         clearPendingSwitchRestore();
+        clearDanmaku("parse");
         spec = PlaySpec.fromParse(result, key, metadata, useParse);
         beginPlaybackTrace("parse");
         this.playWhenReady = playWhenReady;
         retry = 0;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
-        clearDanmakuState();
         parseJob = ParseJob.create(this).start(result, useParse);
     }
 
@@ -1563,14 +1565,12 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void setDanmaku(Danmaku item, boolean force) {
-        if (danmakuController == null) return;
         if (item.isEmpty()) {
             if (spec != null) spec.setDanmaku(item);
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear current=%s", summarizeUrl(currentDanmakuUrl));
-            if (currentDanmakuUrl != null) danmakuController.clearItems();
-            clearDanmakuState();
+            clearDanmaku("empty_source");
             return;
         }
+        if (danmakuController == null) return;
         String url = item.getRealUrl();
         String key = normalizeDanmakuKey(url);
         if (!force && TextUtils.equals(currentDanmakuUrl, url)) {
@@ -1612,6 +1612,12 @@ public class PlayerManager implements ParseCallback {
         loadingDanmakuKey = null;
         danmakuLoadStartedAtMs = 0;
         danmakuLoadInProgress = false;
+    }
+
+    private void clearDanmaku(String reason) {
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, summarizeUrl(currentDanmakuUrl));
+        if (danmakuController != null) danmakuController.clearItems();
+        clearDanmakuState();
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
