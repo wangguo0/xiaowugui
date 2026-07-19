@@ -155,6 +155,8 @@ public class PlayerManager implements ParseCallback {
         App.removeCallbacks(runnable);
         stopNativeAudioSession();
         clearDanmaku("release");
+        if (danmakuController != null) danmakuController.setListener(null);
+        danmakuController = null;
         if (engine == null) return;
         engine.release();
         engine = null;
@@ -481,10 +483,25 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void setDanmakuController(DanmakuController controller) {
+        if (danmakuController == controller) {
+            configureDanmakuController(controller);
+            return;
+        }
+        if (danmakuController != null) {
+            danmakuController.setListener(null);
+            danmakuController.clearItems();
+        }
         danmakuController = controller;
-        danmakuController.setOkHttpClient(OkHttp.player());
-        danmakuController.setConfig(DanmakuSetting.getConfig());
-        danmakuController.setListener(new DanmakuController.Listener() {
+        if (danmakuController == null) return;
+        configureDanmakuController(danmakuController);
+        restoreDanmakuDataSource();
+    }
+
+    private void configureDanmakuController(DanmakuController controller) {
+        if (controller == null) return;
+        controller.setOkHttpClient(OkHttp.player());
+        controller.setConfig(DanmakuSetting.getConfig());
+        controller.setListener(new DanmakuController.Listener() {
             @Override
             public void onLoadCompleted(Uri uri, int count) {
                 logDanmakuLoad("completed", uri, count, null);
@@ -499,16 +516,25 @@ public class PlayerManager implements ParseCallback {
         });
     }
 
+    private void restoreDanmakuDataSource() {
+        if (danmakuController == null || TextUtils.isEmpty(currentDanmakuUrl)) return;
+        loadingDanmakuKey = currentDanmakuKey;
+        danmakuLoadStartedAtMs = SystemClock.elapsedRealtime();
+        danmakuLoadInProgress = true;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "restore controller url=%s key=%s", summarizeUrl(currentDanmakuUrl), summarizeUrl(currentDanmakuKey));
+        danmakuController.setDataSource(Uri.parse(currentDanmakuUrl));
+    }
+
     public void setDanmakuConfig(DanmakuConfig config) {
-        danmakuController.setConfig(config);
+        if (danmakuController != null) danmakuController.setConfig(config);
     }
 
     public void setDanmakuEnabled(boolean enabled) {
-        danmakuController.setEnabled(enabled);
+        if (danmakuController != null) danmakuController.setEnabled(enabled);
     }
 
     public void sendDanmaku(String text) {
-        danmakuController.sendNow(text);
+        if (danmakuController != null) danmakuController.sendNow(text);
     }
 
     public String setSpeed(float speed) {
