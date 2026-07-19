@@ -2,6 +2,7 @@ package com.fongmi.android.tv.utils;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Xml;
 
@@ -51,6 +52,8 @@ public class LoginStateSync {
     private static final long MAX_SCAN_FILE_SIZE = 512L * 1024;
     private static final int TEXT_SAMPLE_SIZE = 4 * 1024;
     private static final int TEXT_PREVIEW_SIZE = 256 * 1024;
+    private static final int MAX_TREE_ITEMS = 500;
+    private static final int MAX_PENDING_PATHS = 512;
     private static final String ROOT_APP = "app";
     private static final String ROOT_SDCARD = "sdcard";
     private static final String ROOT_APP_NAME = "App 私有目录";
@@ -67,6 +70,14 @@ public class LoginStateSync {
             "ttf", "webm", "webp", "zip"
     ));
 
+    private static final long MAX_CONTENT_SCAN_BYTES = 32L * 1024 * 1024;
+    private static final String LEARNING_CACHE_DIR = "login-state-learning";
+    private static final String SNAPSHOT_CACHE_FILE = "snapshot.json";
+    private static final String FINDINGS_CACHE_FILE = "findings.json";
+    private static final Object LEARNING_LOCK = new Object();
+    private static volatile File cachedAppRoot;
+    private static volatile File cachedSdcardRoot;
+
     private static final List<String> LOGIN_MARKERS = Arrays.asList(
             "cookie", "cookies", "ck", "token", "access_token", "refresh_token", "auth", "oauth",
             "session", "sid", "passport", "csrf", "kps", "__puus", "__pus", "member",
@@ -74,34 +85,65 @@ public class LoginStateSync {
     );
 
     public static void beginLearning() {
+        long startedAt = SystemClock.elapsedRealtime();
         Snapshot snapshot = new Snapshot(snapshotEntries());
-        Setting.putLoginStateSnapshot(App.gson().toJson(snapshot));
-        Setting.putLoginStateFindings("");
-        SpiderDebug.log("sync", "login state learning started files=%d", snapshot.entries.size());
+        synchronized (LEARNING_LOCK) {
+            String json = App.gson().toJson(snapshot);
+            boolean cached = writeLearningCache(SNAPSHOT_CACHE_FILE, json);
+            if (cached) {
+                if (!TextUtils.isEmpty(Setting.getLoginStateSnapshot())) Setting.putLoginStateSnapshot("");
+            } else {
+                Setting.putLoginStateSnapshot(json);
+            }
+            clearLearningCache(FINDINGS_CACHE_FILE);
+            if (!TextUtils.isEmpty(Setting.getLoginStateFindings())) Setting.putLoginStateFindings("");
+        }
+        SpiderDebug.log("sync", "login state learning started files=%d elapsedMs=%d", snapshot.entries.size(), SystemClock.elapsedRealtime() - startedAt);
     }
 
     public static LearnResult finishLearning() {
-        Snapshot before = snapshotFromJson(Setting.getLoginStateSnapshot());
-        if (before.entries.isEmpty()) return new LearnResult(Collections.emptyList(), Collections.emptyList(), false);
+        long startedAt = SystemClock.elapsedRealtime();
+        String snapshotJson;
+        synchronized (LEARNING_LOCK) {
+            snapshotJson = readLearningCache(SNAPSHOT_CACHE_FILE);
+            if (TextUtils.isEmpty(snapshotJson)) snapshotJson = Setting.getLoginStateSnapshot();
+        }
+        Snapshot before = snapshotFromJson(snapshotJson);
+        if (before.entries.isEmpty()) {
+            SpiderDebug.log("sync", "login state learning finish skipped reason=no-snapshot elapsedMs=%d", SystemClock.elapsedRealtime() - startedAt);
+            return new LearnResult(Collections.emptyList(), Collections.emptyList(), false);
+        }
         List<Entry> after = snapshotEntries();
+        long scanFinishedAt = SystemClock.elapsedRealtime();
         Map<String, Entry> old = map(before.entries);
         List<Candidate> candidates = new ArrayList<>();
+        ScanBudget budget = new ScanBudget(MAX_CONTENT_SCAN_BYTES);
         for (Entry entry : after) {
             Entry previous = old.get(entry.path);
             if (previous != null && previous.modified == entry.modified && previous.size == entry.size) continue;
-            Candidate candidate = candidate(entry);
+            Candidate candidate = candidate(entry, budget);
             if (candidate != null) candidates.add(candidate);
         }
         List<String> selected = mergeLearned(candidates, true);
         List<String> pending = mergePending(candidates);
-        Setting.putLoginStateSnapshot("");
-        Setting.putLoginStateFindings(App.gson().toJson(candidates));
-        SpiderDebug.log("sync", "login state learning finished changed=%d selected=%d pending=%d", candidates.size(), selected.size(), pending.size());
+        long scoreFinishedAt = SystemClock.elapsedRealtime();
+        synchronized (LEARNING_LOCK) {
+            clearLearningCache(SNAPSHOT_CACHE_FILE);
+            String json = App.gson().toJson(candidates);
+            boolean cached = writeLearningCache(FINDINGS_CACHE_FILE, json);
+            if (cached) {
+                if (!TextUtils.isEmpty(Setting.getLoginStateFindings())) Setting.putLoginStateFindings("");
+            } else {
+                Setting.putLoginStateFindings(json);
+            }
+            if (!TextUtils.isEmpty(Setting.getLoginStateSnapshot())) Setting.putLoginStateSnapshot("");
+        }
+        SpiderDebug.log("sync", "login state learning finished changed=%d selected=%d pending=%d contentBytes=%d skippedContent=%d scanMs=%d scoreMs=%d totalMs=%d", candidates.size(), selected.size(), pending.size(), budget.consumed(), budget.skipped(), scanFinishedAt - startedAt, scoreFinishedAt - scanFinishedAt, SystemClock.elapsedRealtime() - startedAt);
         return new LearnResult(selected, pending, true);
     }
 
     public static boolean hasLearningSnapshot() {
-        return !TextUtils.isEmpty(Setting.getLoginStateSnapshot());
+        return hasLearningCache(SNAPSHOT_CACHE_FILE) || !TextUtils.isEmpty(Setting.getLoginStateSnapshot());
     }
 
     public static int learnedCount() {
@@ -113,12 +155,18 @@ public class LoginStateSync {
     }
 
     public static List<String> pendingPaths() {
-        return prunePending(learnedPaths(), normalizeLines(Setting.getLoginStatePendingPaths()));
+        List<String> result = prunePending(learnedPaths(), normalizeLines(Setting.getLoginStatePendingPaths()));
+        return result.size() <= MAX_PENDING_PATHS ? result : new ArrayList<>(result.subList(0, MAX_PENDING_PATHS));
     }
 
     public static List<Candidate> findings() {
         try {
-            Candidate[] array = App.gson().fromJson(Setting.getLoginStateFindings(), Candidate[].class);
+            String json;
+            synchronized (LEARNING_LOCK) {
+                json = readLearningCache(FINDINGS_CACHE_FILE);
+                if (TextUtils.isEmpty(json)) json = Setting.getLoginStateFindings();
+            }
+            Candidate[] array = App.gson().fromJson(json, Candidate[].class);
             if (array == null) return Collections.emptyList();
             return new ArrayList<>(Arrays.asList(array));
         } catch (Exception e) {
@@ -133,8 +181,9 @@ public class LoginStateSync {
     }
 
     public static void resetLearningResults() {
+        clearLearningCache(FINDINGS_CACHE_FILE);
         Setting.putLoginStatePendingPaths("");
-        Setting.putLoginStateFindings("");
+        if (!TextUtils.isEmpty(Setting.getLoginStateFindings())) Setting.putLoginStateFindings("");
     }
 
     public static List<String> confirmPending() {
@@ -176,10 +225,10 @@ public class LoginStateSync {
             if (path.isEmpty()) {
                 items.add(new TreeItem(ROOT_APP_NAME, ROOT_APP, true, 0, appRoot().lastModified(), false));
                 items.add(new TreeItem(ROOT_SDCARD_NAME, ROOT_SDCARD, true, 0, sdcardRoot().lastModified(), false));
-                return new Tree(path, ".", true, items);
+                return new Tree(path, ".", true, items, items.size(), false);
             }
             Parsed parsed = parse(path);
-            if (parsed == null) return new Tree("", ".", false, items);
+            if (parsed == null) return new Tree("", ".", false, items, 0, false);
             File root = parsed.root;
             File dir = (parsed.relative.isEmpty() ? root : new File(root, parsed.relative)).getCanonicalFile();
             if (!inside(root, dir) || !dir.isDirectory()) {
@@ -192,15 +241,19 @@ public class LoginStateSync {
                     if (a.isDirectory() != b.isDirectory()) return a.isDirectory() ? -1 : 1;
                     return a.getName().compareToIgnoreCase(b.getName());
                 });
+                int total = files == null ? 0 : files.length;
+                int count = 0;
                 for (File file : files == null ? new File[0] : files) {
+                    if (count++ >= MAX_TREE_ITEMS) break;
                     String child = relative(root, parsed.key, file);
                     if (!child.isEmpty()) items.add(new TreeItem(file.getName(), child, file.isDirectory(), file.isFile() ? file.length() : 0, file.lastModified(), true, kind(child, file)));
                 }
+                return new Tree(path, parent, valid, items, total, total > items.size());
             }
         } catch (Exception e) {
             valid = false;
         }
-        return new Tree(path, parent, valid, items);
+        return new Tree(path, parent, valid, items, items.size(), false);
     }
 
     public static String normalizePath(String path) {
@@ -399,7 +452,7 @@ public class LoginStateSync {
         }
     }
 
-    private static Candidate candidate(Entry entry) {
+    private static Candidate candidate(Entry entry, ScanBudget budget) {
         String path = normalize(entry.path);
         Parsed parsed = parse(path);
         if (parsed == null) return null;
@@ -411,12 +464,12 @@ public class LoginStateSync {
         }
         String relative = parsed.relative.toLowerCase(Locale.ROOT);
         boolean cache = isCacheRelative(relative);
-        Score score = scorePath(path, relative, file, cache, entry.size);
+        Score score = scorePath(path, relative, file, cache, entry.size, budget);
         boolean selected = score.level == Level.HIGH && !cache;
         return new Candidate(path, displayPath(path), score.level.name().toLowerCase(Locale.ROOT), score.reason, selected, entry.size, entry.modified);
     }
 
-    private static Score scorePath(String path, String relative, File file, boolean cache, long size) {
+    private static Score scorePath(String path, String relative, File file, boolean cache, long size, ScanBudget budget) {
         String name = basename(relative);
         if (size > MAX_SYNC_FILE_SIZE) return new Score(Level.LOW, "文件较大，需要确认是否为登录态");
         if (isSharedPrefsPath(path)) {
@@ -433,6 +486,7 @@ public class LoginStateSync {
             return new Score(Level.HIGH, "文件名疑似登录态");
         }
         if (file.length() <= MAX_SCAN_FILE_SIZE) {
+            if (!budget.tryAcquire(file.length())) return new Score(Level.LOW, "变化文件过多，已跳过内容扫描");
             ContentScore content = scoreContent(file);
             if (content.hit) {
                 if (cache) return new Score(Level.MEDIUM, "缓存目录内包含登录关键字，需要确认");
@@ -472,46 +526,52 @@ public class LoginStateSync {
     }
 
     private static List<String> mergeLearned(List<Candidate> candidates, boolean selectedOnly) {
-        LinkedHashSet<String> learned = new LinkedHashSet<>(learnedPaths());
+        LoginStatePathIndex learned = new LoginStatePathIndex(learnedPaths());
         for (Candidate candidate : candidates) {
             if (selectedOnly && !candidate.selected) continue;
-            addCovered(learned, candidate.path);
+            learned.add(candidate.path);
         }
-        List<String> result = new ArrayList<>(learned);
+        List<String> result = learned.asList();
         Setting.putLoginStatePaths(pathsText(result));
         return result;
     }
 
     private static List<String> mergePending(List<Candidate> candidates) {
-        LinkedHashSet<String> pending = new LinkedHashSet<>(pendingPaths());
-        LinkedHashSet<String> learned = new LinkedHashSet<>(learnedPaths());
+        LoginStatePathIndex pending = new LoginStatePathIndex(pendingPaths());
+        LoginStatePathIndex learned = new LoginStatePathIndex(learnedPaths());
+        int omitted = 0;
         for (Candidate candidate : candidates) {
-            if (candidate.selected || coversAny(learned, candidate.path)) continue;
-            addCovered(pending, candidate.path);
+            // Low-confidence changes are kept in findings for inspection, but
+            // must not turn a busy cache directory into thousands of pending
+            // login-state paths. Only medium-confidence candidates need a
+            // manual confirmation; high-confidence candidates are selected.
+            if (candidate.selected || !"medium".equals(candidate.confidence) || learned.hasAncestor(candidate.path)) continue;
+            if (pending.size() >= MAX_PENDING_PATHS && !pending.hasAncestor(candidate.path) && !pending.hasDescendant(candidate.path)) {
+                omitted++;
+                continue;
+            }
+            pending.add(candidate.path);
         }
-        List<String> result = prunePending(new ArrayList<>(learned), new ArrayList<>(pending));
+        List<String> result = prunePending(learned.asList(), pending.asList());
         Setting.putLoginStatePendingPaths(pathsText(result));
+        if (omitted > 0) SpiderDebug.log("sync", "login state pending capped limit=%d omitted=%d", MAX_PENDING_PATHS, omitted);
         return result;
     }
 
     private static void addCovered(LinkedHashSet<String> paths, String path) {
         path = normalize(path);
         if (path.isEmpty() || !isSafePath(path)) return;
-        String target = path;
-        paths.removeIf(item -> covers(target, item) || covers(item, target));
-        paths.add(target);
+        LoginStatePathIndex index = new LoginStatePathIndex(paths);
+        index.add(path);
+        paths.clear();
+        paths.addAll(index.asList());
     }
 
     private static List<String> prunePending(List<String> learned, List<String> pending) {
-        List<String> selected = normalizePathList(learned);
-        List<String> result = new ArrayList<>();
-        for (String path : normalizePathList(pending)) if (!coversAny(selected, path)) result.add(path);
-        return result;
-    }
-
-    private static boolean coversAny(Iterable<String> parents, String child) {
-        for (String parent : parents) if (covers(parent, child)) return true;
-        return false;
+        LoginStatePathIndex selected = new LoginStatePathIndex(normalizePathList(learned));
+        LoginStatePathIndex result = new LoginStatePathIndex();
+        for (String path : normalizePathList(pending)) if (!selected.hasAncestor(path)) result.add(path);
+        return result.asList();
     }
 
     private static boolean covers(String parent, String child) {
@@ -522,21 +582,21 @@ public class LoginStateSync {
 
     private static List<String> normalizeLines(String text) {
         if (TextUtils.isEmpty(text)) return new ArrayList<>();
-        List<String> result = new ArrayList<>();
+        LinkedHashSet<String> values = new LinkedHashSet<>();
         for (String line : text.split("[\\r\\n]+")) {
             String path = normalize(line);
-            if (!path.isEmpty() && isSafePath(path) && !result.contains(path)) result.add(path);
+            if (!path.isEmpty() && isSafePath(path)) values.add(path);
         }
-        return result;
+        return new LoginStatePathIndex(values).asList();
     }
 
     private static List<String> normalizePathList(List<String> paths) {
-        LinkedHashSet<String> result = new LinkedHashSet<>();
+        LinkedHashSet<String> values = new LinkedHashSet<>();
         for (String path : paths == null ? Collections.<String>emptyList() : paths) {
             path = normalize(path);
-            if (!path.isEmpty() && isSafePath(path)) result.add(path);
+            if (!path.isEmpty() && isSafePath(path)) values.add(path);
         }
-        return new ArrayList<>(result);
+        return new LoginStatePathIndex(values).asList();
     }
 
     private static List<String> appendPath(List<String> paths, String path) {
@@ -591,6 +651,8 @@ public class LoginStateSync {
         if (relative.startsWith("files/pvideo-") || relative.equals("files/profileinstalled")) return true;
         if (relative.contains("/http cache/") || relative.contains("/gpucache/") || relative.contains("/cache storage/")) return true;
         if (relative.startsWith("cache/image_manager_disk_cache/")) return true;
+        if (relative.startsWith("cache/" + LEARNING_CACHE_DIR + "/")) return true;
+        if (relative.startsWith("no_backup/" + LEARNING_CACHE_DIR + "/")) return true;
         if (relative.startsWith("cache/jar/oat/")) return true;
         if (relative.equals("cache/tv.lck")) return true;
         if (relative.equals("app_webview/browsermetrics-spare.pma") || relative.equals("app_webview/webview_data.lock")) return true;
@@ -841,20 +903,80 @@ public class LoginStateSync {
         }
     }
 
-    private static File appRoot() {
-        try {
-            return new File(App.get().getApplicationInfo().dataDir).getCanonicalFile();
+    private static File learningCacheFile(String name) {
+        File directory = new File(App.get().getNoBackupFilesDir(), LEARNING_CACHE_DIR);
+        if (!directory.exists()) directory.mkdirs();
+        return new File(directory, name);
+    }
+
+    private static boolean hasLearningCache(String name) {
+        File file = learningCacheFile(name);
+        return file.isFile() && file.length() > 0;
+    }
+
+    private static String readLearningCache(String name) {
+        File file = learningCacheFile(name);
+        if (!file.isFile() || file.length() <= 0) return "";
+        try (BufferedInputStream input = new BufferedInputStream(new FileInputStream(file), BUFFER_SIZE);
+             ByteArrayOutputStream output = new ByteArrayOutputStream(8192)) {
+            byte[] buffer = new byte[BUFFER_SIZE];
+            int read;
+            while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+            return output.toString(StandardCharsets.UTF_8.name());
         } catch (Exception e) {
-            return new File(App.get().getApplicationInfo().dataDir);
+            return "";
         }
     }
 
-    private static File sdcardRoot() {
-        try {
-            return Path.root().getCanonicalFile();
+    private static boolean writeLearningCache(String name, String value) {
+        File file = learningCacheFile(name);
+        File temp = new File(file.getParentFile(), file.getName() + ".tmp");
+        try (BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream(temp), BUFFER_SIZE)) {
+            output.write((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            if (!temp.renameTo(file)) {
+                try (BufferedOutputStream fallback = new BufferedOutputStream(new FileOutputStream(file), BUFFER_SIZE)) {
+                    fallback.write((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
+                }
+                temp.delete();
+            }
+            return file.isFile() && file.length() > 0;
         } catch (Exception e) {
-            return Path.root();
+            temp.delete();
+            SpiderDebug.log("sync", "login state cache write failed file=%s error=%s", name, e.getMessage());
+            return false;
         }
+    }
+
+    private static void clearLearningCache(String name) {
+        File file = learningCacheFile(name);
+        if (file.exists()) file.delete();
+        File temp = new File(file.getParentFile(), file.getName() + ".tmp");
+        if (temp.exists()) temp.delete();
+    }
+
+    private static File appRoot() {
+        File cached = cachedAppRoot;
+        if (cached != null) return cached;
+        try {
+            cached = new File(App.get().getApplicationInfo().dataDir).getCanonicalFile();
+        } catch (Exception e) {
+            cached = new File(App.get().getApplicationInfo().dataDir);
+        }
+        cachedAppRoot = cached;
+        return cached;
+    }
+
+    private static File sdcardRoot() {
+        File cached = cachedSdcardRoot;
+        if (cached != null) return cached;
+        try {
+            cached = Path.root().getCanonicalFile();
+        } catch (Exception e) {
+            cached = Path.root();
+        }
+        cachedSdcardRoot = cached;
+        return cached;
     }
 
     private static File fileForPath(String path) throws IOException {
@@ -965,6 +1087,35 @@ public class LoginStateSync {
     }
 
     private record Score(Level level, String reason) {
+    }
+
+    private static final class ScanBudget {
+
+        private final long total;
+        private long remaining;
+        private int skipped;
+
+        private ScanBudget(long bytes) {
+            total = remaining = Math.max(0, bytes);
+        }
+
+        private synchronized boolean tryAcquire(long bytes) {
+            long requested = Math.max(0, Math.min(bytes, MAX_SCAN_FILE_SIZE));
+            if (requested > remaining) {
+                skipped++;
+                return false;
+            }
+            remaining -= requested;
+            return true;
+        }
+
+        private synchronized long consumed() {
+            return total - remaining;
+        }
+
+        private synchronized int skipped() {
+            return skipped;
+        }
     }
 
     private record ContentScore(boolean hit, boolean strong, String marker) {
@@ -1174,12 +1325,16 @@ public class LoginStateSync {
         private final String parent;
         private final boolean valid;
         private final List<TreeItem> items;
+        private final int total;
+        private final boolean truncated;
 
-        private Tree(String path, String parent, boolean valid, List<TreeItem> items) {
+        private Tree(String path, String parent, boolean valid, List<TreeItem> items, int total, boolean truncated) {
             this.path = path;
             this.parent = parent;
             this.valid = valid;
             this.items = items;
+            this.total = total;
+            this.truncated = truncated;
         }
 
         public String getPath() {
@@ -1196,6 +1351,14 @@ public class LoginStateSync {
 
         public List<TreeItem> getItems() {
             return items;
+        }
+
+        public int getTotal() {
+            return total;
+        }
+
+        public boolean isTruncated() {
+            return truncated;
         }
     }
 
