@@ -174,7 +174,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
         scrollParams.topMargin = dp(10);
         root.addView(scroll, scrollParams);
 
-        addHelpIntro(content, "当前播放器内核：" + playerName() + "。参数列表和本说明由同一份内核能力定义生成；切换内核后，两处内容会同步变化。默认使用“自动”档；EXO会根据缓冲、码率和带宽在安全范围内调整预载，并把重缓冲恢复值用于下一播放会话。MPV和IJK当前使用均衡基线。多数底层参数需要重新进入播放或重建播放器后生效。");
+        addHelpIntro(content, "当前播放器内核：" + playerName() + "。不知道怎么选时保持“自动”（默认）；每项说明都会明确告诉你什么情况更流畅、异常时改哪一档，以及对应代价。EXO会动态调整预载和下一会话的重缓冲恢复；MPV会在符合条件的电视4K场景自动使用低开销电视直出；IJK自动档采用稳定基线。多数底层参数需要重新进入播放或重建播放器后生效。");
         String section = "";
         for (PlaybackPerformanceOption option : options()) {
             if (!section.equals(option.section())) {
