@@ -69,20 +69,56 @@ public final class DanmakuUrlPolicy {
     public static boolean isLoopback(String url) {
         if (url == null || url.isBlank()) return false;
         try {
-            String host = URI.create(url.trim()).getHost();
-            return host != null && ("localhost".equalsIgnoreCase(host)
-                    || "127.0.0.1".equals(host)
-                    || "::1".equals(host)
-                    || "0:0:0:0:0:0:0:1".equals(host));
+            return isLoopbackHost(URI.create(url.trim()).getHost());
         } catch (IllegalArgumentException e) {
             return false;
         }
+    }
+
+    public static boolean isDirectHost(String host) {
+        return isLoopbackHost(host) || isPrivateIpv4(host) || isPrivateIpv6(host);
     }
 
     private static boolean validNetworkUri(URI uri) {
         String host = uri.getHost();
         int port = uri.getPort();
         return host != null && !host.isBlank() && uri.getRawUserInfo() == null && port <= 65535;
+    }
+
+    private static boolean isLoopbackHost(String host) {
+        return host != null && ("localhost".equalsIgnoreCase(host)
+                || "127.0.0.1".equals(host)
+                || "::1".equals(host)
+                || "0:0:0:0:0:0:0:1".equals(host));
+    }
+
+    private static boolean isPrivateIpv4(String host) {
+        if (host == null) return false;
+        String[] parts = host.split("\\.", -1);
+        if (parts.length != 4) return false;
+        int[] values = new int[4];
+        try {
+            for (int i = 0; i < parts.length; i++) {
+                if (parts[i].isEmpty()) return false;
+                values[i] = Integer.parseInt(parts[i]);
+                if (values[i] < 0 || values[i] > 255) return false;
+            }
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        return values[0] == 10
+                || (values[0] == 172 && values[1] >= 16 && values[1] <= 31)
+                || (values[0] == 192 && values[1] == 168)
+                || (values[0] == 169 && values[1] == 254);
+    }
+
+    private static boolean isPrivateIpv6(String host) {
+        if (host == null || host.isBlank()) return false;
+        String value = lower(host);
+        if (!value.contains(":")) return false;
+        return value.startsWith("fc") || value.startsWith("fd")
+                || value.startsWith("fe8") || value.startsWith("fe9")
+                || value.startsWith("fea") || value.startsWith("feb");
     }
 
     private static boolean sameAuthority(URI first, URI second) {

@@ -58,4 +58,16 @@ public class DanmakuUrlPolicyTest {
         assertTrue(DanmakuUrlPolicy.isLoopback("ws://localhost:5266/live"));
         assertFalse(DanmakuUrlPolicy.isLoopback("wss://example.com/live"));
     }
+
+    @Test
+    public void identifiesLoopbackAndPrivateLanHostsForDirectRouting() {
+        assertTrue(DanmakuUrlPolicy.isDirectHost("127.0.0.1"));
+        assertTrue(DanmakuUrlPolicy.isDirectHost("192.168.1.9"));
+        assertTrue(DanmakuUrlPolicy.isDirectHost("172.16.8.2"));
+        assertTrue(DanmakuUrlPolicy.isDirectHost("10.0.0.5"));
+        assertTrue(DanmakuUrlPolicy.isDirectHost("fd12::1"));
+        assertTrue(DanmakuUrlPolicy.isDirectHost("fe80::1"));
+        assertFalse(DanmakuUrlPolicy.isDirectHost("172.32.0.1"));
+        assertFalse(DanmakuUrlPolicy.isDirectHost("example.com"));
+    }
 }

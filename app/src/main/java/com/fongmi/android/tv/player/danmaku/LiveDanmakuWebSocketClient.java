@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.player.danmaku;
 
+import com.github.catvod.net.OkHttp;
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +43,7 @@ public final class LiveDanmakuWebSocketClient {
                 .writeTimeout(HANDSHAKE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .callTimeout(0L, TimeUnit.MILLISECONDS)
                 .pingInterval(0L, TimeUnit.MILLISECONDS)
+                .proxySelector(new LiveDanmakuProxySelector(OkHttp.selector()))
                 .build();
     }
 
