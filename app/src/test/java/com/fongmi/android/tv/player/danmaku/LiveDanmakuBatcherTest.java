@@ -23,7 +23,7 @@ public class LiveDanmakuBatcherTest {
             callbacks.incrementAndGet();
             result.set(messages);
             delivered.countDown();
-        }, 10L, 8);
+        }, 10L, 8, () -> 1L);
         buffer.reset(3L);
         batcher.reset(3L);
         buffer.offer(message(3L, "one", LiveDanmakuMessage.Type.NORMAL));

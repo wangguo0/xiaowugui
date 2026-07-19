@@ -27,7 +27,7 @@ public class LiveDanmakuBufferTest {
         buffer.offer(message(1L, "two", LiveDanmakuMessage.Type.NORMAL));
 
         assertEquals(LiveDanmakuBuffer.OfferResult.DROPPED_OLDEST, buffer.offer(message(1L, "three", LiveDanmakuMessage.Type.NORMAL)));
-        assertEquals(List.of("two", "three"), buffer.drain(10).stream().map(LiveDanmakuMessage::text).toList());
+        assertEquals(List.of("two", "three"), buffer.drain(10, 1L).stream().map(LiveDanmakuMessage::text).toList());
     }
 
     @Test
@@ -37,7 +37,7 @@ public class LiveDanmakuBufferTest {
         buffer.offer(message(1L, "normal", LiveDanmakuMessage.Type.NORMAL));
         buffer.offer(message(1L, "priority", LiveDanmakuMessage.Type.SUPER_CHAT));
 
-        assertEquals(List.of("priority", "normal"), buffer.drain(2).stream().map(LiveDanmakuMessage::text).toList());
+        assertEquals(List.of("priority", "normal"), buffer.drain(2, 1L).stream().map(LiveDanmakuMessage::text).toList());
         assertEquals(0, buffer.size());
     }
 
@@ -51,6 +51,21 @@ public class LiveDanmakuBufferTest {
         assertEquals(888L, buffer.latestOnline());
         buffer.reset(5L);
         assertEquals(-1L, buffer.latestOnline());
+    }
+
+    @Test
+    public void dropsExpiredMessagesAndReportsAggregateStats() {
+        LiveDanmakuBuffer buffer = new LiveDanmakuBuffer(2, 1, 100L, 500L);
+        buffer.reset(1L);
+        buffer.offer(new LiveDanmakuMessage(LiveDanmakuMessage.Type.NORMAL, "expired", 0xFFFFFFFF, 10L, 1L));
+        buffer.offer(new LiveDanmakuMessage(LiveDanmakuMessage.Type.NORMAL, "fresh", 0xFFFFFFFF, 150L, 1L));
+        buffer.offer(new LiveDanmakuMessage(LiveDanmakuMessage.Type.SUPER_CHAT, "priority", 0xFFFFFFFF, 10L, 1L));
+
+        assertEquals(List.of("priority", "fresh"), buffer.drain(3, 200L).stream().map(LiveDanmakuMessage::text).toList());
+        LiveDanmakuBuffer.Snapshot snapshot = buffer.snapshot();
+        assertEquals(1L, snapshot.droppedExpired());
+        assertEquals(2L, snapshot.drained());
+        assertEquals(3, snapshot.highWaterMark());
     }
 
     private static LiveDanmakuMessage message(long generation, String text, LiveDanmakuMessage.Type type) {
