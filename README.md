@@ -361,11 +361,22 @@ keyPassword=your_key_password
 - `app/libs/*.aar`:内置 Hook、TVBus、Thunder、ForceTech、JianPian 播放能力依赖。
 - `third_party/maven`:已生成的 `androidx.media3:*:1.11.0-alpha01-fongmi` 本地 Maven 产物，以及定制 `nextlib-media3ext`。
 - `third_party/media-lock.json`:记录 Media3 锁定版本,升级 Media3 时使用(配套脚本 `scripts/build_media_deps.sh`)。
+- `third_party/patches/media3-*.patch`:在锁定的 FongMi Media3 源码上叠加本项目补丁；其中 `media3-danmaku-live.patch` 提供 WebSocket 实时弹幕的批量接收、有界队列、TTL、每帧处理上限和聚合统计。
 - `third_party/mpv-player-jni`:MPV `libplayer.so` JNI 桥接源码，修改后用 `scripts/build_mpv_player_jni.sh` 重建。
 - `app/src/*/assets/mpv-libs/*`:随 APK 打包的 MPV native 库和 JNI 桥接库。
 - `nextlib-media3ext`:`io.github.anilbeesetti:nextlib-media3ext:1.10.0-0.12.1-fongmi-softload`,提供 FFmpeg renderer。
 
 `settings.gradle` 中的依赖顺序是仓库本地 `third_party/maven`、Maven Central、Google Maven、`app/libs` 和 JitPack。`app/build.gradle` 会强制所有 `androidx.media3` 依赖使用 `1.11.0-alpha01-fongmi`，避免传递依赖拉回官方版本。
+
+普通 App/CI 构建直接使用仓库内已经提交完整的 Media3 AAR、POM、module 和校验文件，不会现场拉取或编译 Media3 源码。只有修改 `third_party/patches/media3-*.patch`、Media3 fork 或锁定版本后，才需要重建本地 Maven 产物：
+
+```bash
+scripts/build_media_deps.sh
+bash gradlew :app:testMobileArm64_v8aDebugUnitTest --tests 'com.fongmi.android.tv.player.danmaku.*'
+bash gradlew :app:assembleMobileArm64_v8aDebug :app:assembleLeanbackArm64_v8aDebug
+```
+
+脚本会按 `third_party/media-lock.json` 检出锁定提交、应用全部 Media3 补丁并发布到 `third_party/maven`。`media3-danmaku-live.patch` 还包含 Media3 渲染侧 Robolectric 压力测试；App 测试使用 MockWebServer 模拟 WebSocket，MockWebServer 仅属于 `testImplementation`，不会进入正式 APK。发布 GitHub Action 会先运行完整 WebSocket 弹幕单测，再构建四个 release APK。
 
 ### 常见构建失败
 
