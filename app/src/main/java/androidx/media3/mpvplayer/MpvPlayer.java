@@ -75,6 +75,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private static final long STATE_REFRESH_INTERVAL_MS = 1000;
     private static final long END_FILE_VALIDATION_DELAY_MS = 800;
     private static final long LOAD_START_RETRY_DELAY_MS = 1000;
+    private static final long TRACK_REFRESH_DEBOUNCE_MS = 80;
+    private static final float FRAME_RATE_REQUEST_EPSILON = 0.001f;
     private static final int MAX_LOAD_START_RETRIES = 2;
     private static final double SECONDS_TO_MS = 1000.0;
     private static final double DEFAULT_SUBTITLE_TEXT_SIZE_FRACTION = 0.0533;
@@ -132,6 +134,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private final Runnable stateRefreshRunnable;
     private final Runnable endFileValidationRunnable;
     private final Runnable loadStartRetryRunnable;
+    private final Runnable trackRefreshRunnable;
     private final Runnable isoTrackMetadataReadyListener;
     private final MpvHlsProxy hlsProxy;
     private final MpvCacheObserverState cacheObserverState;
@@ -143,6 +146,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private SurfaceHolder surfaceHolder;
     private Surface surface;
     private Surface attachedSurface;
+    private Surface lastFrameRateSurface;
     private Object videoOutput;
     private MpvLutShader lutShader;
     private String currentPlayableUri;
@@ -200,6 +204,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private boolean cachedCacheEof;
     private boolean preferAacApplied;
     private boolean audioTrackManuallySelected;
+    private boolean trackRefreshScheduled;
     private int loadStartRetryCount;
     private int videoReconfigCount;
     private int currentChapter;
@@ -221,6 +226,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     private double cachedDisplayFps;
     private double cachedEstimatedDisplayFps;
     private float cachedContentFrameRate;
+    private float lastRequestedFrameRate = Float.NaN;
+    private int lastFrameRateCompatibility = -1;
+    private int lastFrameRateStrategy = -1;
     private long cachedDecoderDroppedFrames;
     private long cachedOutputDroppedFrames;
     private long cachedMistimedFrames;
@@ -237,6 +245,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         stateRefreshRunnable = this::refreshPlaybackState;
         endFileValidationRunnable = this::validateEarlyEndFile;
         loadStartRetryRunnable = this::retryLoadIfNotStarted;
+        trackRefreshRunnable = this::runScheduledTrackRefresh;
         isoTrackMetadataReadyListener = this::onIsoTrackMetadataReady;
         hlsProxy = new MpvHlsProxy();
         recentLogs = new ArrayList<>();
@@ -311,6 +320,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     @Override
     protected ListenableFuture<?> handleSetMediaItems(List<MediaItem> mediaItems, int startIndex, long startPositionMs) {
+        cancelScheduledTrackRefresh();
         mediaItem = mediaItems.isEmpty() ? null : mediaItems.get(0);
         pendingSeekPositionMs = mediaItem != null && startPositionMs > 0 ? startPositionMs : C.TIME_UNSET;
         cachedPositionMs = Math.max(0, startPositionMs == C.TIME_UNSET ? 0 : startPositionMs);
@@ -394,6 +404,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     @Override
     protected ListenableFuture<?> handleRelease() {
         released = true;
+        cancelScheduledTrackRefresh();
         stopInternal(false);
         hlsProxy.release();
         clearVideoOutput();
@@ -903,14 +914,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             }
             case "width", "height", "video-params/w", "video-params/h", "video-params/dw", "video-params/dh", "video-out-params/w", "video-out-params/h", "video-out-params/dw", "video-out-params/dh", "current-tracks/video/demux-w", "current-tracks/video/demux-h" -> {
                 updateVideoSize("property:" + property);
-                refreshTracks();
+                scheduleTrackRefresh();
             }
             case "container-fps", "estimated-vf-fps" -> {
                 cachedContentFrameRate = videoFrameRate();
                 applySurfaceFrameRate();
-                refreshTracks();
+                scheduleTrackRefresh();
             }
-            case "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> refreshTracks();
+            case "video-params/primaries", "video-params/gamma", "video-params/colorlevels", "video-params/colormatrix" -> scheduleTrackRefresh();
             case "current-vo" -> cachedCurrentVo = stringValue(value, cachedCurrentVo);
             case "current-gpu-context" -> cachedCurrentGpuContext = stringValue(value, cachedCurrentGpuContext);
             case "gpu-api" -> cachedGpuApi = stringValue(value, cachedGpuApi);
@@ -927,9 +938,9 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             case "display-sync-active" -> cachedDisplaySyncActive = Boolean.TRUE.equals(value);
             case "track-list/count" -> {
                 updateVideoSize("property:" + property);
-                refreshTracks();
+                scheduleTrackRefresh();
             }
-            case "vid", "aid", "sid", "secondary-sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id", "current-tracks/sub2/id" -> refreshTracks();
+            case "vid", "aid", "sid", "secondary-sid", "current-tracks/video/id", "current-tracks/audio/id", "current-tracks/sub/id", "current-tracks/sub2/id" -> scheduleTrackRefresh();
             case "chapter" -> {
                 if (value instanceof Number number) currentChapter = number.intValue();
                 refreshChapters();
@@ -1458,6 +1469,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void setVideoOutput(Object output) {
+        clearSurfaceFrameRate();
+        resetSurfaceFrameRateRequest();
         detachSurfaceHolder();
         surfaceWidth = 0;
         surfaceHeight = 0;
@@ -1522,6 +1535,7 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
 
     private void clearVideoOutput() {
         clearSurfaceFrameRate();
+        resetSurfaceFrameRateRequest();
         detachSurfaceHolder();
         detachMpvSurface();
         releaseOwnedSurface();
@@ -1586,11 +1600,25 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void applySurfaceFrameRate() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || surface == null || !surface.isValid()) return;
+        Surface target = surface;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || target == null || !target.isValid()) return;
         float rate = MpvPerformanceSetting.getFrameRateMode() == MpvPerformanceSetting.FRAME_RATE_SEAMLESS ? cachedContentFrameRate : 0f;
         if (rate < 0) rate = 0f;
+        int compatibility = rate > 0f ? Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE : Surface.FRAME_RATE_COMPATIBILITY_DEFAULT;
+        requestSurfaceFrameRate(target, rate, compatibility, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
+    }
+
+    private void requestSurfaceFrameRate(Surface target, float rate, int compatibility, int strategy) {
+        if (target == lastFrameRateSurface
+                && Math.abs(rate - lastRequestedFrameRate) <= FRAME_RATE_REQUEST_EPSILON
+                && compatibility == lastFrameRateCompatibility
+                && strategy == lastFrameRateStrategy) return;
         try {
-            surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
+            target.setFrameRate(rate, compatibility, strategy);
+            lastFrameRateSurface = target;
+            lastRequestedFrameRate = rate;
+            lastFrameRateCompatibility = compatibility;
+            lastFrameRateStrategy = strategy;
             SpiderDebug.log("mpv", "surface frame rate request=%.3f mode=%s", rate, MpvPerformanceSetting.getFrameRateText());
         } catch (Throwable e) {
             SpiderDebug.log("mpv", "surface frame rate request failed rate=%.3f error=%s", rate, e.getMessage());
@@ -1598,11 +1626,17 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
     }
 
     private void clearSurfaceFrameRate() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || surface == null || !surface.isValid()) return;
-        try {
-            surface.setFrameRate(0f, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
-        } catch (Throwable ignored) {
+        Surface target = surface;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && target != null && target.isValid() && target == lastFrameRateSurface) {
+            requestSurfaceFrameRate(target, 0f, Surface.FRAME_RATE_COMPATIBILITY_DEFAULT, Surface.CHANGE_FRAME_RATE_ONLY_IF_SEAMLESS);
         }
+    }
+
+    private void resetSurfaceFrameRateRequest() {
+        lastFrameRateSurface = null;
+        lastRequestedFrameRate = Float.NaN;
+        lastFrameRateCompatibility = -1;
+        lastFrameRateStrategy = -1;
     }
 
     private String surfaceOutputName(Object output) {
@@ -1642,13 +1676,17 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         @Override
         public void surfaceDestroyed(SurfaceHolder holder) {
             Log.d(SIZE_TAG, "mpv surfaceDestroyed frame=" + surfaceFrame(holder));
+            clearSurfaceFrameRate();
+            resetSurfaceFrameRateRequest();
             surface = null;
             detachMpvSurface();
         }
     };
 
     private void stopInternal(boolean resetState) {
+        cancelScheduledTrackRefresh();
         stopMpv(true);
+        clearSurfaceFrameRate();
         closeContentFds();
         loading = false;
         fileLoaded = false;
@@ -2176,7 +2214,26 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return playbackState == Player.STATE_READY && playWhenReady && !loading;
     }
 
+    private void scheduleTrackRefresh() {
+        if (released || trackRefreshScheduled) return;
+        trackRefreshScheduled = true;
+        mainHandler.postDelayed(trackRefreshRunnable, TRACK_REFRESH_DEBOUNCE_MS);
+    }
+
+    private void runScheduledTrackRefresh() {
+        trackRefreshScheduled = false;
+        if (released) return;
+        refreshTracks();
+        invalidateState();
+    }
+
+    private void cancelScheduledTrackRefresh() {
+        trackRefreshScheduled = false;
+        mainHandler.removeCallbacks(trackRefreshRunnable);
+    }
+
     private void refreshTracks() {
+        if (trackRefreshScheduled) cancelScheduledTrackRefresh();
         if (!initialized) {
             currentTracks = Tracks.EMPTY;
             return;
