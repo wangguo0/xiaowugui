@@ -31,6 +31,7 @@ public final class PlaybackPerformanceCatalog {
     public static final String PREFER_AAC = "prefer_aac";
     public static final String AUDIO_SOFT_PREFER = "audio_soft_prefer";
     public static final String VIDEO_SOFT_PREFER = "video_soft_prefer";
+    public static final String MPV_OUTPUT = "mpv_output";
     public static final String MPV_RENDER = "mpv_render";
     public static final String MPV_HWDEC = "mpv_hwdec";
     public static final String MPV_SYNC = "mpv_sync";
@@ -103,6 +104,7 @@ public final class PlaybackPerformanceCatalog {
     }
 
     private static void addMpv(List<PlaybackPerformanceOption> options) {
+        options.add(option(MPV_OUTPUT, BASIC, "输出模式", "自动模式会在电视端高分辨率硬解且没有字幕、LUT、shader或滤镜需求时尝试低开销直出；GPU完整保留OpenGL/Vulkan和全部图像处理能力；电视直出使用MediaCodec直接输出到Android Surface，通常最省GPU，但MPV原生字幕、LUT、shader和视频滤镜不可用。"));
         options.add(option(MPV_RENDER, BASIC, "渲染后端", "OpenGL 兼容性最好；Vulkan 使用 gpu-next/libplacebo，部分设备性能更好，也更依赖驱动。只有 native 和设备能力都满足时才会实际使用 Vulkan，否则自动回退 OpenGL。"));
         options.add(option(MPV_HWDEC, BASIC, "硬解路径", "自动回退依次尝试 MediaCodec 零拷贝和兼容复制；零拷贝开销最低但设备兼容差异更大；兼容复制增加内存带宽，部分 Amlogic/Mali 设备仍可能绿屏。"));
         options.add(option(MPV_FRAME_RATE, BASIC, "帧率匹配", "Android 11及以上根据 MPV 识别到的内容帧率调用 Surface.setFrameRate。仅无缝模式不会主动触发可能黑屏的显示模式切换；旧系统自动忽略。"));

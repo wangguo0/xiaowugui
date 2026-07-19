@@ -461,6 +461,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             case PlaybackPerformanceCatalog.PREFER_AAC -> onOff(PlayerSetting.isPreferAAC());
             case PlaybackPerformanceCatalog.AUDIO_SOFT_PREFER -> onOff(PlayerSetting.isAudioPrefer());
             case PlaybackPerformanceCatalog.VIDEO_SOFT_PREFER -> onOff(PlayerSetting.isVideoPrefer());
+            case PlaybackPerformanceCatalog.MPV_OUTPUT -> MpvPerformanceSetting.getOutputModeText();
             case PlaybackPerformanceCatalog.MPV_RENDER -> mpvRenderText();
             case PlaybackPerformanceCatalog.MPV_HWDEC -> MpvPerformanceSetting.getHwdecText();
             case PlaybackPerformanceCatalog.MPV_FRAME_RATE -> MpvPerformanceSetting.getFrameRateText();
@@ -530,6 +531,10 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             case PlaybackPerformanceCatalog.PREFER_AAC -> () -> togglePlayer(PlayerSetting::isPreferAAC, PlayerSetting::putPreferAAC);
             case PlaybackPerformanceCatalog.AUDIO_SOFT_PREFER -> () -> togglePlayer(PlayerSetting::isAudioPrefer, PlayerSetting::putAudioPrefer);
             case PlaybackPerformanceCatalog.VIDEO_SOFT_PREFER -> () -> togglePlayer(PlayerSetting::isVideoPrefer, PlayerSetting::putVideoPrefer);
+            case PlaybackPerformanceCatalog.MPV_OUTPUT -> () -> {
+                MpvPerformanceSetting.putOutputMode((MpvPerformanceSetting.getOutputMode() + 1) % 3);
+                refresh();
+            };
             case PlaybackPerformanceCatalog.MPV_RENDER -> !isMpvVulkanAvailable() && PlayerSetting.getMpvRender() == PlayerSetting.MPV_RENDER_OPENGL ? null : () -> {
                 PlayerSetting.putMpvRender(PlayerSetting.getMpvRender() == PlayerSetting.MPV_RENDER_OPENGL ? PlayerSetting.MPV_RENDER_VULKAN : PlayerSetting.MPV_RENDER_OPENGL);
                 PlaybackPerformanceSetting.markCustom();
