@@ -61,6 +61,11 @@ public final class LiveDanmakuBuffer {
         resetStatsLocked();
     }
 
+    public synchronized void discardPending() {
+        normal.clear();
+        priority.clear();
+    }
+
     public synchronized OfferResult offer(LiveDanmakuMessage message) {
         if (message == null || message.generation() != generation) {
             droppedStale++;

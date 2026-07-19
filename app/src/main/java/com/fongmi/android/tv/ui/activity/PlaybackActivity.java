@@ -578,6 +578,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         mService.setNavigationCallback(getNavigationCallback(), getPlaybackKey());
         mService.addPlayerCallback(mPlayerCallback);
         player().setLutAllowed(isLutAllowed());
+        player().setDanmakuForeground(true);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "service connected cost=%dms key=%s", System.currentTimeMillis() - start, getPlaybackKey());
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "service connected %s", lifecycleState());
         onServiceConnected();
@@ -592,7 +593,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     @Override
     protected void onResume() {
         super.onResume();
-        if (mService != null) mService.setPlaybackForeground(true);
+        if (mService != null) {
+            mService.setPlaybackForeground(true);
+            if (isOwner()) player().setDanmakuForeground(true);
+        }
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity resume %s", lifecycleState());
         playbackExiting = false;
         setRedirect(false);
@@ -611,7 +615,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
     @Override
     protected void onStop() {
-        if (mService != null) mService.setPlaybackForeground(false);
+        if (mService != null) {
+            mService.setPlaybackForeground(false);
+            if (isOwner()) player().setDanmakuForeground(false);
+        }
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity stop backgroundOff=%s %s", PlayerSetting.isBackgroundOff(), lifecycleState());
         super.onStop();
         if (isOwner() && !isAudioOnly() && PlayerSetting.isBackgroundOff() && mController != null) mController.pause();

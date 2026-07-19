@@ -54,6 +54,18 @@ public class LiveDanmakuBufferTest {
     }
 
     @Test
+    public void discardsPausedBacklogWithoutInvalidatingCurrentGeneration() {
+        LiveDanmakuBuffer buffer = new LiveDanmakuBuffer(2, 1);
+        buffer.reset(6L);
+        buffer.offer(message(6L, "before pause", LiveDanmakuMessage.Type.NORMAL));
+
+        buffer.discardPending();
+
+        assertEquals(0, buffer.size());
+        assertEquals(LiveDanmakuBuffer.OfferResult.QUEUED, buffer.offer(message(6L, "after resume", LiveDanmakuMessage.Type.NORMAL)));
+    }
+
+    @Test
     public void dropsExpiredMessagesAndReportsAggregateStats() {
         LiveDanmakuBuffer buffer = new LiveDanmakuBuffer(2, 1, 100L, 500L);
         buffer.reset(1L);

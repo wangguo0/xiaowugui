@@ -108,9 +108,11 @@ public class PlayerManager implements ParseCallback {
     private String lastLoggedRouteTraceId = PlaybackTrace.NONE;
     private long danmakuLoadStartedAtMs;
     private volatile long liveDanmakuGeneration;
+    private volatile boolean liveDanmakuPlaybackActive;
     private long pendingSwitchPositionMs = C.TIME_UNSET;
     private float pendingSwitchSpeed = 1f;
     private boolean danmakuLoadInProgress;
+    private boolean danmakuForeground = true;
     private boolean pendingSwitchRepeat;
     private boolean pendingSwitchRestore;
     private boolean audioFocusHeld;
@@ -550,7 +552,18 @@ public class PlayerManager implements ParseCallback {
         if (danmakuController != null) danmakuController.setEnabled(enabled);
         if (!enabled) {
             stopLiveDanmakuSession("hidden");
-        } else if (DanmakuUrlPolicy.classify(currentDanmakuUrl).isLive()) {
+        } else if (danmakuForeground && DanmakuUrlPolicy.classify(currentDanmakuUrl).isLive()) {
+            connectLiveDanmakuSession(currentDanmakuUrl);
+        }
+    }
+
+    public void setDanmakuForeground(boolean foreground) {
+        if (danmakuForeground == foreground) return;
+        danmakuForeground = foreground;
+        if (!foreground) {
+            stopLiveDanmakuSession("background");
+            discardLiveDanmakuPending();
+        } else if (DanmakuSetting.isShow() && DanmakuUrlPolicy.classify(currentDanmakuUrl).isLive()) {
             connectLiveDanmakuSession(currentDanmakuUrl);
         }
     }
@@ -1646,7 +1659,7 @@ public class PlayerManager implements ParseCallback {
             danmakuLoadStartedAtMs = 0;
             danmakuLoadInProgress = false;
             if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "select live source pending websocket connection %s", DanmakuUrlPolicy.logSummary(url));
-            if (DanmakuSetting.isShow()) connectLiveDanmakuSession(url);
+            if (danmakuForeground && DanmakuSetting.isShow()) connectLiveDanmakuSession(url);
             return;
         }
         stopLiveDanmakuSession("static_source");
@@ -1716,6 +1729,7 @@ public class PlayerManager implements ParseCallback {
                     if (result.kind() == LiveDanmakuParser.Kind.ONLINE) {
                         liveDanmakuBuffer.updateOnline(generation, result.online());
                     } else {
+                        if (!liveDanmakuPlaybackActive) return;
                         LiveDanmakuMessage message = result.message();
                         LiveDanmakuBuffer.OfferResult offer = liveDanmakuBuffer.offer(message);
                         if (offer != LiveDanmakuBuffer.OfferResult.STALE) liveDanmakuBatcher.requestDrain(generation);
@@ -1755,6 +1769,12 @@ public class PlayerManager implements ParseCallback {
             if (generation != liveDanmakuGeneration || danmakuController == null) return;
             danmakuController.clearLiveItems();
         });
+    }
+
+    private void discardLiveDanmakuPending() {
+        liveDanmakuBuffer.discardPending();
+        liveDanmakuBatcher.reset(liveDanmakuGeneration);
+        clearLiveDanmakuRenderer(liveDanmakuGeneration);
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
@@ -1967,6 +1987,12 @@ public class PlayerManager implements ParseCallback {
     }
 
     private final Player.Listener listener = new Player.Listener() {
+
+        @Override
+        public void onIsPlayingChanged(boolean isPlaying) {
+            liveDanmakuPlaybackActive = isPlaying;
+            if (!isPlaying) discardLiveDanmakuPending();
+        }
 
         @Override
         public void onPlaybackStateChanged(int state) {
