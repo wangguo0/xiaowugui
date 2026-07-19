@@ -1702,6 +1702,7 @@ public class PlayerManager implements ParseCallback {
                         liveDanmakuBatcher.clear();
                         liveDanmakuBuffer.clear();
                     }
+                    if (state != LiveDanmakuWebSocketSession.State.OPEN) clearLiveDanmakuRenderer(generation);
                     if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "state=%s generation=%d code=%d detail=%s %s", state, generation, code, detail, DanmakuUrlPolicy.logSummary(sourceUrl));
                 }
 
@@ -1746,6 +1747,13 @@ public class PlayerManager implements ParseCallback {
                         .setLiveExpiryElapsedRealtimeMs(message.receivedAtMs() + ttlMs));
             }
             danmakuController.offerLiveBatch(batch);
+        });
+    }
+
+    private void clearLiveDanmakuRenderer(long generation) {
+        App.post(() -> {
+            if (generation != liveDanmakuGeneration || danmakuController == null) return;
+            danmakuController.clearLiveItems();
         });
     }
 

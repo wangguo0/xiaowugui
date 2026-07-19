@@ -1,6 +1,8 @@
 diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
 --- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
 +++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danmaku.java
+@@ -63,0 +64 @@
++  boolean liveItem;
 @@ -67,0 +68 @@
 +  long liveExpiryElapsedRealtimeMs;
 @@ -108,0 +110,5 @@
@@ -12,18 +14,23 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
 --- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
 +++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
-@@ -537,0 +538,6 @@
+@@ -537,0 +538,16 @@
 +    }
 +  }
 +
 +  public void offerLiveBatch(List<Danmaku> items) {
 +    if (danmakuView != null && items != null && !items.isEmpty()) {
 +      danmakuView.offerLiveBatch(items);
-@@ -538,0 +545,4 @@
++    }
 +  }
 +
 +  public DanmakuView.LiveStats getLiveStats() {
 +    return danmakuView == null ? DanmakuView.LiveStats.EMPTY : danmakuView.getLiveStats();
++  }
++
++  public void clearLiveItems() {
++    if (danmakuView != null) {
++      danmakuView.clearLiveItems();
 diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
 --- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
 +++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
@@ -67,7 +74,8 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +
 @@ -310,0 +336 @@
 +    clearLivePending();
-@@ -330,0 +357,11 @@
+@@ -329,0 +356,29 @@
++    }
 +  }
 +
 +  private void clearLivePending() {
@@ -79,6 +87,29 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +    liveDroppedExpired = 0L;
 +    liveTrackWaits = 0L;
 +    liveHighWaterMark = 0;
++  }
++
++  public void clearLiveItems() {
++    clearLivePending();
++    int writeIndex = 0;
++    for (int i = 0; i < activeItems.size(); i++) {
++      Danmaku danmaku = activeItems.get(i);
++      if (danmaku.liveItem) {
++        danmaku.active = false;
++        danmaku.trackIndex = -1;
++        danmaku.activatedTimeMs = -1;
++        continue;
++      }
++      if (writeIndex != i) {
++        activeItems.set(writeIndex, danmaku);
++      }
++      writeIndex++;
+@@ -330,0 +386,5 @@
++    if (activeItems.size() > writeIndex) {
++      activeItems.subList(writeIndex, activeItems.size()).clear();
++    }
++    reconcileActiveItemsToTracks();
++    requestRedrawForExternalChange();
 @@ -412,0 +450 @@
 +    activateLiveItems(currentMs);
 @@ -431 +469 @@
@@ -138,7 +169,7 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +        danmaku.measuredWidth = measurePaint.measureText(danmaku.text);
 @@ -875,0 +960 @@
 +      post(() -> addMeasuredLiveBatch(items, generation));
-@@ -878,0 +964,49 @@
+@@ -878,0 +964,50 @@
 +  private void addMeasuredLiveBatch(List<Danmaku> items, int generation) {
 +    if (released || liveGeneration.get() != generation) {
 +      return;
@@ -153,6 +184,7 @@ diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/Danma
 +        liveDroppedOverflow++;
 +      }
 +      livePending.addLast(danmaku);
++      danmaku.liveItem = true;
 +      liveOffered++;
 +      liveHighWaterMark = Math.max(liveHighWaterMark, livePending.size());
 +    }
