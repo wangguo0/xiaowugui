@@ -24,6 +24,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.effect.ColorLut;
 import androidx.media3.ui.danmaku.DanmakuConfig;
 import androidx.media3.ui.danmaku.DanmakuController;
+import androidx.media3.mpvplayer.MpvPlayer;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Constant;
@@ -55,7 +56,10 @@ import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
 import com.fongmi.android.tv.player.lut.MpvLutShader;
 import com.fongmi.android.tv.player.lut.MpvLutShaderFactory;
+import com.fongmi.android.tv.player.mpv.MpvAutoOutputPolicy;
+import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.setting.DanmakuSetting;
+import com.fongmi.android.tv.setting.MpvPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.LocalProxyDebug;
 import com.fongmi.android.tv.utils.Notify;
@@ -139,12 +143,16 @@ public class PlayerManager implements ParseCallback {
     private boolean lutWarmupReloadPreviewPending;
     private boolean hardDecodeSwitchRetryArmed;
     private boolean lutAllowed = true;
+    private boolean mpvAutoOutputEvaluated;
+    private boolean mpvAutoOutputEvaluationScheduled;
+    private boolean mpvSurfaceFallbackTried;
     private int playerType;
     private int retry;
     private int localProxyRetry;
     private int prepareSeq;
     private int lutApplySeq;
     private int lutWarmupRecoveredErrors;
+    private int mpvOutputEvaluationSeq;
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
@@ -456,6 +464,10 @@ public class PlayerManager implements ParseCallback {
         return playerType == PlayerSetting.MPV;
     }
 
+    public boolean isMpvSurfaceDirect() {
+        return engine instanceof MpvPlayerEngine mpv && mpv.isSurfaceDirect();
+    }
+
     public boolean isExo() {
         return playerType == PlayerSetting.EXO;
     }
@@ -608,6 +620,10 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void setTrack(List<Track> tracks) {
+        if (shouldLeaveAutoSurfaceDirectForSubtitle(tracks)) {
+            rebuildAndRestartMpv(false, "subtitle-selected");
+            return;
+        }
         if (!tracks.isEmpty()) engine.setTrack(tracks);
     }
 
@@ -679,6 +695,7 @@ public class PlayerManager implements ParseCallback {
     public void clear() {
         prepareSeq++;
         lutApplySeq++;
+        resetMpvOutputRuntime();
         spec = null;
         clearPendingSwitchRestore();
         clearDanmaku("clear");
@@ -891,6 +908,124 @@ public class PlayerManager implements ParseCallback {
         callback.onPlayerRebuild(player, resetVideoSurface);
     }
 
+    public void applyPerformanceSettings() {
+        if (!isMpv() || spec == null || TextUtils.isEmpty(spec.getUrl()) || !(engine instanceof MpvPlayerEngine mpv)) return;
+        resetMpvOutputEvaluationState();
+        mpv.setSurfaceDirectOverride(null);
+        rebuildAndRestartMpv(null, "performance-settings-changed");
+    }
+
+    private boolean rebuildAndRestartMpv(Boolean surfaceDirectOverride, String reason) {
+        if (!isMpv() || spec == null || TextUtils.isEmpty(spec.getUrl()) || !(engine instanceof MpvPlayerEngine mpv)) return false;
+        long position = Math.max(0, player.getCurrentPosition());
+        float speed = getSpeed();
+        boolean repeat = isRepeatOne();
+        boolean wasPlayWhenReady = player.getPlayWhenReady();
+        prepareSeq++;
+        App.removeCallbacks(runnable);
+        mpv.setSurfaceDirectOverride(surfaceDirectOverride);
+        videoSize = null;
+        initTrack = false;
+        rebuildPlayer();
+        playWhenReady = wasPlayWhenReady;
+        applySubtitleStyle();
+        playbackTrace.mark(PlaybackTrace.Stage.PREPARE, "player=" + playerType + " decode=" + engine.getDecode() + " mpv-output=" + reason);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "rebuild reason=%s directOverride=%s position=%d play=%s speed=%s repeat=%s spec=%s", reason, surfaceDirectOverride, position, wasPlayWhenReady, speed, repeat, debugSpec());
+        engine.start(spec.checkUa(), position, wasPlayWhenReady);
+        startNativeAudioSession(wasPlayWhenReady);
+        if (speed != 1f) setSpeed(speed);
+        setRepeatOne(repeat);
+        App.post(runnable, Constant.TIMEOUT_PLAY);
+        return true;
+    }
+
+    private void prepareMpvOutputForNewItem() {
+        resetMpvOutputEvaluationState();
+        if (!(engine instanceof MpvPlayerEngine mpv)) return;
+        mpv.setSurfaceDirectOverride(null);
+        boolean shouldStartDirect = MpvPerformanceSetting.shouldUseSurfaceDirect(false, Util.isLeanback(), engine.isHard());
+        if (mpv.isSurfaceDirect() == shouldStartDirect) return;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "prepare new item rebuild currentDirect=%s desiredDirect=%s mode=%s", mpv.isSurfaceDirect(), shouldStartDirect, MpvPerformanceSetting.getOutputModeText());
+        rebuildPlayer();
+    }
+
+    private void resetMpvOutputRuntime() {
+        resetMpvOutputEvaluationState();
+        if (engine instanceof MpvPlayerEngine mpv) mpv.setSurfaceDirectOverride(null);
+    }
+
+    private void resetMpvOutputEvaluationState() {
+        mpvAutoOutputEvaluated = false;
+        mpvAutoOutputEvaluationScheduled = false;
+        mpvSurfaceFallbackTried = false;
+        mpvOutputEvaluationSeq++;
+    }
+
+    private void scheduleMpvAutoOutputEvaluation() {
+        if (!isMpv() || MpvPerformanceSetting.getOutputMode() != MpvPerformanceSetting.OUTPUT_AUTO) return;
+        if (mpvAutoOutputEvaluated || mpvAutoOutputEvaluationScheduled || isMpvSurfaceDirect()) return;
+        mpvAutoOutputEvaluationScheduled = true;
+        int seq = ++mpvOutputEvaluationSeq;
+        App.post(() -> {
+            if (seq != mpvOutputEvaluationSeq) return;
+            mpvAutoOutputEvaluationScheduled = false;
+            evaluateMpvAutoOutput();
+        }, 500);
+    }
+
+    private void evaluateMpvAutoOutput() {
+        if (!isMpv() || mpvAutoOutputEvaluated || isMpvSurfaceDirect() || engine == null) return;
+        Tracks tracks = engine.getCurrentTracks();
+        if (tracks == null || tracks.isEmpty()) return;
+        Format format = engine.getVideoFormat();
+        int width = format != null && format.width > 0 ? format.width : getVideoWidth();
+        int height = format != null && format.height > 0 ? format.height : getVideoHeight();
+        if (width <= 0 || height <= 0) return;
+        boolean subtitleActive = hasSelectedSubtitle(tracks);
+        boolean lutOrFilterActive = videoEffectsActive || videoEffectsDirty || lutAllowed && LutSetting.isEnabled() || MpvPerformanceSetting.isInterpolation();
+        boolean customGpuProcessing = MpvConfigStore.hasGpuVideoProcessing();
+        MpvAutoOutputPolicy.Decision decision = MpvAutoOutputPolicy.evaluate(width, height, engine.isHard(), Util.isLeanback(), subtitleActive, lutOrFilterActive, customGpuProcessing);
+        mpvAutoOutputEvaluated = true;
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("mpv-output", "auto decision eligible=%s reason=%s size=%dx%d subtitle=%s lutOrFilter=%s customGpu=%s", decision.eligible(), decision.reason(), width, height, subtitleActive, lutOrFilterActive, customGpuProcessing);
+        if (decision.eligible()) rebuildAndRestartMpv(true, "auto-" + decision.reason());
+    }
+
+    private boolean shouldLeaveAutoSurfaceDirectForSubtitle(List<Track> tracks) {
+        if (!isMpvSurfaceDirect() || MpvPerformanceSetting.getOutputMode() != MpvPerformanceSetting.OUTPUT_AUTO || tracks == null) return false;
+        for (Track track : tracks) {
+            if (track.getType() == C.TRACK_TYPE_TEXT && track.isSelected() && !track.isDisabled()) {
+                mpvAutoOutputEvaluated = true;
+                mpvOutputEvaluationSeq++;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasSelectedSubtitle(Tracks tracks) {
+        if (tracks == null || tracks.isEmpty()) return false;
+        for (Tracks.Group group : tracks.getGroups()) {
+            if (group.getType() != C.TRACK_TYPE_TEXT) continue;
+            for (int i = 0; i < group.length; i++) if (group.isTrackSelected(i)) return true;
+        }
+        return false;
+    }
+
+    private boolean retryMpvSurfaceDirectFailure(PlaybackException error) {
+        if (!isMpvSurfaceDirect() || mpvSurfaceFallbackTried || error == null) return false;
+        String message = error.getMessage();
+        boolean outputFailure = error.errorCode == PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED
+                || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+                || error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
+                || message != null && (message.startsWith(MpvPlayer.ERROR_VIDEO_OUTPUT_FAILED) || message.startsWith(MpvPlayer.ERROR_DECODE_FAILED));
+        if (!outputFailure) return false;
+        mpvSurfaceFallbackTried = true;
+        mpvAutoOutputEvaluated = true;
+        mpvOutputEvaluationSeq++;
+        PlaybackTrace.log("mpv-output", playbackTrace.current(), "surface direct failed; fallback gpu once code=%d message=%s", error.errorCode, message);
+        return rebuildAndRestartMpv(false, "surface-direct-failure");
+    }
+
     private PlayerEngine buildEngine(int type, int decode) {
         return switch (type) {
             case PlayerSetting.IJK -> new IjkPlayerEngine(decode, listener);
@@ -914,6 +1049,7 @@ public class PlayerManager implements ParseCallback {
         clearPendingSwitchRestore();
         clearDanmaku("start");
         this.spec = spec;
+        prepareMpvOutputForNewItem();
         beginPlaybackTrace("start");
         this.playWhenReady = playWhenReady;
         retry = 0;
@@ -931,6 +1067,7 @@ public class PlayerManager implements ParseCallback {
         clearPendingSwitchRestore();
         clearDanmaku("parse");
         spec = PlaySpec.fromParse(result, key, metadata, useParse);
+        prepareMpvOutputForNewItem();
         beginPlaybackTrace("parse");
         this.playWhenReady = playWhenReady;
         retry = 0;
@@ -1226,6 +1363,12 @@ public class PlayerManager implements ParseCallback {
 
     private void applyLut(boolean notify, boolean preview) {
         if (engine == null) return;
+        if (isMpvSurfaceDirect() && MpvPerformanceSetting.getOutputMode() == MpvPerformanceSetting.OUTPUT_AUTO && LutSetting.isEnabled()) {
+            mpvAutoOutputEvaluated = true;
+            mpvOutputEvaluationSeq++;
+            if (rebuildAndRestartMpv(false, "lut-enabled")) App.post(() -> applyLut(notify, preview), 200);
+            return;
+        }
         int seq = ++lutApplySeq;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("lut", "request seq=%d notify=%s preview=%s enabled=%s preset=%s state=%s videoFormat=%s tracksEmpty=%s active=%s dirty=%s applied=%s applying=%s pendingPreview=%s", seq, notify, preview, LutSetting.isEnabled(), LutSetting.getPresetId(), stateName(player.getPlaybackState()), engine.getVideoFormat(), engine.getCurrentTracks() == null || engine.getCurrentTracks().isEmpty(), videoEffectsActive, videoEffectsDirty, lutAppliedForItem, lutApplyInProgress, pendingLutPreview);
         if (!lutAllowed) {
@@ -2046,6 +2189,7 @@ public class PlayerManager implements ParseCallback {
         public void onVideoSizeChanged(@NonNull VideoSize size) {
             videoSize = size;
             applyLutForCurrentItem();
+            scheduleMpvAutoOutputEvaluation();
         }
 
         @Override
@@ -2058,6 +2202,7 @@ public class PlayerManager implements ParseCallback {
             }
             markStartupCompletion(player != null && player.getPlaybackState() == Player.STATE_READY, tracks);
             applyLutForCurrentItem();
+            scheduleMpvAutoOutputEvaluation();
         }
 
         @Override
@@ -2073,6 +2218,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             App.removeCallbacks(runnable);
+            if (retryMpvSurfaceDirectFailure(e)) return;
             PlaybackErrorClassifier.Failure failure = PlaybackErrorClassifier.classify(e, getEffectivePlaybackRoute());
             PlayerEngine.ErrorAction action = engine.handleError(e);
             PlaybackTrace.log("playback-error", playbackTrace.current(), "%s action=%s player=%d decode=%d", failure.logSummary(), action, playerType, engine.getDecode());

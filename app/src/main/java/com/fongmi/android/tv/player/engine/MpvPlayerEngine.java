@@ -12,6 +12,7 @@ import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.mpvplayer.MpvPlayer;
 import androidx.media3.mpvplayer.MpvPlayerConfig;
+import androidx.annotation.Nullable;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
@@ -42,6 +43,7 @@ public class MpvPlayerEngine implements PlayerEngine {
     private boolean playWhenReady;
     private boolean retriedFormat;
     private boolean surfaceDirect;
+    private Boolean surfaceDirectOverride;
     private int decode;
 
     public MpvPlayerEngine(int decode, Player.Listener listener) {
@@ -192,6 +194,14 @@ public class MpvPlayerEngine implements PlayerEngine {
     @Override
     public boolean supportsNativeLut() {
         return !surfaceDirect;
+    }
+
+    public boolean isSurfaceDirect() {
+        return surfaceDirect;
+    }
+
+    public void setSurfaceDirectOverride(@Nullable Boolean value) {
+        surfaceDirectOverride = value;
     }
 
     @Override
@@ -385,7 +395,9 @@ public class MpvPlayerEngine implements PlayerEngine {
 
     private MpvPlayerConfig buildConfig() {
         MpvConfigStore.ensureReady();
-        surfaceDirect = MpvPerformanceSetting.shouldUseSurfaceDirect(false, Util.isLeanback(), decode == HARD);
+        surfaceDirect = surfaceDirectOverride == null
+                ? MpvPerformanceSetting.shouldUseSurfaceDirect(false, Util.isLeanback(), decode == HARD)
+                : surfaceDirectOverride && decode == HARD;
         boolean requestVulkan = PlayerSetting.getMpvRender() == PlayerSetting.MPV_RENDER_VULKAN;
         boolean nativeVulkan = MPVLib.isBundledVulkanEnabled(App.get());
         boolean deviceVulkan = MPVLib.isDeviceVulkan13Capable(App.get());

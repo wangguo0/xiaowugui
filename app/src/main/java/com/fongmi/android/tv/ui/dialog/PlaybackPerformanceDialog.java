@@ -24,6 +24,7 @@ import androidx.fragment.app.FragmentActivity;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.setting.PlaybackPerformanceCatalog;
 import com.fongmi.android.tv.setting.PlaybackPerformanceOption;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
@@ -328,6 +329,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
     private void refresh() {
         refreshRows();
         syncProfileTabs();
+        ConfigEvent.playerPerformance();
         if (callback != null) callback.run();
     }
 
