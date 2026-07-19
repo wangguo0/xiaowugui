@@ -42,6 +42,7 @@ import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuWebSocketSession;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuParser;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
 import com.fongmi.android.tv.player.lut.LutEffectFactory;
 import com.fongmi.android.tv.player.lut.LutEligibility;
@@ -1689,7 +1690,11 @@ public class PlayerManager implements ParseCallback {
                 @Override
                 public void onMessage(long generation, String text) {
                     if (generation != liveDanmakuGeneration) return;
-                    // Parsing and bounded delivery are added by the following implementation batch.
+                    LiveDanmakuParser.Result result = LiveDanmakuParser.parse(text, generation, SystemClock.elapsedRealtime());
+                    if (!result.isAccepted()) return;
+                    LiveDanmakuWebSocketSession session = liveDanmakuSession;
+                    if (session != null) session.markMessageAccepted(generation);
+                    // Bounded delivery and rendering are added by the following implementation batch.
                 }
             });
         }
