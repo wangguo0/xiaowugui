@@ -67,6 +67,7 @@ import com.google.common.net.HttpHeaders;
 
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -1736,8 +1737,13 @@ public class PlayerManager implements ParseCallback {
 
     private void onLiveDanmakuBatch(long generation, List<LiveDanmakuMessage> messages) {
         App.post(() -> {
-            if (generation != liveDanmakuGeneration || messages.isEmpty()) return;
-            // Media3 live batch delivery is added after the renderer exposes its bounded realtime API.
+            if (generation != liveDanmakuGeneration || messages.isEmpty() || danmakuController == null || !DanmakuSetting.isShow()) return;
+            List<androidx.media3.ui.danmaku.Danmaku> batch = new ArrayList<>(messages.size());
+            for (LiveDanmakuMessage message : messages) {
+                int pool = message.type() == LiveDanmakuMessage.Type.SUPER_CHAT ? androidx.media3.ui.danmaku.Danmaku.POOL_SPECIAL : androidx.media3.ui.danmaku.Danmaku.POOL_NORMAL;
+                batch.add(new androidx.media3.ui.danmaku.Danmaku(message.text(), 0L, androidx.media3.ui.danmaku.Danmaku.TYPE_SCROLL, message.colorArgb(), 0f, pool, "", 0L));
+            }
+            danmakuController.offerLiveBatch(batch);
         });
     }
 

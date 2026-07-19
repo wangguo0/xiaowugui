@@ -1,0 +1,68 @@
+diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
+--- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
++++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuController.java
+@@ -537,0 +538,6 @@
++    }
++  }
++
++  public void offerLiveBatch(List<Danmaku> items) {
++    if (danmakuView != null && items != null && !items.isEmpty()) {
++      danmakuView.offerLiveBatch(items);
+diff --git a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
+--- a/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
++++ b/libraries/ui_danmaku/src/main/java/androidx/media3/ui/danmaku/DanmakuView.java
+@@ -38,0 +39 @@
++import java.util.ArrayDeque;
+@@ -52,0 +54 @@
++  private static final int LIVE_PENDING_CAPACITY = 144;
+@@ -56,0 +59 @@
++  private final ArrayDeque<Danmaku> livePending = new ArrayDeque<>(LIVE_PENDING_CAPACITY);
+@@ -278,0 +282 @@
++    livePending.clear();
+@@ -305,0 +310,23 @@
++    }
++  }
++
++  public void offerLiveBatch(List<Danmaku> items) {
++    if (released || items.isEmpty()) {
++      return;
++    }
++    for (int i = 0; i < items.size(); i++) {
++      Danmaku danmaku = items.get(i);
++      if (danmaku == null || danmaku.text.isEmpty()) {
++        continue;
++      }
++      float sizePx = danmaku.textSizeSp > 0 ? resolveTextSizePx(danmaku.textSizeSp) : textSizePx;
++      fillPaint.setTextSize(sizePx);
++      danmaku.measuredWidth = fillPaint.measureText(danmaku.text);
++      if (livePending.size() >= LIVE_PENDING_CAPACITY) {
++        livePending.removeFirst();
++      }
++      livePending.addLast(danmaku);
++    }
++    fillPaint.setTextSize(textSizePx);
++    if (clock.started && !clock.paused && !livePending.isEmpty()) {
++      postInvalidateOnAnimation();
+@@ -310,0 +338 @@
++    livePending.clear();
+@@ -412,0 +441 @@
++    activateLiveItems(currentMs);
+@@ -431 +460 @@
+-      if (writeIdx > 0) {
++      if (writeIdx > 0 || !livePending.isEmpty()) {
+@@ -488,0 +518,15 @@
++  }
++
++  private void activateLiveItems(long currentMs) {
++    while (!livePending.isEmpty() && activeItems.size() < config.maxOnScreen) {
++      Danmaku danmaku = livePending.peekFirst();
++      if (!isTypeVisible(danmaku.type) || !isPoolVisible(danmaku.pool)) {
++        livePending.removeFirst();
++        continue;
++      }
++      if (!tryActivate(danmaku, currentMs)) {
++        break;
++      }
++      livePending.removeFirst();
++      activeItems.add(danmaku);
++    }
