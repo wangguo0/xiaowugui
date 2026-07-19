@@ -40,6 +40,7 @@ import com.fongmi.android.tv.player.engine.MpvPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
+import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
 import com.fongmi.android.tv.player.lut.LutEffectFactory;
 import com.fongmi.android.tv.player.lut.LutEligibility;
@@ -519,10 +520,11 @@ public class PlayerManager implements ParseCallback {
 
     private void restoreDanmakuDataSource() {
         if (danmakuController == null || TextUtils.isEmpty(currentDanmakuUrl)) return;
+        if (!DanmakuUrlPolicy.classify(currentDanmakuUrl).isStatic()) return;
         loadingDanmakuKey = currentDanmakuKey;
         danmakuLoadStartedAtMs = SystemClock.elapsedRealtime();
         danmakuLoadInProgress = true;
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "restore controller url=%s key=%s", summarizeUrl(currentDanmakuUrl), summarizeUrl(currentDanmakuKey));
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "restore controller %s key=%s", DanmakuUrlPolicy.logSummary(currentDanmakuUrl), summarizeUrl(currentDanmakuKey));
         danmakuController.setDataSource(Uri.parse(currentDanmakuUrl));
     }
 
@@ -1598,24 +1600,39 @@ public class PlayerManager implements ParseCallback {
             return;
         }
         if (danmakuController == null) return;
-        String url = item.getRealUrl();
+        String url = DanmakuUrlPolicy.normalize(DanmakuSetting.getValidApiUrl(), item.getRealUrl());
+        DanmakuUrlPolicy.SourceType sourceType = DanmakuUrlPolicy.classify(url);
+        if (!sourceType.isSupported()) {
+            if (spec != null) spec.setDanmaku(item);
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "reject %s", DanmakuUrlPolicy.logSummary(url));
+            clearDanmaku("unsupported_source");
+            return;
+        }
         String key = normalizeDanmakuKey(url);
         if (!force && TextUtils.equals(currentDanmakuUrl, url)) {
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "skip same url=%s", summarizeUrl(url));
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "skip same %s", DanmakuUrlPolicy.logSummary(url));
             return;
         }
         if (force && shouldSkipForcedDanmakuReload(key)) {
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "skip duplicate reload key=%s url=%s", summarizeUrl(key), summarizeUrl(url));
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "skip duplicate reload key=%s %s", summarizeUrl(key), DanmakuUrlPolicy.logSummary(url));
             return;
         }
         if (spec != null) spec.setDanmaku(item);
         if (force && currentDanmakuUrl != null) danmakuController.clearItems();
         currentDanmakuUrl = url;
         currentDanmakuKey = key;
+        if (sourceType.isLive()) {
+            danmakuController.clearItems();
+            loadingDanmakuKey = null;
+            danmakuLoadStartedAtMs = 0;
+            danmakuLoadInProgress = false;
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "select live source pending websocket connection %s", DanmakuUrlPolicy.logSummary(url));
+            return;
+        }
         loadingDanmakuKey = key;
         danmakuLoadStartedAtMs = SystemClock.elapsedRealtime();
         danmakuLoadInProgress = true;
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "%s name=%s url=%s key=%s", force ? "reload" : "load", item.getName(), summarizeUrl(url), summarizeUrl(key));
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "%s name=%s %s key=%s", force ? "reload" : "load", item.getName(), DanmakuUrlPolicy.logSummary(url), summarizeUrl(key));
         danmakuController.setDataSource(Uri.parse(url));
     }
 
@@ -1642,7 +1659,7 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void clearDanmaku(String reason) {
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, summarizeUrl(currentDanmakuUrl));
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, DanmakuUrlPolicy.logSummary(currentDanmakuUrl));
         if (danmakuController != null) danmakuController.clearItems();
         clearDanmakuState();
     }
@@ -1651,9 +1668,9 @@ public class PlayerManager implements ParseCallback {
         if (!SpiderDebug.isEnabled()) return;
         long elapsed = danmakuLoadStartedAtMs <= 0 ? -1 : SystemClock.elapsedRealtime() - danmakuLoadStartedAtMs;
         if (error == null) {
-            SpiderDebug.log("danmaku", "load %s count=%d elapsed=%dms url=%s", event, count, elapsed, summarizeUrl(uri == null ? "" : uri.toString()));
+            SpiderDebug.log("danmaku", "load %s count=%d elapsed=%dms %s", event, count, elapsed, DanmakuUrlPolicy.logSummary(uri == null ? "" : uri.toString()));
         } else {
-            SpiderDebug.log("danmaku", "load %s elapsed=%dms url=%s error=%s", event, elapsed, summarizeUrl(uri == null ? "" : uri.toString()), error.getMessage());
+            SpiderDebug.log("danmaku", "load %s elapsed=%dms %s error=%s", event, elapsed, DanmakuUrlPolicy.logSummary(uri == null ? "" : uri.toString()), error.getMessage());
         }
     }
 
