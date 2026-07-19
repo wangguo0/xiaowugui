@@ -41,8 +41,10 @@ import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
-import com.fongmi.android.tv.player.danmaku.LiveDanmakuWebSocketSession;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuBuffer;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuMessage;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuParser;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuWebSocketSession;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
 import com.fongmi.android.tv.player.lut.LutEffectFactory;
 import com.fongmi.android.tv.player.lut.LutEligibility;
@@ -89,6 +91,7 @@ public class PlayerManager implements ParseCallback {
     private final BroadcastReceiver noisyReceiver;
     private final PlaybackBufferingTracker playbackBufferingTracker;
     private final PlaybackTrace playbackTrace;
+    private final LiveDanmakuBuffer liveDanmakuBuffer;
     private DanmakuController danmakuController;
     private LiveDanmakuWebSocketSession liveDanmakuSession;
     private PlayerEngine engine;
@@ -138,6 +141,7 @@ public class PlayerManager implements ParseCallback {
         this.runnable = this::onPlaybackTimeout;
         this.playbackBufferingTracker = new PlaybackBufferingTracker();
         this.playbackTrace = new PlaybackTrace();
+        this.liveDanmakuBuffer = new LiveDanmakuBuffer();
         this.dynamicLutEffect = new DynamicLutEffect();
         this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
         this.noisyReceiver = new BroadcastReceiver() {
@@ -1673,6 +1677,7 @@ public class PlayerManager implements ParseCallback {
     private void clearDanmaku(String reason) {
         if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku", "clear reason=%s current=%s", reason, DanmakuUrlPolicy.logSummary(currentDanmakuUrl));
         stopLiveDanmakuSession(reason);
+        liveDanmakuBuffer.clear();
         if (danmakuController != null) danmakuController.clearItems();
         clearDanmakuState();
     }
@@ -1684,6 +1689,11 @@ public class PlayerManager implements ParseCallback {
                 @Override
                 public void onStateChanged(LiveDanmakuWebSocketSession.State state, long generation, String sourceUrl, int code, String detail) {
                     liveDanmakuGeneration = generation;
+                    if (state == LiveDanmakuWebSocketSession.State.CONNECTING) {
+                        liveDanmakuBuffer.reset(generation);
+                    } else if (state == LiveDanmakuWebSocketSession.State.RETRY_WAIT || state == LiveDanmakuWebSocketSession.State.STOPPED || state == LiveDanmakuWebSocketSession.State.RELEASED) {
+                        liveDanmakuBuffer.clear();
+                    }
                     if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "state=%s generation=%d code=%d detail=%s %s", state, generation, code, detail, DanmakuUrlPolicy.logSummary(sourceUrl));
                 }
 
@@ -1694,7 +1704,12 @@ public class PlayerManager implements ParseCallback {
                     if (!result.isAccepted()) return;
                     LiveDanmakuWebSocketSession session = liveDanmakuSession;
                     if (session != null) session.markMessageAccepted(generation);
-                    // Bounded delivery and rendering are added by the following implementation batch.
+                    if (result.kind() == LiveDanmakuParser.Kind.ONLINE) {
+                        liveDanmakuBuffer.updateOnline(generation, result.online());
+                    } else {
+                        LiveDanmakuMessage message = result.message();
+                        liveDanmakuBuffer.offer(message);
+                    }
                 }
             });
         }
