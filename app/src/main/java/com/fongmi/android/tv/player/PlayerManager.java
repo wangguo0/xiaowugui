@@ -44,6 +44,7 @@ import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuBatcher;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuBuffer;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuMessage;
+import com.fongmi.android.tv.player.danmaku.LiveDanmakuMetrics;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuParser;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuWebSocketSession;
 import com.fongmi.android.tv.player.lut.DynamicLutEffect;
@@ -83,10 +84,12 @@ public class PlayerManager implements ParseCallback {
     private static final int LOCAL_PROXY_MAX_RETRY = 2;
     private static final int LUT_WARMUP_RECOVERED_ERROR_REFRESH_THRESHOLD = 3;
     private static final long DANMAKU_FORCE_RELOAD_DEBOUNCE_MS = 10000;
+    private static final long LIVE_DANMAKU_METRICS_INTERVAL_MS = 15000L;
     private static final float[] SPEED_PRESETS = new float[]{0.5f, 0.75f, 1f, 1.2f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f, 5f};
     private static final DecimalFormat SPEED_FORMAT = new DecimalFormat("0.##x");
 
     private final Runnable runnable;
+    private final Runnable liveDanmakuMetricsRunnable;
     private final Callback callback;
     private final DynamicLutEffect dynamicLutEffect;
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
@@ -95,6 +98,7 @@ public class PlayerManager implements ParseCallback {
     private final PlaybackTrace playbackTrace;
     private final LiveDanmakuBatcher liveDanmakuBatcher;
     private final LiveDanmakuBuffer liveDanmakuBuffer;
+    private final LiveDanmakuMetrics liveDanmakuMetrics;
     private DanmakuController danmakuController;
     private LiveDanmakuWebSocketSession liveDanmakuSession;
     private PlayerEngine engine;
@@ -144,9 +148,11 @@ public class PlayerManager implements ParseCallback {
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
+        this.liveDanmakuMetricsRunnable = () -> logLiveDanmakuMetrics("periodic", true);
         this.playbackBufferingTracker = new PlaybackBufferingTracker();
         this.playbackTrace = new PlaybackTrace();
         this.liveDanmakuBuffer = new LiveDanmakuBuffer();
+        this.liveDanmakuMetrics = new LiveDanmakuMetrics();
         this.liveDanmakuBatcher = new LiveDanmakuBatcher(liveDanmakuBuffer, this::onLiveDanmakuBatch);
         this.dynamicLutEffect = new DynamicLutEffect();
         this.audioFocusChangeListener = this::onNativeAudioFocusChanged;
@@ -172,6 +178,7 @@ public class PlayerManager implements ParseCallback {
         clearDanmaku("release");
         releaseLiveDanmakuSession();
         liveDanmakuBatcher.release();
+        App.removeCallbacks(liveDanmakuMetricsRunnable);
         if (danmakuController != null) danmakuController.setListener(null);
         danmakuController = null;
         if (engine == null) return;
@@ -1708,6 +1715,7 @@ public class PlayerManager implements ParseCallback {
                 @Override
                 public void onStateChanged(LiveDanmakuWebSocketSession.State state, long generation, String sourceUrl, int code, String detail) {
                     liveDanmakuGeneration = generation;
+                    liveDanmakuMetrics.onState(state, code, SystemClock.elapsedRealtime());
                     if (state == LiveDanmakuWebSocketSession.State.CONNECTING) {
                         liveDanmakuBuffer.reset(generation);
                         liveDanmakuBatcher.reset(generation);
@@ -1715,14 +1723,22 @@ public class PlayerManager implements ParseCallback {
                         liveDanmakuBatcher.clear();
                         liveDanmakuBuffer.clear();
                     }
-                    if (state != LiveDanmakuWebSocketSession.State.OPEN) clearLiveDanmakuRenderer(generation);
+                    if (state != LiveDanmakuWebSocketSession.State.OPEN) {
+                        App.post(() -> logLiveDanmakuMetrics("state_" + state, false));
+                        clearLiveDanmakuRenderer(generation);
+                    }
+                    if (state == LiveDanmakuWebSocketSession.State.CONNECTING || state == LiveDanmakuWebSocketSession.State.OPEN || state == LiveDanmakuWebSocketSession.State.RETRY_WAIT) scheduleLiveDanmakuMetrics();
+                    else App.removeCallbacks(liveDanmakuMetricsRunnable);
                     if (SpiderDebug.isEnabled()) SpiderDebug.log("danmaku-ws", "state=%s generation=%d code=%d detail=%s %s", state, generation, code, detail, DanmakuUrlPolicy.logSummary(sourceUrl));
                 }
 
                 @Override
                 public void onMessage(long generation, String text) {
                     if (generation != liveDanmakuGeneration) return;
+                    liveDanmakuMetrics.onFrame();
+                    long parseStartedNs = SystemClock.elapsedRealtimeNanos();
                     LiveDanmakuParser.Result result = LiveDanmakuParser.parse(text, generation, SystemClock.elapsedRealtime());
+                    liveDanmakuMetrics.onParse(result, SystemClock.elapsedRealtimeNanos() - parseStartedNs);
                     if (!result.isAccepted()) return;
                     LiveDanmakuWebSocketSession session = liveDanmakuSession;
                     if (session != null) session.markMessageAccepted(generation);
@@ -1732,6 +1748,7 @@ public class PlayerManager implements ParseCallback {
                         if (!liveDanmakuPlaybackActive) return;
                         LiveDanmakuMessage message = result.message();
                         LiveDanmakuBuffer.OfferResult offer = liveDanmakuBuffer.offer(message);
+                        liveDanmakuMetrics.onOffer(offer);
                         if (offer != LiveDanmakuBuffer.OfferResult.STALE) liveDanmakuBatcher.requestDrain(generation);
                     }
                 }
@@ -1751,8 +1768,10 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void onLiveDanmakuBatch(long generation, List<LiveDanmakuMessage> messages) {
+        long scheduledAtMs = SystemClock.elapsedRealtime();
         App.post(() -> {
             if (generation != liveDanmakuGeneration || messages.isEmpty() || danmakuController == null || !DanmakuSetting.isShow()) return;
+            liveDanmakuMetrics.onBatch(messages.size(), SystemClock.elapsedRealtime() - scheduledAtMs);
             List<androidx.media3.ui.danmaku.Danmaku> batch = new ArrayList<>(messages.size());
             for (LiveDanmakuMessage message : messages) {
                 int pool = message.type() == LiveDanmakuMessage.Type.SUPER_CHAT ? androidx.media3.ui.danmaku.Danmaku.POOL_SPECIAL : androidx.media3.ui.danmaku.Danmaku.POOL_NORMAL;
@@ -1775,6 +1794,21 @@ public class PlayerManager implements ParseCallback {
         liveDanmakuBuffer.discardPending();
         liveDanmakuBatcher.reset(liveDanmakuGeneration);
         clearLiveDanmakuRenderer(liveDanmakuGeneration);
+    }
+
+    private void scheduleLiveDanmakuMetrics() {
+        if (!SpiderDebug.isEnabled()) return;
+        App.post(liveDanmakuMetricsRunnable, LIVE_DANMAKU_METRICS_INTERVAL_MS);
+    }
+
+    private void logLiveDanmakuMetrics(String reason, boolean reschedule) {
+        if (!SpiderDebug.isEnabled()) return;
+        long nowMs = SystemClock.elapsedRealtime();
+        LiveDanmakuMetrics.Snapshot metrics = liveDanmakuMetrics.snapshotAndReset(nowMs);
+        LiveDanmakuBuffer.Snapshot buffer = liveDanmakuBuffer.snapshot();
+        androidx.media3.ui.danmaku.DanmakuView.LiveStats render = danmakuController == null ? androidx.media3.ui.danmaku.DanmakuView.LiveStats.EMPTY : danmakuController.getLiveStats();
+        SpiderDebug.log("danmaku-ws-metrics", "reason=%s state=%s stateMs=%d openMs=%d code=%d received=%d parsed=%d invalid=%d normal=%d super=%d online=%d queued=%d overflow=%d stale=%d batches=%d batchMessages=%d parseAvgUs=%d parseMaxUs=%d mainAvgMs=%d mainMaxMs=%d retries=%d appPending=%d/%d appExpired=%d appHigh=%d renderOffered=%d renderAdmitted=%d renderOverflow=%d renderExpired=%d trackWaits=%d renderPending=%d renderHigh=%d active=%d", reason, metrics.state(), metrics.stateDurationMs(), metrics.openDurationMs(), metrics.lastCode(), metrics.received(), metrics.parsed(), metrics.invalid(), metrics.normal(), metrics.superChat(), metrics.online(), metrics.queued(), metrics.overflow(), metrics.stale(), metrics.batches(), metrics.batchedMessages(), metrics.averageParseNanos() / 1000L, metrics.maxParseNanos() / 1000L, metrics.averageMainDelayMs(), metrics.maxMainDelayMs(), metrics.retryWaits(), buffer.normalPending(), buffer.priorityPending(), buffer.droppedExpired(), buffer.highWaterMark(), render.offered, render.admitted, render.droppedOverflow, render.droppedExpired, render.trackWaits, render.pending, render.highWaterMark, render.active);
+        if (reschedule && liveDanmakuSession != null && liveDanmakuSession.state() != LiveDanmakuWebSocketSession.State.STOPPED && liveDanmakuSession.state() != LiveDanmakuWebSocketSession.State.RELEASED) scheduleLiveDanmakuMetrics();
     }
 
     private void logDanmakuLoad(String event, Uri uri, int count, IOException error) {
