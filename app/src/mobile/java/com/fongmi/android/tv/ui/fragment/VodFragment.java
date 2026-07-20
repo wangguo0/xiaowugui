@@ -21,10 +21,12 @@ import androidx.viewbinding.ViewBinding;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Class;
 import com.fongmi.android.tv.bean.Config;
+import com.fongmi.android.tv.bean.Device;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Value;
@@ -81,6 +83,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private Result mResult;
     private String mChromeMode = WebHomeChrome.NORMAL;
     private int mHomeWebTopMargin;
+    private Device pendingApkDevice;
 
     public static VodFragment newInstance() {
         return new VodFragment();
@@ -287,7 +290,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         else if (item.getItemId() == R.id.search) SearchActivity.start(requireActivity());
         else if (item.getItemId() == R.id.history) HistoryActivity.start(requireActivity());
         else if (item.getItemId() == R.id.sync) OneKeySyncDialog.create().show(requireActivity());
-        else if (item.getItemId() == R.id.push_apk) apkLauncher.launch(new String[]{"application/vnd.android.package-archive", "application/octet-stream"});
+        else if (item.getItemId() == R.id.push_apk) ApkPushDialog.create().listener(this::onApkDeviceSelected).show(requireActivity());
         else if (item.getItemId() == R.id.enhance && homeActivity() != null) homeActivity().openEnhanceFromVod();
         else if (item.getItemId() == R.id.web_home_fullscreen) onWebHomeFullscreen();
         else return false;
@@ -295,7 +298,16 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void onApkSelected(Uri uri) {
-        if (uri != null) ApkPushDialog.create(uri).show(requireActivity());
+        Device device = pendingApkDevice;
+        pendingApkDevice = null;
+        if (uri != null && device != null) ApkPushDialog.create(device, uri).show(requireActivity());
+    }
+
+    private void onApkDeviceSelected(Device device) {
+        pendingApkDevice = device;
+        App.post(() -> {
+            if (isAdded()) apkLauncher.launch(new String[]{"application/vnd.android.package-archive", "application/octet-stream"});
+        });
     }
 
     private void onWebHomeFullscreen() {

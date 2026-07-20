@@ -17,6 +17,7 @@
     <string name="menu_reset">重設</string>
     <string name="menu_push_apk">推送apk</string>
     <string name="apk_push_preparing">正在準備APK…</string>
+    <string name="apk_push_select_device">推送apk · 選擇接收裝置</string>
     <string name="apk_push_ready">推送apk · %1$s · %2$s</string>
     <string name="apk_push_progress">推送apk · %1$d%% · %2$s / %3$s</string>
     <string name="apk_push_success">APK已傳送，請在接收裝置確認安裝</string>

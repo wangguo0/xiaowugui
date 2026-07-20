@@ -50,13 +50,15 @@ import okhttp3.Response;
 
 public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAdapter.OnClickListener, ScanTask.Listener, NsdDeviceDiscovery.Listener {
 
-    private static final String TAG = "apk_push";
+    private static final String TAG_DISCOVERY = "apk_push_discovery";
+    private static final String TAG_TRANSFER = "apk_push_transfer";
     private static final String PART_NAME = "apk";
     private static final int MAX_RETRY = 2;
     private static final MediaType APK = MediaType.parse("application/vnd.android.package-archive");
 
     private final OkHttpClient client = OkHttp.client(Constant.TIMEOUT_SYNC_TRANSFER);
     private final NsdDeviceDiscovery discovery = new NsdDeviceDiscovery(this);
+    private final Device target;
     private final Uri uri;
 
     private DialogDeviceBinding binding;
@@ -68,19 +70,30 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
     private String sha256;
     private volatile boolean pushing;
     private long lastProgressUpdate;
+    private Listener listener;
 
-    private ApkPushDialog(Uri uri) {
+    private ApkPushDialog(Device target, Uri uri) {
+        this.target = target;
         this.uri = uri;
     }
 
-    public static ApkPushDialog create(Uri uri) {
-        return new ApkPushDialog(uri);
+    public static ApkPushDialog create() {
+        return new ApkPushDialog(null, null);
+    }
+
+    public static ApkPushDialog create(Device target, Uri uri) {
+        return new ApkPushDialog(target, uri);
+    }
+
+    public ApkPushDialog listener(Listener listener) {
+        this.listener = listener;
+        return this;
     }
 
     public void show(FragmentActivity activity) {
         if (activity.getSupportFragmentManager().isStateSaved()) return;
-        for (Fragment fragment : activity.getSupportFragmentManager().getFragments()) if (fragment instanceof ApkPushDialog) return;
-        showNow(activity.getSupportFragmentManager(), TAG);
+        String tag = isDiscoveryMode() ? TAG_DISCOVERY : TAG_TRANSFER;
+        if (activity.getSupportFragmentManager().findFragmentByTag(tag) == null) show(activity.getSupportFragmentManager(), tag);
     }
 
     @Override
@@ -91,12 +104,18 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
     @Override
     protected void initView() {
         Server.get().start();
-        binding.title.setText(R.string.apk_push_preparing);
         binding.scan.setVisibility(View.GONE);
         binding.recycler.setHasFixedSize(false);
         binding.recycler.addItemDecoration(new SpaceItemDecoration(1, 8));
         binding.recycler.setAdapter(adapter = new SyncDeviceAdapter(this));
-        prepare();
+        if (isDiscoveryMode()) {
+            binding.title.setText(R.string.apk_push_select_device);
+            refresh();
+        } else {
+            binding.title.setText(R.string.apk_push_preparing);
+            binding.refresh.setVisibility(View.GONE);
+            prepare();
+        }
     }
 
     @Override
@@ -117,7 +136,8 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
                 App.post(() -> {
                     if (binding == null) return;
                     binding.title.setText(getString(R.string.apk_push_ready, fileName, FileUtil.byteCountToDisplaySize(apk.length())));
-                    refresh();
+                    pushing = true;
+                    upload(target, 0);
                 });
             } catch (Exception e) {
                 if (apk != null) Path.clear(apk);
@@ -161,7 +181,7 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
     }
 
     private void refresh() {
-        if (pushing || apk == null) return;
+        if (pushing || !isDiscoveryMode() || binding == null) return;
         discovery.stop();
         scanTask.stop();
         scanTask = new ScanTask(this);
@@ -194,10 +214,11 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
 
     @Override
     public void onItemClick(Device device) {
-        if (pushing || apk == null) return;
-        pushing = true;
+        if (pushing || !isDiscoveryMode()) return;
         stopScan();
-        upload(device, 0);
+        Listener callback = listener;
+        dismissAllowingStateLoss();
+        if (callback != null) callback.onSelected(device);
     }
 
     private void upload(Device device, int retry) {
@@ -225,7 +246,12 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) {
                 try (Response res = response) {
-                    String ack = res.body() == null ? "" : res.body().string().trim();
+                    String ack;
+                    try {
+                        ack = res.body() == null ? "" : res.body().string().trim();
+                    } catch (java.io.IOException e) {
+                        ack = "";
+                    }
                     if (res.isSuccessful() && "APK received".equals(ack)) App.post(() -> {
                         pushing = false;
                         Notify.show(R.string.apk_push_success);
@@ -250,9 +276,12 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
 
     private void failed(String reason) {
         pushing = false;
-        binding.title.setText(getString(R.string.apk_push_ready, fileName, FileUtil.byteCountToDisplaySize(apk.length())));
         Notify.show(getString(R.string.apk_push_failed, reason));
-        refresh();
+        dismissAllowingStateLoss();
+    }
+
+    private boolean isDiscoveryMode() {
+        return target == null || uri == null;
     }
 
     private void stopScan() {
@@ -279,5 +308,10 @@ public class ApkPushDialog extends BaseBottomSheetDialog implements SyncDeviceAd
         if (apk != null) Path.clear(apk);
         binding = null;
         super.onDestroyView();
+    }
+
+    public interface Listener {
+
+        void onSelected(Device device);
     }
 }

@@ -17,6 +17,7 @@
     <string name="menu_reset">Reset</string>
     <string name="menu_push_apk">Push APK</string>
     <string name="apk_push_preparing">Preparing APK...</string>
+    <string name="apk_push_select_device">Push APK · Select receiving device</string>
     <string name="apk_push_ready">Push APK · %1$s · %2$s</string>
     <string name="apk_push_progress">Pushing APK · %1$d%% · %2$s / %3$s</string>
     <string name="apk_push_success">APK sent. Confirm installation on the receiving device.</string>
