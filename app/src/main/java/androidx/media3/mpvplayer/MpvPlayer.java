@@ -989,6 +989,10 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
         return currentTracks;
     }
 
+    public VideoSize getVideoSizeSnapshot() {
+        return videoSize;
+    }
+
     public void resetTrackSelection() {
         audioTrackManuallySelected = true;
         preferAacApplied = true;

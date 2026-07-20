@@ -9,6 +9,7 @@ import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
+import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.mpvplayer.MpvPlayer;
 import androidx.media3.mpvplayer.MpvPlayerConfig;
@@ -184,6 +185,10 @@ public class MpvPlayerEngine implements PlayerEngine {
     @Override
     public Tracks getCurrentTracks() {
         return player.getCurrentTracksSnapshot();
+    }
+
+    public VideoSize getVideoSizeSnapshot() {
+        return player.getVideoSizeSnapshot();
     }
 
     @Override
