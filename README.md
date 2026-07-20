@@ -56,7 +56,7 @@ https://github.com/user-attachments/assets/984c274f-8a9b-4857-b641-d251e061f5cc
 - Android Intent、DLNA、MediaSession
 - CORS、Cookie 和网络策略
 
-WebHome 主页、扩展、模板、示例和 AI skills 统一放在 [webhome-devkit/](webhome-devkit/) ：
+WebHome 主页、扩展、模板、示例和 AI skills 统一放在 [webhome-devkit/](webhome-devkit/) （附 [独立 CNB 仓库](https://cnb.cool/fish2035/ext)）：
 
 - 扩展脚本开发指南见 [webhome-devkit/README.md](webhome-devkit/README.md)。
 - 扩展示例见 [webhome-devkit/examples/extensions/](webhome-devkit/examples/extensions/)。
