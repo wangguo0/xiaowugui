@@ -21,7 +21,7 @@ public final class ExoPlaybackCapability {
     public record DisplayCapability(int maxWidth, int maxHeight, int currentWidth, int currentHeight, float currentRefreshRate) {
     }
 
-    public record DecoderCapability(String name, String mimeType, int width, int height, int frameRate, int bitrate, boolean hardwareAccelerated, boolean performancePoint) {
+    public record DecoderCapability(String name, String mimeType, int width, int height, int frameRate, int bitrate, int maxVideoBitrate, boolean hardwareAccelerated, boolean performancePoint) {
         public boolean supported() {
             return name != null && !name.isEmpty() && !"none".equals(name);
         }

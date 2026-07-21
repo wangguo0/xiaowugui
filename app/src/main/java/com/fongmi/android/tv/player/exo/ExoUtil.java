@@ -178,7 +178,7 @@ public class ExoUtil {
     private static void applyEnhancedVideoProfile(DefaultTrackSelector.Parameters.Builder builder, EnhancedVideoProfile profile) {
         builder.setMaxVideoSize(profile.width(), profile.height());
         builder.setViewportSize(profile.width(), profile.height(), true);
-        builder.setMaxVideoBitrate(profile.bitrate());
+        builder.setMaxVideoBitrate(profile.maxVideoBitrate());
         builder.setMaxVideoFrameRate(profile.frameRate());
         builder.setExceedVideoConstraintsIfNecessary(true);
         builder.setAllowVideoNonSeamlessAdaptiveness(true);
@@ -231,14 +231,14 @@ public class ExoUtil {
         DisplayProfile display = getDisplayProfile(context);
         CodecVideoProfile codec = chooseCodecVideoProfile(MediaFormat.MIMETYPE_VIDEO_HEVC, display);
         ExoPlaybackCapability.DisplayCapability displayCapability = new ExoPlaybackCapability.DisplayCapability(display.width(), display.height(), display.currentWidth(), display.currentHeight(), display.currentRefreshRate());
-        ExoPlaybackCapability.DecoderCapability decoderCapability = new ExoPlaybackCapability.DecoderCapability(codec.name(), MediaFormat.MIMETYPE_VIDEO_HEVC, codec.profile().width(), codec.profile().height(), codec.profile().frameRate(), codec.profile().bitrate(), codec.supported(), codec.performancePoint());
+        ExoPlaybackCapability.DecoderCapability decoderCapability = new ExoPlaybackCapability.DecoderCapability(codec.name(), MediaFormat.MIMETYPE_VIDEO_HEVC, codec.profile().width(), codec.profile().height(), codec.profile().frameRate(), codec.profile().bitrate(), codec.profile().maxVideoBitrate(), codec.supported(), codec.performancePoint());
         ExoPlaybackCapability.Report report = ExoPlaybackCapability.Report.deviceOnly(displayCapability, decoderCapability);
         if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-capability", "display=max%dx%d current=%dx%d@%.3f decoder=%s %s", display.width(), display.height(), display.currentWidth(), display.currentHeight(), display.currentRefreshRate(), codec.name(), codec.profileText());
         return report;
     }
 
     private static CodecVideoProfile toCodecVideoProfile(ExoPlaybackCapability.DecoderCapability decoder) {
-        EnhancedVideoProfile profile = new EnhancedVideoProfile(decoder.width(), decoder.height(), decoder.bitrate(), decoder.frameRate());
+        EnhancedVideoProfile profile = new EnhancedVideoProfile(decoder.width(), decoder.height(), decoder.bitrate(), decoder.frameRate(), decoder.maxVideoBitrate());
         return new CodecVideoProfile(decoder.name(), profile, decoder.performancePoint());
     }
 
@@ -280,8 +280,9 @@ public class ExoUtil {
 
     private static EnhancedVideoProfile getSupportedProfile(android.media.MediaCodecInfo.VideoCapabilities caps, EnhancedVideoProfile target) {
         if (!supportsSize(caps, target.width(), target.height())) return null;
-        if (supportsPerformance(caps, target) || supportsRate(caps, target)) return target.withBitrate(getSupportedBitrate(caps, target.bitrate()));
-        return target.withFrameRate(30).withBitrate(getSupportedBitrate(caps, target.bitrate()));
+        int maxVideoBitrate = getSupportedTrackBitrate(caps, target.maxVideoBitrate());
+        if (supportsPerformance(caps, target) || supportsRate(caps, target)) return target.withTrackBitrate(maxVideoBitrate);
+        return target.withFrameRate(30).withTrackBitrate(maxVideoBitrate);
     }
 
     private static android.media.MediaCodecInfo.VideoCapabilities getVideoCapabilities(android.media.MediaCodecInfo info, String mimeType) {
@@ -324,12 +325,12 @@ public class ExoUtil {
         return false;
     }
 
-    private static int getSupportedBitrate(android.media.MediaCodecInfo.VideoCapabilities caps, int bitrate) {
+    private static int getSupportedTrackBitrate(android.media.MediaCodecInfo.VideoCapabilities caps, int fallback) {
         try {
             Range<Integer> range = caps.getBitrateRange();
-            return range == null ? bitrate : Math.max(1_000_000, Math.min(bitrate, range.getUpper()));
+            return range == null ? fallback : Math.max(1_000_000, range.getUpper());
         } catch (Exception e) {
-            return bitrate;
+            return fallback;
         }
     }
 
@@ -368,7 +369,7 @@ public class ExoUtil {
     }
 
     private static EnhancedVideoProfile logEnhancedVideoProfile(EnhancedVideoProfile profile, DisplayProfile display, CodecVideoProfile codec) {
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-enhance", "profile=%dx%d@%d bitrate=%d display=%dx%d codec=%s codecProfile=%s performancePoint=%s", profile.width(), profile.height(), profile.frameRate(), profile.bitrate(), display.width(), display.height(), codec.name(), codec.profileText(), codec.performancePoint());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-enhance", "profile=%dx%d@%d networkBitrate=%d trackLimit=%d display=%dx%d codec=%s codecProfile=%s performancePoint=%s", profile.width(), profile.height(), profile.frameRate(), profile.bitrate(), profile.maxVideoBitrate(), display.width(), display.height(), codec.name(), codec.profileText(), codec.performancePoint());
         return profile;
     }
 
@@ -602,7 +603,11 @@ public class ExoUtil {
         }
     }
 
-    public record EnhancedVideoProfile(int width, int height, int bitrate, int frameRate) {
+    public record EnhancedVideoProfile(int width, int height, int bitrate, int frameRate, int maxVideoBitrate) {
+
+        public EnhancedVideoProfile(int width, int height, int bitrate, int frameRate) {
+            this(width, height, bitrate, frameRate, bitrate);
+        }
 
         private static List<EnhancedVideoProfile> targets() {
             return List.of(
@@ -627,11 +632,15 @@ public class ExoUtil {
         }
 
         private EnhancedVideoProfile withFrameRate(int frameRate) {
-            return new EnhancedVideoProfile(width, height, bitrate, frameRate);
+            return new EnhancedVideoProfile(width, height, bitrate, frameRate, maxVideoBitrate);
         }
 
         private EnhancedVideoProfile withBitrate(int bitrate) {
-            return new EnhancedVideoProfile(width, height, bitrate, frameRate);
+            return new EnhancedVideoProfile(width, height, bitrate, frameRate, maxVideoBitrate);
+        }
+
+        private EnhancedVideoProfile withTrackBitrate(int maxVideoBitrate) {
+            return new EnhancedVideoProfile(width, height, bitrate, frameRate, maxVideoBitrate);
         }
     }
 
