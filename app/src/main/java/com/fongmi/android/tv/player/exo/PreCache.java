@@ -52,11 +52,13 @@ public class PreCache implements Player.Listener {
         @Override
         public void onPrepareError(MediaItem mediaItem, IOException exception) {
             finishTask(PreloadLifecycleTracker.TaskEvent.Outcome.PREPARE_ERROR, "prepare-error", exception);
+            openExternalCircuit("prepare-error", exception);
         }
 
         @Override
         public void onDownloadError(MediaItem mediaItem, IOException exception) {
             finishTask(PreloadLifecycleTracker.TaskEvent.Outcome.DOWNLOAD_ERROR, "download-error", exception);
+            openExternalCircuit("download-error", exception);
         }
     };
     private ThreadPoolExecutor executor;
@@ -76,6 +78,7 @@ public class PreCache implements Player.Listener {
     private long taskPreparedDurationMs = C.TIME_UNSET;
     private long taskCacheBytesBefore;
     private boolean playable;
+    private boolean externalPreloadCircuitOpen;
     private BufferGate bufferGate;
     private AutoPreloadPolicy autoPolicy;
 
@@ -93,6 +96,7 @@ public class PreCache implements Player.Listener {
         clearSeek();
         lastStartMs = C.TIME_UNSET;
         playable = false;
+        externalPreloadCircuitOpen = false;
         bufferGate = BufferGate.FIRST_FRAME;
         this.player.addListener(this);
         PlaybackCacheMetrics.Snapshot cacheMetrics = PlaybackCacheMetrics.snapshot();
@@ -243,6 +247,10 @@ public class PreCache implements Player.Listener {
             stop("live");
             return false;
         }
+        if (externalPreloadCircuitOpen) {
+            transition(PreloadLifecycleTracker.State.PAUSED_AUTO, "external-preload-circuit-open", "generation=%d route=%s position=%d buffered=%d", generation, route, player.getCurrentPosition(), player.getTotalBufferedDuration());
+            return true;
+        }
         AutoPreloadPolicy.Decision autoDecision = getAutoDecision();
         if (autoDecision != null && !autoDecision.enabled()) {
             ObservedMediaBitrateEstimator.Estimate media = PlaybackAnalyticsListener.getMediaBitrateEstimate();
@@ -331,6 +339,14 @@ public class PreCache implements Player.Listener {
             bufferGate = BufferGate.INITIAL;
         }
         check();
+    }
+
+    private void openExternalCircuit(String reason, Throwable error) {
+        if (route != PlaybackRoute.EXTERNAL_LOOPBACK_PROXY || externalPreloadCircuitOpen) return;
+        externalPreloadCircuitOpen = true;
+        PlaybackTrace.log("exo-preload", playbackTraceId, "event=circuit-open session=%d generation=%d route=%s reason=%s error=%s action=stop-preload-keep-playback", lifecycle.sessionId(), generation, route, reason, error == null ? "-" : error.getClass().getSimpleName());
+        stopCurrentTask("external-preload-circuit-open");
+        transition(PreloadLifecycleTracker.State.PAUSED_AUTO, "external-preload-circuit-open", "generation=%d route=%s", generation, route);
     }
 
     private PreCacheHelper createHelper(MediaItem mediaItem) {
