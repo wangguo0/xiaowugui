@@ -11,6 +11,8 @@ public final class ExoPerformanceSetting {
     public static final int CODEC_QUEUE_SYNC = 2;
     public static final int FRAME_RATE_OFF = 0;
     public static final int FRAME_RATE_SEAMLESS = 1;
+    public static final int FRAME_RATE_MOVIE_ALWAYS = 2;
+    public static final int FRAME_RATE_RESOLUTION_AND_RATE = 3;
 
     private static final String KEY_CODEC_QUEUE_MODE = "perf_exo_codec_queue_mode";
     private static final String KEY_FRAME_RATE_MODE = "perf_exo_frame_rate_mode";
@@ -43,11 +45,11 @@ public final class ExoPerformanceSetting {
     }
 
     public static int getFrameRateMode() {
-        return clamp(Prefers.getInt(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS), FRAME_RATE_OFF, FRAME_RATE_SEAMLESS);
+        return clamp(Prefers.getInt(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS), FRAME_RATE_OFF, FRAME_RATE_RESOLUTION_AND_RATE);
     }
 
     public static void putFrameRateMode(int value) {
-        Prefers.put(KEY_FRAME_RATE_MODE, clamp(value, FRAME_RATE_OFF, FRAME_RATE_SEAMLESS));
+        Prefers.put(KEY_FRAME_RATE_MODE, clamp(value, FRAME_RATE_OFF, FRAME_RATE_RESOLUTION_AND_RATE));
         PlaybackPerformanceSetting.markCustom();
     }
 
@@ -61,6 +63,8 @@ public final class ExoPerformanceSetting {
     public static String getFrameRateText() {
         return switch (getFrameRateMode()) {
             case FRAME_RATE_OFF -> "关闭";
+            case FRAME_RATE_MOVIE_ALWAYS -> "电影强制";
+            case FRAME_RATE_RESOLUTION_AND_RATE -> "分辨率+刷新率";
             default -> "仅无缝";
         };
     }

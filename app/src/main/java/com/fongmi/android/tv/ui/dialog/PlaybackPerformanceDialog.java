@@ -629,7 +629,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
                 refresh();
             };
             case PlaybackPerformanceCatalog.EXO_FRAME_RATE -> () -> {
-                ExoPerformanceSetting.putFrameRateMode((ExoPerformanceSetting.getFrameRateMode() + 1) % 2);
+                ExoPerformanceSetting.putFrameRateMode((ExoPerformanceSetting.getFrameRateMode() + 1) % 4);
                 refresh();
             };
             case PlaybackPerformanceCatalog.EXO_START_BUFFER -> () -> {

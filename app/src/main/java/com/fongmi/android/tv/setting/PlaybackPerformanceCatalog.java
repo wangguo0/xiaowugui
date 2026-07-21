@@ -83,7 +83,7 @@ public final class PlaybackPerformanceCatalog {
         options.add(option(ADAPTIVE_DOWNGRADE, BASIC, "自适应降级", "作用：重缓冲、连续掉帧或带宽不足时自动降到更容易播放的轨道。弱网、4K大文件建议开启（默认）；追求始终最高画质可关闭。代价：降级后本次播放不会自动升回，画质可能降低。"));
         options.add(option(BANDWIDTH_METER, BASIC, "带宽估算", "作用：用实际下载速度帮助 EXO 选轨和判断是否降级。网络忽快忽慢时建议开启（默认），可减少反复切换和卡顿；固定高速内网可关闭。代价：估算偏保守时可能提前选择低画质，它不会额外测速。"));
         options.add(option(TUNNEL, BASIC, "隧道模式", "作用：尝试让音视频走硬件直通，降低 CPU 并改善同步。电视硬解且只追求播放流畅时可尝试开启；出现黑屏、无声、字幕/LUT失效立即关闭。代价：依赖设备和 SurfaceView，兼容性不如普通路径。"));
-        options.add(option(EXO_FRAME_RATE, BASIC, "帧率匹配", "作用：请求显示刷新率贴合视频帧率。电视播放电影/25或24fps内容建议保持“仅无缝”（默认），可减少抖动；遇到切换黑屏或刷新率异常选关闭。代价：仅无缝不会强行切换显示模式，效果取决于电视系统。"));
+        options.add(option(EXO_FRAME_RATE, BASIC, "帧率匹配", "作用：请求显示刷新率贴合视频帧率。默认“仅无缝”只接受系统无黑屏的切换；电影模式允许长片切换到精确刷新率；“分辨率+刷新率”还会匹配1080p/4K输出。遇到黑屏或刷新率异常选关闭。代价：强制模式可能黑屏1～2秒，系统也可能拒绝请求。"));
         addSharedBuffer(options, true, false);
         options.add(option(EXO_START_BUFFER, BUFFER, "起播阈值", "作用：开始播放前至少准备多少秒。1.5秒（均衡/默认）适合大多数网络；弱网或4K卡顿可调到2～3秒，追求秒开可用0.5～1秒。代价：阈值越高首帧越慢。"));
         options.add(option(EXO_REBUFFER, BUFFER, "重缓冲恢复", "作用：卡住后积累多少缓冲才恢复。自动档会在2～8秒间根据上一轮表现调整；手动建议均衡3秒、兼容5秒、轻量2秒。代价：数值越高越不易再次卡，但等待更久。"));

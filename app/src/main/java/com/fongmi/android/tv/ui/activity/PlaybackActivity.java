@@ -16,6 +16,7 @@ import android.view.WindowManager;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.Format;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
 import androidx.media3.exoplayer.drm.FrameworkMediaDrm;
@@ -28,6 +29,8 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.engine.PlaySpec;
+import com.fongmi.android.tv.player.exo.ExoOutputModeManager;
+import com.fongmi.android.tv.player.exo.ExoOutputModePolicy;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
@@ -53,6 +56,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private boolean lock;
     private int render = -1;
     private int requestedResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT;
+    private ExoOutputModeManager exoOutputModeManager;
 
     protected MediaController controller() {
         return mController;
@@ -538,6 +542,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         long start = System.currentTimeMillis();
         super.initView(savedInstanceState);
         ExoUtil.setPlayerView(getExoView());
+        exoOutputModeManager = new ExoOutputModeManager(getWindow());
         if (deferPlaybackServiceBinding()) bindPlaybackServiceAfterFirstFrame();
         else bindPlaybackService();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "initView cost=%dms key=%s deferred=%s", System.currentTimeMillis() - start, getPlaybackKey(), deferPlaybackServiceBinding());
@@ -568,7 +573,18 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         if (!isOwner()) return;
         logSurfaceState("onVideoSizeChanged size=" + size.width + "x" + size.height + " ratio=" + size.pixelWidthHeightRatio);
         syncVideoSurfaceSize(size);
+        applyExoOutputMode();
         onSizeChanged(size);
+    }
+
+    private void applyExoOutputMode() {
+        if (mService == null || !player().isExo() || getRender() != PlayerSetting.RENDER_SURFACE || exoOutputModeManager == null) return;
+        Format format = player().getVideoFormat();
+        ExoOutputModeManager.Result result = exoOutputModeManager.apply(format);
+        if (SpiderDebug.isEnabled() && result.decision() != null && result.decision().mode() != null) {
+            ExoOutputModePolicy.Mode mode = result.decision().mode();
+            SpiderDebug.log("playback-flow", "exo output mode reason=%s applied=%s target=%dx%d@%.3fHz", result.reason(), result.applied(), mode.width(), mode.height(), mode.refreshRateMilliHz() / 1000f);
+        }
     }
 
     @Override
@@ -603,6 +619,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity resume %s", lifecycleState());
         playbackExiting = false;
         setRedirect(false);
+        applyExoOutputMode();
         if (shouldReclaim()) {
             detachSurface();
             onReclaim();
@@ -622,6 +639,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
             mService.setPlaybackForeground(false);
             if (isOwner()) player().setDanmakuForeground(false);
         }
+        if (exoOutputModeManager != null) exoOutputModeManager.restore();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity stop backgroundOff=%s %s", PlayerSetting.isBackgroundOff(), lifecycleState());
         super.onStop();
         if (isOwner() && !isAudioOnly() && PlayerSetting.isBackgroundOff() && mController != null) mController.pause();
@@ -636,6 +654,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     @Override
     protected void onDestroy() {
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity destroy beforeRelease %s", lifecycleState());
+        if (exoOutputModeManager != null) exoOutputModeManager.restore();
         super.onDestroy();
         if (isChangingConfigurations()) {
             if (mService != null) mService.removePlayerCallback(mPlayerCallback);
