@@ -419,7 +419,7 @@ public class ExoUtil {
         int startBufferMs = auto ? ExoPerformanceSetting.getAutoSessionStartBufferMs() : ExoPerformanceSetting.getStartBufferMs();
         int rebufferMs = ExoPerformanceSetting.getRebufferMs();
         int backBufferMs = PlayerSetting.getBackBufferMs(PlayerSetting.EXO);
-        boolean prioritizeTime = ExoPerformanceSetting.isPrioritizeTime();
+        boolean prioritizeTime = ExoLoadControlPolicy.prioritizeTime(profile, ExoPerformanceSetting.isPrioritizeTime());
         ExoPlaybackDiagnostics.logLoadControl(profile, durations, budget, startBufferMs, rebufferMs, backBufferMs, prioritizeTime);
         DefaultLoadControl loadControl = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(durations.minBufferMs(), durations.maxBufferMs(), startBufferMs, auto ? AutoLoadControl.MAX_REBUFFER_MS : rebufferMs)

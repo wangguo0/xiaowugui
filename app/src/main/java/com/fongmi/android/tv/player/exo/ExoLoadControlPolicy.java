@@ -19,6 +19,10 @@ final class ExoLoadControlPolicy {
         };
     }
 
+    static boolean prioritizeTime(int profile, boolean configured) {
+        return configured || profile == PlaybackPerformanceSetting.PROFILE_AUTO;
+    }
+
     private static BufferDurations custom(int bufferLevel) {
         int level = Math.clamp(bufferLevel, 1, 10);
         int minBufferMs = MIN_BUFFER_MS + (level - 1) * (MAX_BUFFER_MS - MIN_BUFFER_MS) / 9;

@@ -5,8 +5,17 @@ import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class ExoLoadControlPolicyTest {
+
+    @Test
+    public void autoProfilePrioritizesTimeEvenWhenSizePrioritySettingIsOff() {
+        assertTrue(ExoLoadControlPolicy.prioritizeTime(PlaybackPerformanceSetting.PROFILE_AUTO, false));
+        assertTrue(ExoLoadControlPolicy.prioritizeTime(PlaybackPerformanceSetting.PROFILE_AUTO, true));
+        assertFalse(ExoLoadControlPolicy.prioritizeTime(PlaybackPerformanceSetting.PROFILE_RECOMMENDED, false));
+    }
 
     @Test
     public void fixedProfilesUseAuditedBufferDurations() {
