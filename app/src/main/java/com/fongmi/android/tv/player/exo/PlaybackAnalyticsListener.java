@@ -123,16 +123,30 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         }
         if (state != Player.STATE_BUFFERING && next.rebufferStartMs() > 0) next = next.withRebufferEnd(now);
         if (state == Player.STATE_READY) next = next.withEverReady();
-        snapshot = next;
-        if (!SpiderDebug.isEnabled()) return;
         boolean rebufferStarted = previous.rebufferStartMs() <= 0 && next.rebufferStartMs() > 0;
         boolean rebufferEnded = previous.rebufferStartMs() > 0 && next.rebufferStartMs() <= 0;
+        snapshot = next;
+        if (rebufferStarted || rebufferEnded) updateAutoRecovery(next, now);
+        if (!SpiderDebug.isEnabled()) return;
         if (rebufferStarted) {
             traceLog("rebuffer start count=%d position=%d buffered=%d loading=%s", next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
         } else if (rebufferEnded) {
             traceLog("rebuffer end duration=%dms total=%dms count=%d position=%d buffered=%d loading=%s", Math.max(0, now - previous.rebufferStartMs()), next.rebufferTotalMs(), next.rebufferCount(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
         } else {
             traceLog("state=%s position=%d buffered=%d loading=%s", stateName(state), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs, loading);
+        }
+    }
+
+    private static void updateAutoRecovery(Snapshot current, long now) {
+        long totalMs = current.rebufferTotalMs();
+        if (current.rebufferStartMs() > 0) totalMs += Math.max(0, now - current.rebufferStartMs());
+        ObservedMediaBitrateEstimator.Estimate media = getMediaBitrateEstimate();
+        long mediaBitrate = media.bitrateBitsPerSecond();
+        if (mediaBitrate <= 0) mediaBitrate = ExoPlaybackDiagnostics.combinedBitrate(current.videoFormat(), current.audioFormat());
+        int previousMs = ExoPerformanceSetting.getAutoSessionRebufferMs();
+        int updatedMs = ExoPerformanceSetting.updateAutoSession(current.rebufferCount(), totalMs, current.positionMs(), mediaBitrate, current.bandwidthEstimate());
+        if (updatedMs != previousMs && SpiderDebug.isEnabled()) {
+            traceLog("auto recovery threshold=%dms previous=%dms count=%d total=%dms mediaBitrate=%d bandwidth=%d", updatedMs, previousMs, current.rebufferCount(), totalMs, mediaBitrate, current.bandwidthEstimate());
         }
     }
 

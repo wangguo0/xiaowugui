@@ -15,7 +15,7 @@ import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 
 final class AutoLoadControl implements LoadControl {
 
-    static final int MAX_REBUFFER_MS = 8_000;
+    static final int MAX_REBUFFER_MS = 15_000;
     private final DefaultLoadControl delegate;
 
     AutoLoadControl(DefaultLoadControl delegate) {

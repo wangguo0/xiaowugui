@@ -15,6 +15,8 @@ public class AutoLoadControlTest {
         assertTrue(AutoLoadControl.reachedAdaptiveThreshold(3_000_000, 1f, C.TIME_UNSET, 3_000));
         assertFalse(AutoLoadControl.reachedAdaptiveThreshold(7_999_000, 1f, C.TIME_UNSET, 8_000));
         assertTrue(AutoLoadControl.reachedAdaptiveThreshold(8_000_000, 1f, C.TIME_UNSET, 8_000));
+        assertFalse(AutoLoadControl.reachedAdaptiveThreshold(14_999_000, 1f, C.TIME_UNSET, 15_000));
+        assertTrue(AutoLoadControl.reachedAdaptiveThreshold(15_000_000, 1f, C.TIME_UNSET, 15_000));
     }
 
     @Test

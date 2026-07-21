@@ -23,6 +23,7 @@ final class ObservedMediaBitrateEstimator {
     private final Deque<PositionSample> positions = new ArrayDeque<>();
     private final List<Long> rateSamples = new ArrayList<>();
     private long formatBitrate;
+    private boolean videoFormatPresent;
     private long contentLengthBytes;
     private long durationMs = C.TIME_UNSET;
     private long lastRateMediaPositionMs = C.TIME_UNSET;
@@ -30,13 +31,16 @@ final class ObservedMediaBitrateEstimator {
 
     synchronized void reset() {
         formatBitrate = 0;
+        videoFormatPresent = false;
         contentLengthBytes = 0;
         durationMs = C.TIME_UNSET;
         invalidateObserved(Long.MIN_VALUE);
     }
 
     synchronized void updateFormats(@Nullable Format video, @Nullable Format audio) {
-        formatBitrate = ExoPlaybackDiagnostics.combinedBitrate(video, audio);
+        videoFormatPresent = video != null;
+        long videoBitrate = ExoPlaybackDiagnostics.formatBitrate(video);
+        formatBitrate = videoFormatPresent && videoBitrate <= 0 ? 0 : ExoPlaybackDiagnostics.combinedBitrate(video, audio);
     }
 
     synchronized void updateContent(long contentLengthBytes, long durationMs) {

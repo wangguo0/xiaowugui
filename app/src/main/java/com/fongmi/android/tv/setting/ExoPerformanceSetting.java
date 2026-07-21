@@ -143,6 +143,18 @@ public final class ExoPerformanceSetting {
         Prefers.put(KEY_AUTO_CLEAN_STREAK, result.cleanStreak());
     }
 
+    public static int updateAutoSession(int rebufferCount, long rebufferTotalMs, long positionMs, long mediaBitrate, long bandwidthEstimate) {
+        if (!PlaybackPerformanceSetting.isAuto(PlayerSetting.EXO)) return getAutoSessionRebufferMs();
+        AutoRebufferPolicy.Result result = AutoRebufferPolicy.resolve(autoSessionRebufferMs, 0, rebufferCount, rebufferTotalMs, positionMs, mediaBitrate, bandwidthEstimate);
+        int updated = Math.max(getAutoSessionRebufferMs(), result.rebufferMs());
+        if (updated != autoSessionRebufferMs) {
+            autoSessionRebufferMs = updated;
+            Prefers.put(KEY_AUTO_REBUFFER_MS, updated);
+            Prefers.put(KEY_AUTO_CLEAN_STREAK, 0);
+        }
+        return updated;
+    }
+
     public static void beginAutoSession() {
         autoSessionRebufferMs = getAutoRebufferMs();
     }

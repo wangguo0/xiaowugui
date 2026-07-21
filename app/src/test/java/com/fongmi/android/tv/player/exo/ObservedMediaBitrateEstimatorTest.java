@@ -33,6 +33,17 @@ public class ObservedMediaBitrateEstimatorTest {
     }
 
     @Test
+    public void unknownVideoBitrateDoesNotLetAudioOverrideWholeFileEstimate() {
+        ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
+        estimator.updateFormats(new Format.Builder().setSampleMimeType("video/hevc").build(), new Format.Builder().setAverageBitrate(384_000).build());
+        estimator.updateContent(80_468_115_456L, 8_502_743);
+
+        ObservedMediaBitrateEstimator.Estimate estimate = estimator.estimate();
+        assertEquals(ObservedMediaBitrateEstimator.Source.CONTENT_LENGTH, estimate.source());
+        assertTrue(estimate.bitrateBitsPerSecond() > 70_000_000);
+    }
+
+    @Test
     public void contentLengthAndDurationProvideHighConfidenceAverage() {
         ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
         estimator.updateContent(60_000_000_000L, 6_000_000);
