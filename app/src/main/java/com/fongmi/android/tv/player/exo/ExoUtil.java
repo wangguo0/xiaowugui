@@ -79,6 +79,7 @@ public class ExoUtil {
     private static final int FFMPEG_SKIP_LOOP_FILTER_ALL = 48;
     private static final int FFMPEG_LOWRES_HALF = 1;
     private static volatile EnhancedVideoProfile enhancedVideoProfile;
+    private static volatile ExoPlaybackCapability.Report playbackCapabilityReport;
 
     public static void setPlayerView(PlayerView view) {
         view.setRender(PlayerSetting.getRender());
@@ -205,10 +206,40 @@ public class ExoUtil {
     }
 
     private static EnhancedVideoProfile detectEnhancedVideoProfile(Context context) {
-        DisplayProfile display = getDisplayProfile(context);
-        CodecVideoProfile codec = chooseCodecVideoProfile(MediaFormat.MIMETYPE_VIDEO_HEVC, display);
+        ExoPlaybackCapability.Report report = getPlaybackCapabilityReport(context);
+        DisplayProfile display = getDisplayProfile(report.display());
+        CodecVideoProfile codec = toCodecVideoProfile(report.decoder());
         EnhancedVideoProfile profile = codec.supported() ? codec.profile() : EnhancedVideoProfile.low();
         return logEnhancedVideoProfile(profile, display, codec);
+    }
+
+    public static ExoPlaybackCapability.Report getPlaybackCapabilityReport() {
+        return getPlaybackCapabilityReport(App.get());
+    }
+
+    private static ExoPlaybackCapability.Report getPlaybackCapabilityReport(Context context) {
+        ExoPlaybackCapability.Report report = playbackCapabilityReport;
+        if (report != null) return report;
+        synchronized (ExoUtil.class) {
+            report = playbackCapabilityReport;
+            if (report == null) playbackCapabilityReport = report = detectPlaybackCapability(context);
+        }
+        return report;
+    }
+
+    private static ExoPlaybackCapability.Report detectPlaybackCapability(Context context) {
+        DisplayProfile display = getDisplayProfile(context);
+        CodecVideoProfile codec = chooseCodecVideoProfile(MediaFormat.MIMETYPE_VIDEO_HEVC, display);
+        ExoPlaybackCapability.DisplayCapability displayCapability = new ExoPlaybackCapability.DisplayCapability(display.width(), display.height(), display.currentWidth(), display.currentHeight(), display.currentRefreshRate());
+        ExoPlaybackCapability.DecoderCapability decoderCapability = new ExoPlaybackCapability.DecoderCapability(codec.name(), MediaFormat.MIMETYPE_VIDEO_HEVC, codec.profile().width(), codec.profile().height(), codec.profile().frameRate(), codec.profile().bitrate(), codec.supported(), codec.performancePoint());
+        ExoPlaybackCapability.Report report = ExoPlaybackCapability.Report.deviceOnly(displayCapability, decoderCapability);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-capability", "display=max%dx%d current=%dx%d@%.3f decoder=%s %s", display.width(), display.height(), display.currentWidth(), display.currentHeight(), display.currentRefreshRate(), codec.name(), codec.profileText());
+        return report;
+    }
+
+    private static CodecVideoProfile toCodecVideoProfile(ExoPlaybackCapability.DecoderCapability decoder) {
+        EnhancedVideoProfile profile = new EnhancedVideoProfile(decoder.width(), decoder.height(), decoder.bitrate(), decoder.frameRate());
+        return new CodecVideoProfile(decoder.name(), profile, decoder.performancePoint());
     }
 
     private static EnhancedVideoProfile detectSoftVideoProfile(Context context) {
@@ -311,10 +342,16 @@ public class ExoUtil {
     private static DisplayProfile getDisplayProfile(Context context) {
         int width = ResUtil.getScreenWidth(context);
         int height = ResUtil.getScreenHeight(context);
+        int currentWidth = width;
+        int currentHeight = height;
+        float currentRefreshRate = 0;
         Display display = ResUtil.getDisplay(context);
         if (display != null) {
             Display.Mode mode = display.getMode();
             if (mode != null) {
+                currentWidth = Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight());
+                currentHeight = Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight());
+                currentRefreshRate = mode.getRefreshRate();
                 width = Math.max(width, Math.max(mode.getPhysicalWidth(), mode.getPhysicalHeight()));
                 height = Math.max(height, Math.min(mode.getPhysicalWidth(), mode.getPhysicalHeight()));
             }
@@ -323,7 +360,11 @@ public class ExoUtil {
                 height = Math.max(height, Math.min(supported.getPhysicalWidth(), supported.getPhysicalHeight()));
             }
         }
-        return new DisplayProfile(Math.max(width, height), Math.min(width, height));
+        return new DisplayProfile(Math.max(width, height), Math.min(width, height), currentWidth, currentHeight, currentRefreshRate);
+    }
+
+    private static DisplayProfile getDisplayProfile(ExoPlaybackCapability.DisplayCapability display) {
+        return new DisplayProfile(display.maxWidth(), display.maxHeight(), display.currentWidth(), display.currentHeight(), display.currentRefreshRate());
     }
 
     private static EnhancedVideoProfile logEnhancedVideoProfile(EnhancedVideoProfile profile, DisplayProfile display, CodecVideoProfile codec) {
@@ -594,7 +635,7 @@ public class ExoUtil {
         }
     }
 
-    private record DisplayProfile(int width, int height) {
+    private record DisplayProfile(int width, int height, int currentWidth, int currentHeight, float currentRefreshRate) {
 
         private boolean supports(EnhancedVideoProfile profile) {
             return width >= profile.width() && height >= profile.height();
