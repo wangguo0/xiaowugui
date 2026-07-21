@@ -16,6 +16,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
+import com.fongmi.android.tv.player.exo.ExoTunnelingRuntimeState;
 import com.fongmi.android.tv.player.exo.MediaSourceFactory;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.player.exo.PreCache;
@@ -90,7 +91,9 @@ public class ExoPlayerEngine implements PlayerEngine {
         if (!tunnelingEnabledForSession || tunnelingFallbackAttempted) return false;
         tunnelingFallbackAttempted = true;
         tunnelingEnabledForSession = false;
+        int failures = ExoTunnelingRuntimeState.recordFailure(ExoUtil.getTunnelingRuntimeKey(decode));
         PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "disable tunneling for current session");
+        PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "runtime failure count=%d blacklisted=%s", failures, failures >= ExoTunnelingRuntimeState.BLACKLIST_THRESHOLD);
         return true;
     }
 

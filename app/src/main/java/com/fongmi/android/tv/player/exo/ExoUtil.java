@@ -186,6 +186,15 @@ public class ExoUtil {
         return getTunnelingDecision(decode, tunnelingFallbackAttempted).enabled();
     }
 
+    public static String getTunnelingRuntimeKey() {
+        return getTunnelingRuntimeKey(PlayerEngine.HARD);
+    }
+
+    public static String getTunnelingRuntimeKey(int decode) {
+        ExoPlaybackCapability.DecoderCapability decoder = getPlaybackCapabilityReport().decoder();
+        return Build.MANUFACTURER + "|" + Build.MODEL + "|" + decoder.name() + "|" + decoder.mimeType() + "|decode=" + decode;
+    }
+
     private static ExoTunnelingPolicy.Decision getTunnelingDecision(int decode, boolean tunnelingFallbackAttempted) {
         ExoTunnelingPolicy.Request request = new ExoTunnelingPolicy.Request(
                 PlayerSetting.isTunnel(),
@@ -195,7 +204,7 @@ public class ExoUtil {
                 true,
                 LutSetting.isEnabled(),
                 false,
-                false,
+                ExoTunnelingRuntimeState.isBlacklisted(getTunnelingRuntimeKey(decode)),
                 false,
                 true,
                 tunnelingFallbackAttempted);
