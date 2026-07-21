@@ -40,4 +40,16 @@ public class ForwardBufferTrendTest {
 
         assertFalse(trend.snapshot().known());
     }
+
+    @Test
+    public void fastAndSlowEwmaUsePessimisticEstimate() {
+        ForwardBufferTrend trend = new ForwardBufferTrend();
+        trend.observe(0, 20_000, true);
+        trend.observe(10_000, 19_000, true);
+        trend.observe(20_000, 19_000, true);
+
+        ForwardBufferTrend.Snapshot snapshot = trend.snapshot();
+        assertTrue(snapshot.fastSlopeMsPerSecond() > snapshot.slowSlopeMsPerSecond());
+        assertEquals(snapshot.slowSlopeMsPerSecond(), snapshot.slopeMsPerSecond());
+    }
 }

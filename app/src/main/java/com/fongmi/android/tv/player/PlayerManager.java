@@ -41,6 +41,7 @@ import com.fongmi.android.tv.player.engine.MpvPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
+import com.fongmi.android.tv.player.exo.ExoNetworkGuardEligibility;
 import com.fongmi.android.tv.player.exo.ExoNetworkGuardController;
 import com.fongmi.android.tv.player.exo.ForwardBufferTrend;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
@@ -322,7 +323,9 @@ public class PlayerManager implements ParseCallback {
         if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled()) return "";
         if (Math.abs(userPlaybackSpeed - 1f) > 0.001f) return "已暂停 · 用户" + SPEED_FORMAT.format(userPlaybackSpeed);
         if (!isVod()) return "仅点播";
-        if (networkProtectionState == ExoNetworkGuardController.State.UNSUSTAINABLE) return networkProtectionState.text() + " · 下限" + SPEED_FORMAT.format(networkProtectionSpeed);
+        ExoNetworkGuardEligibility.Decision eligibility = getNetworkProtectionEligibility();
+        if (!eligibility.eligible()) return "休眠 · " + networkProtectionReasonText(eligibility.reason());
+        if (networkProtectionState == ExoNetworkGuardController.State.NORMAL && networkProtectionSpeed >= 0.999f) return "观察中";
         return networkProtectionState.text() + " " + SPEED_FORMAT.format(networkProtectionSpeed);
     }
 
@@ -655,19 +658,48 @@ public class PlayerManager implements ParseCallback {
         applyEffectiveSpeed(userPlaybackSpeed, reason);
     }
 
-    private boolean isNetworkProtectionEligible() {
-        return player != null && isExo() && isVod() && ExoPerformanceSetting.isNetworkProtectionEnabled() && Math.abs(userPlaybackSpeed - 1f) < 0.001f;
+    private ExoNetworkGuardEligibility.Decision getNetworkProtectionEligibility() {
+        return ExoNetworkGuardEligibility.resolve(new ExoNetworkGuardEligibility.Request(
+                ExoPerformanceSetting.isNetworkProtectionEnabled(),
+                player != null && isExo(),
+                isVod(),
+                Math.abs(userPlaybackSpeed - 1f) < 0.001f,
+                player != null && player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH),
+                PlayerSetting.isTunnel(),
+                PlayerSetting.isAudioPassThrough(PlayerSetting.EXO)));
+    }
+
+    private static String networkProtectionReasonText(String reason) {
+        return switch (reason) {
+            case "preserve-tunneling" -> "保留隧道模式";
+            case "preserve-passthrough" -> "保留音频直通";
+            case "user-speed" -> "用户倍速优先";
+            case "speed-unsupported" -> "设备不支持保调变速";
+            case "vod-only" -> "仅支持点播";
+            case "exo-only" -> "仅支持EXO";
+            default -> "未启用";
+        };
     }
 
     private void scheduleNetworkProtection(long delayMs) {
         App.removeCallbacks(networkProtectionRunnable);
-        if (!isNetworkProtectionEligible() || player.getPlaybackState() != Player.STATE_READY || !player.isPlaying()) return;
+        ExoNetworkGuardEligibility.Decision eligibility = getNetworkProtectionEligibility();
+        if (!eligibility.eligible()) {
+            if (networkProtectionSpeed < 0.999f) resetNetworkProtectionSession(eligibility.reason());
+            else {
+                networkProtectionState = ExoNetworkGuardController.State.NORMAL;
+                networkProtectionReason = eligibility.reason();
+            }
+            return;
+        }
+        if (player.getPlaybackState() != Player.STATE_READY || !player.isPlaying()) return;
         App.post(networkProtectionRunnable, delayMs);
     }
 
     private void evaluateNetworkProtection() {
         if (player == null) return;
-        boolean eligible = isNetworkProtectionEligible();
+        ExoNetworkGuardEligibility.Decision eligibility = getNetworkProtectionEligibility();
+        boolean eligible = eligibility.eligible();
         long nowMs = SystemClock.elapsedRealtime();
         boolean ready = player.getPlaybackState() == Player.STATE_READY;
         boolean playing = player.isPlaying();
@@ -676,6 +708,9 @@ public class PlayerManager implements ParseCallback {
         networkProtectionTrend.observe(nowMs, bufferedMs, eligible && ready && playing && loading);
         ForwardBufferTrend.Snapshot trend = networkProtectionTrend.snapshot();
         PlaybackAnalyticsListener.Snapshot analytics = PlaybackAnalyticsListener.getSnapshot();
+        PlaybackAnalyticsListener.DisplayMediaBitrateEstimate media = PlaybackAnalyticsListener.getDisplayMediaBitrateEstimate(getVideoFormat());
+        boolean networkEstimateKnown = isTrustedNetworkEstimate(analytics, media);
+        float networkSupportedSpeed = networkEstimateKnown ? Math.min(2f, analytics.bandwidthEstimate() * 0.90f / media.bitrateBitsPerSecond()) : 1f;
         ExoNetworkGuardController.State previousState = networkProtectionState;
         ExoNetworkGuardController.Decision decision = networkProtectionController.evaluate(new ExoNetworkGuardController.Input(
                 nowMs,
@@ -689,17 +724,25 @@ public class PlayerManager implements ParseCallback {
                 trend.windowMs(),
                 analytics.rebufferCount(),
                 getEffectiveSpeed(),
-                ExoPerformanceSetting.getNetworkProtectionMinimumSpeed()));
+                ExoPerformanceSetting.getNetworkProtectionMinimumSpeed(),
+                networkEstimateKnown,
+                networkSupportedSpeed));
         networkProtectionState = decision.state();
         networkProtectionReason = decision.reason();
         networkProtectionSpeed = decision.targetSpeed();
         if (decision.changed()) applyEffectiveSpeed(networkProtectionSpeed, "guard-" + decision.reason());
         if (decision.changed() || previousState != networkProtectionState) {
-            PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "state=%s reason=%s speed=%.2f supported=%.2f floor=%.2f buffered=%d loading=%s slope=%d window=%d rebuffer=%d",
+            PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "state=%s reason=%s speed=%.3f supported=%.3f floor=%.2f buffered=%d tte=%d loading=%s slope=%d fast=%d slow=%d window=%d rebuffer=%d networkKnown=%s networkSupported=%.3f route=%s",
                     networkProtectionState, networkProtectionReason, networkProtectionSpeed, decision.supportedSpeed(), ExoPerformanceSetting.getNetworkProtectionMinimumSpeed(),
-                    player.getTotalBufferedDuration(), player.isLoading(), trend.slopeMsPerSecond(), trend.windowMs(), analytics.rebufferCount());
+                    player.getTotalBufferedDuration(), decision.timeToEmptyMs(), player.isLoading(), trend.slopeMsPerSecond(), trend.fastSlopeMsPerSecond(), trend.slowSlopeMsPerSecond(), trend.windowMs(), analytics.rebufferCount(), networkEstimateKnown, networkSupportedSpeed, getEffectivePlaybackRoute().route());
         }
         if (eligible && player.getPlaybackState() == Player.STATE_READY && player.isPlaying()) scheduleNetworkProtection(ExoNetworkGuardController.SAMPLE_INTERVAL_MS);
+    }
+
+    private boolean isTrustedNetworkEstimate(PlaybackAnalyticsListener.Snapshot analytics, PlaybackAnalyticsListener.DisplayMediaBitrateEstimate media) {
+        if (analytics.bandwidthEstimate() <= 0 || media.bitrateBitsPerSecond() <= 0) return false;
+        if ("unknown".equals(media.source()) || "low".equals(media.confidence()) || "unknown".equals(media.confidence())) return false;
+        return getEffectivePlaybackRoute().route() == PlaybackRoute.DIRECT_REMOTE_HTTP;
     }
 
     public String addSpeed() {
@@ -1017,6 +1060,11 @@ public class PlayerManager implements ParseCallback {
     }
 
     public void applyPerformanceSettings() {
+        if (isExo()) {
+            resetNetworkProtectionSession("performance-settings-changed");
+            scheduleNetworkProtection(0);
+            return;
+        }
         if (!isMpv() || spec == null || TextUtils.isEmpty(spec.getUrl()) || !(engine instanceof MpvPlayerEngine mpv)) return;
         resetMpvOutputEvaluationState();
         mpv.setSurfaceDirectOverride(null);
@@ -2313,7 +2361,9 @@ public class PlayerManager implements ParseCallback {
             liveDanmakuPlaybackActive = isPlaying;
             if (!isPlaying) discardLiveDanmakuPending();
             if (isPlaying) scheduleNetworkProtection(0);
-            else {
+            else if (player.getPlaybackState() == Player.STATE_READY && !player.getPlayWhenReady()) {
+                resetNetworkProtectionSession("paused");
+            } else {
                 App.removeCallbacks(networkProtectionRunnable);
                 networkProtectionController.disrupt(networkProtectionSpeed);
                 networkProtectionTrend.reset();
@@ -2332,21 +2382,21 @@ public class PlayerManager implements ParseCallback {
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
                 scheduleNetworkProtection(0);
-            } else {
+            } else if (state == Player.STATE_BUFFERING) {
                 App.removeCallbacks(networkProtectionRunnable);
                 networkProtectionController.disrupt(networkProtectionSpeed);
                 networkProtectionTrend.reset();
                 networkProtectionState = networkProtectionController.getState();
+                networkProtectionReason = "buffering";
+            } else {
+                resetNetworkProtectionSession(state == Player.STATE_ENDED ? "ended" : "inactive");
             }
             recordBufferingState(state);
         }
 
         @Override
         public void onPositionDiscontinuity(@NonNull Player.PositionInfo oldPosition, @NonNull Player.PositionInfo newPosition, int reason) {
-            networkProtectionController.disrupt(networkProtectionSpeed);
-            networkProtectionTrend.reset();
-            networkProtectionState = networkProtectionController.getState();
-            networkProtectionReason = "discontinuity-" + reason;
+            resetNetworkProtectionSession("discontinuity-" + reason);
             scheduleNetworkProtection(ExoNetworkGuardController.SAMPLE_INTERVAL_MS);
         }
 

@@ -9,12 +9,22 @@ public final class ForwardBufferTrend {
     private static final long MIN_WINDOW_MS = 5_000;
     private static final long MEDIUM_WINDOW_MS = 15_000;
     private static final long HIGH_WINDOW_MS = 30_000;
-    private static final long MAX_WINDOW_MS = 30_000;
+    private static final long MAX_WINDOW_MS = 45_000;
+    private static final long FAST_HALF_LIFE_MS = 6_000;
+    private static final long SLOW_HALF_LIFE_MS = 20_000;
+    private static final long MIN_SLOPE_MS_PER_SECOND = -2_000;
+    private static final long MAX_SLOPE_MS_PER_SECOND = 5_000;
 
     private final Deque<Sample> samples = new ArrayDeque<>();
+    private double fastSlope;
+    private double slowSlope;
+    private boolean slopeInitialized;
 
     public synchronized void reset() {
         samples.clear();
+        fastSlope = 0;
+        slowSlope = 0;
+        slopeInitialized = false;
     }
 
     public synchronized void observe(long nowMs, long bufferedMs, boolean stablePlayback) {
@@ -24,6 +34,7 @@ public final class ForwardBufferTrend {
         }
         Sample last = samples.peekLast();
         if (last != null && nowMs - last.nowMs() < MIN_SAMPLE_INTERVAL_MS) return;
+        if (last != null) updateSlope(nowMs - last.nowMs(), bufferedMs - last.bufferedMs());
         samples.addLast(new Sample(nowMs, bufferedMs));
         while (samples.size() > 2 && nowMs - samples.peekFirst().nowMs() > MAX_WINDOW_MS) samples.removeFirst();
     }
@@ -33,11 +44,30 @@ public final class ForwardBufferTrend {
         Sample last = samples.peekLast();
         if (first == null || last == null) return Snapshot.unknown();
         long windowMs = last.nowMs() - first.nowMs();
-        if (windowMs < MIN_WINDOW_MS) return new Snapshot(0, windowMs, samples.size(), Confidence.UNKNOWN);
-        long deltaMs = last.bufferedMs() - first.bufferedMs();
-        long slope = deltaMs * 1_000L / windowMs;
+        if (windowMs < MIN_WINDOW_MS || !slopeInitialized) return new Snapshot(0, 0, 0, windowMs, samples.size(), Confidence.UNKNOWN);
+        long fast = Math.round(fastSlope);
+        long slow = Math.round(slowSlope);
+        long slope = Math.min(fast, slow);
         Confidence confidence = windowMs >= HIGH_WINDOW_MS ? Confidence.HIGH : windowMs >= MEDIUM_WINDOW_MS ? Confidence.MEDIUM : Confidence.LOW;
-        return new Snapshot(slope, windowMs, samples.size(), confidence);
+        return new Snapshot(slope, fast, slow, windowMs, samples.size(), confidence);
+    }
+
+    private void updateSlope(long elapsedMs, long bufferDeltaMs) {
+        if (elapsedMs <= 0) return;
+        double sample = Math.min(Math.max(bufferDeltaMs * 1_000d / elapsedMs, MIN_SLOPE_MS_PER_SECOND), MAX_SLOPE_MS_PER_SECOND);
+        if (!slopeInitialized) {
+            fastSlope = sample;
+            slowSlope = sample;
+            slopeInitialized = true;
+            return;
+        }
+        fastSlope = ewma(fastSlope, sample, elapsedMs, FAST_HALF_LIFE_MS);
+        slowSlope = ewma(slowSlope, sample, elapsedMs, SLOW_HALF_LIFE_MS);
+    }
+
+    private static double ewma(double current, double sample, long elapsedMs, long halfLifeMs) {
+        double alpha = 1d - Math.exp(-Math.log(2d) * elapsedMs / halfLifeMs);
+        return current + alpha * (sample - current);
     }
 
     public enum Confidence {
@@ -57,10 +87,14 @@ public final class ForwardBufferTrend {
         }
     }
 
-    public record Snapshot(long slopeMsPerSecond, long windowMs, int sampleCount, Confidence confidence) {
+    public record Snapshot(long slopeMsPerSecond, long fastSlopeMsPerSecond, long slowSlopeMsPerSecond, long windowMs, int sampleCount, Confidence confidence) {
+
+        public Snapshot(long slopeMsPerSecond, long windowMs, int sampleCount, Confidence confidence) {
+            this(slopeMsPerSecond, slopeMsPerSecond, slopeMsPerSecond, windowMs, sampleCount, confidence);
+        }
 
         static Snapshot unknown() {
-            return new Snapshot(0, 0, 0, Confidence.UNKNOWN);
+            return new Snapshot(0, 0, 0, 0, 0, Confidence.UNKNOWN);
         }
 
         public boolean known() {

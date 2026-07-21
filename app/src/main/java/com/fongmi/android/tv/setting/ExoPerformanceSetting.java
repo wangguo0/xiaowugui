@@ -122,16 +122,16 @@ public final class ExoPerformanceSetting {
     }
 
     public static int getNetworkProtectionMode() {
-        return clamp(Prefers.getInt(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF), ExoNetworkProtectionPolicy.MODE_OFF, ExoNetworkProtectionPolicy.MODE_AGGRESSIVE);
+        return ExoNetworkProtectionPolicy.resolve(Prefers.getInt(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF)).mode();
     }
 
     public static void putNetworkProtectionMode(int value) {
-        Prefers.put(KEY_NETWORK_PROTECTION_MODE, clamp(value, ExoNetworkProtectionPolicy.MODE_OFF, ExoNetworkProtectionPolicy.MODE_AGGRESSIVE));
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.resolve(value).mode());
         PlaybackPerformanceSetting.markCustom();
     }
 
     public static int nextNetworkProtectionMode() {
-        return (getNetworkProtectionMode() + 1) % (ExoNetworkProtectionPolicy.MODE_AGGRESSIVE + 1);
+        return getNetworkProtectionMode() == ExoNetworkProtectionPolicy.MODE_OFF ? ExoNetworkProtectionPolicy.MODE_AUTO : ExoNetworkProtectionPolicy.MODE_OFF;
     }
 
     public static boolean isNetworkProtectionEnabled() {
@@ -143,12 +143,7 @@ public final class ExoPerformanceSetting {
     }
 
     public static String getNetworkProtectionText() {
-        return switch (getNetworkProtectionMode()) {
-            case ExoNetworkProtectionPolicy.MODE_STANDARD -> "低感知自动 · 最低0.95x";
-            case ExoNetworkProtectionPolicy.MODE_ENHANCED -> "增强自动 · 最低0.90x";
-            case ExoNetworkProtectionPolicy.MODE_AGGRESSIVE -> "激进自动 · 最低0.85x";
-            default -> "关闭";
-        };
+        return isNetworkProtectionEnabled() ? "无感动态 · 0.97～1.00x" : "关闭";
     }
 
     public static void applyRecommended() {
@@ -163,7 +158,7 @@ public final class ExoPerformanceSetting {
     public static void applyAuto() {
         Prefers.put(KEY_CODEC_QUEUE_MODE, CODEC_QUEUE_AUTO);
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
-        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF);
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_AUTO);
         applyStartBufferPreset(PlaybackPerformanceSetting.PROFILE_AUTO);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_AUTO);
         applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_AUTO);

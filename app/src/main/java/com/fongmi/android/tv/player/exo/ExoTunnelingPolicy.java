@@ -8,7 +8,6 @@ public final class ExoTunnelingPolicy {
 
     public static Decision resolve(Request request) {
         if (request == null || !request.requested()) return Decision.disabled("user-off");
-        if (request.networkProtection()) return Decision.disabled("network-protection");
         if (request.fallbackAttempted()) return Decision.disabled("fallback-already-attempted");
         if (!request.surfaceView()) return Decision.disabled("requires-surface-view");
         if (!request.hardDecode()) return Decision.disabled("requires-hard-decode");
@@ -20,7 +19,7 @@ public final class ExoTunnelingPolicy {
         return new Decision(true, "eligible");
     }
 
-    public record Request(boolean requested, boolean networkProtection, boolean surfaceView, boolean hardDecode, boolean hasAudio, boolean hasVideo, boolean videoEffectsActive, boolean externalAudio, boolean blacklisted, boolean automatic, boolean televisionDevice, boolean fallbackAttempted) {
+    public record Request(boolean requested, boolean surfaceView, boolean hardDecode, boolean hasAudio, boolean hasVideo, boolean videoEffectsActive, boolean externalAudio, boolean blacklisted, boolean automatic, boolean televisionDevice, boolean fallbackAttempted) {
     }
 
     public record Decision(boolean enabled, String reason) {

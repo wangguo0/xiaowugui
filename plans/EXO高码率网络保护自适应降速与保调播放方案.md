@@ -1,318 +1,435 @@
-# EXO 高码率网络保护自适应降速与保调播放方案
+# EXO 高码率无感动态网络保护与保调播放最佳实践方案
 
-日期：2026-07-21
+日期：2026-07-22
 
-代码基线：`main-2` / `playback-optimization-item-55`
+代码基线：main-2 / playback-optimization-item-61
 
-Media3：`1.11.0-alpha01-fongmi`
+最终实现目标 tag：playback-optimization-item-62
 
-适用场景：4K/5K、HEVC/H.265、大体积 MKV/REMUX、网盘 Range、Go 本地代理、实际吞吐略低于视频消费码率
+Media3：1.11.0-alpha01-fongmi
 
-## 一、结论先行
+适用场景：4K/5K、HEVC/H.265、大体积 MKV/REMUX、网盘 Range、Go 二进制代理、实际持续吞吐略低于媒体消费码率。
 
-针对“视频消费码率略高于实际网络吞吐，缓冲持续下降并反复重缓冲”的场景，可以增加一个可选的“网络保护播放”模式：
+## 一、最终结论
 
-```text
-正常播放：1.00x
-网络保护：根据缓冲趋势在 0.95～1.00x 或 0.90～1.00x 之间渐进调整
-激进保护：用户主动允许最低 0.85x
-```
+该能力应定义为“允许自动判断的无感动态保护”，而不是“开启后整场固定降速”。
 
-这不是凭空创造带宽。它只能降低单位墙钟时间内消耗的媒体数据量，适合解决 5%～15% 左右的持续缺口或短时吞吐波动；如果网络长期只有视频码率的 60%～70%，即使 0.90x 也无法稳定。
+最终状态模型：
 
-推荐的源码组合是：
+    休眠（不改变任何现有功能）
+      → 观察缓冲与网络证据
+      → 确认存在可在无感范围内补偿的轻微吞吐缺口
+      → 连续、小幅、保调地降低播放速度
+      → 缓冲能力恢复
+      → 平滑回到 1.00x
+      → 自动退出并重新休眠
 
-1. 使用 Media3 已内置的 `PlaybackParameters` + `SonicAudioProcessor` 做保调变速。
-2. 参考 dash.js `CatchupController` 的缓冲安全区、滞后、步进和恢复逻辑。
-3. 以“缓冲媒体时间斜率”为主要控制信号，不把 `127.0.0.1` 瞬时吞吐误认为 CDN/Go 代理真实吞吐。
-4. 对 tunneling、音频直通/offload、显示刷新率匹配设置明确边界。
+核心原则：
 
-本方案不绕过 Go 二进制代理，不增加 App 直连网盘 SDK/CDN 的路径，也不引入 App 侧光流插帧。
+1. 设置开启只代表允许控制器观察和判断。
+2. 未介入时不得改变播放器行为。
+3. 不得为了启用而关闭 tunneling、音频直通、电视刷新率匹配或分辨率直出。
+4. 用户已启用 tunneling 或音频直通时，控制器保持休眠。
+5. 自动速度严格限制在 0.97～1.00x。
+6. 如果稳定播放所需速度低于 0.97x，控制器不得继续偷偷降速。
+7. Go 二进制代理和 127.0.0.1 播放链路必须保留，App 不直连网盘 SDK/CDN。
+8. 对 Go/本地代理链路，不得把 Exo 从 127.0.0.1 读取到的速度当成真实上游吞吐。
 
-## 二、物理边界与收益估算
+## 二、为什么必须重做 item-60/61 原型
 
-稳定播放的理论条件近似为：
+item-60/61 验证了 Media3 PlaybackParameters 与 Sonic 保调变速可以工作，但实现存在三类结构性问题：
 
-```text
-播放速度 ≤ 实际持续吞吐 ÷ 视频实际消费码率
-```
-
-示例：
-
-| 视频实际消费码率 | 网络持续吞吐 | 理论速度上限 | 适用判断 |
-|---:|---:|---:|---|
-| 65Mbps | 60Mbps | 0.923x | 0.90～0.92x 有机会稳定 |
-| 75Mbps | 70Mbps | 0.933x | 0.92～0.95x 有机会稳定 |
-| 70Mbps | 60Mbps | 0.857x | 需要接近 0.85x，感知明显 |
-| 85Mbps | 60Mbps | 0.706x | 0.85～0.95x 不能长期稳定 |
-
-对于 85Mbps 视频、60Mbps 网络：
-
-- 1.00x 时缺口约 25Mbps。
-- 0.90x 时消费约 76.5Mbps，仍缺口约 16.5Mbps。
-- 0.90x 只能延长初始缓冲的可用时间，不能消除长期重缓冲。
-- 真正稳定需要约 0.70x，不能作为正常观影速度。
-
-两小时内容的时长代价：
-
-| 播放速度 | 增加的实际观看时间 |
-|---:|---:|
-| 0.95x | 约 6 分 19 秒 |
-| 0.90x | 约 13 分 20 秒 |
-| 0.85x | 约 21 分 11 秒 |
-
-因此“0.90～0.95x 完全无感”不能作为绝对保证。更稳妥的产品定义是：0.95x 为低感知保护档，0.90x 为增强保护档，0.85x 仅作为用户主动选择的激进档。
-
-## 三、公开开源实现调研
-
-### 3.1 Media3：直接可用的保调链路
-
-- [PlaybackParameters.java](https://github.com/androidx/media/blob/main/libraries/common/src/main/java/androidx/media3/common/PlaybackParameters.java)
-  - `speed` 控制播放速度。
-  - `pitch=1.0` 表示改变速度但不主动改变音调。
-  - 当前项目的 `withSpeed()` 会保留现有 pitch。
-
-- [SonicAudioProcessor.java](https://github.com/androidx/media/blob/main/libraries/common/src/main/java/androidx/media3/common/audio/SonicAudioProcessor.java)
-  - Media3 内置 Sonic 时间伸缩处理器。
-  - 支持独立 speed/pitch。
-  - 使用 WSOLA/SOLA 类时间伸缩思路，避免简单重采样产生的低沉人声。
-  - 运行在 PCM 音频处理链，不需要引入新的 native 依赖。
-
-- [DefaultAudioSink.java](https://github.com/androidx/media/blob/main/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/DefaultAudioSink.java)
-  - 默认音频处理链包含 Sonic。
-  - 普通 PCM 播放时可以由 ExoPlayer 处理速度和音调。
-  - 音频直通/offload 和 tunneling 不使用这条处理链。
-
-Media3 的现成能力已经覆盖第一阶段原型，不建议先复制 mpv 或 FFmpeg 的音频算法。
-
-### 3.2 dash.js：缓冲驱动的动态播放速度
-
-- [CatchupController.js](https://github.com/Dash-Industry-Forum/dash.js/blob/development/src/streaming/controllers/CatchupController.js)
-  - 提供 Default、Step、LoL+ 等控制模式。
-  - LoL+ 在 `bufferLevel < playbackBufferMin` 时降低 playback rate。
-  - 使用最小变更步长，避免频繁触发 ratechange。
-  - 播放已经 stalled 时，不继续提高或剧烈改变速度。
-  - 缓冲恢复后逐步回到 1.0。
-
-它主要用于低延迟直播追赶 live edge，但其中的缓冲安全区、滞后和分步恢复逻辑适合改造成点播网络保护控制器。
-
-### 3.3 Media3：比例控制和冷却机制
-
-- [DefaultLivePlaybackSpeedControl.java](https://github.com/androidx/media/blob/main/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/DefaultLivePlaybackSpeedControl.java)
-  - 通过目标延迟误差计算速度。
-  - 速度受最小值、最大值限制。
-  - 有最小更新间隔，避免频繁调速。
-  - 重缓冲后扩大目标延迟，网络恢复后再平滑收敛。
-
-该类针对直播延迟，不应直接用于当前单轨高码率点播，但其控制结构可复用。
-
-### 3.4 mpv、FFmpeg、VLC 和其他音频实现
-
-- mpv：[af_scaletempo2.c](https://github.com/mpv-player/mpv/blob/master/audio/filter/af_scaletempo2.c)
-  - `scaletempo2` 在改变速度时保持音调。
-  - mpv 文档中的 `audio-pitch-correction` 会在 speed 不为 1 时自动插入该滤镜。
-  - 源码实现较完整，但不能直接接入 EXO 的 `AudioSink`。
-
-- FFmpeg：[af_atempo.c](https://github.com/FFmpeg/FFmpeg/blob/master/libavfilter/af_atempo.c)
-  - 使用 WSOLA 思路做音频 tempo scaling。
-  - 适合作为 FFmpeg 音频链路参考。
-  - 当前项目若只为降速而引入 FFmpeg filter，会增加 JNI/native 维护成本。
-
-- VLC：[scaletempo.c](https://github.com/videolan/vlc/blob/master/modules/audio_filter/scaletempo.c)
-  - 通过 stride、overlap 和相关搜索保持音调。
-  - 适合参考算法参数，不建议直接移植到 Android 播放主链。
-
-- WebRTC NetEq：[PreemptiveExpand](https://github.com/webrtc-mirror/webrtc/blob/main/modules/audio_coding/neteq/preemptive_expand.cc)
-  - 针对语音 jitter buffer 做短时音频拉伸。
-  - 说明“缓冲状态 → 小幅时间伸缩 → 恢复”的思路有成熟工程先例。
-  - 这是音频抖动缓冲，不是电影视频播放器的直接实现。
-
-- Rubber Band：[Rubber Band Library](https://github.com/breakfastquay/rubberband)
-  - 音质和功能较高，但实时处理更重。
-  - GPL 或商业授权，不适合作为当前 App 的首选依赖。
-
-## 四、当前工程源码审阅
-
-### 4.1 已具备的能力
-
-- [PlayerManager.setSpeed()](../app/src/main/java/com/fongmi/android/tv/player/PlayerManager.java) 已能调用 `player.setPlaybackParameters(...withSpeed(speed))`。
-- [ExoUtil.buildAudioSink()](../app/src/main/java/com/fongmi/android/tv/player/exo/ExoUtil.java) 已统一构建 `DefaultAudioSink`。
-- FFmpeg 音频 renderer 最终也输出 PCM 到同一 AudioSink，理论上可以复用 Sonic。
-- EXO 自动模式已有缓冲、重缓冲和带宽诊断，可作为控制器输入来源。
-- Go 二进制代理和 `127.0.0.1` HTTP 链路必须继续保留。
-
-### 4.2 当前缺口
-
-- `SPEED_PRESETS` 目前主要是 `0.5x、0.75x、1x、1.2x` 以上，没有 0.95/0.92/0.90/0.85 保护档。
-- 没有“缓冲下降趋势 → 自动降速 → 稳定后恢复”的独立控制器。
-- [ExoTunnelingPolicy](../app/src/main/java/com/fongmi/android/tv/player/exo/ExoTunnelingPolicy.java) 没有根据网络保护模式或非 1.0x 速度禁用 tunneling。
-- 当前音频直通/offload 与 Sonic 保调存在冲突。
-- [ExoOutputModeManager](../app/src/main/java/com/fongmi/android/tv/player/exo/ExoOutputModeManager.java) 按原始帧率选显示模式，没有为动态播放速度提供匹配刷新率。
-- 当前“播放性能自动”只调整加载、缓冲、解码等参数，不会自动改变播放速度。
-
-## 五、推荐的控制器设计
-
-### 5.1 主要输入
-
-优先级从高到低：
-
-1. 播放缓冲媒体时间的滑动斜率。
-2. 连续重缓冲次数和重缓冲间隔。
-3. 真实字节读取斜率和已知媒体码率。
-4. Go 代理提供的可选上游 telemetry；没有 telemetry 时不能假设本地吞吐等于 CDN 吞吐。
-
-缓冲斜率的近似关系：
-
-```text
-可支撑媒体速度 ≈ 当前播放速度 + 缓冲秒数变化率
-```
-
-例如当前 1.0x 播放，20 秒内缓冲从 30 秒降到 28 秒，则网络大约只能支撑 0.90x 的媒体消费速度，应在安全余量下逐步调到 0.90～0.92x。
-
-采样必须避开：暂停、Seek、切轨、重缓冲过程、缓冲已经达到上限且加载器主动停止的阶段。
-
-### 5.2 状态机
-
-```text
-NORMAL
-  speed=1.00
-
-BUFFER_WARNING
-  缓冲持续下降，连续确认后进入保护
-
-PROTECT
-  1.00 → 0.97 → 0.95 → 0.92 → 0.90
-  每次调整 0.01～0.02，至少间隔 10～20 秒
-
-RECOVERY
-  缓冲恢复并稳定后逐步回升
-  0.90 → 0.92 → 0.95 → 0.97 → 1.00
-
-UNSUSTAINABLE
-  已到最低速度但缓冲仍持续下降
-  停止继续降速，报告网络无法支撑当前媒体
-```
-
-自动控制不得无限降低速度，也不应在重缓冲时反复震荡。
-
-### 5.3 模式边界
-
-建议提供三个档位：
-
-| 模式 | 速度范围 | 目标 |
+| 问题 | 原型行为 | 最终修正 |
 |---|---|---|
-| 标准保护 | 0.95～1.00x | 尽量低感知，处理轻微缺口 |
-| 增强保护 | 0.90～1.00x | 处理约 5%～10% 持续缺口 |
-| 激进保护 | 0.85～1.00x | 用户主动选择，尽量延迟重缓冲 |
+| 输出功能被提前改变 | 设置开启即禁用 tunneling | 保留 tunneling；检测到用户启用时控制器休眠 |
+| 音频能力被提前改变 | 设置开启即强制 PCM，关闭直通 | 保留音频直通；检测到用户启用时控制器休眠 |
+| 电视直出被提前改变 | 设置开启即恢复/跳过 EXO Display.Mode | 完全移除该关联，帧率与分辨率直出照常工作 |
+| 调速目标离散 | 每次固定变化 0.02x | 根据可支撑速度连续计算，保留小步限幅 |
+| 模式范围过宽 | 自动下探 0.95/0.90/0.85x | 无感自动统一限制为 0.97～1.00x |
+| 上游带宽判断不严谨 | 容易误用本地代理吞吐 | loopback 只用缓冲斜率；仅直连远端才使用 Media3 带宽估计 |
 
-## 六、必须处理的兼容性问题
+因此 item-60/61 应视为实验原型，最终实现由 item-62 替代其副作用和固定档位设计。
 
-### 6.1 音频直通/offload
+## 三、公开资料与开源实现调研
 
-Sonic 只能处理 PCM，不能修改已经编码的 AC3/EAC3/TrueHD/DTS-HD bitstream。因此网络保护模式可能需要关闭 passthrough/offload，改为：
+### 3.1 Media3 默认速度控制：0.97～1.03 的工程边界
 
-```text
-压缩音频 → 解码 PCM → Sonic 保调 → AudioTrack
-```
+来源：
 
-代价是失去原始码流直通、Atmos/DTS:X 对象音频能力，以及部分功耗优势。
+- https://github.com/androidx/media/blob/main/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/DefaultLivePlaybackSpeedControl.java
 
-### 6.2 tunneling
+关键事实：
 
-Media3 的音频 sink 在 tunneling 下不会应用音频处理器变速，因为音频时长变化与视频帧时间戳无法自动保持同步。因此网络保护模式不能继续无条件启用 tunneling。
+- 默认最小播放速度为 0.97x。
+- 默认最大播放速度为 1.03x。
+- 使用最小更新间隔避免频繁 rate change。
+- 使用比例控制器，而不是固定几个目标档位。
+- 对最小可达延迟使用指数平滑。
+- 使用平滑偏差的 3 倍作为安全边界。
 
-优先策略是：
+虽然该实现服务于直播延迟控制，不能直接套到高码率点播，但它证明 0.97x、平滑、最小更新间隔、安全边界是 Media3 自身采用的成熟工程模式。
 
-- 在会话创建前已知需要网络保护时，直接关闭 tunneling。
-- 不在播放中途为了降速强行重建播放器。
-- 如果用户选择音频直通或 tunneling，则自动网络降速应显示为不可用，而不是静默破坏输出能力。
+### 3.2 Media3 Sonic 与 DefaultAudioSink：保调能力和兼容边界
 
-### 6.3 显示刷新率和画面节奏
+来源：
 
-0.95x/0.90x 会改变有效视频节奏，但电视通常没有 22.8Hz/21.6Hz 这类刷新率。网络保护模式不应随着每次调速频繁切换 Display.Mode；应保持当前显示模式，接受轻微 cadence 变化，或由电视自身 MEMC 处理。
+- https://github.com/androidx/media/blob/main/libraries/common/src/main/java/androidx/media3/common/audio/SonicAudioProcessor.java
+- https://github.com/androidx/media/blob/main/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/DefaultAudioSink.java
 
-不建议在 App 内实现光流插帧：4K/5K 光流会显著增加 GPU、内存、功耗和延迟，可能把网络问题变成渲染/热控问题。
+关键事实：
 
-### 6.4 用户手动速度
+- SonicAudioProcessor 独立设置 speed 与 pitch。
+- PlaybackParameters.withSpeed() 保留 pitch，当前项目可用 pitch=1.0 做保调变速。
+- DefaultAudioSink 默认音频处理链包含 Sonic。
+- AudioProcessor 只支持 PCM，不支持 passthrough/offload。
+- Media3 源码明确说明 tunneling 下不能使用会改变音频时长的处理器，因此无法依靠 Sonic 调速。
+- DefaultAudioSink 默认关闭 offload；当前项目也没有主动开启 offload。
 
-自动网络保护必须与用户手动倍速区分：
+结论：不能为了网络保护强制重建输出链。正确做法是仅在当前天然为 PCM、非 tunneling 的会话中介入。
 
-- 用户主动设置 0.75x/1.25x 时，不应被自动控制器覆盖。
-- 自动控制只在用户速度为 1.0x 且模式已开启时生效。
-- OSD 应显示“网络保护 0.95x”与“用户速度 1.00x”两个概念，避免误解。
+### 3.3 Media3 issues：offload 调速不可靠
 
-## 七、实施顺序建议
+来源：
 
-### ✅ 阶段 0：只做观测，不改速度
+- https://github.com/androidx/media/issues/133
+- https://github.com/androidx/media/issues/1110
+- https://github.com/androidx/media/issues/2038
 
-- ✅ 已有 `ForwardBufferTrend` 记录 5～30 秒缓冲斜率。
-- ✅ 已记录重缓冲次数、总时长、当前缓冲和加载状态。
-- ✅ 观测链路不改变用户播放行为，并有专项单测。
+共同结论：
 
-### ✅ 阶段 1：固定保护档
+- offload 可能失去 playback speed 等能力。
+- 部分 Samsung、Pixel 和 Android 版本即使声明需要支持速度变化，实际仍可能不生效。
+- PlaybackParameters 可能显示已设置，但真实播放仍为 1.00x。
 
-- ✅ 在播放性能设置中增加关闭、0.95x、0.90x、0.85x 固定保护档。
-- ✅ 仅 EXO 点播、用户倍速为 1.0x 时生效；用户手动倍速优先。
-- ✅ 保护会话禁用 tunneling、音频直通输出路径和强制刷新率匹配，使用 PCM + Sonic 保调。
-- ✅ OSD 分别显示用户倍速、网络保护档和实际播放速度。
-- ✅ 不改变 Go 二进制代理及 `127.0.0.1` 播放链路。
+因此最终资格门控必须保守，不应在压缩音频直通/offload 路径上假设保调调速可靠。
 
-### ✅ 阶段 2：自动标准保护
+### 3.4 dash.js CatchupController：状态机、死区和 LoL+ 非线性控制
 
-- ✅ 新增独立 `ExoNetworkGuardController` 状态机，包含正常、评估、保护、恢复、带宽不足状态。
-- ✅ 每 5 秒采样，只使用 READY、正在播放、点播会话的有效缓冲趋势；不使用 `127.0.0.1` 瞬时带宽直接决策。
-- ✅ 每次最多调整 0.02x，调整冷却 15 秒，并用下降确认、恢复确认和缓冲安全区避免速度震荡。
-- ✅ 低感知模式限制在 0.95～1.00x；达到下限仍持续耗尽时进入“带宽不足”，不继续降速。
-- ✅ Seek、暂停、重缓冲和用户手动倍速会清理或暂停趋势证据，避免旧样本误触发。
+来源：
 
-### 🟡 阶段 3：增强/激进保护
+- https://github.com/Dash-Industry-Forum/dash.js/blob/development/src/streaming/controllers/CatchupController.js
 
-- ✅ 用户可主动开启最低 0.90x 或 0.85x，复用同一有界自动控制器。
-- 增加音频听感、画面 cadence、字幕同步、Seek 和切后台测试。
-- 建立设备/音频格式黑名单。
+可借鉴点：
 
-## 八、验收指标
+- 播放暂停、Seek、stalled 时不盲目调速。
+- 缓冲低于安全阈值时才进入 buffer-based 控制。
+- LoL+ 使用连续非线性函数计算新速度。
+- 速度差小于阈值时不写入，避免频繁 ratechange。
+- 恢复到安全区后回到 1.00x。
 
-每次代码修改都必须单独单测、构建 APK、commit、打独立 tag，并在 vivo V2453A 真机验证。
+本项目采用相同思想，但把直播延迟误差替换为点播缓冲斜率和耗尽时间。
 
-### 功能
+### 3.5 hls.js 与 Shaka：快慢双 EWMA 的保守融合
 
-- 速度能在 1.00/0.95/0.92/0.90/0.85 之间渐进切换。
-- Sonic 保持人声音调，不出现明显低沉或断裂。
-- Seek、暂停、重缓冲、切轨后速度状态正确恢复。
-- 用户手动倍速不会被自动模式覆盖。
+来源：
 
-### 稳定性
+- https://github.com/video-dev/hls.js/blob/master/src/utils/ewma-bandwidth-estimator.ts
+- https://github.com/shaka-project/shaka-player/blob/main/lib/abr/ewma_bandwidth_estimator.js
 
-- 轻微带宽缺口下重缓冲次数和总时长下降。
-- 达到最低速度仍无法支撑时不无限降速。
-- 不破坏 Go 二进制代理、鉴权和 `127.0.0.1` 链路。
-- tunneling、直通和 PCM 模式的可用性显示准确。
+两者都维护快、慢两个 EWMA，并取两者较小值：
 
-### 性能
+- 网络变差时快速下调。
+- 网络恢复时缓慢上调。
+- 避免短时峰值造成过度乐观。
 
-- 比较 Sonic CPU、音频 underrun、视频掉帧、首帧时间和 RSS。
-- 确认关闭 tunneling 后的 CPU 增量是否抵消网络保护收益。
-- 记录 24/30/60fps 内容在 0.95/0.90x 下的 cadence/judder。
+最终实现把这一原则用于缓冲斜率：
 
-## 九、明确不建议的方案
+    保守缓冲斜率 = min(快速 EWMA, 慢速 EWMA)
 
-1. 直接按“本地 127.0.0.1 网速 / 视频码率”每秒调速。
-2. 不设置速度下限，持续降到 0.5x 或更低。
-3. 为了降速强制关闭所有硬件输出能力且不提示用户。
-4. 在播放中途频繁重建播放器来切换 PCM、直通或 tunneling。
-5. 为网络卡顿引入 App 侧实时光流插帧。
-6. 仅引入 mpv/FFmpeg 音频滤镜，却不处理视频时钟、tunneling 和显示 cadence。
-7. 把“0.90～0.95x 低感知”宣传成所有内容和用户都完全无感。
+### 3.6 主观感知论文
 
-## 十、最终建议
+来源：
 
-该方案可以作为主方案的独立候选项实施，但不应默认覆盖所有高规格播放。
+- Smooth Control of Adaptive Media Playout for Video Streaming
+  - DOI: 10.1109/TMM.2009.2030543
+- Online Buffer Fullness Estimation Aided Adaptive Media Playout for Video Streaming
+  - DOI: 10.1109/TMM.2011.2160158
+- Subjective Assessment of Adaptive Media Playout for Video Streaming
+  - DOI: 10.1109/QOMEX.2019.8743320
+- Human Perception of Altered Video Speed
+  - DOI: 10.1163/22134468-bja10116
 
-优先建议：
+关键结论：
 
-1. 先做阶段 0 观测，确认当前资源的缓冲斜率确实能预测重缓冲。
-2. 再做阶段 1 手动 0.95/0.90x 实验。
-3. 只有确认 Sonic、PCM 输出和画面 cadence 可接受后，才实现自动控制器。
-4. 默认保护下限采用 0.95x；增强模式下限 0.90x；0.85x 仅用户主动开启。
-5. 对长期严重带宽不足的资源，最终仍应提示切换低码率版本、等待更大缓冲或更换网络，不能把降速当成带宽替代品。
+- 自适应播放速度可用于控制缓冲和播放延迟。
+- 缓冲 fullness 估计可以辅助动态速度控制。
+- 2019 年主观研究指出，既往工作低估了速度变化对感知质量的影响，一般不应偏离原速超过 10%。
+- 2024 年研究进一步确认，用户对速度变化存在系统性感知偏差，且不同内容、动作与用户差异明显。
+
+项目最终选择 0.97x，而不是把 0.90x 或 0.85x 宣称为无感。
+
+### 3.7 Android 电视刷新率官方建议
+
+来源：
+
+- https://developer.android.com/media/optimize/performance/frame-rate
+
+关键事实：
+
+- Surface.setFrameRate() 只是向系统表达内容帧率偏好，系统不保证切换。
+- 非无缝刷新率切换可能黑屏。
+- 视频 App 应按内容和用户选择决定是否允许非无缝切换。
+- App 必须在系统没有切换刷新率时仍能正常工作。
+
+结论：动态网络保护不能接管或关闭电视帧率匹配。当前 EXO 输出模式继续按原始媒体帧率工作，保护控制器不频繁切换 Display.Mode。
+
+## 四、物理边界
+
+稳定播放的近似条件：
+
+    播放速度 <= 实际持续吞吐 / 实际媒体消费码率
+
+缓冲斜率提供了不依赖上游鉴权和代理内部实现的等价估计：
+
+    缓冲可支撑速度 = 当前播放速度 + 缓冲秒数变化率
+
+例：
+
+- 当前速度 1.00x。
+- 20 秒内缓冲减少 0.4 秒。
+- 缓冲斜率约为 -0.02 秒/秒。
+- 可支撑速度约为 0.98x。
+
+如果估算结果为 0.92x，说明缺口超过无感范围。此时 0.97x 只能延缓重缓冲，不能消除长期缺口，控制器不应伪装成已经解决。
+
+## 五、最终资格矩阵
+
+只有全部满足才进入观察：
+
+| 条件 | 要求 | 不满足时 |
+|---|---|---|
+| 播放核心 | EXO | 休眠 |
+| 内容类型 | 点播 | 休眠 |
+| 用户速度 | 1.00x | 用户设置优先 |
+| 速度命令 | COMMAND_SET_SPEED_AND_PITCH 可用 | 休眠 |
+| tunneling | 用户未启用 | 保留 tunneling，休眠 |
+| 音频直通 | 用户未启用 | 保留直通，休眠 |
+| 电视输出 | 不作为阻断条件 | 保持原帧率/分辨率直出 |
+| Go 代理 | 保持原链路 | 不绕过、不直连 |
+
+注意：“设置开启”不是资格条件全部成立的同义词。它只是允许控制器执行上述判断。
+
+## 六、输入信号与可信度
+
+### 6.1 主信号：缓冲媒体时间斜率
+
+采样条件：
+
+- Player.STATE_READY
+- player.isPlaying()
+- player.isLoading()
+- 非暂停
+- 非 Seek
+- 非切轨
+- 非重缓冲过程
+
+实现：
+
+- 5 秒调度一次。
+- 最少 10 秒趋势窗口后才决策。
+- 快 EWMA 半衰期 6 秒。
+- 慢 EWMA 半衰期 20 秒。
+- 取二者较小值，下降快、恢复慢。
+- 单次异常斜率钳制在 -2.0～+5.0 秒/秒。
+
+### 6.2 风险信号：缓冲耗尽时间
+
+当缓冲下降时：
+
+    timeToEmpty = 当前缓冲秒数 / 缓冲下降速度
+
+风险成立需满足：
+
+- 缓冲斜率 <= -0.015 秒/秒；并且
+- 缓冲 <= 45 秒，或预计 240 秒内耗尽。
+
+这样可避免在已有数分钟安全缓冲时过早干预。
+
+### 6.3 辅助信号：真实远端带宽 / 媒体消费码率
+
+仅 DIRECT_REMOTE_HTTP 使用：
+
+    网络可支撑速度 = 0.90 × Media3 带宽估计 / 保守媒体码率
+
+媒体码率优先级：
+
+1. Format 标称码率。
+2. 文件总长度 / 总时长。
+3. content-length 与 byte-slope 混合估计。
+4. P90 / 1.25×P50 保守观测。
+
+仅使用 medium/high confidence。
+
+对于 APP_LOCAL_SERVICE 和 EXTERNAL_LOOPBACK_PROXY：
+
+- 不使用 Media3 bandwidthEstimate 参与调速。
+- 原因是该值描述 Exo 到 127.0.0.1 的本地腿，不能证明 Go/CDN 上游能力。
+- 继续依赖缓冲斜率；未来若 Go 二进制提供上游 telemetry，可作为额外保守上限接入。
+
+## 七、连续动态控制算法
+
+### 7.1 支撑能力融合
+
+    bufferSupported = currentSpeed + conservativeBufferSlope
+
+直连远端且网络估计可信时：
+
+    supported = min(bufferSupported, networkSupported)
+
+Go/loopback 时：
+
+    supported = bufferSupported
+
+### 7.2 进入条件
+
+必须同时满足：
+
+1. 资格矩阵通过。
+2. 趋势窗口不少于 10 秒。
+3. 风险持续确认 10 秒。
+4. supported 位于 0.97～1.00x。
+5. 目标速度变化超过 0.002x 死区。
+
+### 7.3 目标速度
+
+缓冲下降时：
+
+    desired = clamp(supported - 0.002, 0.97, 1.00)
+
+不是固定跳到 0.98/0.95，而是可产生 0.992、0.984、0.979 等连续目标。
+
+限幅：
+
+- 每 10 秒最多下降 0.008x。
+- 每 10 秒最多恢复 0.004x。
+- 写入精度 0.001x。
+- 下降比恢复快，避免刚恢复就反复卡顿。
+
+### 7.4 自动退出
+
+已介入后，满足以下条件持续 25 秒才恢复：
+
+- 可支撑速度 >= 0.998x。
+- 缓冲 >= 30 秒。
+
+或者：
+
+- 加载器因满缓冲停止。
+- 缓冲 >= 50 秒并持续 30 秒。
+
+速度平滑回到 1.00x 后，状态回到观察，不再改变播放。
+
+### 7.5 超出无感范围
+
+当 supported < 0.968x：
+
+- 未介入时保持 1.00x，不偷偷降到 0.95/0.90/0.85。
+- 已介入时平滑退出。
+- 状态标记为“超出无感范围”，用于诊断。
+- 不无限降低速度。
+
+## 八、暂停、Seek、重缓冲与切换行为
+
+| 事件 | 行为 |
+|---|---|
+| 用户暂停 | 立即恢复用户 1.00x，清除趋势 |
+| Seek/跳集/切轨 | 恢复 1.00x，清除旧样本，重新观察 |
+| 重缓冲 | 保留当前无感保护速度，但清除旧趋势；恢复 READY 后重新采样 |
+| 停止/结束/新媒体 | 恢复用户速度，完整重置 |
+| 用户手动改倍速 | 自动控制退出，用户速度绝对优先 |
+| 中途启用 tunneling/直通 | 自动恢复 1.00x 并休眠 |
+
+## 九、当前代码实施映射
+
+### ✅ 已修正的副作用
+
+- ✅ ExoTunnelingPolicy 不再因网络保护设置而禁用 tunneling。
+- ✅ ExoUtil.buildAudioSink() 不再因网络保护设置而强制 PCM。
+- ✅ PlaybackActivity 不再因网络保护设置而跳过电视 Display.Mode。
+- ✅ 用户启用 tunneling 或音频直通时由资格门控休眠。
+
+### ✅ 已实现的动态控制
+
+- ✅ ExoNetworkGuardEligibility：非破坏性资格矩阵。
+- ✅ ForwardBufferTrend：快/慢双 EWMA 保守缓冲斜率。
+- ✅ ExoNetworkGuardController：进入确认、耗尽时间、死区、滞后、连续目标、下降/恢复非对称限幅。
+- ✅ PlayerManager：自动调度、暂停/Seek/重缓冲/停止生命周期处理。
+- ✅ DIRECT_REMOTE_HTTP 可融合可信带宽与媒体码率。
+- ✅ loopback 不使用本地带宽误判 Go/CDN 上游。
+- ✅ 播放性能“自动”默认允许无感动态判断。
+- ✅ OSD 诊断可显示观察、休眠原因、保护、恢复与超出无感范围。
+
+### ✅ 不变的播放链
+
+- ✅ Go 二进制代理继续存在。
+- ✅ 127.0.0.1 HTTP 播放链继续存在。
+- ✅ App 不增加网盘 SDK 鉴权。
+- ✅ App 不直连网盘 CDN Range。
+- ✅ 原有硬解、SurfaceView、帧率匹配、电视分辨率直出逻辑不被该功能重写。
+
+## 十、收益、代价与适用边界
+
+### 收益
+
+- 对约 0～3% 的持续吞吐小缺口，可直接消除缓冲持续下降。
+- 对轻微短时波动，可延长缓冲安全时间并减少重缓冲。
+- 不需要更换清晰度、重建播放器或绕过 Go 代理。
+- 未介入时没有 Sonic 处理开销，也不改变输出能力。
+- 动态退出后恢复原始 1.00x。
+
+### 代价
+
+- 介入时 PCM 音频经过 Sonic，会增加少量 CPU。
+- 0.97x 会使两小时内容增加约 3 分 43 秒实际观看时间。
+- 某些节拍强、熟悉人声或高运动内容仍可能被极敏感用户察觉。
+- 不能解决 5%、10% 或更大的长期带宽缺口。
+- 不能替代更大缓冲、稳定网络、低码率版本或真正的上游吞吐优化。
+
+## 十一、测试与验收
+
+### 已有专项单元测试
+
+- ExoNetworkProtectionPolicyTest
+- ExoNetworkGuardEligibilityTest
+- ExoTunnelingPolicyTest
+- ForwardBufferTrendTest
+- ExoNetworkGuardControllerTest
+- AutoPreloadPolicyTest
+
+覆盖：
+
+- tunneling/直通不被关闭。
+- 用户倍速和不支持调速的设备保持休眠。
+- 小缺口持续确认后连续降速。
+- 超出 0.97 无感范围时不介入。
+- 调整冷却避免频繁 ratechange。
+- 缓冲恢复后慢速回到 1.00x。
+- 满缓冲时恢复。
+- direct 网络估计只能让结果更保守。
+- 重缓冲后没有新趋势时不盲目降速。
+
+### 真机验收指标
+
+1. 隧道模式开启：网络保护显示休眠，隧道仍按原逻辑工作。
+2. 音频直通开启：网络保护显示休眠，直通仍按原逻辑工作。
+3. 电视帧率/分辨率直出：开启网络保护后仍正常切换。
+4. 普通 PCM EXO 点播：健康网络全程保持 1.00x。
+5. 轻微受限网络：确认后出现 0.99x 左右连续值，缓冲下降停止。
+6. 网络恢复：至少确认 25 秒后缓慢回到 1.00x。
+7. 严重缺口：保持 1.00x并报告超出无感范围，不下探 0.95/0.90。
+8. 暂停、Seek、切集：立即恢复 1.00x并重新观察。
+9. 对比 CPU、音频 underrun、视频 droppedFrames、重缓冲次数与总时长。
+
+## 十二、后续可选增强
+
+1. Go 二进制增加只读上游 telemetry：
+   - 上游实际读取字节。
+   - 上游请求耗时。
+   - Range 命中与重试。
+   - 快/慢 EWMA。
+   - 仅提供观测，不改变 App 鉴权和播放路径。
+2. 加入 Sonic CPU、AudioTrack underrun 和热控资格门控。
+3. 建立设备/ROM 黑名单。
+4. 统计不同内容类型下 0.97x 的主观感知反馈。
+
+这些增强不能绕过 Go，也不能扩大自动速度范围。
