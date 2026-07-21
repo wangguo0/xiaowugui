@@ -92,10 +92,14 @@ public class ExoUtil {
     }
 
     public static ExoPlayer buildPlayer(int decode, Player.Listener listener) {
+        return buildPlayer(decode, listener, false);
+    }
+
+    public static ExoPlayer buildPlayer(int decode, Player.Listener listener, boolean tunnelingFallbackAttempted) {
         if (PlaybackPerformanceSetting.isAuto(PlayerSetting.EXO)) ExoPerformanceSetting.beginAutoSession();
         EnhancedVideoProfile profile = getEnhancedVideoProfile(decode);
         List<EnhancedVideoProfile> profiles = getEnhancedVideoProfiles(decode);
-        DefaultTrackSelector trackSelector = buildTrackSelector(decode);
+        DefaultTrackSelector trackSelector = buildTrackSelector(decode, tunnelingFallbackAttempted);
         ExoPlayer.Builder builder = new ExoPlayer.Builder(App.get())
                 .setTrackSelector(trackSelector)
                 .setRenderersFactory(buildPlaybackRenderersFactory(decode))
@@ -161,14 +165,14 @@ public class ExoUtil {
         return PlayerSetting.isCaption() ? CaptionStyleCompat.createFromCaptionStyle(((CaptioningManager) App.get().getSystemService(Context.CAPTIONING_SERVICE)).getUserStyle()) : new CaptionStyleCompat(Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, null);
     }
 
-    private static DefaultTrackSelector buildTrackSelector(int decode) {
+    private static DefaultTrackSelector buildTrackSelector(int decode, boolean tunnelingFallbackAttempted) {
         DefaultTrackSelector trackSelector = new DefaultTrackSelector(App.get());
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
         if (PlayerSetting.isPreferAAC(PlayerSetting.EXO)) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
-        ExoTunnelingPolicy.Decision tunneling = getTunnelingDecision(decode);
+        ExoTunnelingPolicy.Decision tunneling = getTunnelingDecision(decode, tunnelingFallbackAttempted);
         builder.setTunnelingEnabled(tunneling.enabled());
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-tunnel", "requested=%s enabled=%s reason=%s decode=%d render=%d lut=%s", PlayerSetting.isTunnel(), tunneling.enabled(), tunneling.reason(), decode, PlayerSetting.getRender(), LutSetting.isEnabled());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-tunnel", "requested=%s enabled=%s reason=%s decode=%d render=%d lut=%s fallback=%s", PlayerSetting.isTunnel(), tunneling.enabled(), tunneling.reason(), decode, PlayerSetting.getRender(), LutSetting.isEnabled(), tunnelingFallbackAttempted);
         if (PlaybackPerformanceSetting.isTrackLimitEnabled()) {
             applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode));
         } else {
@@ -178,7 +182,11 @@ public class ExoUtil {
         return trackSelector;
     }
 
-    private static ExoTunnelingPolicy.Decision getTunnelingDecision(int decode) {
+    public static boolean isTunnelingEnabled(int decode, boolean tunnelingFallbackAttempted) {
+        return getTunnelingDecision(decode, tunnelingFallbackAttempted).enabled();
+    }
+
+    private static ExoTunnelingPolicy.Decision getTunnelingDecision(int decode, boolean tunnelingFallbackAttempted) {
         ExoTunnelingPolicy.Request request = new ExoTunnelingPolicy.Request(
                 PlayerSetting.isTunnel(),
                 PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE,
@@ -190,7 +198,7 @@ public class ExoUtil {
                 false,
                 false,
                 true,
-                false);
+                tunnelingFallbackAttempted);
         return ExoTunnelingPolicy.resolve(request);
     }
 

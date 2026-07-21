@@ -40,11 +40,13 @@ public class ExoPlayerEngine implements PlayerEngine {
     private int decode;
     private boolean playWhenReady;
     private boolean cacheSessionActive;
+    private boolean tunnelingFallbackAttempted;
+    private boolean tunnelingEnabledForSession;
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
         MediaSourceFactory.acquireCacheSession();
         try {
-            this.player = ExoUtil.buildPlayer(decode, listener);
+            this.player = ExoUtil.buildPlayer(decode, listener, false);
         } catch (RuntimeException | Error e) {
             MediaSourceFactory.releaseCacheSession();
             throw e;
@@ -54,6 +56,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.preCache = new PreCache();
         this.attemptedFormats = new HashSet<>();
         this.decode = decode;
+        this.tunnelingEnabledForSession = ExoUtil.isTunnelingEnabled(decode, false);
     }
 
     @Override
@@ -79,7 +82,16 @@ public class ExoPlayerEngine implements PlayerEngine {
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "rebuild decode=%d", decode);
-        return player = ExoUtil.buildPlayer(decode, listener);
+        tunnelingEnabledForSession = ExoUtil.isTunnelingEnabled(decode, tunnelingFallbackAttempted);
+        return player = ExoUtil.buildPlayer(decode, listener, tunnelingFallbackAttempted);
+    }
+
+    public boolean disableTunnelingForSession() {
+        if (!tunnelingEnabledForSession || tunnelingFallbackAttempted) return false;
+        tunnelingFallbackAttempted = true;
+        tunnelingEnabledForSession = false;
+        PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "disable tunneling for current session");
+        return true;
     }
 
     @Override
