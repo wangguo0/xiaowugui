@@ -67,7 +67,8 @@ public class MediaSourceFactory implements MediaSource.Factory {
         OkHttpDataSource.Factory factory = new OkHttpDataSource.Factory(OkHttp.player());
         applyHeaders(factory, headers);
         DataSource.Factory upstream = new DefaultDataSource.Factory(App.get(), factory);
-        return new PriorityTaskDataSource.Factory(upstream, PLAYBACK_PRIORITY_MANAGER, C.PRIORITY_PLAYBACK_PRELOAD, true);
+        DataSource.Factory recovered = new HttpEofRecoveryDataSource.Factory(upstream);
+        return new PriorityTaskDataSource.Factory(recovered, PLAYBACK_PRIORITY_MANAGER, C.PRIORITY_PLAYBACK_PRELOAD, true);
     }
 
     static synchronized Cache getCache() {
@@ -184,7 +185,7 @@ public class MediaSourceFactory implements MediaSource.Factory {
     private CacheDataSource.Factory getCacheDataSource(DataSource.Factory upstreamFactory) {
         return new CacheDataSource.Factory()
                 .setCache(getCache())
-                .setUpstreamDataSourceFactory(upstreamFactory)
+                .setUpstreamDataSourceFactory(new HttpEofRecoveryDataSource.Factory(upstreamFactory))
                 .setCacheWriteDataSinkFactory(null)
                 .setEventListener(PlaybackCacheMetrics.listener())
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
