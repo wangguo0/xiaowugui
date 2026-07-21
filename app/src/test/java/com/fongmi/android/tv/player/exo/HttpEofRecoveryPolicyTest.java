@@ -27,4 +27,12 @@ public class HttpEofRecoveryPolicyTest {
         assertEquals(0, HttpEofRecoveryDataSource.remainingLength(10, 12));
         assertEquals(C.LENGTH_UNSET, HttpEofRecoveryDataSource.remainingLength(C.LENGTH_UNSET, 4));
     }
+
+    @Test
+    public void capsOnlyConsecutiveFailures() {
+        assertTrue(HttpEofRecoveryDataSource.canRecoverConsecutively(0));
+        assertTrue(HttpEofRecoveryDataSource.canRecoverConsecutively(2));
+        assertFalse(HttpEofRecoveryDataSource.canRecoverConsecutively(3));
+        assertFalse(HttpEofRecoveryDataSource.canRecoverConsecutively(-1));
+    }
 }

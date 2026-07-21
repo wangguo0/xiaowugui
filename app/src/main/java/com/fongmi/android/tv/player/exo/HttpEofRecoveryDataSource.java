@@ -18,12 +18,17 @@ import java.util.Map;
 /** Reopens a truncated fixed-length HTTP response at the exact unread byte offset. */
 final class HttpEofRecoveryDataSource implements DataSource {
 
-    private static final int MAX_RECONNECTS_PER_OPEN = 2;
+    /**
+     * Limit only consecutive EOF recoveries. A long remote file may legitimately
+     * close its HTTP response more than once, so a lifetime limit would eventually
+     * turn a recoverable stream interruption into a player error.
+     */
+    private static final int MAX_CONSECUTIVE_RECONNECTS = 3;
 
     private final DataSource upstream;
     private DataSpec dataSpec;
     private long bytesRead;
-    private int reconnectCount;
+    private int consecutiveReconnects;
 
     HttpEofRecoveryDataSource(DataSource upstream) {
         this.upstream = upstream;
@@ -38,7 +43,7 @@ final class HttpEofRecoveryDataSource implements DataSource {
     public long open(DataSpec dataSpec) throws IOException {
         this.dataSpec = dataSpec;
         this.bytesRead = 0;
-        this.reconnectCount = 0;
+        this.consecutiveReconnects = 0;
         return upstream.open(dataSpec);
     }
 
@@ -47,11 +52,16 @@ final class HttpEofRecoveryDataSource implements DataSource {
         while (true) {
             try {
                 int read = upstream.read(buffer, offset, length);
-                if (read > 0) bytesRead += read;
+                if (read > 0) {
+                    bytesRead += read;
+                    // Progress proves the resumed connection is healthy. Do not
+                    // carry an old burst of EOFs into a later, independent stall.
+                    consecutiveReconnects = 0;
+                }
                 return read;
             } catch (IOException error) {
-                if (!isRecoverableEof(error) || reconnectCount >= MAX_RECONNECTS_PER_OPEN || dataSpec == null) throw error;
-                reconnectCount++;
+                if (!isRecoverableEof(error) || !canRecoverConsecutively(consecutiveReconnects) || dataSpec == null) throw error;
+                consecutiveReconnects++;
                 reconnectAtCurrentPosition();
             }
         }
@@ -72,7 +82,7 @@ final class HttpEofRecoveryDataSource implements DataSource {
     public void close() throws IOException {
         dataSpec = null;
         bytesRead = 0;
-        reconnectCount = 0;
+        consecutiveReconnects = 0;
         upstream.close();
     }
 
@@ -84,7 +94,7 @@ final class HttpEofRecoveryDataSource implements DataSource {
         long remaining = remainingLength();
         DataSpec retrySpec = remaining == C.LENGTH_UNSET ? dataSpec.subrange(bytesRead) : dataSpec.subrange(bytesRead, remaining);
         upstream.open(retrySpec);
-        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-network", "unexpected EOF recovered offset=%d remaining=%d attempt=%d", retrySpec.position, remaining, reconnectCount);
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-network", "unexpected EOF recovered offset=%d remaining=%d consecutiveAttempt=%d", retrySpec.position, remaining, consecutiveReconnects);
     }
 
     private long remainingLength() {
@@ -104,6 +114,10 @@ final class HttpEofRecoveryDataSource implements DataSource {
             current = current.getCause();
         }
         return false;
+    }
+
+    static boolean canRecoverConsecutively(int consecutiveReconnects) {
+        return consecutiveReconnects >= 0 && consecutiveReconnects < MAX_CONSECUTIVE_RECONNECTS;
     }
 
     private static boolean messageContainsUnexpectedEnd(String message) {
