@@ -31,7 +31,7 @@ public class PreCache implements Player.Listener {
     private static final long TICK_MS = 5000;
     private static final long MIN_STEP_MS = 5000;
     private static final long MAX_STEP_MS = 30000;
-    private static final long EXTERNAL_LOOPBACK_STEP_MS = 20000;
+    private static final long EXTERNAL_LOOPBACK_STEP_MS = 10000;
     private static final long BUFFER_GAP_MS = 1250;
     private static final int STEP_DIV = 4;
 

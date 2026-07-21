@@ -14,9 +14,9 @@ final class AutoPreloadPolicy {
     private static final long FAST_BUFFER_MS = 20_000;
     private static final long FAST_FALLBACK_BUFFER_MS = 12_000;
     private static final long EXTERNAL_LOOPBACK_BUFFER_MS = 12_000;
-    private static final long EXTERNAL_LOOPBACK_RESUME_DELAY_MS = 20_000;
-    private static final long EXTERNAL_LOOPBACK_REBUFFER_DELAY_MS = 30_000;
-    private static final long EXTERNAL_LOOPBACK_DURATION_MS = 10_000;
+    private static final long EXTERNAL_LOOPBACK_RESUME_DELAY_MS = 5_000;
+    private static final long EXTERNAL_LOOPBACK_REBUFFER_DELAY_MS = 10_000;
+    private static final long EXTERNAL_LOOPBACK_DURATION_MS = 20_000;
     private static final long EXTERNAL_LOOPBACK_DECLINE_GUARD_MS = 16_000;
     private static final long EXTERNAL_LOOPBACK_DECLINE_LIMIT_MS_PER_SECOND = -500;
     private static final long EXTERNAL_LOOPBACK_RESUME_LIMIT_MS_PER_SECOND = -250;
@@ -46,7 +46,7 @@ final class AutoPreloadPolicy {
             }
         }
         lastRebufferCount = Math.max(lastRebufferCount, rebufferCount);
-        if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY && (loading || bufferedMs < EXTERNAL_LOOPBACK_BUFFER_MS)) {
+        if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY && bufferedMs < EXTERNAL_LOOPBACK_BUFFER_MS) {
             pause(nowMs, EXTERNAL_LOOPBACK_RESUME_DELAY_MS);
             return decision(route);
         }

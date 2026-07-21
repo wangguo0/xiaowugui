@@ -44,6 +44,7 @@ Media3：`1.11.0-alpha01-fongmi`
 - ✅ `item-47`：参数面板在视频轨码率缺失时使用文件/读取估算，并直接显示帧率和码率值。
 - ✅ `item-48`：EXO 帧处理偏移、滞后批次和可恢复 codec 错误聚合诊断。
 - ✅ `item-49`：自动模式修正视频码率估算，并在当前会话内按重缓冲表现逐级提升恢复阈值（最高 15 秒）。
+- ✅ `item-50`：外部回环代理安全缓冲后的低优先级连续预载，不再因 EXO 长期 loading 状态被永久暂停。
 - ✅ item-46/47 APK 已完成基础真机播放验收；item-46 长时间 EOF 专项仍需单独监听。
 - ⬜ item-48 新 APK 真机验收（帧调度诊断行）。
 - ⬜ MediaParser/Java Matroska/native extractor A/B。

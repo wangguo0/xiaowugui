@@ -49,18 +49,19 @@ public class AutoPreloadPolicyTest {
         AutoPreloadPolicy.Decision initial = evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
         AutoPreloadPolicy.Decision stable = evaluate(policy, 60_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
         assertEquals(1, initial.threads());
-        assertEquals(10_000, initial.durationMs());
+        assertEquals(20_000, initial.durationMs());
         assertEquals(1, stable.threads());
-        assertEquals(10_000, stable.durationMs());
+        assertEquals(20_000, stable.durationMs());
     }
 
     @Test
-    public void externalLoopbackRequiresTwelveSecondIdleBuffer() {
+    public void externalLoopbackCanPreloadWhilePlaybackIsLoadingAfterSafeBuffer() {
         AutoPreloadPolicy policy = new AutoPreloadPolicy();
         assertFalse(evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 11_999, 0, 0, 0, false).enabled());
-        assertFalse(evaluate(policy, 20_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true).enabled());
-        assertFalse(evaluate(policy, 39_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, false).enabled());
-        assertTrue(evaluate(policy, 40_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, false).enabled());
+        assertFalse(evaluate(policy, 4_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true).enabled());
+        AutoPreloadPolicy.Decision resumed = evaluate(policy, 5_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true);
+        assertTrue(resumed.enabled());
+        assertEquals(20_000, resumed.durationMs());
     }
 
     @Test
@@ -73,12 +74,12 @@ public class AutoPreloadPolicyTest {
     }
 
     @Test
-    public void externalLoopbackRequiresThirtySecondsAfterRebuffer() {
+    public void externalLoopbackCanResumeTenSecondsAfterRebuffer() {
         AutoPreloadPolicy policy = new AutoPreloadPolicy();
 
         assertFalse(evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
-        assertFalse(evaluate(policy, 29_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
-        assertTrue(evaluate(policy, 30_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
+        assertFalse(evaluate(policy, 9_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, true).enabled());
+        assertTrue(evaluate(policy, 10_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, true).enabled());
     }
 
     @Test
