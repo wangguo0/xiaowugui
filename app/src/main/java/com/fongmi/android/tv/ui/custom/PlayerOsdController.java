@@ -307,6 +307,7 @@ public class PlayerOsdController {
         String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(getBandwidthEstimateText(snapshot)), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
         String nativeCache = summarizeNativeCache(player.getCacheState());
         String renderDiagnostics = player.getRenderDiagnostics();
+        String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
         String runtimeDiagnostics = player.getRuntimeDiagnostics();
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
@@ -330,6 +331,7 @@ public class PlayerOsdController {
                 row("网络", network),
                 TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
                 TextUtils.isEmpty(renderDiagnostics) ? "" : row(player.isExo() ? "EXO输出" : "MPV渲染", renderDiagnostics),
+                TextUtils.isEmpty(frameTiming) ? "" : row("EXO帧调度", frameTiming),
                 TextUtils.isEmpty(runtimeDiagnostics) ? "" : row(player.isExo() ? "EXO运行" : "MPV运行", runtimeDiagnostics),
                 row("状态", playback),
                 row("播放", playerText),
@@ -579,6 +581,20 @@ public class PlayerOsdController {
                 cache.maxBytes() > 0 ? "上限 " + formatBytes(cache.maxBytes()) : "",
                 cache.maxBackBytes() > 0 ? "回退 " + formatBytes(cache.maxBackBytes()) : "回退 关");
         return join(" / ", runtime, config);
+    }
+
+    private String summarizeFrameTiming() {
+        com.fongmi.android.tv.player.exo.ExoFrameTimingMetrics.Snapshot timing = PlaybackAnalyticsListener.getFrameTimingSnapshot();
+        if (timing.frameCount() <= 0 && timing.codecErrorCount() <= 0) return "";
+        String offset = timing.frameCount() <= 0 ? "" : timing.averageOffsetUs() >= 0
+                ? "平均提前 " + bitrateFormat.format(timing.averageOffsetUs() / 1000f) + "ms"
+                : "平均滞后 " + bitrateFormat.format(-timing.averageOffsetUs() / 1000f) + "ms";
+        return join(" / ",
+                offset,
+                timing.frameCount() > 0 ? "样本 " + timing.frameCount() : "",
+                timing.lateBatchCount() > 0 ? "滞后批次 " + timing.lateBatchCount() : "滞后批次 0",
+                "codec错误 " + timing.codecErrorCount(),
+                TextUtils.isEmpty(timing.lastCodecError()) ? "" : shortText(timing.lastCodecError(), 72));
     }
 
     private String getColor(Format format) {

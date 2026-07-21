@@ -38,6 +38,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
     private static final long LOW_BUFFER_LOG_THRESHOLD_MS = 8_000;
     private static final ObservedMediaBitrateEstimator BITRATE_ESTIMATOR = new ObservedMediaBitrateEstimator();
     private static final ObservedVideoFrameRateEstimator FRAME_RATE_ESTIMATOR = new ObservedVideoFrameRateEstimator();
+    private static final ExoFrameTimingMetrics FRAME_TIMING_METRICS = new ExoFrameTimingMetrics();
     private static final ForwardBufferTrend BUFFER_TREND = new ForwardBufferTrend();
     private static final DebugEventLimiter LOADING_LOG_LIMITER = new DebugEventLimiter(1);
 
@@ -74,6 +75,10 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         return new DisplayFrameRateEstimate(estimate.frameRate(), estimate.sampleCount());
     }
 
+    public static ExoFrameTimingMetrics.Snapshot getFrameTimingSnapshot() {
+        return FRAME_TIMING_METRICS.snapshot();
+    }
+
     public static ForwardBufferTrend.Snapshot getBufferTrend() {
         return BUFFER_TREND.snapshot();
     }
@@ -87,6 +92,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         playbackTraceId = PlaybackTrace.NONE;
         BITRATE_ESTIMATOR.reset();
         FRAME_RATE_ESTIMATOR.reset();
+        FRAME_TIMING_METRICS.reset();
         BUFFER_TREND.reset();
         LOADING_LOG_LIMITER.clear();
         PlaybackCacheMetrics.reset();
@@ -188,6 +194,17 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         snapshot = snapshot.withDroppedFrames(totalDroppedFrames);
         if (!SpiderDebug.isEnabled()) return;
         traceLog("droppedFrames=%d total=%d elapsed=%dms position=%d", droppedFrames, totalDroppedFrames, elapsedMs, eventTime.currentPlaybackPositionMs);
+    }
+
+    @Override
+    public void onVideoFrameProcessingOffset(EventTime eventTime, long totalProcessingOffsetUs, int frameCount) {
+        FRAME_TIMING_METRICS.observeProcessingOffset(totalProcessingOffsetUs, frameCount);
+    }
+
+    @Override
+    public void onVideoCodecError(EventTime eventTime, Exception videoCodecError) {
+        FRAME_TIMING_METRICS.observeCodecError(videoCodecError);
+        if (SpiderDebug.isEnabled()) traceLog("video codec recoverable error=%s", videoCodecError);
     }
 
     @Override
