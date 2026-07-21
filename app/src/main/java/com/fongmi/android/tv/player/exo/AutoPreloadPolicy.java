@@ -16,7 +16,7 @@ final class AutoPreloadPolicy {
     private static final long EXTERNAL_LOOPBACK_BUFFER_MS = 12_000;
     private static final long EXTERNAL_LOOPBACK_RESUME_DELAY_MS = 5_000;
     private static final long EXTERNAL_LOOPBACK_REBUFFER_DELAY_MS = 10_000;
-    private static final long EXTERNAL_LOOPBACK_DURATION_MS = 20_000;
+    private static final long EXTERNAL_LOOPBACK_DURATION_MS = 40_000;
     private static final long EXTERNAL_LOOPBACK_DECLINE_GUARD_MS = 16_000;
     private static final long EXTERNAL_LOOPBACK_DECLINE_LIMIT_MS_PER_SECOND = -500;
     private static final long EXTERNAL_LOOPBACK_RESUME_LIMIT_MS_PER_SECOND = -250;
@@ -123,7 +123,7 @@ final class AutoPreloadPolicy {
             default -> new Decision(NORMAL_THREADS, NORMAL_DURATION_MS, "normal");
         };
         if (route != PlaybackRoute.EXTERNAL_LOOPBACK_PROXY || !decision.enabled()) return decision;
-        return new Decision(NORMAL_THREADS, Math.min(decision.durationMs(), EXTERNAL_LOOPBACK_DURATION_MS), "external-" + decision.mode());
+        return new Decision(NORMAL_THREADS, EXTERNAL_LOOPBACK_DURATION_MS, "external-" + decision.mode());
     }
 
     private static boolean supportsFast(PlaybackRoute route) {

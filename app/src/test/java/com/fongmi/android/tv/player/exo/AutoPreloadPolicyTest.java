@@ -49,9 +49,9 @@ public class AutoPreloadPolicyTest {
         AutoPreloadPolicy.Decision initial = evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
         AutoPreloadPolicy.Decision stable = evaluate(policy, 60_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
         assertEquals(1, initial.threads());
-        assertEquals(20_000, initial.durationMs());
+        assertEquals(40_000, initial.durationMs());
         assertEquals(1, stable.threads());
-        assertEquals(20_000, stable.durationMs());
+        assertEquals(40_000, stable.durationMs());
     }
 
     @Test
@@ -61,7 +61,7 @@ public class AutoPreloadPolicyTest {
         assertFalse(evaluate(policy, 4_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true).enabled());
         AutoPreloadPolicy.Decision resumed = evaluate(policy, 5_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true);
         assertTrue(resumed.enabled());
-        assertEquals(20_000, resumed.durationMs());
+        assertEquals(40_000, resumed.durationMs());
     }
 
     @Test
