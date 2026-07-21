@@ -22,6 +22,17 @@ public class ObservedMediaBitrateEstimatorTest {
     }
 
     @Test
+    public void observedEstimateCanIgnoreAudioOnlyFormatBitrate() {
+        ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
+        estimator.updateFormats(null, new Format.Builder().setAverageBitrate(1_500_000).build());
+        estimator.updateContent(60_000_000_000L, 6_000_000);
+
+        ObservedMediaBitrateEstimator.Estimate estimate = estimator.estimateWithoutFormat();
+        assertEquals(80_000_000, estimate.bitrateBitsPerSecond());
+        assertEquals(ObservedMediaBitrateEstimator.Source.CONTENT_LENGTH, estimate.source());
+    }
+
+    @Test
     public void contentLengthAndDurationProvideHighConfidenceAverage() {
         ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
         estimator.updateContent(60_000_000_000L, 6_000_000);

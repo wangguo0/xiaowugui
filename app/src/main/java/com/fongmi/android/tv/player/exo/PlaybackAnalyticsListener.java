@@ -63,6 +63,12 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         return new DisplayMediaBitrateEstimate(estimate.bitrateBitsPerSecond(), estimate.source().label(), estimate.confidence().label(), estimate.source() != ObservedMediaBitrateEstimator.Source.FORMAT && estimate.source() != ObservedMediaBitrateEstimator.Source.UNKNOWN);
     }
 
+    public static DisplayMediaBitrateEstimate getDisplayMediaBitrateEstimate(@Nullable Format videoFormat) {
+        boolean videoBitrateKnown = ExoPlaybackDiagnostics.formatBitrate(videoFormat) > 0;
+        ObservedMediaBitrateEstimator.Estimate estimate = videoBitrateKnown ? BITRATE_ESTIMATOR.estimate() : BITRATE_ESTIMATOR.estimateWithoutFormat();
+        return new DisplayMediaBitrateEstimate(estimate.bitrateBitsPerSecond(), estimate.source().label(), estimate.confidence().label(), estimate.source() != ObservedMediaBitrateEstimator.Source.UNKNOWN);
+    }
+
     public static DisplayFrameRateEstimate getDisplayFrameRateEstimate() {
         ObservedVideoFrameRateEstimator.Estimate estimate = FRAME_RATE_ESTIMATOR.estimate();
         return new DisplayFrameRateEstimate(estimate.frameRate(), estimate.sampleCount());

@@ -540,7 +540,7 @@ public class PlayerOsdController {
         String declared = getFrameRate(format);
         if (!TextUtils.isEmpty(declared) || player == null || !player.isExo()) return declared;
         PlaybackAnalyticsListener.DisplayFrameRateEstimate estimate = PlaybackAnalyticsListener.getDisplayFrameRateEstimate();
-        return estimate.frameRate() <= 0 ? "" : "约" + frameFormat.format(estimate.frameRate()) + "fps（观测）";
+        return estimate.frameRate() <= 0 ? "" : frameFormat.format(estimate.frameRate()) + "fps";
     }
 
     private String getBitrate(Format format) {
@@ -550,10 +550,8 @@ public class PlayerOsdController {
     private String getBitrate(Format format, PlayerManager player) {
         String declared = getBitrate(format);
         if (!TextUtils.isEmpty(declared) || player == null || !player.isExo()) return declared;
-        PlaybackAnalyticsListener.DisplayMediaBitrateEstimate estimate = PlaybackAnalyticsListener.getDisplayMediaBitrateEstimate();
-        if (!estimate.estimated() || estimate.bitrateBitsPerSecond() <= 0) return "";
-        String type = "content-length".equals(estimate.source()) ? "总平均" : "观测总码率";
-        return "约" + formatBitrate(estimate.bitrateBitsPerSecond()) + "（" + type + "）";
+        PlaybackAnalyticsListener.DisplayMediaBitrateEstimate estimate = PlaybackAnalyticsListener.getDisplayMediaBitrateEstimate(format);
+        return estimate.bitrateBitsPerSecond() <= 0 ? "" : formatBitrate(estimate.bitrateBitsPerSecond());
     }
 
     private String getBandwidthEstimateText(PlaybackAnalyticsListener.Snapshot snapshot) {

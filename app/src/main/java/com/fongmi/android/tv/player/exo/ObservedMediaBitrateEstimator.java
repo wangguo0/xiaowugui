@@ -74,12 +74,20 @@ final class ObservedMediaBitrateEstimator {
     }
 
     synchronized Estimate estimate() {
+        return estimate(true);
+    }
+
+    synchronized Estimate estimateWithoutFormat() {
+        return estimate(false);
+    }
+
+    private Estimate estimate(boolean includeFormat) {
         long p50 = percentile(rateSamples, 50);
         long p90 = percentile(rateSamples, 90);
         long observed = conservativeObserved(p50, p90);
         long content = contentBitrate();
         long windowMs = positionWindowMs();
-        if (formatBitrate > 0) return new Estimate(formatBitrate, Source.FORMAT, Confidence.HIGH, p50, p90, rateSamples.size(), windowMs, contentLengthBytes, durationMs);
+        if (includeFormat && formatBitrate > 0) return new Estimate(formatBitrate, Source.FORMAT, Confidence.HIGH, p50, p90, rateSamples.size(), windowMs, contentLengthBytes, durationMs);
         if (content > 0 && observed > 0) {
             long bitrate = Math.max(content, observed);
             Confidence confidence = windowMs >= HIGH_CONFIDENCE_SPAN_MS && rateSamples.size() >= 3 ? Confidence.HIGH : Confidence.MEDIUM;
