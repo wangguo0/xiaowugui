@@ -228,6 +228,17 @@ public class ExoPlayerEngine implements PlayerEngine {
     }
 
     @Override
+    public String getRenderDiagnostics() {
+        String key = ExoUtil.getTunnelingRuntimeKey(decode);
+        int failures = ExoTunnelingRuntimeState.failureCount(key);
+        return String.format(Locale.US, "tunnel requested %s / fallback %s / failures %d / blacklisted %s",
+                tunnelingEnabledForSession ? "yes" : "no",
+                tunnelingFallbackAttempted ? "yes" : "no",
+                failures,
+                ExoTunnelingRuntimeState.isBlacklisted(key) ? "yes" : "no");
+    }
+
+    @Override
     public void start(PlaySpec spec) {
         start(spec, true);
     }

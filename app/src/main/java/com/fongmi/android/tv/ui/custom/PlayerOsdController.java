@@ -329,8 +329,8 @@ public class PlayerOsdController {
                 row("音频", audioText),
                 row("网络", network),
                 TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
-                TextUtils.isEmpty(renderDiagnostics) ? "" : row("MPV渲染", renderDiagnostics),
-                TextUtils.isEmpty(runtimeDiagnostics) ? "" : row("MPV运行", runtimeDiagnostics),
+                TextUtils.isEmpty(renderDiagnostics) ? "" : row(player.isExo() ? "EXO输出" : "MPV渲染", renderDiagnostics),
+                TextUtils.isEmpty(runtimeDiagnostics) ? "" : row(player.isExo() ? "EXO运行" : "MPV运行", runtimeDiagnostics),
                 row("状态", playback),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())));
