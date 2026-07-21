@@ -17,6 +17,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
+import com.fongmi.android.tv.player.exo.ExoTunnelingProgressWatchdog;
 import com.fongmi.android.tv.player.exo.ExoTunnelingRuntimeState;
 import com.fongmi.android.tv.player.exo.ExoTunnelingWatchdog;
 import com.fongmi.android.tv.player.exo.MediaSourceFactory;
@@ -46,18 +47,41 @@ public class ExoPlayerEngine implements PlayerEngine {
     private boolean tunnelingFallbackAttempted;
     private boolean tunnelingEnabledForSession;
     private final ExoTunnelingWatchdog tunnelingWatchdog = new ExoTunnelingWatchdog();
+    private final ExoTunnelingProgressWatchdog tunnelingProgressWatchdog = new ExoTunnelingProgressWatchdog();
     private final Runnable tunnelingWatchdogRunnable = this::onTunnelingWatchdogTimeout;
+    private final Runnable tunnelingProgressWatchdogRunnable = this::checkTunnelingProgress;
+    private boolean firstFrameRendered;
     private final Player.Listener tunnelingWatchdogListener = new Player.Listener() {
         @Override
         public void onRenderedFirstFrame() {
+            firstFrameRendered = true;
             tunnelingWatchdog.onFirstFrame();
             App.removeCallbacks(tunnelingWatchdogRunnable);
+            if (player.isPlaying()) armTunnelingProgressWatchdog();
+        }
+
+        @Override
+        public void onIsPlayingChanged(boolean isPlaying) {
+            if (isPlaying && firstFrameRendered) armTunnelingProgressWatchdog();
+            else if (!isPlaying) cancelTunnelingProgressWatchdog();
+        }
+
+        @Override
+        public void onPlaybackStateChanged(int state) {
+            if (state == Player.STATE_READY && player.isPlaying() && firstFrameRendered) armTunnelingProgressWatchdog();
+            else if (state != Player.STATE_READY) cancelTunnelingProgressWatchdog();
+        }
+
+        @Override
+        public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
+            if (player.isPlaying() && firstFrameRendered) armTunnelingProgressWatchdog();
         }
 
         @Override
         public void onPlayerError(@androidx.annotation.NonNull PlaybackException error) {
             tunnelingWatchdog.onError();
             App.removeCallbacks(tunnelingWatchdogRunnable);
+            cancelTunnelingProgressWatchdog();
         }
     };
 
@@ -75,6 +99,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.attemptedFormats = new HashSet<>();
         this.decode = decode;
         this.tunnelingEnabledForSession = ExoUtil.isTunnelingEnabled(decode, false);
+        this.firstFrameRendered = false;
         this.player.addListener(tunnelingWatchdogListener);
     }
 
@@ -92,6 +117,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         }
         preCache.release(cacheRelease);
         cancelTunnelingWatchdog();
+        cancelTunnelingProgressWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
     }
@@ -100,6 +126,7 @@ public class ExoPlayerEngine implements PlayerEngine {
     public Player rebuild(Player.Listener listener) {
         preCache.stop("engine-rebuild");
         cancelTunnelingWatchdog();
+        cancelTunnelingProgressWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "rebuild decode=%d", decode);
@@ -113,6 +140,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         if (!tunnelingEnabledForSession || tunnelingFallbackAttempted) return false;
         tunnelingFallbackAttempted = true;
         tunnelingEnabledForSession = false;
+        cancelTunnelingProgressWatchdog();
         cancelTunnelingWatchdog();
         int failures = ExoTunnelingRuntimeState.recordFailure(ExoUtil.getTunnelingRuntimeKey(decode));
         PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "disable tunneling for current session");
@@ -129,6 +157,34 @@ public class ExoPlayerEngine implements PlayerEngine {
     private void cancelTunnelingWatchdog() {
         tunnelingWatchdog.reset();
         App.removeCallbacks(tunnelingWatchdogRunnable);
+    }
+
+    private void armTunnelingProgressWatchdog() {
+        if (!tunnelingEnabledForSession || !firstFrameRendered || !player.isPlaying() || player.getPlaybackState() != Player.STATE_READY) return;
+        tunnelingProgressWatchdog.arm(android.os.SystemClock.elapsedRealtime(), player.getCurrentPosition());
+        App.post(tunnelingProgressWatchdogRunnable, 1_000L);
+    }
+
+    private void cancelTunnelingProgressWatchdog() {
+        tunnelingProgressWatchdog.reset();
+        App.removeCallbacks(tunnelingProgressWatchdogRunnable);
+    }
+
+    private void checkTunnelingProgress() {
+        if (!tunnelingEnabledForSession || !firstFrameRendered || !player.isPlaying() || player.getPlaybackState() != Player.STATE_READY) return;
+        long nowMs = android.os.SystemClock.elapsedRealtime();
+        long positionMs = player.getCurrentPosition();
+        if (tunnelingProgressWatchdog.shouldTimeout(nowMs, positionMs)) {
+            long position = Math.max(0, positionMs);
+            boolean wasPlayWhenReady = player.getPlayWhenReady();
+            if (!disableTunnelingForSession()) return;
+            PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "progress watchdog fallback position=%d", position);
+            player.stop();
+            startInternal(position, wasPlayWhenReady);
+            return;
+        }
+        tunnelingProgressWatchdog.observe(nowMs, positionMs);
+        App.post(tunnelingProgressWatchdogRunnable, 1_000L);
     }
 
     private void onTunnelingWatchdogTimeout() {
@@ -323,6 +379,8 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     private void startInternal(long position, boolean playWhenReady) {
         this.playWhenReady = playWhenReady;
+        firstFrameRendered = false;
+        cancelTunnelingProgressWatchdog();
         armTunnelingWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         PlaybackAnalyticsListener.beginSession(spec.getPlaybackTraceId());
