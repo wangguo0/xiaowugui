@@ -2,7 +2,6 @@ package com.fongmi.android.tv.player.exo;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.media.MediaCrypto;
 import android.media.MediaCodecList;
 import android.media.MediaFormat;
 import android.net.Uri;
@@ -16,7 +15,6 @@ import android.view.accessibility.CaptioningManager;
 import androidx.annotation.NonNull;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
-import androidx.media3.common.ColorInfo;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
@@ -32,7 +30,6 @@ import androidx.media3.exoplayer.audio.AudioSink;
 import androidx.media3.exoplayer.audio.AudioRendererEventListener;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
 import androidx.media3.exoplayer.audio.DefaultAudioSink;
-import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter;
 import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
 import androidx.media3.exoplayer.source.MediaSource;
@@ -41,7 +38,6 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime;
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.exoplayer.util.EventLogger;
-import androidx.media3.exoplayer.video.MediaCodecVideoRenderer;
 import androidx.media3.exoplayer.video.VideoRendererEventListener;
 import androidx.media3.ui.CaptionStyleCompat;
 import androidx.media3.ui.PlayerView;
@@ -462,10 +458,7 @@ public class ExoUtil {
         @Override
         protected void buildVideoRenderers(Context context, int extensionRendererMode, MediaCodecSelector mediaCodecSelector, boolean enableDecoderFallback, Handler eventHandler, VideoRendererEventListener eventListener, long allowedVideoJoiningTimeMs, ArrayList<Renderer> out) {
             super.buildVideoRenderers(context, videoRenderMode, getVideoCodecSelector(mediaCodecSelector), enableDecoderFallback, eventHandler, eventListener, allowedVideoJoiningTimeMs, out);
-            if (videoRenderMode == EXTENSION_RENDERER_MODE_OFF) {
-                out.add(new DolbyVisionHdr10FallbackRenderer(context, getCodecAdapterFactory(), getVideoCodecSelector(mediaCodecSelector), allowedVideoJoiningTimeMs, enableDecoderFallback, eventHandler, eventListener));
-                return;
-            }
+            if (videoRenderMode == EXTENSION_RENDERER_MODE_OFF) return;
             try {
                 out.add(getExtensionRendererIndex(videoRenderMode, videoPrefer, out), buildFfmpegVideoRenderer(allowedVideoJoiningTimeMs, eventHandler, eventListener));
             } catch (Throwable ignored) {
@@ -492,72 +485,6 @@ public class ExoUtil {
             int index = out.size();
             if (index > 0 && (extensionRendererMode == EXTENSION_RENDERER_MODE_PREFER || prefer)) index--;
             return index;
-        }
-    }
-
-    private static final class DolbyVisionHdr10FallbackRenderer extends MediaCodecVideoRenderer {
-
-        DolbyVisionHdr10FallbackRenderer(Context context, MediaCodecAdapter.Factory codecAdapterFactory, MediaCodecSelector mediaCodecSelector, long allowedJoiningTimeMs, boolean enableDecoderFallback, Handler eventHandler, VideoRendererEventListener eventListener) {
-            super(context, codecAdapterFactory, mediaCodecSelector, allowedJoiningTimeMs, enableDecoderFallback, eventHandler, eventListener, DefaultRenderersFactory.MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
-        }
-
-        @Override
-        public String getName() {
-            return "MediaCodecVideoRenderer-DV-HDR10";
-        }
-
-        @Override
-        protected int supportsFormat(MediaCodecSelector mediaCodecSelector, Format format) throws androidx.media3.exoplayer.mediacodec.MediaCodecUtil.DecoderQueryException {
-            if (!isDolbyVisionHdr10Fallback(format)) return C.FORMAT_UNSUPPORTED_TYPE;
-            Format hdr10 = asHdr10Hevc(format);
-            int support = super.supportsFormat(mediaCodecSelector, hdr10);
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV HDR10 forced fallback support=%d codecs=%s size=%dx%d color=%s", support, format.codecs, format.width, format.height, hdr10.colorInfo);
-            return support;
-        }
-
-        @Override
-        protected List<MediaCodecInfo> getDecoderInfos(MediaCodecSelector mediaCodecSelector, Format format, boolean requiresSecureDecoder) throws androidx.media3.exoplayer.mediacodec.MediaCodecUtil.DecoderQueryException {
-            if (!isDolbyVisionHdr10Fallback(format)) return List.of();
-            List<MediaCodecInfo> infos = super.getDecoderInfos(mediaCodecSelector, asHdr10Hevc(format), requiresSecureDecoder);
-            if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV HDR10 forced fallback codecs=%s decoders=%s", format.codecs, decoderNames(infos));
-            return infos;
-        }
-
-        @Override
-        protected MediaCodecAdapter.Configuration getMediaCodecConfiguration(MediaCodecInfo codecInfo, Format format, MediaCrypto crypto, float codecOperatingRate) {
-            if (isDolbyVisionHdr10Fallback(format) && SpiderDebug.isEnabled()) SpiderDebug.log("exo-dv", "DV configure as HDR10 HEVC codecs=%s decoder=%s codecMime=%s", format.codecs, codecInfo.name, codecInfo.codecMimeType);
-            return super.getMediaCodecConfiguration(codecInfo, isDolbyVisionHdr10Fallback(format) ? asHdr10Hevc(format) : format, crypto, codecOperatingRate);
-        }
-
-        private static boolean isDolbyVisionHdr10Fallback(Format format) {
-            return isDolbyVisionProfile5(format) || isDolbyVisionProfile7(format);
-        }
-
-        private static boolean isDolbyVisionProfile5(Format format) {
-            return hasDolbyVisionProfile(format, "05");
-        }
-
-        private static boolean isDolbyVisionProfile7(Format format) {
-            return hasDolbyVisionProfile(format, "07");
-        }
-
-        private static boolean hasDolbyVisionProfile(Format format, String profile) {
-            if (format == null || !MimeTypes.VIDEO_DOLBY_VISION.equals(format.sampleMimeType) || format.codecs == null) return false;
-            String codecs = format.codecs.toLowerCase(java.util.Locale.US);
-            return codecs.startsWith("dvhe." + profile + ".") || codecs.startsWith("dvh1." + profile + ".");
-        }
-
-        private static Format asHdr10Hevc(Format format) {
-            ColorInfo colorInfo = format.colorInfo == null
-                    ? new ColorInfo.Builder().setColorSpace(C.COLOR_SPACE_BT2020).setColorRange(C.COLOR_RANGE_LIMITED).setColorTransfer(C.COLOR_TRANSFER_ST2084).build()
-                    : format.colorInfo.buildUpon().setColorSpace(C.COLOR_SPACE_BT2020).setColorRange(C.COLOR_RANGE_LIMITED).setColorTransfer(C.COLOR_TRANSFER_ST2084).build();
-            return format.buildUpon().setSampleMimeType(MimeTypes.VIDEO_H265).setCodecs(null).setColorInfo(colorInfo).build();
-        }
-
-        private static String decoderNames(List<MediaCodecInfo> infos) {
-            List<String> names = new ArrayList<>();
-            for (MediaCodecInfo info : infos) names.add(info.name);
-            return String.join(",", names);
         }
     }
 
