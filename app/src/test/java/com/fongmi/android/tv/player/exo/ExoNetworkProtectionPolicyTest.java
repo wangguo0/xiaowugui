@@ -17,11 +17,12 @@ public class ExoNetworkProtectionPolicyTest {
     }
 
     @Test
-    public void automaticModeUsesMedia3ImperceptibleBoundary() {
+    public void automaticModeUsesExtendedFloorAndPreferredLightBoundary() {
         ExoNetworkProtectionPolicy.Decision decision = ExoNetworkProtectionPolicy.resolve(ExoNetworkProtectionPolicy.MODE_AUTO);
 
         assertTrue(decision.enabled());
-        assertEquals(0.97f, decision.minimumSpeed(), 0.0001f);
+        assertEquals(0.85f, decision.minimumSpeed(), 0.0001f);
+        assertEquals(0.97f, ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED, 0.0001f);
     }
 
     @Test

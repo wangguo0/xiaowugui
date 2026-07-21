@@ -143,7 +143,7 @@ public final class ExoPerformanceSetting {
     }
 
     public static String getNetworkProtectionText() {
-        return isNetworkProtectionEnabled() ? "无感动态 · 0.97～1.00x" : "关闭";
+        return isNetworkProtectionEnabled() ? "动态自动 · 0.85～1.00x" : "关闭";
     }
 
     public static void applyRecommended() {

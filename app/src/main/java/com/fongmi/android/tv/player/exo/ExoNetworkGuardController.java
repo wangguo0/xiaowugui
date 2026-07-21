@@ -1,29 +1,40 @@
 package com.fongmi.android.tv.player.exo;
 
-/** Continuous, hysteretic controller for imperceptible EXO network protection. */
+/** Deadline-aware, hysteretic controller for adaptive EXO network protection. */
 public final class ExoNetworkGuardController {
 
-    public static final long SAMPLE_INTERVAL_MS = 5_000;
+    public static final long OBSERVE_INTERVAL_MS = 5_000;
+    public static final long CONTROL_INTERVAL_MS = 1_000;
     static final long MIN_TREND_WINDOW_MS = 10_000;
     static final long ENTRY_CONFIRM_MS = 10_000;
+    static final long URGENT_ENTRY_CONFIRM_MS = 3_000;
     static final long RECOVERY_CONFIRM_MS = 25_000;
     static final long FULL_BUFFER_RECOVERY_CONFIRM_MS = 30_000;
-    static final long ADJUSTMENT_COOLDOWN_MS = 10_000;
-    static final long RISK_BUFFER_CEILING_MS = 45_000;
-    static final long RECOVERY_BUFFER_FLOOR_MS = 30_000;
-    static final long FULL_BUFFER_RECOVERY_MS = 50_000;
-    static final long RISK_TIME_TO_EMPTY_MS = 240_000;
+    static final long ADJUSTMENT_COOLDOWN_MS = 1_000;
+    static final long RISK_BUFFER_HEADROOM_MS = 20_000;
+    static final long RECOVERY_BUFFER_HEADROOM_MS = 5_000;
+    static final long FULL_BUFFER_HEADROOM_MS = 20_000;
+    static final long RISK_TIME_TO_RESERVE_MS = 240_000;
+    static final long DEEP_PROTECTION_TIME_TO_RESERVE_MS = 120_000;
+    static final long URGENT_TIME_TO_RESERVE_MS = 30_000;
+    static final long RAMP_RESERVE_MARGIN_MS = 5_000;
+    static final long MAX_RAMP_ELAPSED_MS = 2_000;
     static final long DECLINE_DEADBAND_MS_PER_SECOND = -15;
+    static final long PROTECTED_DECLINE_DEADBAND_MS_PER_SECOND = -2;
     static final float SUPPORTED_RECOVERY_SPEED = 0.998f;
-    static final float SAFETY_MARGIN = 0.002f;
-    static final float MAX_DOWN_STEP = 0.008f;
-    static final float MAX_UP_STEP = 0.004f;
-    static final float MIN_CHANGE = 0.002f;
+    static final float SAFETY_MARGIN = 0.003f;
+    static final float PROPORTIONAL_GAIN = 0.20f;
+    static final float LIGHT_MAX_SLEW_PER_SECOND = 0.003f;
+    static final float DEEP_MAX_SLEW_PER_SECOND = 0.006f;
+    static final float URGENT_MAX_SLEW_PER_SECOND = 0.010f;
+    static final float RECOVERY_SLEW_PER_SECOND = 0.002f;
+    static final float MIN_CHANGE = 0.001f;
 
     private static final long UNSET = Long.MIN_VALUE;
     private static final float EPSILON = 0.0005f;
 
     private State state = State.NORMAL;
+    private ProtectionTier tier = ProtectionTier.NONE;
     private long warningSinceMs = UNSET;
     private long recoverySinceMs = UNSET;
     private long lastAdjustmentMs = UNSET;
@@ -31,6 +42,7 @@ public final class ExoNetworkGuardController {
 
     public void reset() {
         state = State.NORMAL;
+        tier = ProtectionTier.NONE;
         warningSinceMs = UNSET;
         recoverySinceMs = UNSET;
         lastAdjustmentMs = UNSET;
@@ -41,117 +53,208 @@ public final class ExoNetworkGuardController {
         warningSinceMs = UNSET;
         recoverySinceMs = UNSET;
         state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.NORMAL;
+        tier = tierForSpeed(currentSpeed);
     }
 
     public State getState() {
         return state;
     }
 
+    public ProtectionTier getTier() {
+        return tier;
+    }
+
     public Decision evaluate(Input input) {
         float currentSpeed = clamp(input.currentSpeed(), 0.25f, 1f);
-        float minimumSpeed = clamp(input.minimumSpeed(), ExoNetworkProtectionPolicy.IMPERCEPTIBLE_MIN_SPEED, 1f);
+        float minimumSpeed = clamp(input.minimumSpeed(), ExoNetworkProtectionPolicy.AUTO_MIN_SPEED, 1f);
+        Metrics metrics = metrics(input, currentSpeed, minimumSpeed);
         if (!input.eligible()) {
             boolean changed = currentSpeed < 1f - EPSILON;
             reset();
-            return new Decision(state, 1f, changed, "ineligible", currentSpeed, Long.MAX_VALUE);
+            return decision(state, tier, 1f, changed, "ineligible", metrics, 0f, 0f, true);
         }
 
         boolean rebuffered = input.rebufferCount() > lastRebufferCount;
         lastRebufferCount = Math.max(lastRebufferCount, input.rebufferCount());
-        if (!input.ready() || !input.playing()) return hold(currentSpeed, input, "inactive");
-        if (!input.loading()) return evaluateFullBufferRecovery(input, currentSpeed);
+        if (!input.ready() || !input.playing()) return hold(currentSpeed, input, metrics, "inactive", true);
+        if (!input.loading()) return evaluateFullBufferRecovery(input, currentSpeed, metrics);
         if (!input.trendKnown() || input.trendWindowMs() < MIN_TREND_WINDOW_MS) {
             if (rebuffered) state = State.WARNING;
             else state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.NORMAL;
-            return hold(currentSpeed, input, "trend-warmup");
+            tier = tierForSpeed(currentSpeed);
+            return hold(currentSpeed, input, metrics, "trend-warmup", true);
         }
 
-        float supportedSpeed = supportedSpeed(currentSpeed, input);
-        long timeToEmptyMs = timeToEmptyMs(input.bufferedMs(), input.slopeMsPerSecond());
-        boolean decliningRisk = input.slopeMsPerSecond() <= DECLINE_DEADBAND_MS_PER_SECOND
-                && (input.bufferedMs() <= RISK_BUFFER_CEILING_MS || timeToEmptyMs <= RISK_TIME_TO_EMPTY_MS);
-
-        if (decliningRisk) {
-            recoverySinceMs = UNSET;
-            if (supportedSpeed < minimumSpeed - SAFETY_MARGIN) {
-                warningSinceMs = UNSET;
-                state = State.UNSUSTAINABLE;
-                if (currentSpeed < 1f - EPSILON && canAdjust(input.nowMs())) return adjustToward(input, currentSpeed, 1f, MAX_UP_STEP, "outside-imperceptible-range");
-                return decision(state, currentSpeed, false, "outside-imperceptible-range", supportedSpeed, timeToEmptyMs);
-            }
-
-            state = State.WARNING;
-            if (warningSinceMs == UNSET) warningSinceMs = rebuffered ? input.nowMs() - ENTRY_CONFIRM_MS / 2 : input.nowMs();
-            if (input.nowMs() - warningSinceMs < ENTRY_CONFIRM_MS || !canAdjust(input.nowMs())) {
-                return decision(state, currentSpeed, false, "risk-confirming", supportedSpeed, timeToEmptyMs);
-            }
-
-            float desiredSpeed = clamp(supportedSpeed - SAFETY_MARGIN, minimumSpeed, 1f);
-            if (desiredSpeed >= currentSpeed - MIN_CHANGE) {
-                state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.WARNING;
-                return decision(state, currentSpeed, false, "within-deadband", supportedSpeed, timeToEmptyMs);
-            }
-            warningSinceMs = input.nowMs();
-            return adjustToward(input, currentSpeed, desiredSpeed, MAX_DOWN_STEP, "sustained-risk");
-        }
+        long declineThreshold = currentSpeed < 1f - EPSILON ? PROTECTED_DECLINE_DEADBAND_MS_PER_SECOND : DECLINE_DEADBAND_MS_PER_SECOND;
+        boolean decliningRisk = input.slopeMsPerSecond() <= declineThreshold
+                && (input.bufferedMs() <= metrics.safeBufferMs() + RISK_BUFFER_HEADROOM_MS || metrics.timeToReserveMs() <= RISK_TIME_TO_RESERVE_MS);
+        if (decliningRisk) return evaluateDecliningRisk(input, currentSpeed, minimumSpeed, metrics, rebuffered);
 
         warningSinceMs = UNSET;
-        if (currentSpeed < 1f - EPSILON) {
-            state = State.PROTECT;
-            boolean recoveryReady = supportedSpeed >= SUPPORTED_RECOVERY_SPEED && input.bufferedMs() >= RECOVERY_BUFFER_FLOOR_MS;
-            if (!recoveryReady) {
-                recoverySinceMs = UNSET;
-                return decision(state, currentSpeed, false, "protected-stable", supportedSpeed, timeToEmptyMs);
-            }
-            state = State.RECOVERY;
-            if (recoverySinceMs == UNSET) recoverySinceMs = input.nowMs();
-            if (input.nowMs() - recoverySinceMs < RECOVERY_CONFIRM_MS || !canAdjust(input.nowMs())) {
-                return decision(state, currentSpeed, false, "recovery-confirming", supportedSpeed, timeToEmptyMs);
-            }
-            recoverySinceMs = input.nowMs();
-            return adjustToward(input, currentSpeed, 1f, MAX_UP_STEP, "capacity-recovered");
-        }
+        if (currentSpeed < 1f - EPSILON) return evaluateRecovery(input, currentSpeed, metrics);
 
         recoverySinceMs = UNSET;
         state = State.NORMAL;
-        return decision(state, currentSpeed, false, "healthy", supportedSpeed, timeToEmptyMs);
+        tier = ProtectionTier.NONE;
+        return hold(currentSpeed, input, metrics, "healthy", true);
     }
 
-    private Decision evaluateFullBufferRecovery(Input input, float currentSpeed) {
-        warningSinceMs = UNSET;
-        if (currentSpeed >= 1f - EPSILON || input.bufferedMs() < FULL_BUFFER_RECOVERY_MS) {
+    private Decision evaluateDecliningRisk(Input input, float currentSpeed, float minimumSpeed, Metrics metrics, boolean rebuffered) {
+        recoverySinceMs = UNSET;
+        if (metrics.rawTargetSpeed() < minimumSpeed - EPSILON) {
+            warningSinceMs = UNSET;
+            state = State.UNSUSTAINABLE;
+            tier = tierForSpeed(currentSpeed);
+            return hold(currentSpeed, input, metrics, "below-protection-floor", false);
+        }
+
+        float calculatedTarget = metrics.calculatedTargetSpeed();
+        ProtectionTier requestedTier = calculatedTarget < ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED - EPSILON ? ProtectionTier.DEEP : ProtectionTier.LIGHT;
+        boolean dualTrendEvidence = input.fastSlopeMsPerSecond() <= DECLINE_DEADBAND_MS_PER_SECOND
+                && input.slowSlopeMsPerSecond() <= DECLINE_DEADBAND_MS_PER_SECOND;
+        boolean deepNeeded = metrics.timeToReserveMs() <= DEEP_PROTECTION_TIME_TO_RESERVE_MS
+                || input.bufferedMs() <= metrics.safeBufferMs() + RECOVERY_BUFFER_HEADROOM_MS
+                || rebuffered;
+        boolean deepAlreadyActive = tier == ProtectionTier.DEEP || currentSpeed < ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED - EPSILON;
+        String reason = "sustained-risk";
+        if (requestedTier == ProtectionTier.DEEP && !deepAlreadyActive && (!dualTrendEvidence || !deepNeeded)) {
+            calculatedTarget = Math.max(calculatedTarget, ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED);
+            requestedTier = ProtectionTier.LIGHT;
+            reason = !dualTrendEvidence ? "deep-confidence-building" : "light-protection-first";
+        }
+
+        state = State.WARNING;
+        tier = requestedTier;
+        boolean urgent = metrics.timeToReserveMs() <= URGENT_TIME_TO_RESERVE_MS || input.bufferedMs() <= metrics.safeBufferMs();
+        long confirmationMs = urgent ? URGENT_ENTRY_CONFIRM_MS : ENTRY_CONFIRM_MS;
+        if (warningSinceMs == UNSET) warningSinceMs = rebuffered ? input.nowMs() - confirmationMs / 2 : input.nowMs();
+        if (input.nowMs() - warningSinceMs < confirmationMs) {
+            return decision(state, tier, currentSpeed, false, "risk-confirming", metrics.withCalculatedTarget(calculatedTarget), 0f, 0f, true);
+        }
+
+        if (calculatedTarget >= currentSpeed - MIN_CHANGE) {
+            state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.WARNING;
+            tier = tierForSpeed(currentSpeed);
+            return decision(state, tier, currentSpeed, false, "within-deadband", metrics.withCalculatedTarget(calculatedTarget), 0f, 0f, true);
+        }
+
+        Ramp ramp = calculateRamp(input.nowMs(), currentSpeed, calculatedTarget, metrics.timeToReserveMs(), requestedTier);
+        if (!ramp.feasible()) {
+            warningSinceMs = UNSET;
+            state = State.UNSUSTAINABLE;
+            tier = tierForSpeed(currentSpeed);
+            return decision(state, tier, currentSpeed, false, "deadline-too-short", metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), 0f, false);
+        }
+        if (!canAdjust(input.nowMs())) {
+            return decision(state, tier, currentSpeed, false, reason + "-cooldown", metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), 0f, true);
+        }
+
+        float target = roundThousandth(Math.max(calculatedTarget, currentSpeed - ramp.step()));
+        if (currentSpeed - target < MIN_CHANGE) {
+            return decision(state, tier, currentSpeed, false, reason + "-deadband", metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), 0f, true);
+        }
+        lastAdjustmentMs = input.nowMs();
+        state = State.PROTECT;
+        tier = requestedTier;
+        return decision(state, tier, target, true, reason, metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), ramp.appliedSlewPerSecond(), true);
+    }
+
+    private Decision evaluateRecovery(Input input, float currentSpeed, Metrics metrics) {
+        state = State.PROTECT;
+        tier = tierForSpeed(currentSpeed);
+        long recoveryBuffer = Math.max(30_000, metrics.safeBufferMs() + RECOVERY_BUFFER_HEADROOM_MS);
+        boolean recoveryReady = metrics.supportedSpeed() >= SUPPORTED_RECOVERY_SPEED && input.bufferedMs() >= recoveryBuffer;
+        if (!recoveryReady) {
             recoverySinceMs = UNSET;
-            state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.NORMAL;
-            return hold(currentSpeed, input, "loader-idle");
+            return hold(currentSpeed, input, metrics, "protected-stable", true);
         }
         state = State.RECOVERY;
         if (recoverySinceMs == UNSET) recoverySinceMs = input.nowMs();
-        if (input.nowMs() - recoverySinceMs < FULL_BUFFER_RECOVERY_CONFIRM_MS || !canAdjust(input.nowMs())) return hold(currentSpeed, input, "full-buffer-confirming");
-        recoverySinceMs = input.nowMs();
-        return adjustToward(input, currentSpeed, 1f, MAX_UP_STEP, "full-buffer");
+        if (input.nowMs() - recoverySinceMs < RECOVERY_CONFIRM_MS || !canAdjust(input.nowMs())) {
+            return hold(currentSpeed, input, metrics, "recovery-confirming", true);
+        }
+        return adjustUp(input, currentSpeed, metrics, "capacity-recovered");
     }
 
-    private Decision adjustToward(Input input, float currentSpeed, float desiredSpeed, float maximumStep, String reason) {
-        float delta = clamp(desiredSpeed - currentSpeed, -maximumStep, maximumStep);
-        float target = roundThousandth(currentSpeed + delta);
-        if (Math.abs(target - currentSpeed) < MIN_CHANGE) return hold(currentSpeed, input, reason + "-deadband");
+    private Decision evaluateFullBufferRecovery(Input input, float currentSpeed, Metrics metrics) {
+        warningSinceMs = UNSET;
+        long fullBuffer = Math.max(50_000, metrics.safeBufferMs() + FULL_BUFFER_HEADROOM_MS);
+        if (currentSpeed >= 1f - EPSILON || input.bufferedMs() < fullBuffer) {
+            recoverySinceMs = UNSET;
+            state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.NORMAL;
+            tier = tierForSpeed(currentSpeed);
+            return hold(currentSpeed, input, metrics, "loader-idle", true);
+        }
+        state = State.RECOVERY;
+        tier = tierForSpeed(currentSpeed);
+        if (recoverySinceMs == UNSET) recoverySinceMs = input.nowMs();
+        if (input.nowMs() - recoverySinceMs < FULL_BUFFER_RECOVERY_CONFIRM_MS || !canAdjust(input.nowMs())) {
+            return hold(currentSpeed, input, metrics, "full-buffer-confirming", true);
+        }
+        return adjustUp(input, currentSpeed, metrics, "full-buffer");
+    }
+
+    private Decision adjustUp(Input input, float currentSpeed, Metrics metrics, String reason) {
+        long elapsedMs = adjustmentElapsedMs(input.nowMs());
+        float step = Math.max(MIN_CHANGE, RECOVERY_SLEW_PER_SECOND * elapsedMs / 1_000f);
+        float target = roundThousandth(Math.min(1f, currentSpeed + step));
+        if (target - currentSpeed < MIN_CHANGE) return hold(currentSpeed, input, metrics, reason + "-deadband", true);
         lastAdjustmentMs = input.nowMs();
-        if (target >= 1f - EPSILON) state = State.NORMAL;
-        else if (target > currentSpeed) state = State.RECOVERY;
-        else state = State.PROTECT;
-        return decision(state, target, true, reason, supportedSpeed(currentSpeed, input), timeToEmptyMs(input.bufferedMs(), input.slopeMsPerSecond()));
+        if (target >= 1f - EPSILON) {
+            state = State.NORMAL;
+            tier = ProtectionTier.NONE;
+        } else {
+            state = State.RECOVERY;
+            tier = tierForSpeed(target);
+        }
+        float appliedSlew = (target - currentSpeed) * 1_000f / elapsedMs;
+        return decision(state, tier, target, true, reason, metrics, 0f, appliedSlew, true);
     }
 
-    private Decision hold(float currentSpeed, Input input, String reason) {
-        return decision(state, currentSpeed, false, reason, supportedSpeed(currentSpeed, input), timeToEmptyMs(input.bufferedMs(), input.slopeMsPerSecond()));
+    private Ramp calculateRamp(long nowMs, float currentSpeed, float targetSpeed, long timeToReserveMs, ProtectionTier requestedTier) {
+        float error = Math.max(0f, currentSpeed - targetSpeed);
+        long availableRampTimeMs = timeToReserveMs == Long.MAX_VALUE ? Long.MAX_VALUE : Math.max(0, timeToReserveMs - RAMP_RESERVE_MARGIN_MS);
+        float requiredSlew = availableRampTimeMs == Long.MAX_VALUE ? 0f
+                : availableRampTimeMs <= 0 ? Float.POSITIVE_INFINITY
+                : error * 1_000f / availableRampTimeMs;
+        float maximumSlew = timeToReserveMs <= URGENT_TIME_TO_RESERVE_MS
+                ? URGENT_MAX_SLEW_PER_SECOND
+                : requestedTier == ProtectionTier.DEEP ? DEEP_MAX_SLEW_PER_SECOND : LIGHT_MAX_SLEW_PER_SECOND;
+        boolean feasible = requiredSlew <= maximumSlew + EPSILON;
+        long elapsedMs = adjustmentElapsedMs(nowMs);
+        float proportionalSlew = PROPORTIONAL_GAIN * error;
+        float appliedSlew = Math.min(maximumSlew, Math.max(requiredSlew, proportionalSlew));
+        float step = Math.min(error, Math.max(MIN_CHANGE, appliedSlew * elapsedMs / 1_000f));
+        return new Ramp(step, requiredSlew, step * 1_000f / elapsedMs, feasible);
     }
 
-    private static Decision decision(State state, float targetSpeed, boolean changed, String reason, float supportedSpeed, long timeToEmptyMs) {
-        return new Decision(state, targetSpeed, changed, reason, supportedSpeed, timeToEmptyMs);
+    private long adjustmentElapsedMs(long nowMs) {
+        if (lastAdjustmentMs == UNSET) return CONTROL_INTERVAL_MS;
+        return Math.max(1, Math.min(MAX_RAMP_ELAPSED_MS, nowMs - lastAdjustmentMs));
     }
 
     private boolean canAdjust(long nowMs) {
         return lastAdjustmentMs == UNSET || nowMs - lastAdjustmentMs >= ADJUSTMENT_COOLDOWN_MS;
+    }
+
+    private Decision hold(float currentSpeed, Input input, Metrics metrics, String reason, boolean feasible) {
+        return decision(state, tier, currentSpeed, false, reason, metrics, 0f, 0f, feasible);
+    }
+
+    private static Decision decision(State state, ProtectionTier tier, float targetSpeed, boolean changed, String reason, Metrics metrics,
+                                     float requiredSlewPerSecond, float appliedSlewPerSecond, boolean rampFeasible) {
+        return new Decision(state, tier, targetSpeed, changed, reason, metrics.supportedSpeed(), metrics.rawTargetSpeed(), metrics.calculatedTargetSpeed(),
+                metrics.safeBufferMs(), metrics.timeToEmptyMs(), metrics.timeToReserveMs(), requiredSlewPerSecond, appliedSlewPerSecond, rampFeasible);
+    }
+
+    private static Metrics metrics(Input input, float currentSpeed, float minimumSpeed) {
+        float supportedSpeed = supportedSpeed(currentSpeed, input);
+        float rawTargetSpeed = supportedSpeed - SAFETY_MARGIN;
+        float calculatedTargetSpeed = clamp(rawTargetSpeed, minimumSpeed, 1f);
+        long safeBufferMs = Math.max(0, input.safeBufferMs());
+        return new Metrics(supportedSpeed, rawTargetSpeed, calculatedTargetSpeed, safeBufferMs,
+                timeToLevelMs(input.bufferedMs(), 0, input.slopeMsPerSecond()),
+                timeToLevelMs(input.bufferedMs(), safeBufferMs, input.slopeMsPerSecond()));
     }
 
     private static float supportedSpeed(float currentSpeed, Input input) {
@@ -161,11 +264,17 @@ public final class ExoNetworkGuardController {
         return clamp(supported, 0f, 2f);
     }
 
-    private static long timeToEmptyMs(long bufferedMs, long slopeMsPerSecond) {
-        if (bufferedMs <= 0) return 0;
+    private static long timeToLevelMs(long bufferedMs, long targetBufferMs, long slopeMsPerSecond) {
+        long availableMs = bufferedMs - targetBufferMs;
+        if (availableMs <= 0) return 0;
         if (slopeMsPerSecond >= 0) return Long.MAX_VALUE;
-        if (bufferedMs > Long.MAX_VALUE / 1_000L) return Long.MAX_VALUE;
-        return bufferedMs * 1_000L / -slopeMsPerSecond;
+        if (availableMs > Long.MAX_VALUE / 1_000L) return Long.MAX_VALUE;
+        return availableMs * 1_000L / -slopeMsPerSecond;
+    }
+
+    private static ProtectionTier tierForSpeed(float speed) {
+        if (speed >= 1f - EPSILON) return ProtectionTier.NONE;
+        return speed < ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED - EPSILON ? ProtectionTier.DEEP : ProtectionTier.LIGHT;
     }
 
     private static float roundThousandth(float value) {
@@ -181,7 +290,7 @@ public final class ExoNetworkGuardController {
         WARNING("评估"),
         PROTECT("保护"),
         RECOVERY("恢复"),
-        UNSUSTAINABLE("超出无感范围");
+        UNSUSTAINABLE("保护能力不足");
 
         private final String text;
 
@@ -194,13 +303,45 @@ public final class ExoNetworkGuardController {
         }
     }
 
-    public record Input(long nowMs, boolean eligible, boolean ready, boolean playing, boolean loading, long bufferedMs, boolean trendKnown, long slopeMsPerSecond, long trendWindowMs, int rebufferCount, float currentSpeed, float minimumSpeed, boolean networkEstimateKnown, float networkSupportedSpeed) {
+    public enum ProtectionTier {
+        NONE(""),
+        LIGHT("轻量"),
+        DEEP("深度");
 
-        public Input(long nowMs, boolean eligible, boolean ready, boolean playing, boolean loading, long bufferedMs, boolean trendKnown, long slopeMsPerSecond, long trendWindowMs, int rebufferCount, float currentSpeed, float minimumSpeed) {
-            this(nowMs, eligible, ready, playing, loading, bufferedMs, trendKnown, slopeMsPerSecond, trendWindowMs, rebufferCount, currentSpeed, minimumSpeed, false, 1f);
+        private final String text;
+
+        ProtectionTier(String text) {
+            this.text = text;
+        }
+
+        public String text() {
+            return text;
         }
     }
 
-    public record Decision(State state, float targetSpeed, boolean changed, String reason, float supportedSpeed, long timeToEmptyMs) {
+    public record Input(long nowMs, boolean eligible, boolean ready, boolean playing, boolean loading, long bufferedMs, boolean trendKnown,
+                        long slopeMsPerSecond, long fastSlopeMsPerSecond, long slowSlopeMsPerSecond, long trendWindowMs, int rebufferCount,
+                        float currentSpeed, float minimumSpeed, long safeBufferMs, boolean networkEstimateKnown, float networkSupportedSpeed) {
+
+        public Input(long nowMs, boolean eligible, boolean ready, boolean playing, boolean loading, long bufferedMs, boolean trendKnown,
+                     long slopeMsPerSecond, long trendWindowMs, int rebufferCount, float currentSpeed, float minimumSpeed) {
+            this(nowMs, eligible, ready, playing, loading, bufferedMs, trendKnown, slopeMsPerSecond, slopeMsPerSecond, slopeMsPerSecond,
+                    trendWindowMs, rebufferCount, currentSpeed, minimumSpeed, 20_000, false, 1f);
+        }
+    }
+
+    public record Decision(State state, ProtectionTier tier, float targetSpeed, boolean changed, String reason, float supportedSpeed,
+                           float rawTargetSpeed, float calculatedTargetSpeed, long safeBufferMs, long timeToEmptyMs, long timeToReserveMs,
+                           float requiredSlewPerSecond, float appliedSlewPerSecond, boolean rampFeasible) {
+    }
+
+    private record Metrics(float supportedSpeed, float rawTargetSpeed, float calculatedTargetSpeed, long safeBufferMs, long timeToEmptyMs, long timeToReserveMs) {
+
+        private Metrics withCalculatedTarget(float value) {
+            return new Metrics(supportedSpeed, rawTargetSpeed, value, safeBufferMs, timeToEmptyMs, timeToReserveMs);
+        }
+    }
+
+    private record Ramp(float step, float requiredSlewPerSecond, float appliedSlewPerSecond, boolean feasible) {
     }
 }
