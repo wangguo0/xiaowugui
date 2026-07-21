@@ -13,6 +13,13 @@ final class AutoPreloadPolicy {
     private static final long NORMAL_BUFFER_MS = 8_000;
     private static final long FAST_BUFFER_MS = 20_000;
     private static final long FAST_FALLBACK_BUFFER_MS = 12_000;
+    private static final long EXTERNAL_LOOPBACK_BUFFER_MS = 12_000;
+    private static final long EXTERNAL_LOOPBACK_RESUME_DELAY_MS = 20_000;
+    private static final long EXTERNAL_LOOPBACK_REBUFFER_DELAY_MS = 30_000;
+    private static final long EXTERNAL_LOOPBACK_DURATION_MS = 10_000;
+    private static final long EXTERNAL_LOOPBACK_DECLINE_GUARD_MS = 16_000;
+    private static final long EXTERNAL_LOOPBACK_DECLINE_LIMIT_MS_PER_SECOND = -500;
+    private static final long EXTERNAL_LOOPBACK_RESUME_LIMIT_MS_PER_SECOND = -250;
     private static final long NORMAL_STABLE_MS = 20_000;
     private static final long RESUME_DELAY_MS = 10_000;
     private static final long WEAK_RESUME_DELAY_MS = 15_000;
@@ -29,17 +36,38 @@ final class AutoPreloadPolicy {
     private long stableSinceMs = Long.MIN_VALUE;
     private int lastRebufferCount;
 
-    Decision evaluate(long nowMs, PlaybackRoute route, long bufferedMs, long mediaBitrate, long bandwidthEstimate, int rebufferCount, boolean loading) {
-        if (rebufferCount > lastRebufferCount) disrupt(nowMs);
+    Decision evaluate(long nowMs, PlaybackRoute route, long bufferedMs, long mediaBitrate, long bandwidthEstimate, int rebufferCount, boolean loading, ForwardBufferTrend.Snapshot bufferTrend) {
+        if (rebufferCount > lastRebufferCount) {
+            if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY) {
+                pause(nowMs, EXTERNAL_LOOPBACK_REBUFFER_DELAY_MS);
+                fastBlockedUntilMs = Math.max(fastBlockedUntilMs, nowMs + FAST_COOLDOWN_MS);
+            } else {
+                disrupt(nowMs);
+            }
+        }
         lastRebufferCount = Math.max(lastRebufferCount, rebufferCount);
+        if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY && (loading || bufferedMs < EXTERNAL_LOOPBACK_BUFFER_MS)) {
+            pause(nowMs, EXTERNAL_LOOPBACK_RESUME_DELAY_MS);
+            return decision(route);
+        }
+        if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY
+                && bufferTrend != null
+                && bufferTrend.known()
+                && bufferedMs < EXTERNAL_LOOPBACK_DECLINE_GUARD_MS
+                && bufferTrend.slopeMsPerSecond() < EXTERNAL_LOOPBACK_DECLINE_LIMIT_MS_PER_SECOND) {
+            pause(nowMs, EXTERNAL_LOOPBACK_RESUME_DELAY_MS);
+            return decision(route);
+        }
         double ratio = ratio(bandwidthEstimate, mediaBitrate);
         boolean knownRatio = ratio > 0;
         if ((loading && bufferedMs < PreCachePolicy.INITIAL_SAFE_BUFFER_MS) || (knownRatio && ratio < PAUSE_RATIO)) {
             pause(nowMs, WEAK_RESUME_DELAY_MS);
-            return decision();
+            return decision(route);
         }
         if (mode == Mode.PAUSED) {
-            if (nowMs < resumeAfterMs || bufferedMs < NORMAL_BUFFER_MS || (knownRatio && ratio < RESUME_RATIO)) return decision();
+            long resumeBufferMs = route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY ? EXTERNAL_LOOPBACK_BUFFER_MS : NORMAL_BUFFER_MS;
+            if (nowMs < resumeAfterMs || bufferedMs < resumeBufferMs || (knownRatio && ratio < RESUME_RATIO)) return decision(route);
+            if (route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY && bufferTrend != null && bufferTrend.known() && bufferTrend.slopeMsPerSecond() < EXTERNAL_LOOPBACK_RESUME_LIMIT_MS_PER_SECOND) return decision(route);
             mode = Mode.NORMAL;
             stableSinceMs = nowMs;
         }
@@ -73,7 +101,7 @@ final class AutoPreloadPolicy {
                 && nowMs - stableSinceMs >= FAST_STABLE_MS) {
             mode = Mode.FAST;
         }
-        return decision();
+        return decision(route);
     }
 
     void disrupt(long nowMs) {
@@ -87,13 +115,15 @@ final class AutoPreloadPolicy {
         stableSinceMs = Long.MIN_VALUE;
     }
 
-    private Decision decision() {
-        return switch (mode) {
+    private Decision decision(PlaybackRoute route) {
+        Decision decision = switch (mode) {
             case PAUSED -> new Decision(PAUSED_THREADS, 0, "paused");
             case DEGRADED -> new Decision(NORMAL_THREADS, DEGRADED_DURATION_MS, "degraded");
             case FAST -> new Decision(FAST_THREADS, FAST_DURATION_MS, "fast");
             default -> new Decision(NORMAL_THREADS, NORMAL_DURATION_MS, "normal");
         };
+        if (route != PlaybackRoute.EXTERNAL_LOOPBACK_PROXY || !decision.enabled()) return decision;
+        return new Decision(NORMAL_THREADS, Math.min(decision.durationMs(), EXTERNAL_LOOPBACK_DURATION_MS), "external-" + decision.mode());
     }
 
     private static boolean supportsFast(PlaybackRoute route) {

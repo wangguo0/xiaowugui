@@ -73,7 +73,6 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.FfmpegVideoRenderer;
 
 public class ExoUtil {
 
-    private static final int ENHANCED_TARGET_BUFFER_BYTES = 128 * 1024 * 1024;
     private static final long ENHANCED_LATE_THRESHOLD_TO_DROP_INPUT_US = 5_000L;
     private static final long ENHANCED_ADAPT_COOLDOWN_MS = 15_000L;
     private static final int ENHANCED_DROPPED_FRAMES_THRESHOLD = 24;
@@ -361,7 +360,7 @@ public class ExoUtil {
 
     static ExoBufferBudget.Budget getBufferBudget() {
         int configured = PlayerSetting.getBufferBytes(PlayerSetting.EXO);
-        int requested = configured > 0 ? configured : ENHANCED_TARGET_BUFFER_BYTES;
+        int requested = ExoBufferBudget.resolveRequestedTargetBytes(configured);
         return ExoBufferBudget.resolve(App.get(), requested);
     }
 

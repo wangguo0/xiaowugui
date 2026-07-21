@@ -46,8 +46,39 @@ public class AutoPreloadPolicyTest {
     @Test
     public void externalLoopbackNeverExceedsOneThread() {
         AutoPreloadPolicy policy = new AutoPreloadPolicy();
-        evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
-        assertEquals(1, evaluate(policy, 60_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false).threads());
+        AutoPreloadPolicy.Decision initial = evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
+        AutoPreloadPolicy.Decision stable = evaluate(policy, 60_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 30_000, 10, 50, 0, false);
+        assertEquals(1, initial.threads());
+        assertEquals(10_000, initial.durationMs());
+        assertEquals(1, stable.threads());
+        assertEquals(10_000, stable.durationMs());
+    }
+
+    @Test
+    public void externalLoopbackRequiresTwelveSecondIdleBuffer() {
+        AutoPreloadPolicy policy = new AutoPreloadPolicy();
+        assertFalse(evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 11_999, 0, 0, 0, false).enabled());
+        assertFalse(evaluate(policy, 20_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, true).enabled());
+        assertFalse(evaluate(policy, 39_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, false).enabled());
+        assertTrue(evaluate(policy, 40_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 0, false).enabled());
+    }
+
+    @Test
+    public void externalLoopbackPausesWhenGuardBufferKeepsDeclining() {
+        AutoPreloadPolicy policy = new AutoPreloadPolicy();
+        ForwardBufferTrend.Snapshot declining = new ForwardBufferTrend.Snapshot(-750, 20_000, 5, ForwardBufferTrend.Confidence.MEDIUM);
+
+        assertFalse(evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 15_000, 0, 0, 0, false, declining).enabled());
+        assertFalse(evaluate(policy, 20_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 15_000, 0, 0, 0, false, declining).enabled());
+    }
+
+    @Test
+    public void externalLoopbackRequiresThirtySecondsAfterRebuffer() {
+        AutoPreloadPolicy policy = new AutoPreloadPolicy();
+
+        assertFalse(evaluate(policy, 0, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
+        assertFalse(evaluate(policy, 29_999, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
+        assertTrue(evaluate(policy, 30_000, PlaybackRoute.EXTERNAL_LOOPBACK_PROXY, 20_000, 0, 0, 1, false).enabled());
     }
 
     @Test
@@ -65,6 +96,10 @@ public class AutoPreloadPolicyTest {
     }
 
     private static AutoPreloadPolicy.Decision evaluate(AutoPreloadPolicy policy, long nowMs, PlaybackRoute route, long bufferedMs, long bitrateMbps, long bandwidthMbps, int rebufferCount, boolean loading) {
-        return policy.evaluate(nowMs, route, bufferedMs, bitrateMbps * 1_000_000, bandwidthMbps * 1_000_000, rebufferCount, loading);
+        return evaluate(policy, nowMs, route, bufferedMs, bitrateMbps, bandwidthMbps, rebufferCount, loading, ForwardBufferTrend.Snapshot.unknown());
+    }
+
+    private static AutoPreloadPolicy.Decision evaluate(AutoPreloadPolicy policy, long nowMs, PlaybackRoute route, long bufferedMs, long bitrateMbps, long bandwidthMbps, int rebufferCount, boolean loading, ForwardBufferTrend.Snapshot trend) {
+        return policy.evaluate(nowMs, route, bufferedMs, bitrateMbps * 1_000_000, bandwidthMbps * 1_000_000, rebufferCount, loading, trend);
     }
 }

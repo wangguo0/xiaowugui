@@ -2,6 +2,7 @@ package com.fongmi.android.tv.player.exo;
 
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.SystemClock;
 
 import androidx.annotation.NonNull;
@@ -30,6 +31,7 @@ public class PreCache implements Player.Listener {
     private static final long TICK_MS = 5000;
     private static final long MIN_STEP_MS = 5000;
     private static final long MAX_STEP_MS = 30000;
+    private static final long EXTERNAL_LOOPBACK_STEP_MS = 20000;
     private static final long BUFFER_GAP_MS = 1250;
     private static final int STEP_DIV = 4;
 
@@ -38,7 +40,8 @@ public class PreCache implements Player.Listener {
         @Override
         public void onPrepared(MediaItem originalMediaItem, MediaItem preparedMediaItem) {
             long sessionId = lifecycle.sessionId();
-            if (sessionId > 0) PlaybackTrace.log("exo-preload", playbackTraceId, "event=helper-prepared session=%d generation=%d", sessionId, generation);
+            taskPreparedDurationMs = taskStartRealtimeMs == C.TIME_UNSET ? C.TIME_UNSET : Math.max(0, SystemClock.elapsedRealtime() - taskStartRealtimeMs);
+            if (sessionId > 0) PlaybackTrace.log("exo-preload", playbackTraceId, "event=helper-prepared session=%d generation=%d prepareMs=%d cacheBytesAdded=%d", sessionId, generation, taskPreparedDurationMs, taskCacheDelta());
         }
 
         @Override
@@ -69,6 +72,9 @@ public class PreCache implements Player.Listener {
     private volatile long generation;
     private long lastStartMs;
     private long seekStartMs;
+    private long taskStartRealtimeMs = C.TIME_UNSET;
+    private long taskPreparedDurationMs = C.TIME_UNSET;
+    private long taskCacheBytesBefore;
     private boolean playable;
     private BufferGate bufferGate;
     private AutoPreloadPolicy autoPolicy;
@@ -89,7 +95,8 @@ public class PreCache implements Player.Listener {
         playable = false;
         bufferGate = BufferGate.FIRST_FRAME;
         this.player.addListener(this);
-        logSession(lifecycle.beginSession(), "generation=%d %s configuredThreads=%d effectiveThreads=%d durationTargetMs=%d cacheCapacityBytes=%d", generation, this.routeResolution.logSummary(), PreloadSetting.getPreloadThreads(PlayerSetting.EXO), threads, PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), MediaSourceFactory.getCacheCapacityBytes());
+        PlaybackCacheMetrics.Snapshot cacheMetrics = PlaybackCacheMetrics.snapshot();
+        logSession(lifecycle.beginSession(), "generation=%d %s configuredThreads=%d effectiveThreads=%d durationTargetMs=%d cacheCapacityBytes=%d cachedBytesRead=%d cacheSizeBytes=%d", generation, this.routeResolution.logSummary(), PreloadSetting.getPreloadThreads(PlayerSetting.EXO), threads, PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO), MediaSourceFactory.getCacheCapacityBytes(), cacheMetrics.cachedBytesRead(), cacheMetrics.cacheSizeBytes());
         transition(PreloadLifecycleTracker.State.WAIT_FIRST_FRAME, "session-start", "generation=%d position=%d buffered=%d loading=%s", generation, player.getCurrentPosition(), player.getTotalBufferedDuration(), player.isLoading());
         check();
     }
@@ -104,7 +111,8 @@ public class PreCache implements Player.Listener {
         long stoppedGeneration = generation;
         stopCurrentTask(reason);
         if (active) {
-            logSession(lifecycle.endSession(reason), "generation=%d nextGeneration=%d waitCount=%d waitTotalMs=%d", stoppedGeneration, generation, priority.waitCount(), priority.waitTotalMs());
+            PlaybackCacheMetrics.Snapshot cacheMetrics = PlaybackCacheMetrics.snapshot();
+            logSession(lifecycle.endSession(reason), "generation=%d nextGeneration=%d waitCount=%d waitTotalMs=%d cachedBytesRead=%d cacheSizeBytes=%d", stoppedGeneration, generation, priority.waitCount(), priority.waitTotalMs(), cacheMetrics.cachedBytesRead(), cacheMetrics.cacheSizeBytes());
         }
         if (player != null) player.removeListener(this);
         if (helper != null) helper.release(false);
@@ -122,6 +130,10 @@ public class PreCache implements Player.Listener {
     }
 
     public void release() {
+        release(null);
+    }
+
+    public void release(Runnable completion) {
         stop("release");
         ThreadPoolExecutor retiringExecutor = executor;
         HandlerThread retiringWorker = worker;
@@ -130,6 +142,7 @@ public class PreCache implements Player.Listener {
         threads = 0;
         if (retiringWorker == null) {
             shutdownExecutor(retiringExecutor);
+            completeRelease(completion);
             return;
         }
         // PreCacheHelper.release() posts cancellation to this same looper.
@@ -138,7 +151,13 @@ public class PreCache implements Player.Listener {
         new Handler(retiringWorker.getLooper()).post(() -> {
             shutdownExecutor(retiringExecutor);
             retiringWorker.quitSafely();
+            completeRelease(completion);
         });
+    }
+
+    private void completeRelease(Runnable completion) {
+        if (completion == null) return;
+        new Handler(Looper.getMainLooper()).post(completion);
     }
 
     @Override
@@ -226,7 +245,9 @@ public class PreCache implements Player.Listener {
         }
         AutoPreloadPolicy.Decision autoDecision = getAutoDecision();
         if (autoDecision != null && !autoDecision.enabled()) {
-            transition(PreloadLifecycleTracker.State.PAUSED_AUTO, "auto-" + autoDecision.mode(), "generation=%d route=%s mode=%s position=%d buffered=%d bandwidth=%d bitrate=%d", generation, route, autoDecision.mode(), player.getCurrentPosition(), player.getTotalBufferedDuration(), PlaybackAnalyticsListener.getSnapshot().bandwidthEstimate(), getSelectedBitrate());
+            ObservedMediaBitrateEstimator.Estimate media = PlaybackAnalyticsListener.getMediaBitrateEstimate();
+            ForwardBufferTrend.Snapshot trend = PlaybackAnalyticsListener.getBufferTrend();
+            transition(PreloadLifecycleTracker.State.PAUSED_AUTO, "auto-" + autoDecision.mode(), "generation=%d route=%s mode=%s position=%d buffered=%d bandwidth=%d bitrate=%d bitrateSource=%s bitrateConfidence=%s bufferSlope=%d slopeConfidence=%s slopeWindowMs=%d", generation, route, autoDecision.mode(), player.getCurrentPosition(), player.getTotalBufferedDuration(), PlaybackAnalyticsListener.getSnapshot().bandwidthEstimate(), getSelectedBitrate(), media.source().label(), media.confidence().label(), trend.slopeMsPerSecond(), trend.confidence().label(), trend.windowMs());
             return true;
         }
         if (autoDecision != null) setEffectiveThreads(autoDecision.threads());
@@ -240,13 +261,16 @@ public class PreCache implements Player.Listener {
         if (!shouldPreCache(startMs)) return true;
         long bitrate = getSelectedBitrate();
         long estimatedBytes = ExoPlaybackDiagnostics.estimateBytes(bitrate, lengthMs);
+        ObservedMediaBitrateEstimator.Estimate media = PlaybackAnalyticsListener.getMediaBitrateEstimate();
+        ForwardBufferTrend.Snapshot trend = PlaybackAnalyticsListener.getBufferTrend();
         PriorityTaskDataSource.DiagnosticSnapshot priority = PriorityTaskDataSource.getDiagnosticSnapshot();
         transition(PreloadLifecycleTracker.State.PRELOADING, "task-start", "generation=%d route=%s threads=%d", generation, route, threads);
         for (PreloadLifecycleTracker.TaskEvent event : lifecycle.startTask(generation, startMs, lengthMs)) {
             if (event.type() == PreloadLifecycleTracker.TaskEvent.Type.END) {
-                logTask(event, "reason=next-range");
+                logTaskEnd(event, "next-range", null);
             } else {
-                logTask(event, "estimatedBytes=%d bitrate=%d position=%d buffered=%d loading=%s waitCount=%d waitTotalMs=%d", estimatedBytes, bitrate, player.getCurrentPosition(), player.getTotalBufferedDuration(), player.isLoading(), priority.waitCount(), priority.waitTotalMs());
+                beginTaskMetrics();
+                logTask(event, "estimatedBytes=%d bitrate=%d bitrateSource=%s bitrateConfidence=%s p50=%d p90=%d position=%d buffered=%d loading=%s bufferSlope=%d slopeConfidence=%s slopeWindowMs=%d waitCount=%d waitTotalMs=%d", estimatedBytes, bitrate, media.source().label(), media.confidence().label(), media.p50BitsPerSecond(), media.p90BitsPerSecond(), player.getCurrentPosition(), player.getTotalBufferedDuration(), player.isLoading(), trend.slopeMsPerSecond(), trend.confidence().label(), trend.windowMs(), priority.waitCount(), priority.waitTotalMs());
             }
         }
         try {
@@ -272,7 +296,7 @@ public class PreCache implements Player.Listener {
     }
 
     private void stopCurrentTask(String reason) {
-        logTask(lifecycle.endTask(PreloadLifecycleTracker.TaskEvent.Outcome.CANCELLED), "reason=%s", reason);
+        logTaskEnd(lifecycle.endTask(PreloadLifecycleTracker.TaskEvent.Outcome.CANCELLED), reason, null);
         generation++;
         cancel();
         if (helper != null) helper.stop();
@@ -294,6 +318,8 @@ public class PreCache implements Player.Listener {
     }
 
     private long getSelectedBitrate() {
+        long observed = PlaybackAnalyticsListener.getMediaBitrateEstimate().bitrateBitsPerSecond();
+        if (observed > 0) return observed;
         Format video = TrackUtil.selectedFormat(player.getCurrentTracks(), C.TRACK_TYPE_VIDEO);
         Format audio = TrackUtil.selectedFormat(player.getCurrentTracks(), C.TRACK_TYPE_AUDIO);
         return ExoPlaybackDiagnostics.combinedBitrate(video, audio);
@@ -348,7 +374,8 @@ public class PreCache implements Player.Listener {
     }
 
     private long getStep() {
-        return Math.clamp(PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO) / STEP_DIV, MIN_STEP_MS, MAX_STEP_MS);
+        long stepMs = Math.clamp(PreloadSetting.getPreloadDurationMs(PlayerSetting.EXO) / STEP_DIV, MIN_STEP_MS, MAX_STEP_MS);
+        return route == PlaybackRoute.EXTERNAL_LOOPBACK_PROXY ? Math.max(stepMs, EXTERNAL_LOOPBACK_STEP_MS) : stepMs;
     }
 
     private void markSeek(long startMs) {
@@ -379,7 +406,7 @@ public class PreCache implements Player.Listener {
     private AutoPreloadPolicy.Decision getAutoDecision() {
         if (autoPolicy == null) return null;
         PlaybackAnalyticsListener.Snapshot snapshot = PlaybackAnalyticsListener.getSnapshot();
-        return autoPolicy.evaluate(SystemClock.elapsedRealtime(), route, player.getTotalBufferedDuration(), getSelectedBitrate(), snapshot.bandwidthEstimate(), snapshot.rebufferCount(), player.isLoading());
+        return autoPolicy.evaluate(SystemClock.elapsedRealtime(), route, player.getTotalBufferedDuration(), getSelectedBitrate(), snapshot.bandwidthEstimate(), snapshot.rebufferCount(), player.isLoading(), PlaybackAnalyticsListener.getBufferTrend());
     }
 
     private void setEffectiveThreads(int requested) {
@@ -444,10 +471,35 @@ public class PreCache implements Player.Listener {
     private void finishTask(PreloadLifecycleTracker.TaskEvent.Outcome outcome, String reason, Throwable error) {
         PreloadLifecycleTracker.TaskEvent event = lifecycle.endTask(outcome);
         if (event == null) return;
-        if (error == null) logTask(event, "reason=%s", reason);
-        else logTask(event, "reason=%s error=%s", reason, error.getClass().getSimpleName());
+        logTaskEnd(event, reason, error);
         PreloadLifecycleTracker.State state = outcome == PreloadLifecycleTracker.TaskEvent.Outcome.COMPLETED ? PreloadLifecycleTracker.State.WAIT_NEXT_RANGE : PreloadLifecycleTracker.State.WAIT_RETRY;
         transition(state, reason, "generation=%d task=%d", event.generation(), event.taskId());
+    }
+
+    private void beginTaskMetrics() {
+        taskStartRealtimeMs = SystemClock.elapsedRealtime();
+        taskPreparedDurationMs = C.TIME_UNSET;
+        taskCacheBytesBefore = MediaSourceFactory.getCache().getCacheSpace();
+    }
+
+    private void logTaskEnd(PreloadLifecycleTracker.TaskEvent event, String reason, Throwable error) {
+        if (event == null) return;
+        long elapsedMs = taskStartRealtimeMs == C.TIME_UNSET ? C.TIME_UNSET : Math.max(0, SystemClock.elapsedRealtime() - taskStartRealtimeMs);
+        long cacheBytesAdded = taskCacheDelta();
+        PlaybackCacheMetrics.Snapshot cacheMetrics = PlaybackCacheMetrics.snapshot();
+        if (error == null) {
+            logTask(event, "reason=%s elapsedMs=%d prepareMs=%d cacheBytesAdded=%d cachedBytesRead=%d", reason, elapsedMs, taskPreparedDurationMs, cacheBytesAdded, cacheMetrics.cachedBytesRead());
+        } else {
+            logTask(event, "reason=%s error=%s elapsedMs=%d prepareMs=%d cacheBytesAdded=%d cachedBytesRead=%d", reason, error.getClass().getSimpleName(), elapsedMs, taskPreparedDurationMs, cacheBytesAdded, cacheMetrics.cachedBytesRead());
+        }
+        taskStartRealtimeMs = C.TIME_UNSET;
+        taskPreparedDurationMs = C.TIME_UNSET;
+        taskCacheBytesBefore = 0;
+    }
+
+    private long taskCacheDelta() {
+        if (taskStartRealtimeMs == C.TIME_UNSET) return 0;
+        return Math.max(0, MediaSourceFactory.getCache().getCacheSpace() - taskCacheBytesBefore);
     }
 
     private static String detail(String format, Object... args) {

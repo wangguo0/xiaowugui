@@ -30,6 +30,7 @@ import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.PreloadSetting;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.UrlUtil;
+import com.github.catvod.crawler.SpiderDebug;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
@@ -46,9 +47,12 @@ public class MediaSourceFactory implements MediaSource.Factory {
     private static final String CONCAT_DURATION_SEPARATOR = "|||";
     private static final String CONCAT_DURATION_SEPARATOR_REGEX = "\\|\\|\\|";
     private static final PriorityTaskManager PLAYBACK_PRIORITY_MANAGER = new PriorityTaskManager();
+    private static final CacheCapacityState CACHE_CAPACITY_STATE = new CacheCapacityState();
 
     private static StandaloneDatabaseProvider databaseProvider;
     private static Cache cache;
+    private static long cacheCapacityBytes;
+    private static int activeCacheSessions;
 
     private final DefaultMediaSourceFactory defaultMediaSourceFactory;
     private OkHttpDataSource.Factory httpDataSourceFactory;
@@ -69,7 +73,21 @@ public class MediaSourceFactory implements MediaSource.Factory {
     static synchronized Cache getCache() {
         if (cache != null) return cache;
         File dir = Path.exoCache();
-        return cache = new SimpleCache(dir, new LeastRecentlyUsedCacheEvictor(getMaxCacheSize(dir)), getDatabaseProvider());
+        cacheCapacityBytes = getMaxCacheSize(dir);
+        CACHE_CAPACITY_STATE.recordCreated(cacheCapacityBytes);
+        return cache = new SimpleCache(dir, new LeastRecentlyUsedCacheEvictor(cacheCapacityBytes), getDatabaseProvider());
+    }
+
+    public static synchronized void acquireCacheSession() {
+        refreshPendingCacheCapacity();
+        if (activeCacheSessions == 0 && CACHE_CAPACITY_STATE.hasPending()) releaseCacheLocked("next-player-session");
+        activeCacheSessions++;
+    }
+
+    public static synchronized void releaseCacheSession() {
+        activeCacheSessions = Math.max(0, activeCacheSessions - 1);
+        refreshPendingCacheCapacity();
+        if (activeCacheSessions == 0 && CACHE_CAPACITY_STATE.hasPending()) releaseCacheLocked("last-player-release");
     }
 
     private static StandaloneDatabaseProvider getDatabaseProvider() {
@@ -84,8 +102,29 @@ public class MediaSourceFactory implements MediaSource.Factory {
         return Math.min(PreloadSetting.getPreloadSizeBytes(PlayerSetting.EXO), storageBudget);
     }
 
-    static long getCacheCapacityBytes() {
-        return getMaxCacheSize(Path.exoCache());
+    static synchronized long getCacheCapacityBytes() {
+        return CACHE_CAPACITY_STATE.report(getMaxCacheSize(Path.exoCache()));
+    }
+
+    static synchronized long getPendingCacheCapacityBytes() {
+        refreshPendingCacheCapacity();
+        return CACHE_CAPACITY_STATE.pendingCapacityBytes();
+    }
+
+    private static void refreshPendingCacheCapacity() {
+        CACHE_CAPACITY_STATE.report(getMaxCacheSize(Path.exoCache()));
+    }
+
+    private static void releaseCacheLocked(String reason) {
+        if (cache == null) return;
+        Cache releasing = cache;
+        long actual = cacheCapacityBytes;
+        long pending = CACHE_CAPACITY_STATE.pendingCapacityBytes();
+        cache = null;
+        cacheCapacityBytes = 0;
+        CACHE_CAPACITY_STATE.recordReleased();
+        releasing.release();
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-cache", "released reason=%s actualCapacityBytes=%d pendingCapacityBytes=%d activeSessions=%d", reason, actual, pending, activeCacheSessions);
     }
 
     static boolean isConcatenatingUrl(String url) {
@@ -136,13 +175,19 @@ public class MediaSourceFactory implements MediaSource.Factory {
     private DataSource.Factory getDataSourceFactory() {
         if (dataSourceFactory == null) {
             DataSource.Factory cacheDataSource = getCacheDataSource(new DefaultDataSource.Factory(App.get(), getHttpDataSourceFactory()));
-            dataSourceFactory = new PriorityTaskDataSource.Factory(cacheDataSource, PLAYBACK_PRIORITY_MANAGER, C.PRIORITY_PLAYBACK, false);
+            DataSource.Factory trackedDataSource = new PlaybackBytePositionDataSource.Factory(cacheDataSource);
+            dataSourceFactory = new PriorityTaskDataSource.Factory(trackedDataSource, PLAYBACK_PRIORITY_MANAGER, C.PRIORITY_PLAYBACK, false);
         }
         return dataSourceFactory;
     }
 
     private CacheDataSource.Factory getCacheDataSource(DataSource.Factory upstreamFactory) {
-        return new CacheDataSource.Factory().setCache(getCache()).setUpstreamDataSourceFactory(upstreamFactory).setCacheWriteDataSinkFactory(null).setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
+        return new CacheDataSource.Factory()
+                .setCache(getCache())
+                .setUpstreamDataSourceFactory(upstreamFactory)
+                .setCacheWriteDataSinkFactory(null)
+                .setEventListener(PlaybackCacheMetrics.listener())
+                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR);
     }
 
     private OkHttpDataSource.Factory getHttpDataSourceFactory() {

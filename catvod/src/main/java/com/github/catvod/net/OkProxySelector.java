@@ -64,7 +64,7 @@ public class OkProxySelector extends ProxySelector {
             for (String rule : item.getHosts()) {
                 if (!matches(host, rule)) continue;
                 List<java.net.Proxy> selected = item.getProxies().isEmpty() ? fallback(uri, "empty-proxy") : item.getProxies();
-                SpiderDebug.log("proxy", "select hit uri=%s host=%s rule=%s name=%s proxy=%s", uri, host, rule, item.getName(), selected);
+                SpiderDebug.log("proxy", "select hit uri=%s host=%s ruleHash=%s nameHash=%s proxyCount=%s", OkHttpLogPolicy.redactUri(uri), OkHttpLogPolicy.redactHost(host), OkHttpLogPolicy.redactHost(rule), OkHttpLogPolicy.redactHost(item.getName()), selected.size());
                 return selected;
             }
         }
@@ -73,7 +73,7 @@ public class OkProxySelector extends ProxySelector {
 
     private List<java.net.Proxy> fallback(URI uri, String reason) {
         List<java.net.Proxy> selected = fallback(uri);
-        SpiderDebug.log("proxy", "select fallback reason=%s uri=%s proxy=%s", reason, uri, selected);
+        SpiderDebug.log("proxy", "select fallback reason=%s uri=%s proxyCount=%s", reason, OkHttpLogPolicy.redactUri(uri), selected.size());
         return selected;
     }
 
@@ -83,7 +83,7 @@ public class OkProxySelector extends ProxySelector {
 
     @Override
     public void connectFailed(URI uri, SocketAddress socketAddress, IOException e) {
-        SpiderDebug.log("proxy", "connectFailed uri=%s address=%s error=%s", uri, socketAddress, e.getMessage());
+        SpiderDebug.log("proxy", "connectFailed uri=%s addressType=%s error=%s", OkHttpLogPolicy.redactUri(uri), socketAddress == null ? "none" : socketAddress.getClass().getSimpleName(), OkHttpLogPolicy.errorChain(e));
         if (system != null) system.connectFailed(uri, socketAddress, e);
     }
 }

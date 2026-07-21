@@ -16,6 +16,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
+import com.fongmi.android.tv.player.exo.MediaSourceFactory;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.player.exo.PreCache;
 import com.fongmi.android.tv.player.exo.TrackUtil;
@@ -38,9 +39,17 @@ public class ExoPlayerEngine implements PlayerEngine {
     private ExoPlayer player;
     private int decode;
     private boolean playWhenReady;
+    private boolean cacheSessionActive;
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
-        this.player = ExoUtil.buildPlayer(decode, listener);
+        MediaSourceFactory.acquireCacheSession();
+        try {
+            this.player = ExoUtil.buildPlayer(decode, listener);
+        } catch (RuntimeException | Error e) {
+            MediaSourceFactory.releaseCacheSession();
+            throw e;
+        }
+        this.cacheSessionActive = true;
         this.provider = new ErrorMsgProvider();
         this.preCache = new PreCache();
         this.attemptedFormats = new HashSet<>();
@@ -54,7 +63,12 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     @Override
     public void release() {
-        preCache.release();
+        Runnable cacheRelease = null;
+        if (cacheSessionActive) {
+            cacheSessionActive = false;
+            cacheRelease = MediaSourceFactory::releaseCacheSession;
+        }
+        preCache.release(cacheRelease);
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
     }
