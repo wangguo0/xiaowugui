@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.source.MediaLoadData;
 
 import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.player.PlaybackTrace;
+import com.github.catvod.crawler.DebugEventLimiter;
 import com.github.catvod.crawler.SpiderDebug;
 
 public class PlaybackAnalyticsListener implements AnalyticsListener {
@@ -30,8 +31,12 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     private static volatile boolean loading;
     private static final long BANDWIDTH_LOG_INTERVAL_MS = 5_000;
     private static final long MEDIA_ESTIMATE_LOG_INTERVAL_MS = 10_000;
+    private static final long LOADING_LOG_INTERVAL_MS = 5_000;
+    private static final long LOW_BUFFER_LOADING_LOG_INTERVAL_MS = 1_000;
+    private static final long LOW_BUFFER_LOG_THRESHOLD_MS = 8_000;
     private static final ObservedMediaBitrateEstimator BITRATE_ESTIMATOR = new ObservedMediaBitrateEstimator();
     private static final ForwardBufferTrend BUFFER_TREND = new ForwardBufferTrend();
+    private static final DebugEventLimiter LOADING_LOG_LIMITER = new DebugEventLimiter(1);
 
     public static Snapshot getSnapshot() {
         return snapshot;
@@ -63,6 +68,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         playbackTraceId = PlaybackTrace.NONE;
         BITRATE_ESTIMATOR.reset();
         BUFFER_TREND.reset();
+        LOADING_LOG_LIMITER.clear();
         PlaybackCacheMetrics.reset();
         PlaybackBytePositionDataSource.resetSession();
     }
@@ -108,7 +114,13 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     public void onIsLoadingChanged(EventTime eventTime, boolean isLoading) {
         if (loading == isLoading) return;
         loading = isLoading;
-        if (SpiderDebug.isEnabled()) traceLog("loading=%s state=%s position=%d buffered=%d", isLoading, snapshot.state(), eventTime.currentPlaybackPositionMs, eventTime.totalBufferedDurationMs);
+        if (!SpiderDebug.isEnabled()) return;
+        long bufferedMs = Math.max(0, eventTime.totalBufferedDurationMs);
+        long intervalMs = bufferedMs < LOW_BUFFER_LOG_THRESHOLD_MS ? LOW_BUFFER_LOADING_LOG_INTERVAL_MS : LOADING_LOG_INTERVAL_MS;
+        if (!"READY".equals(snapshot.state())) intervalMs = 0;
+        DebugEventLimiter.Decision decision = LOADING_LOG_LIMITER.acquire("loading", SystemClock.elapsedRealtime(), intervalMs);
+        if (!decision.allowed()) return;
+        traceLog("loading=%s state=%s position=%d buffered=%d suppressed=%d", isLoading, snapshot.state(), eventTime.currentPlaybackPositionMs, bufferedMs, decision.suppressedCount());
     }
 
     @Override
