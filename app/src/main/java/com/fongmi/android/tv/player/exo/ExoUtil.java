@@ -113,7 +113,9 @@ public class ExoUtil {
         }
         ExoPlayer player = builder.build();
         PlaybackAnalyticsListener.reset();
-        player.addAnalyticsListener(new PlaybackAnalyticsListener());
+        PlaybackAnalyticsListener analyticsListener = new PlaybackAnalyticsListener();
+        player.addAnalyticsListener(analyticsListener);
+        player.setVideoFrameMetadataListener(analyticsListener);
         if (PlaybackPerformanceSetting.isAdaptiveDowngradeEnabled()) player.addAnalyticsListener(new AdaptiveVideoProfileController(trackSelector, profile, profiles));
         if (BuildConfig.DEBUG) player.addAnalyticsListener(new EventLogger());
         player.setAudioAttributes(AudioAttributes.DEFAULT, true);

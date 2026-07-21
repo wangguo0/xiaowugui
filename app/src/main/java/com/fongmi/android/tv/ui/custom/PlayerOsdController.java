@@ -391,14 +391,14 @@ public class PlayerOsdController {
     private String summarizeVideo(Format format, PlayerManager player, String decoder, VideoTrackState videoTrack) {
         if (videoTrack.hasTracks()) format = mergeFormat(format, videoTrack.format());
         String size = getSize(format, player);
-        String fps = getFrameRate(format);
-        String bitrate = getBitrate(format);
+        String fps = getFrameRate(format, player);
+        String bitrate = getBitrate(format, player);
         String codec = format == null || TextUtils.isEmpty(format.codecs) ? "codec -" : "codec " + format.codecs;
         String color = getColor(format).replace("color ", "色彩 ");
         String support = videoTrack.hasTracks() && !videoTrack.isHandled() ? supportText(videoTrack.support()) : "";
         String decode = "decoder " + emptyDash(decoderText(player, decoder));
         return join(" / ",
-                "格式 " + emptyDash(getMime(format)),
+                "格式 " + emptyDash(getVideoCodecName(format)),
                 "分辨率 " + emptyDash(size),
                 "帧率 " + emptyDash(fps),
                 "码率 " + emptyDash(bitrate),
@@ -536,8 +536,24 @@ public class PlayerOsdController {
         return frameFormat.format(format.frameRate) + "fps";
     }
 
+    private String getFrameRate(Format format, PlayerManager player) {
+        String declared = getFrameRate(format);
+        if (!TextUtils.isEmpty(declared) || player == null || !player.isExo()) return declared;
+        PlaybackAnalyticsListener.DisplayFrameRateEstimate estimate = PlaybackAnalyticsListener.getDisplayFrameRateEstimate();
+        return estimate.frameRate() <= 0 ? "" : "约" + frameFormat.format(estimate.frameRate()) + "fps（观测）";
+    }
+
     private String getBitrate(Format format) {
         return format == null ? "" : formatBitrate(formatBitrateValue(format));
+    }
+
+    private String getBitrate(Format format, PlayerManager player) {
+        String declared = getBitrate(format);
+        if (!TextUtils.isEmpty(declared) || player == null || !player.isExo()) return declared;
+        PlaybackAnalyticsListener.DisplayMediaBitrateEstimate estimate = PlaybackAnalyticsListener.getDisplayMediaBitrateEstimate();
+        if (!estimate.estimated() || estimate.bitrateBitsPerSecond() <= 0) return "";
+        String type = "content-length".equals(estimate.source()) ? "总平均" : "观测总码率";
+        return "约" + formatBitrate(estimate.bitrateBitsPerSecond()) + "（" + type + "）";
     }
 
     private String getBandwidthEstimateText(PlaybackAnalyticsListener.Snapshot snapshot) {
@@ -597,6 +613,21 @@ public class PlayerOsdController {
             return index >= 0 && index + 1 < format.sampleMimeType.length() ? format.sampleMimeType.substring(index + 1) : format.sampleMimeType;
         }
         return TextUtils.isEmpty(format.codecs) ? "" : format.codecs;
+    }
+
+    private String getVideoCodecName(Format format) {
+        if (format == null) return "";
+        String mime = TextUtils.isEmpty(format.sampleMimeType) ? "" : format.sampleMimeType.toLowerCase(Locale.ROOT);
+        String codecs = TextUtils.isEmpty(format.codecs) ? "" : format.codecs.toLowerCase(Locale.ROOT);
+        if ("video/dolby-vision".equals(mime) || codecs.startsWith("dvhe") || codecs.startsWith("dvh1")) return "Dolby Vision";
+        if (MimeTypes.VIDEO_H265.equals(mime) || codecs.startsWith("hvc1") || codecs.startsWith("hev1")) return "H.265 / HEVC";
+        if (MimeTypes.VIDEO_H264.equals(mime) || codecs.startsWith("avc1") || codecs.startsWith("avc3")) return "H.264 / AVC";
+        if (MimeTypes.VIDEO_AV1.equals(mime) || codecs.startsWith("av01")) return "AV1";
+        if (MimeTypes.VIDEO_VP9.equals(mime) || codecs.startsWith("vp09")) return "VP9";
+        if (MimeTypes.VIDEO_VP8.equals(mime) || codecs.startsWith("vp08")) return "VP8";
+        if (MimeTypes.VIDEO_MPEG2.equals(mime)) return "MPEG-2";
+        if (MimeTypes.VIDEO_MP4V.equals(mime)) return "MPEG-4";
+        return getMime(format);
     }
 
     private String getAudioMime(Format format) {

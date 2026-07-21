@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.player.exo;
 
+import android.media.MediaFormat;
 import android.os.SystemClock;
 
 import androidx.annotation.Nullable;
@@ -15,13 +16,14 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime;
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer;
 import androidx.media3.exoplayer.source.LoadEventInfo;
 import androidx.media3.exoplayer.source.MediaLoadData;
+import androidx.media3.exoplayer.video.VideoFrameMetadataListener;
 
 import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.github.catvod.crawler.DebugEventLimiter;
 import com.github.catvod.crawler.SpiderDebug;
 
-public class PlaybackAnalyticsListener implements AnalyticsListener {
+public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameMetadataListener {
 
     private static volatile Snapshot snapshot = Snapshot.empty();
     private static volatile String playbackTraceId = PlaybackTrace.NONE;
@@ -35,6 +37,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     private static final long LOW_BUFFER_LOADING_LOG_INTERVAL_MS = 1_000;
     private static final long LOW_BUFFER_LOG_THRESHOLD_MS = 8_000;
     private static final ObservedMediaBitrateEstimator BITRATE_ESTIMATOR = new ObservedMediaBitrateEstimator();
+    private static final ObservedVideoFrameRateEstimator FRAME_RATE_ESTIMATOR = new ObservedVideoFrameRateEstimator();
     private static final ForwardBufferTrend BUFFER_TREND = new ForwardBufferTrend();
     private static final DebugEventLimiter LOADING_LOG_LIMITER = new DebugEventLimiter(1);
 
@@ -55,6 +58,16 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         return BITRATE_ESTIMATOR.estimate();
     }
 
+    public static DisplayMediaBitrateEstimate getDisplayMediaBitrateEstimate() {
+        ObservedMediaBitrateEstimator.Estimate estimate = BITRATE_ESTIMATOR.estimate();
+        return new DisplayMediaBitrateEstimate(estimate.bitrateBitsPerSecond(), estimate.source().label(), estimate.confidence().label(), estimate.source() != ObservedMediaBitrateEstimator.Source.FORMAT && estimate.source() != ObservedMediaBitrateEstimator.Source.UNKNOWN);
+    }
+
+    public static DisplayFrameRateEstimate getDisplayFrameRateEstimate() {
+        ObservedVideoFrameRateEstimator.Estimate estimate = FRAME_RATE_ESTIMATOR.estimate();
+        return new DisplayFrameRateEstimate(estimate.frameRate(), estimate.sampleCount());
+    }
+
     public static ForwardBufferTrend.Snapshot getBufferTrend() {
         return BUFFER_TREND.snapshot();
     }
@@ -67,6 +80,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
         loading = false;
         playbackTraceId = PlaybackTrace.NONE;
         BITRATE_ESTIMATOR.reset();
+        FRAME_RATE_ESTIMATOR.reset();
         BUFFER_TREND.reset();
         LOADING_LOG_LIMITER.clear();
         PlaybackCacheMetrics.reset();
@@ -133,6 +147,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     @Override
     public void onVideoInputFormatChanged(EventTime eventTime, Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
         snapshot = snapshot.withVideoFormat(format);
+        FRAME_RATE_ESTIMATOR.reset();
         BITRATE_ESTIMATOR.updateFormats(snapshot.videoFormat(), snapshot.audioFormat());
         if (!SpiderDebug.isEnabled()) return;
         traceLog("video format mime=%s codecs=%s size=%dx%d fps=%.3f bitrate=%d bitrateSource=%s color=%s", format.sampleMimeType, format.codecs, format.width, format.height, format.frameRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.colorInfo);
@@ -192,7 +207,13 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
     @Override
     public void onPositionDiscontinuity(EventTime eventTime, Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
         BITRATE_ESTIMATOR.disrupt();
+        FRAME_RATE_ESTIMATOR.reset();
         BUFFER_TREND.reset();
+    }
+
+    @Override
+    public void onVideoFrameAboutToBeRendered(long presentationTimeUs, long releaseTimeNs, Format format, @Nullable MediaFormat mediaFormat) {
+        FRAME_RATE_ESTIMATOR.observe(presentationTimeUs);
     }
 
     @Override
@@ -233,6 +254,12 @@ public class PlaybackAnalyticsListener implements AnalyticsListener {
             case Player.STATE_ENDED -> "ENDED";
             default -> String.valueOf(state);
         };
+    }
+
+    public record DisplayMediaBitrateEstimate(long bitrateBitsPerSecond, String source, String confidence, boolean estimated) {
+    }
+
+    public record DisplayFrameRateEstimate(float frameRate, int sampleCount) {
     }
 
     public record Snapshot(String state, String videoDecoderName, Format videoFormat, String audioDecoderName, Format audioFormat, long droppedFrames, long positionMs, long bufferedMs, long bandwidthEstimate, int lastLoadTimeMs, long lastLoadBytes, int rebufferCount, long rebufferTotalMs, long rebufferStartMs, boolean everReady, String errorCode, String errorMessage, Format errorFormat, String errorDecoderName, String errorDiagnosticInfo, boolean errorSecureDecoderRequired, String errorCause) {
