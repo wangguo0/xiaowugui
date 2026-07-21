@@ -264,7 +264,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         BITRATE_ESTIMATOR.updateContent(bytes.contentLengthBytes(), player.getDuration());
         boolean stablePlayback = player.getPlaybackState() == Player.STATE_READY && player.isPlaying();
         BITRATE_ESTIMATOR.observeBytePosition(now, player.getBufferedPosition(), bytes, stablePlayback);
-        BUFFER_TREND.observe(now, player.getTotalBufferedDuration(), stablePlayback);
+        BUFFER_TREND.observe(now, player.getTotalBufferedDuration(), stablePlayback && player.isLoading());
         if (!SpiderDebug.isEnabled() || now - lastMediaEstimateLogMs < MEDIA_ESTIMATE_LOG_INTERVAL_MS) return;
         lastMediaEstimateLogMs = now;
         ObservedMediaBitrateEstimator.Estimate media = getMediaBitrateEstimate();

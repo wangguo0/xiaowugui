@@ -3,7 +3,7 @@ package com.fongmi.android.tv.player.exo;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-final class ForwardBufferTrend {
+public final class ForwardBufferTrend {
 
     private static final long MIN_SAMPLE_INTERVAL_MS = 1_000;
     private static final long MIN_WINDOW_MS = 5_000;
@@ -13,11 +13,11 @@ final class ForwardBufferTrend {
 
     private final Deque<Sample> samples = new ArrayDeque<>();
 
-    synchronized void reset() {
+    public synchronized void reset() {
         samples.clear();
     }
 
-    synchronized void observe(long nowMs, long bufferedMs, boolean stablePlayback) {
+    public synchronized void observe(long nowMs, long bufferedMs, boolean stablePlayback) {
         if (!stablePlayback || bufferedMs < 0) {
             reset();
             return;
@@ -28,7 +28,7 @@ final class ForwardBufferTrend {
         while (samples.size() > 2 && nowMs - samples.peekFirst().nowMs() > MAX_WINDOW_MS) samples.removeFirst();
     }
 
-    synchronized Snapshot snapshot() {
+    public synchronized Snapshot snapshot() {
         Sample first = samples.peekFirst();
         Sample last = samples.peekLast();
         if (first == null || last == null) return Snapshot.unknown();
@@ -40,7 +40,7 @@ final class ForwardBufferTrend {
         return new Snapshot(slope, windowMs, samples.size(), confidence);
     }
 
-    enum Confidence {
+    public enum Confidence {
         HIGH("high"),
         MEDIUM("medium"),
         LOW("low"),
@@ -52,18 +52,18 @@ final class ForwardBufferTrend {
             this.label = label;
         }
 
-        String label() {
+        public String label() {
             return label;
         }
     }
 
-    record Snapshot(long slopeMsPerSecond, long windowMs, int sampleCount, Confidence confidence) {
+    public record Snapshot(long slopeMsPerSecond, long windowMs, int sampleCount, Confidence confidence) {
 
         static Snapshot unknown() {
             return new Snapshot(0, 0, 0, Confidence.UNKNOWN);
         }
 
-        boolean known() {
+        public boolean known() {
             return confidence != Confidence.UNKNOWN;
         }
     }

@@ -144,9 +144,9 @@ public final class ExoPerformanceSetting {
 
     public static String getNetworkProtectionText() {
         return switch (getNetworkProtectionMode()) {
-            case ExoNetworkProtectionPolicy.MODE_STANDARD -> "低感知 · 最低0.95x";
-            case ExoNetworkProtectionPolicy.MODE_ENHANCED -> "增强 · 最低0.90x";
-            case ExoNetworkProtectionPolicy.MODE_AGGRESSIVE -> "激进 · 最低0.85x";
+            case ExoNetworkProtectionPolicy.MODE_STANDARD -> "低感知自动 · 最低0.95x";
+            case ExoNetworkProtectionPolicy.MODE_ENHANCED -> "增强自动 · 最低0.90x";
+            case ExoNetworkProtectionPolicy.MODE_AGGRESSIVE -> "激进自动 · 最低0.85x";
             default -> "关闭";
         };
     }

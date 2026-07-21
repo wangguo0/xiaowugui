@@ -41,6 +41,9 @@ import com.fongmi.android.tv.player.engine.MpvPlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerCacheState;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
+import com.fongmi.android.tv.player.exo.ExoNetworkGuardController;
+import com.fongmi.android.tv.player.exo.ForwardBufferTrend;
+import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.player.danmaku.DanmakuUrlPolicy;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuBatcher;
 import com.fongmi.android.tv.player.danmaku.LiveDanmakuBuffer;
@@ -98,12 +101,15 @@ public class PlayerManager implements ParseCallback {
 
     private final Runnable runnable;
     private final Runnable liveDanmakuMetricsRunnable;
+    private final Runnable networkProtectionRunnable;
     private final Callback callback;
     private final DynamicLutEffect dynamicLutEffect;
     private final AudioManager.OnAudioFocusChangeListener audioFocusChangeListener;
     private final BroadcastReceiver noisyReceiver;
     private final PlaybackBufferingTracker playbackBufferingTracker;
     private final PlaybackTrace playbackTrace;
+    private final ExoNetworkGuardController networkProtectionController;
+    private final ForwardBufferTrend networkProtectionTrend;
     private final LiveDanmakuBatcher liveDanmakuBatcher;
     private final LiveDanmakuBuffer liveDanmakuBuffer;
     private final LiveDanmakuMetrics liveDanmakuMetrics;
@@ -161,12 +167,17 @@ public class PlayerManager implements ParseCallback {
     private int mpvAutoOutputProbeAttempts;
     private float userPlaybackSpeed = 1f;
     private float networkProtectionSpeed = 1f;
+    private ExoNetworkGuardController.State networkProtectionState = ExoNetworkGuardController.State.NORMAL;
+    private String networkProtectionReason = "waiting";
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
         this.liveDanmakuMetricsRunnable = () -> logLiveDanmakuMetrics("periodic", true);
+        this.networkProtectionRunnable = this::evaluateNetworkProtection;
         this.playbackBufferingTracker = new PlaybackBufferingTracker();
         this.playbackTrace = new PlaybackTrace();
+        this.networkProtectionController = new ExoNetworkGuardController();
+        this.networkProtectionTrend = new ForwardBufferTrend();
         this.liveDanmakuBuffer = new LiveDanmakuBuffer();
         this.liveDanmakuMetrics = new LiveDanmakuMetrics();
         this.liveDanmakuBatcher = new LiveDanmakuBatcher(liveDanmakuBuffer, this::onLiveDanmakuBatch);
@@ -190,6 +201,7 @@ public class PlayerManager implements ParseCallback {
         lutApplySeq++;
         player.removeListener(listener);
         App.removeCallbacks(runnable);
+        App.removeCallbacks(networkProtectionRunnable);
         stopNativeAudioSession();
         clearDanmaku("release");
         releaseLiveDanmakuSession();
@@ -309,8 +321,9 @@ public class PlayerManager implements ParseCallback {
     public String getNetworkProtectionText() {
         if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled()) return "";
         if (Math.abs(userPlaybackSpeed - 1f) > 0.001f) return "已暂停 · 用户" + SPEED_FORMAT.format(userPlaybackSpeed);
-        if (networkProtectionSpeed < 0.999f) return "固定 " + SPEED_FORMAT.format(networkProtectionSpeed);
-        return isVod() ? "等待生效" : "仅点播";
+        if (!isVod()) return "仅点播";
+        if (networkProtectionState == ExoNetworkGuardController.State.UNSUSTAINABLE) return networkProtectionState.text() + " · 下限" + SPEED_FORMAT.format(networkProtectionSpeed);
+        return networkProtectionState.text() + " " + SPEED_FORMAT.format(networkProtectionSpeed);
     }
 
     public boolean isEmpty() {
@@ -612,10 +625,15 @@ public class PlayerManager implements ParseCallback {
 
     public String setSpeed(float speed) {
         if (!player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) return getSpeedText();
+        App.removeCallbacks(networkProtectionRunnable);
+        networkProtectionController.reset();
+        networkProtectionTrend.reset();
+        networkProtectionState = ExoNetworkGuardController.State.NORMAL;
+        networkProtectionReason = "user";
         userPlaybackSpeed = speed;
         networkProtectionSpeed = 1f;
         applyEffectiveSpeed(speed, "user");
-        if (Math.abs(speed - 1f) < 0.001f && player.getPlaybackState() == Player.STATE_READY) applyFixedNetworkProtectionSpeed();
+        if (Math.abs(speed - 1f) < 0.001f) scheduleNetworkProtection(0);
         return getSpeedText();
     }
 
@@ -627,18 +645,61 @@ public class PlayerManager implements ParseCallback {
         PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "speed %.2f->%.2f reason=%s user=%.2f", current, speed, reason, userPlaybackSpeed);
     }
 
-    private void resetNetworkProtectionSpeed(String reason) {
+    private void resetNetworkProtectionSession(String reason) {
+        App.removeCallbacks(networkProtectionRunnable);
+        networkProtectionController.reset();
+        networkProtectionTrend.reset();
+        networkProtectionState = ExoNetworkGuardController.State.NORMAL;
+        networkProtectionReason = reason;
         networkProtectionSpeed = 1f;
         applyEffectiveSpeed(userPlaybackSpeed, reason);
     }
 
-    private void applyFixedNetworkProtectionSpeed() {
-        if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled() || Math.abs(userPlaybackSpeed - 1f) > 0.001f || !isVod()) {
-            resetNetworkProtectionSpeed("ineligible");
-            return;
+    private boolean isNetworkProtectionEligible() {
+        return player != null && isExo() && isVod() && ExoPerformanceSetting.isNetworkProtectionEnabled() && Math.abs(userPlaybackSpeed - 1f) < 0.001f;
+    }
+
+    private void scheduleNetworkProtection(long delayMs) {
+        App.removeCallbacks(networkProtectionRunnable);
+        if (!isNetworkProtectionEligible() || player.getPlaybackState() != Player.STATE_READY || !player.isPlaying()) return;
+        App.post(networkProtectionRunnable, delayMs);
+    }
+
+    private void evaluateNetworkProtection() {
+        if (player == null) return;
+        boolean eligible = isNetworkProtectionEligible();
+        long nowMs = SystemClock.elapsedRealtime();
+        boolean ready = player.getPlaybackState() == Player.STATE_READY;
+        boolean playing = player.isPlaying();
+        boolean loading = player.isLoading();
+        long bufferedMs = Math.max(0, player.getTotalBufferedDuration());
+        networkProtectionTrend.observe(nowMs, bufferedMs, eligible && ready && playing && loading);
+        ForwardBufferTrend.Snapshot trend = networkProtectionTrend.snapshot();
+        PlaybackAnalyticsListener.Snapshot analytics = PlaybackAnalyticsListener.getSnapshot();
+        ExoNetworkGuardController.State previousState = networkProtectionState;
+        ExoNetworkGuardController.Decision decision = networkProtectionController.evaluate(new ExoNetworkGuardController.Input(
+                nowMs,
+                eligible,
+                ready,
+                playing,
+                loading,
+                bufferedMs,
+                trend.known(),
+                trend.slopeMsPerSecond(),
+                trend.windowMs(),
+                analytics.rebufferCount(),
+                getEffectiveSpeed(),
+                ExoPerformanceSetting.getNetworkProtectionMinimumSpeed()));
+        networkProtectionState = decision.state();
+        networkProtectionReason = decision.reason();
+        networkProtectionSpeed = decision.targetSpeed();
+        if (decision.changed()) applyEffectiveSpeed(networkProtectionSpeed, "guard-" + decision.reason());
+        if (decision.changed() || previousState != networkProtectionState) {
+            PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "state=%s reason=%s speed=%.2f supported=%.2f floor=%.2f buffered=%d loading=%s slope=%d window=%d rebuffer=%d",
+                    networkProtectionState, networkProtectionReason, networkProtectionSpeed, decision.supportedSpeed(), ExoPerformanceSetting.getNetworkProtectionMinimumSpeed(),
+                    player.getTotalBufferedDuration(), player.isLoading(), trend.slopeMsPerSecond(), trend.windowMs(), analytics.rebufferCount());
         }
-        networkProtectionSpeed = ExoPerformanceSetting.getNetworkProtectionMinimumSpeed();
-        applyEffectiveSpeed(networkProtectionSpeed, "fixed-protection");
+        if (eligible && player.getPlaybackState() == Player.STATE_READY && player.isPlaying()) scheduleNetworkProtection(ExoNetworkGuardController.SAMPLE_INTERVAL_MS);
     }
 
     public String addSpeed() {
@@ -731,6 +792,7 @@ public class PlayerManager implements ParseCallback {
 
     public void reset() {
         App.removeCallbacks(runnable);
+        resetNetworkProtectionSession("reset");
         retry = 0;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
@@ -740,6 +802,7 @@ public class PlayerManager implements ParseCallback {
     public void clear() {
         prepareSeq++;
         lutApplySeq++;
+        resetNetworkProtectionSession("clear");
         resetMpvOutputRuntime();
         spec = null;
         clearPendingSwitchRestore();
@@ -1272,7 +1335,7 @@ public class PlayerManager implements ParseCallback {
         spec.refreshPlaybackRoute();
         logPlaybackRoute();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
-        resetNetworkProtectionSpeed("new-media");
+        resetNetworkProtectionSession("new-media");
         App.removeCallbacks(runnable);
         setDanmakus(spec.getDanmakus());
         prepareLutPipeline();
@@ -2249,6 +2312,13 @@ public class PlayerManager implements ParseCallback {
         public void onIsPlayingChanged(boolean isPlaying) {
             liveDanmakuPlaybackActive = isPlaying;
             if (!isPlaying) discardLiveDanmakuPending();
+            if (isPlaying) scheduleNetworkProtection(0);
+            else {
+                App.removeCallbacks(networkProtectionRunnable);
+                networkProtectionController.disrupt(networkProtectionSpeed);
+                networkProtectionTrend.reset();
+                networkProtectionState = networkProtectionController.getState();
+            }
         }
 
         @Override
@@ -2261,9 +2331,23 @@ public class PlayerManager implements ParseCallback {
                 hardDecodeSwitchRetryArmed = false;
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
-                applyFixedNetworkProtectionSpeed();
+                scheduleNetworkProtection(0);
+            } else {
+                App.removeCallbacks(networkProtectionRunnable);
+                networkProtectionController.disrupt(networkProtectionSpeed);
+                networkProtectionTrend.reset();
+                networkProtectionState = networkProtectionController.getState();
             }
             recordBufferingState(state);
+        }
+
+        @Override
+        public void onPositionDiscontinuity(@NonNull Player.PositionInfo oldPosition, @NonNull Player.PositionInfo newPosition, int reason) {
+            networkProtectionController.disrupt(networkProtectionSpeed);
+            networkProtectionTrend.reset();
+            networkProtectionState = networkProtectionController.getState();
+            networkProtectionReason = "discontinuity-" + reason;
+            scheduleNetworkProtection(ExoNetworkGuardController.SAMPLE_INTERVAL_MS);
         }
 
         @Override
@@ -2299,6 +2383,7 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlayerError(@NonNull PlaybackException e) {
             App.removeCallbacks(runnable);
+            App.removeCallbacks(networkProtectionRunnable);
             if (retryMpvSurfaceDirectFailure(e)) return;
             PlaybackErrorClassifier.Failure failure = PlaybackErrorClassifier.classify(e, getEffectivePlaybackRoute());
             PlayerEngine.ErrorAction action = engine.handleError(e);
