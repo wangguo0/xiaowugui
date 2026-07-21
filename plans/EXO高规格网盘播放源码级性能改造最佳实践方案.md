@@ -48,10 +48,11 @@ Media3：`1.11.0-alpha01-fongmi`
 - ✅ `item-51`：外部回环自动预载在 degraded 带宽档仍保持 40 秒连续前向范围，避免 10 秒预载块被快速耗尽。
 - ✅ `item-52`：外部回环预载首次连接/下载失败后会话级熔断，停止所有失败重试并保留主播放连接独占 Go 代理；不改变 `127.0.0.1` 代理边界。
 - ✅ `item-53`：EXO 自动档改为时间优先加载，避免高码率视频被约 161MB 字节目标硬性截断在约 15 秒缓冲；仍受 60 秒时间上限和设备堆内存预算约束。
+- ✅ `item-54`：增加 EXO 帧释放时序基础诊断，聚合释放提前/滞后、滞后帧数、最大滞后、释放抖动和渲染回调间隔；明确 Android App 层不虚构 HWC 合成计数或 MediaCodec 队列占用。
 - ✅ item-46/47 APK 已完成基础真机播放验收；item-46 长时间 EOF 专项仍需单独监听。
-- ⬜ item-48 新 APK 真机验收（帧调度诊断行）。
+- ⬜ item-48/54 新 APK 真机验收（帧调度与释放时序诊断行）。
 - ⬜ MediaParser/Java Matroska/native extractor A/B。
-- ⬜ FrameTimeline、HWC composition 和 codec queue 深度诊断。
+- ⬜ FrameTimeline、HWC composition 和 codec queue 深度诊断（需 Perfetto/厂商工具证据）。
 - ⬜ Cues/SeekMap sidecar、字幕和附件懒加载。
 - ⬜ thermal-aware 预载、索引和线程策略。
 - ⬜ Media3/vendor codec 深水区专项。
@@ -988,7 +989,7 @@ Evidence links
 2. ✅ Capability model 拆分。
 3. ✅ Display.Mode/Surface frame-rate 输出管理器第一版。
 4. ✅ tunneling 白名单、watchdog、回退和 OSD actual 状态第一版。
-5. FrameTimeline、HWC composition、codec queue 的基础诊断。
+5. ✅ FrameTimeline/HWC/codec queue 可观测边界梳理与 EXO 帧释放时序基础诊断（真实 HWC 合成和队列占用需 Perfetto/厂商工具补证）。
 
 ### 第二批：需要接口或真机证据
 

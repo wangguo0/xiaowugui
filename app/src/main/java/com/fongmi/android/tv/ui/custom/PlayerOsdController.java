@@ -585,14 +585,21 @@ public class PlayerOsdController {
 
     private String summarizeFrameTiming() {
         com.fongmi.android.tv.player.exo.ExoFrameTimingMetrics.Snapshot timing = PlaybackAnalyticsListener.getFrameTimingSnapshot();
-        if (timing.frameCount() <= 0 && timing.codecErrorCount() <= 0) return "";
+        if (timing.frameCount() <= 0 && timing.releaseFrameCount() <= 0 && timing.codecErrorCount() <= 0) return "";
         String offset = timing.frameCount() <= 0 ? "" : timing.averageOffsetUs() >= 0
                 ? "平均提前 " + bitrateFormat.format(timing.averageOffsetUs() / 1000f) + "ms"
                 : "平均滞后 " + bitrateFormat.format(-timing.averageOffsetUs() / 1000f) + "ms";
+        String release = timing.releaseFrameCount() <= 0 ? "" : timing.averageReleaseLeadUs() >= 0
+                ? "释放提前 " + bitrateFormat.format(timing.averageReleaseLeadUs() / 1000f) + "ms"
+                : "释放滞后 " + bitrateFormat.format(-timing.averageReleaseLeadUs() / 1000f) + "ms";
         return join(" / ",
                 offset,
+                release,
                 timing.frameCount() > 0 ? "样本 " + timing.frameCount() : "",
                 timing.lateBatchCount() > 0 ? "滞后批次 " + timing.lateBatchCount() : "滞后批次 0",
+                timing.lateReleaseFrameCount() > 0 ? "释放滞后帧 " + timing.lateReleaseFrameCount() + "(最大 " + bitrateFormat.format(timing.maxLateReleaseUs() / 1000f) + "ms)" : "释放滞后帧 0",
+                timing.releaseJitterSampleCount() > 0 ? "释放抖动 " + bitrateFormat.format(timing.averageReleaseJitterUs() / 1000f) + "ms" : "",
+                timing.callbackGapSampleCount() > 0 ? "回调间隔 " + bitrateFormat.format(timing.averageCallbackGapUs() / 1000f) + "ms" : "",
                 "codec错误 " + timing.codecErrorCount(),
                 TextUtils.isEmpty(timing.lastCodecError()) ? "" : shortText(timing.lastCodecError(), 72));
     }

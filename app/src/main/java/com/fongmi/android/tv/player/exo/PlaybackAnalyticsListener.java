@@ -251,6 +251,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
     @Override
     public void onVideoFrameAboutToBeRendered(long presentationTimeUs, long releaseTimeNs, Format format, @Nullable MediaFormat mediaFormat) {
         FRAME_RATE_ESTIMATOR.observe(presentationTimeUs);
+        FRAME_TIMING_METRICS.observeFrameRelease(presentationTimeUs, releaseTimeNs, System.nanoTime());
     }
 
     @Override
