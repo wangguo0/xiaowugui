@@ -11,12 +11,14 @@ import androidx.media3.common.Player;
 import androidx.media3.common.Tracks;
 import androidx.media3.exoplayer.ExoPlayer;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.player.PlaybackTrace;
 import com.fongmi.android.tv.player.exo.ErrorMsgProvider;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.exo.ExoTunnelingRuntimeState;
+import com.fongmi.android.tv.player.exo.ExoTunnelingWatchdog;
 import com.fongmi.android.tv.player.exo.MediaSourceFactory;
 import com.fongmi.android.tv.player.exo.PlaybackAnalyticsListener;
 import com.fongmi.android.tv.player.exo.PreCache;
@@ -43,6 +45,21 @@ public class ExoPlayerEngine implements PlayerEngine {
     private boolean cacheSessionActive;
     private boolean tunnelingFallbackAttempted;
     private boolean tunnelingEnabledForSession;
+    private final ExoTunnelingWatchdog tunnelingWatchdog = new ExoTunnelingWatchdog();
+    private final Runnable tunnelingWatchdogRunnable = this::onTunnelingWatchdogTimeout;
+    private final Player.Listener tunnelingWatchdogListener = new Player.Listener() {
+        @Override
+        public void onRenderedFirstFrame() {
+            tunnelingWatchdog.onFirstFrame();
+            App.removeCallbacks(tunnelingWatchdogRunnable);
+        }
+
+        @Override
+        public void onPlayerError(@androidx.annotation.NonNull PlaybackException error) {
+            tunnelingWatchdog.onError();
+            App.removeCallbacks(tunnelingWatchdogRunnable);
+        }
+    };
 
     public ExoPlayerEngine(int decode, Player.Listener listener) {
         MediaSourceFactory.acquireCacheSession();
@@ -58,6 +75,7 @@ public class ExoPlayerEngine implements PlayerEngine {
         this.attemptedFormats = new HashSet<>();
         this.decode = decode;
         this.tunnelingEnabledForSession = ExoUtil.isTunnelingEnabled(decode, false);
+        this.player.addListener(tunnelingWatchdogListener);
     }
 
     @Override
@@ -73,6 +91,7 @@ public class ExoPlayerEngine implements PlayerEngine {
             cacheRelease = MediaSourceFactory::releaseCacheSession;
         }
         preCache.release(cacheRelease);
+        cancelTunnelingWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
     }
@@ -80,21 +99,46 @@ public class ExoPlayerEngine implements PlayerEngine {
     @Override
     public Player rebuild(Player.Listener listener) {
         preCache.stop("engine-rebuild");
+        cancelTunnelingWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         player.release();
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "rebuild decode=%d", decode);
         tunnelingEnabledForSession = ExoUtil.isTunnelingEnabled(decode, tunnelingFallbackAttempted);
-        return player = ExoUtil.buildPlayer(decode, listener, tunnelingFallbackAttempted);
+        player = ExoUtil.buildPlayer(decode, listener, tunnelingFallbackAttempted);
+        player.addListener(tunnelingWatchdogListener);
+        return player;
     }
 
     public boolean disableTunnelingForSession() {
         if (!tunnelingEnabledForSession || tunnelingFallbackAttempted) return false;
         tunnelingFallbackAttempted = true;
         tunnelingEnabledForSession = false;
+        cancelTunnelingWatchdog();
         int failures = ExoTunnelingRuntimeState.recordFailure(ExoUtil.getTunnelingRuntimeKey(decode));
         PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "disable tunneling for current session");
         PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "runtime failure count=%d blacklisted=%s", failures, failures >= ExoTunnelingRuntimeState.BLACKLIST_THRESHOLD);
         return true;
+    }
+
+    private void armTunnelingWatchdog() {
+        if (!tunnelingEnabledForSession) return;
+        tunnelingWatchdog.arm(android.os.SystemClock.elapsedRealtime());
+        App.post(tunnelingWatchdogRunnable, ExoTunnelingWatchdog.FIRST_FRAME_TIMEOUT_MS);
+    }
+
+    private void cancelTunnelingWatchdog() {
+        tunnelingWatchdog.reset();
+        App.removeCallbacks(tunnelingWatchdogRunnable);
+    }
+
+    private void onTunnelingWatchdogTimeout() {
+        if (!tunnelingWatchdog.shouldTimeout(android.os.SystemClock.elapsedRealtime())) return;
+        long position = Math.max(0, player.getCurrentPosition());
+        boolean wasPlayWhenReady = player.getPlayWhenReady();
+        if (!disableTunnelingForSession()) return;
+        PlaybackTrace.log("exo-tunnel", getPlaybackTraceId(), "first-frame watchdog fallback position=%d", position);
+        player.stop();
+        startInternal(position, wasPlayWhenReady);
     }
 
     @Override
@@ -279,6 +323,7 @@ public class ExoPlayerEngine implements PlayerEngine {
 
     private void startInternal(long position, boolean playWhenReady) {
         this.playWhenReady = playWhenReady;
+        armTunnelingWatchdog();
         PlaybackAnalyticsListener.finishSession(player.getCurrentPosition());
         PlaybackAnalyticsListener.beginSession(spec.getPlaybackTraceId());
         PlaybackTrace.log("player-engine", getPlaybackTraceId(), "prepare position=%d decode=%d format=%s originalFormat=%s play=%s", position, decode, activeFormat, spec.getFormat(), playWhenReady);
