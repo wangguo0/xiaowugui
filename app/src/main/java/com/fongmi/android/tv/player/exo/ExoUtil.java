@@ -49,6 +49,7 @@ import com.fongmi.android.tv.bean.Sub;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.engine.PlaySpec;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
+import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.track.LangUtil;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.ExoPerformanceSetting;
@@ -165,7 +166,9 @@ public class ExoUtil {
         DefaultTrackSelector.Parameters.Builder builder = trackSelector.buildUponParameters();
         if (PlayerSetting.isPreferAAC(PlayerSetting.EXO)) builder.setPreferredAudioMimeType(MimeTypes.AUDIO_AAC);
         builder.setPreferredTextLanguages(LangUtil.getPreferredTextLanguages());
-        builder.setTunnelingEnabled(PlayerSetting.isTunnelingEnabled());
+        ExoTunnelingPolicy.Decision tunneling = getTunnelingDecision(decode);
+        builder.setTunnelingEnabled(tunneling.enabled());
+        if (SpiderDebug.isEnabled()) SpiderDebug.log("exo-tunnel", "requested=%s enabled=%s reason=%s decode=%d render=%d lut=%s", PlayerSetting.isTunnel(), tunneling.enabled(), tunneling.reason(), decode, PlayerSetting.getRender(), LutSetting.isEnabled());
         if (PlaybackPerformanceSetting.isTrackLimitEnabled()) {
             applyEnhancedVideoProfile(builder, getEnhancedVideoProfile(decode));
         } else {
@@ -173,6 +176,22 @@ public class ExoUtil {
         }
         trackSelector.setParameters(builder.build());
         return trackSelector;
+    }
+
+    private static ExoTunnelingPolicy.Decision getTunnelingDecision(int decode) {
+        ExoTunnelingPolicy.Request request = new ExoTunnelingPolicy.Request(
+                PlayerSetting.isTunnel(),
+                PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE,
+                decode != PlayerEngine.SOFT,
+                true,
+                true,
+                LutSetting.isEnabled(),
+                false,
+                false,
+                false,
+                true,
+                false);
+        return ExoTunnelingPolicy.resolve(request);
     }
 
     private static void applyEnhancedVideoProfile(DefaultTrackSelector.Parameters.Builder builder, EnhancedVideoProfile profile) {
