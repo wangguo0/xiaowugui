@@ -33,6 +33,7 @@ import com.fongmi.android.tv.player.exo.ExoOutputModeManager;
 import com.fongmi.android.tv.player.exo.ExoOutputModePolicy;
 import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.PlaybackPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
@@ -579,6 +580,11 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
 
     private void applyExoOutputMode() {
         if (mService == null || !player().isExo() || getRender() != PlayerSetting.RENDER_SURFACE || exoOutputModeManager == null) return;
+        if (ExoPerformanceSetting.isNetworkProtectionEnabled()) {
+            exoOutputModeManager.restore();
+            if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-flow", "exo output mode skipped reason=network-protection");
+            return;
+        }
         Format format = player().getVideoFormat();
         ExoOutputModeManager.Result result = exoOutputModeManager.apply(format);
         if (SpiderDebug.isEnabled() && result.decision() != null && result.decision().mode() != null) {

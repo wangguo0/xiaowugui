@@ -200,6 +200,7 @@ public class ExoUtil {
     private static ExoTunnelingPolicy.Decision getTunnelingDecision(int decode, boolean tunnelingFallbackAttempted) {
         ExoTunnelingPolicy.Request request = new ExoTunnelingPolicy.Request(
                 PlayerSetting.isTunnel(),
+                ExoPerformanceSetting.isNetworkProtectionEnabled(),
                 PlayerSetting.getRender() == PlayerSetting.RENDER_SURFACE,
                 decode != PlayerEngine.SOFT,
                 true,
@@ -482,7 +483,7 @@ public class ExoUtil {
 
     private static AudioSink buildAudioSink(Context context, boolean enableFloatOutput, boolean enableAudioOutputPlaybackParams) {
         DefaultAudioSink.Builder builder = new DefaultAudioSink.Builder(context).setEnableFloatOutput(enableFloatOutput).setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams);
-        if (!PlayerSetting.isAudioPassThrough(PlayerSetting.EXO)) builder.setAudioOutputProvider(new AudioTrackAudioOutputProvider.Builder(null).build());
+        if (!PlayerSetting.isAudioPassThrough(PlayerSetting.EXO) || ExoPerformanceSetting.isNetworkProtectionEnabled()) builder.setAudioOutputProvider(new AudioTrackAudioOutputProvider.Builder(null).build());
         return builder.build();
     }
 

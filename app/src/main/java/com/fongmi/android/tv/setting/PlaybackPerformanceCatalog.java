@@ -58,6 +58,7 @@ public final class PlaybackPerformanceCatalog {
     public static final String EXO_START_BUFFER = "exo_start_buffer";
     public static final String EXO_REBUFFER = "exo_rebuffer";
     public static final String EXO_PRIORITIZE_TIME = "exo_prioritize_time";
+    public static final String EXO_NETWORK_PROTECTION = "exo_network_protection";
 
     private static final String BASIC = "基础性能";
     private static final String BUFFER = "缓冲与缓存";
@@ -88,6 +89,7 @@ public final class PlaybackPerformanceCatalog {
         options.add(option(EXO_START_BUFFER, BUFFER, "起播阈值", "作用：开始播放前至少准备多少秒。1.5秒（均衡/默认）适合大多数网络；弱网或4K卡顿可调到2～3秒，追求秒开可用0.5～1秒。代价：阈值越高首帧越慢。"));
         options.add(option(EXO_REBUFFER, BUFFER, "重缓冲恢复", "作用：卡住后积累多少缓冲才恢复。自动档会在当前播放中根据真实码率、带宽和重缓冲表现逐级调整到2～15秒；手动建议均衡3秒、兼容5秒、轻量2秒。代价：数值越高越不易再次卡，但单次等待更久。"));
         options.add(option(EXO_PRIORITIZE_TIME, BUFFER, "时间优先", "作用：优先满足“缓冲秒数”，不因目标字节容量已达到就停止加载。网络波动或长视频建议开启；内存紧张设备保持关闭。代价：可能超过目标容量并暂时占用更多内存，不能突破系统可用内存。"));
+        options.add(option(EXO_NETWORK_PROTECTION, BUFFER, "网络保护降速", "作用：网盘单轨视频的持续吞吐略低于消费码率时，以保调降速减少单位时间的数据消耗。低感知最低0.95x，增强最低0.90x，激进最低0.85x；仅EXO点播且用户倍速为1.0时生效。代价：会关闭隧道、音频直通和刷新率强制匹配；严重带宽不足仍无法稳定。修改后重新进入播放生效。"));
         options.add(option(LOAD_SELECTED_TRACKS, BUFFER, "只加载选中轨道", "作用：只请求当前音视频轨道，减少带宽和内存。网速/内存紧张建议开启；经常切换清晰度、音轨时可关闭以减少重新请求。代价：切换轨道可能需要重新缓冲。"));
         addPreload(options);
         options.add(option(CODEC_ASYNC, DECODE, "MediaCodec 队列", "作用：决定解码输出由异步还是同步队列驱动。保持自动（默认）通常吞吐最高；只有旧设备异步回调异常时才改同步。代价：同步可能更稳，但会增加等待和 CPU 调度压力。"));

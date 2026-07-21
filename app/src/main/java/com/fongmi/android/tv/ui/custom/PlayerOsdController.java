@@ -308,6 +308,7 @@ public class PlayerOsdController {
         String nativeCache = summarizeNativeCache(player.getCacheState());
         String renderDiagnostics = player.getRenderDiagnostics();
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
+        String networkProtection = player.getNetworkProtectionText();
         String runtimeDiagnostics = player.getRuntimeDiagnostics();
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
@@ -329,6 +330,7 @@ public class PlayerOsdController {
                 row("设备HEVC能力", getHevcDecoderText()),
                 row("音频", audioText),
                 row("网络", network),
+                TextUtils.isEmpty(networkProtection) ? "" : row("网络保护", networkProtection + " / 实际 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed())),
                 TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
                 TextUtils.isEmpty(renderDiagnostics) ? "" : row(player.isExo() ? "EXO输出" : "MPV渲染", renderDiagnostics),
                 TextUtils.isEmpty(frameTiming) ? "" : row("EXO帧调度", frameTiming),

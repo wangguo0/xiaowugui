@@ -14,24 +14,29 @@ public class ExoTunnelingPolicyTest {
 
     @Test
     public void rejectsTextureViewAndSoftDecode() {
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, false, false, false, false, true, false)).enabled());
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, false, true, true, false, false, false, false, true, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, false, true, true, true, false, false, false, false, true, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, false, true, true, false, false, false, false, true, false)).enabled());
     }
 
     @Test
     public void rejectsEffectsExternalAudioAndKnownBadDevices() {
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, true, false, false, false, true, false)).enabled());
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, false, true, false, false, true, false)).enabled());
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, false, false, true, false, true, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, true, true, false, false, false, true, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, true, false, true, false, false, true, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, true, false, false, true, false, true, false)).enabled());
     }
 
     @Test
     public void automaticModeIsTvOnlyAndFallbackIsOneShot() {
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, false, false, false, true, false, false)).enabled());
-        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, false, false, false, false, true, true)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, true, false, false, false, true, false, false)).enabled());
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, false, true, true, true, true, false, false, false, false, true, true)).enabled());
+    }
+
+    @Test
+    public void rejectsNetworkProtectionSessions() {
+        assertFalse(ExoTunnelingPolicy.resolve(new ExoTunnelingPolicy.Request(true, true, true, true, true, true, false, false, false, false, true, false)).enabled());
     }
 
     private static ExoTunnelingPolicy.Request request() {
-        return new ExoTunnelingPolicy.Request(true, true, true, true, true, false, false, false, false, true, false);
+        return new ExoTunnelingPolicy.Request(true, false, true, true, true, true, false, false, false, false, true, false);
     }
 }

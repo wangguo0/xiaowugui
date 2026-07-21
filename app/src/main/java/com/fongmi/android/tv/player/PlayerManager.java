@@ -59,6 +59,7 @@ import com.fongmi.android.tv.player.lut.MpvLutShaderFactory;
 import com.fongmi.android.tv.player.mpv.MpvAutoOutputPolicy;
 import com.fongmi.android.tv.player.mpv.MpvConfigStore;
 import com.fongmi.android.tv.setting.DanmakuSetting;
+import com.fongmi.android.tv.setting.ExoPerformanceSetting;
 import com.fongmi.android.tv.setting.MpvPerformanceSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.utils.LocalProxyDebug;
@@ -158,6 +159,8 @@ public class PlayerManager implements ParseCallback {
     private int lutWarmupRecoveredErrors;
     private int mpvOutputEvaluationSeq;
     private int mpvAutoOutputProbeAttempts;
+    private float userPlaybackSpeed = 1f;
+    private float networkProtectionSpeed = 1f;
 
     public PlayerManager(Callback callback) {
         this.runnable = this::onPlaybackTimeout;
@@ -296,7 +299,18 @@ public class PlayerManager implements ParseCallback {
     }
 
     public float getSpeed() {
-        return player.getPlaybackParameters().speed;
+        return userPlaybackSpeed;
+    }
+
+    public float getEffectiveSpeed() {
+        return player == null ? userPlaybackSpeed : player.getPlaybackParameters().speed;
+    }
+
+    public String getNetworkProtectionText() {
+        if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled()) return "";
+        if (Math.abs(userPlaybackSpeed - 1f) > 0.001f) return "已暂停 · 用户" + SPEED_FORMAT.format(userPlaybackSpeed);
+        if (networkProtectionSpeed < 0.999f) return "固定 " + SPEED_FORMAT.format(networkProtectionSpeed);
+        return isVod() ? "等待生效" : "仅点播";
     }
 
     public boolean isEmpty() {
@@ -598,8 +612,33 @@ public class PlayerManager implements ParseCallback {
 
     public String setSpeed(float speed) {
         if (!player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) return getSpeedText();
-        player.setPlaybackParameters(player.getPlaybackParameters().withSpeed(speed));
+        userPlaybackSpeed = speed;
+        networkProtectionSpeed = 1f;
+        applyEffectiveSpeed(speed, "user");
+        if (Math.abs(speed - 1f) < 0.001f && player.getPlaybackState() == Player.STATE_READY) applyFixedNetworkProtectionSpeed();
         return getSpeedText();
+    }
+
+    private void applyEffectiveSpeed(float speed, String reason) {
+        if (player == null || !player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) return;
+        float current = player.getPlaybackParameters().speed;
+        if (Math.abs(current - speed) < 0.001f) return;
+        player.setPlaybackParameters(player.getPlaybackParameters().withSpeed(speed));
+        PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "speed %.2f->%.2f reason=%s user=%.2f", current, speed, reason, userPlaybackSpeed);
+    }
+
+    private void resetNetworkProtectionSpeed(String reason) {
+        networkProtectionSpeed = 1f;
+        applyEffectiveSpeed(userPlaybackSpeed, reason);
+    }
+
+    private void applyFixedNetworkProtectionSpeed() {
+        if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled() || Math.abs(userPlaybackSpeed - 1f) > 0.001f || !isVod()) {
+            resetNetworkProtectionSpeed("ineligible");
+            return;
+        }
+        networkProtectionSpeed = ExoPerformanceSetting.getNetworkProtectionMinimumSpeed();
+        applyEffectiveSpeed(networkProtectionSpeed, "fixed-protection");
     }
 
     public String addSpeed() {
@@ -1233,6 +1272,7 @@ public class PlayerManager implements ParseCallback {
         spec.refreshPlaybackRoute();
         logPlaybackRoute();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "setMediaItem timeout=%d notify=%s spec=%s", timeout, notifyPrepare, debugSpec());
+        resetNetworkProtectionSpeed("new-media");
         App.removeCallbacks(runnable);
         setDanmakus(spec.getDanmakus());
         prepareLutPipeline();
@@ -2221,6 +2261,7 @@ public class PlayerManager implements ParseCallback {
                 hardDecodeSwitchRetryArmed = false;
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
+                applyFixedNetworkProtectionSpeed();
             }
             recordBufferingState(state);
         }

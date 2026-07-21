@@ -2,6 +2,7 @@ package com.fongmi.android.tv.setting;
 
 import androidx.media3.common.C;
 
+import com.fongmi.android.tv.player.exo.ExoNetworkProtectionPolicy;
 import com.github.catvod.utils.Prefers;
 
 public final class ExoPerformanceSetting {
@@ -21,6 +22,7 @@ public final class ExoPerformanceSetting {
     private static final String KEY_PRIORITIZE_TIME = "perf_exo_prioritize_time";
     private static final String KEY_AUTO_REBUFFER_MS = "perf_exo_auto_rebuffer_ms";
     private static final String KEY_AUTO_CLEAN_STREAK = "perf_exo_auto_clean_streak";
+    private static final String KEY_NETWORK_PROTECTION_MODE = "perf_exo_network_protection_mode";
     private static volatile int autoSessionRebufferMs = AutoRebufferPolicy.DEFAULT_REBUFFER_MS;
 
     private ExoPerformanceSetting() {
@@ -119,9 +121,40 @@ public final class ExoPerformanceSetting {
         PlaybackPerformanceSetting.markCustom();
     }
 
+    public static int getNetworkProtectionMode() {
+        return clamp(Prefers.getInt(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF), ExoNetworkProtectionPolicy.MODE_OFF, ExoNetworkProtectionPolicy.MODE_AGGRESSIVE);
+    }
+
+    public static void putNetworkProtectionMode(int value) {
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, clamp(value, ExoNetworkProtectionPolicy.MODE_OFF, ExoNetworkProtectionPolicy.MODE_AGGRESSIVE));
+        PlaybackPerformanceSetting.markCustom();
+    }
+
+    public static int nextNetworkProtectionMode() {
+        return (getNetworkProtectionMode() + 1) % (ExoNetworkProtectionPolicy.MODE_AGGRESSIVE + 1);
+    }
+
+    public static boolean isNetworkProtectionEnabled() {
+        return ExoNetworkProtectionPolicy.resolve(getNetworkProtectionMode()).enabled();
+    }
+
+    public static float getNetworkProtectionMinimumSpeed() {
+        return ExoNetworkProtectionPolicy.resolve(getNetworkProtectionMode()).minimumSpeed();
+    }
+
+    public static String getNetworkProtectionText() {
+        return switch (getNetworkProtectionMode()) {
+            case ExoNetworkProtectionPolicy.MODE_STANDARD -> "低感知 · 最低0.95x";
+            case ExoNetworkProtectionPolicy.MODE_ENHANCED -> "增强 · 最低0.90x";
+            case ExoNetworkProtectionPolicy.MODE_AGGRESSIVE -> "激进 · 最低0.85x";
+            default -> "关闭";
+        };
+    }
+
     public static void applyRecommended() {
         Prefers.put(KEY_CODEC_QUEUE_MODE, CODEC_QUEUE_AUTO);
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF);
         applyStartBufferPreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED);
         applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_RECOMMENDED);
@@ -130,6 +163,7 @@ public final class ExoPerformanceSetting {
     public static void applyAuto() {
         Prefers.put(KEY_CODEC_QUEUE_MODE, CODEC_QUEUE_AUTO);
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF);
         applyStartBufferPreset(PlaybackPerformanceSetting.PROFILE_AUTO);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_AUTO);
         applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_AUTO);
@@ -180,6 +214,7 @@ public final class ExoPerformanceSetting {
     public static void applyCompatible() {
         Prefers.put(KEY_CODEC_QUEUE_MODE, CODEC_QUEUE_SYNC);
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_OFF);
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF);
         applyStartBufferPreset(PlaybackPerformanceSetting.PROFILE_COMPATIBLE);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_COMPATIBLE);
         applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_COMPATIBLE);
@@ -188,6 +223,7 @@ public final class ExoPerformanceSetting {
     public static void applyLightweight() {
         Prefers.put(KEY_CODEC_QUEUE_MODE, CODEC_QUEUE_AUTO);
         Prefers.put(KEY_FRAME_RATE_MODE, FRAME_RATE_SEAMLESS);
+        Prefers.put(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF);
         applyStartBufferPreset(PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT);
         applyRebufferPreset(PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT);
         applyPrioritizeTimePreset(PlaybackPerformanceSetting.PROFILE_LIGHTWEIGHT);

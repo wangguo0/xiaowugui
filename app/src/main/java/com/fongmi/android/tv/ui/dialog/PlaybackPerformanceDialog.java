@@ -490,6 +490,7 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             case PlaybackPerformanceCatalog.EXO_START_BUFFER -> formatSeconds(ExoPerformanceSetting.getStartBufferMs());
             case PlaybackPerformanceCatalog.EXO_REBUFFER -> PlaybackPerformanceSetting.isAuto() ? "自动 · " + formatSeconds(ExoPerformanceSetting.getRebufferMs()) + "（2～15秒）" : formatSeconds(ExoPerformanceSetting.getRebufferMs());
             case PlaybackPerformanceCatalog.EXO_PRIORITIZE_TIME -> onOff(ExoPerformanceSetting.isPrioritizeTime());
+            case PlaybackPerformanceCatalog.EXO_NETWORK_PROTECTION -> ExoPerformanceSetting.getNetworkProtectionText();
             default -> "";
         };
     }
@@ -642,6 +643,10 @@ public final class PlaybackPerformanceDialog extends DialogFragment {
             };
             case PlaybackPerformanceCatalog.EXO_PRIORITIZE_TIME -> () -> {
                 ExoPerformanceSetting.putPrioritizeTime(!ExoPerformanceSetting.isPrioritizeTime());
+                refresh();
+            };
+            case PlaybackPerformanceCatalog.EXO_NETWORK_PROTECTION -> () -> {
+                ExoPerformanceSetting.putNetworkProtectionMode(ExoPerformanceSetting.nextNetworkProtectionMode());
                 refresh();
             };
             default -> null;
