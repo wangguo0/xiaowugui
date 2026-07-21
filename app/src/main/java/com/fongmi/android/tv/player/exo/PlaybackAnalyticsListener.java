@@ -119,6 +119,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
         if (state == Player.STATE_BUFFERING) {
             BITRATE_ESTIMATOR.disrupt();
             BUFFER_TREND.reset();
+            FRAME_TIMING_METRICS.resetReleaseContinuity();
             if (next.everReady() && next.rebufferStartMs() <= 0) next = next.withRebufferStart(now);
         }
         if (state != Player.STATE_BUFFERING && next.rebufferStartMs() > 0) next = next.withRebufferEnd(now);
@@ -174,6 +175,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
     public void onVideoInputFormatChanged(EventTime eventTime, Format format, @Nullable DecoderReuseEvaluation decoderReuseEvaluation) {
         snapshot = snapshot.withVideoFormat(format);
         FRAME_RATE_ESTIMATOR.reset();
+        FRAME_TIMING_METRICS.resetReleaseContinuity();
         BITRATE_ESTIMATOR.updateFormats(snapshot.videoFormat(), snapshot.audioFormat());
         if (!SpiderDebug.isEnabled()) return;
         traceLog("video format mime=%s codecs=%s size=%dx%d fps=%.3f bitrate=%d bitrateSource=%s color=%s", format.sampleMimeType, format.codecs, format.width, format.height, format.frameRate, ExoPlaybackDiagnostics.formatBitrate(format), ExoPlaybackDiagnostics.bitrateSource(format), format.colorInfo);
@@ -245,6 +247,7 @@ public class PlaybackAnalyticsListener implements AnalyticsListener, VideoFrameM
     public void onPositionDiscontinuity(EventTime eventTime, Player.PositionInfo oldPosition, Player.PositionInfo newPosition, int reason) {
         BITRATE_ESTIMATOR.disrupt();
         FRAME_RATE_ESTIMATOR.reset();
+        FRAME_TIMING_METRICS.resetReleaseContinuity();
         BUFFER_TREND.reset();
     }
 

@@ -53,6 +53,13 @@ public final class ExoFrameTimingMetrics {
         lastCodecError = error == null ? "unknown" : error.getClass().getSimpleName() + (error.getMessage() == null ? "" : ": " + error.getMessage());
     }
 
+    /** Starts a new continuous playback segment without discarding accumulated diagnostics. */
+    synchronized void resetReleaseContinuity() {
+        previousPresentationTimeUs = Long.MIN_VALUE;
+        previousReleaseTimeNs = Long.MIN_VALUE;
+        previousCallbackTimeNs = Long.MIN_VALUE;
+    }
+
     /**
      * Records the renderer's scheduled release time. This is a timing proxy only: Android does
      * not expose HWC composition or MediaCodec queue occupancy to the app.

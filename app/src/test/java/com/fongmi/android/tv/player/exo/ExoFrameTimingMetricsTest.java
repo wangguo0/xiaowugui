@@ -47,4 +47,17 @@ public class ExoFrameTimingMetricsTest {
         assertEquals(42_500, snapshot.averageCallbackGapUs());
         assertEquals(43_000, snapshot.maxCallbackGapUs());
     }
+
+    @Test
+    public void doesNotCountInterruptionAsReleaseJitterOrCallbackGap() {
+        ExoFrameTimingMetrics metrics = new ExoFrameTimingMetrics();
+        metrics.observeFrameRelease(0, 1_000_000_000L, 999_000_000L);
+        metrics.resetReleaseContinuity();
+        metrics.observeFrameRelease(40_000, 10_000_000_000L, 9_999_000_000L);
+
+        ExoFrameTimingMetrics.Snapshot snapshot = metrics.snapshot();
+        assertEquals(2, snapshot.releaseFrameCount());
+        assertEquals(0, snapshot.releaseJitterSampleCount());
+        assertEquals(0, snapshot.callbackGapSampleCount());
+    }
 }
