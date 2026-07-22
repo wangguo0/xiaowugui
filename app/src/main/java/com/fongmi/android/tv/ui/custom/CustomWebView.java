@@ -7,10 +7,8 @@ import android.net.Uri;
 import android.net.http.SslError;
 import android.text.TextUtils;
 import android.view.ViewGroup;
-import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.SslErrorHandler;
-import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -27,7 +25,6 @@ import com.fongmi.android.tv.impl.ParseCallback;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.WebDialog;
 import com.fongmi.android.tv.utils.WebSniffHeaders;
-import com.fongmi.android.tv.utils.WebViewUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.crawler.SpiderDebug;
@@ -76,7 +73,6 @@ public class CustomWebView extends WebView implements DialogInterface.OnDismissL
         timer = () -> stop(true);
         urls = new LinkedHashSet<>();
         empty = new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream("".getBytes()));
-        WebViewUtil.configureBase(this, "parse");
         WebSettings setting = getSettings();
         setting.setSupportZoom(true);
         setting.setUseWideViewPort(true);
@@ -90,7 +86,6 @@ public class CustomWebView extends WebView implements DialogInterface.OnDismissL
         setting.setMediaPlaybackRequiresUserGesture(false);
         setting.setJavaScriptCanOpenWindowsAutomatically(false);
         setting.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        setWebChromeClient(webChromeClient());
         setWebViewClient(webViewClient());
     }
 
@@ -159,16 +154,6 @@ public class CustomWebView extends WebView implements DialogInterface.OnDismissL
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return false;
-            }
-        };
-    }
-
-    private WebChromeClient webChromeClient() {
-        return new WebChromeClient() {
-            @Override
-            public boolean onConsoleMessage(ConsoleMessage message) {
-                if (message != null) SpiderDebug.log("webview-console", "%s %s:%s %s", message.messageLevel(), message.sourceId(), message.lineNumber(), message.message());
-                return super.onConsoleMessage(message);
             }
         };
     }
