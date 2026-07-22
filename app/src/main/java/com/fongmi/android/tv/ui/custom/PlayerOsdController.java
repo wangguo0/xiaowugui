@@ -304,7 +304,6 @@ public class PlayerOsdController {
         String state = stateText(player.getPlaybackState()) + (player.isLoading() ? " / 正在加载" : "");
         String buffer = join(" / ", formatDuration(player.getBufferedDuration()), player.getBufferedPercentage() > 0 ? player.getBufferedPercentage() + "%" : "");
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
-        long mediaBitrate = player.getNetworkProtectionMediaBitrate();
         long stableThroughput = player.getNetworkProtectionStableThroughput();
         long consumption = player.getNetworkProtectionConsumption();
         String networkProtection = player.getNetworkProtectionText();
@@ -313,11 +312,10 @@ public class PlayerOsdController {
                 "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()),
                 "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()));
         String network = join(" / ",
-                mediaBitrate > 0 ? "片段码率 " + formatBitrate(mediaBitrate) : "片段码率 待采样",
                 consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
                 stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
-                stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "",
-                strategy);
+                stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "");
+        if (TextUtils.isEmpty(network)) network = "待采样";
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
@@ -333,15 +331,15 @@ public class PlayerOsdController {
         String playback = join(" / ", state, buffer, "重缓冲 " + rebuffer, "掉帧 " + player.getDroppedFrames());
         String error = getErrorText(player, snapshot);
         String main = join("\n",
-                row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
                 TextUtils.isEmpty(error) ? "" : row("错误", error),
                 row("视频", videoText),
                 row("音频", audioText),
                 row("网络", network),
-                TextUtils.isEmpty(frameTiming) ? "" : row("EXO帧调度", frameTiming),
+                row("保流畅", strategy),
+                TextUtils.isEmpty(frameTiming) ? "" : row("帧调度", frameTiming),
                 row("播放", playback),
                 row("配置", playerText),
-                row("来源", summarizeSource(player.getUrl())));
+                row("结论", getDiagnosis(player, snapshot, video, audioTrack)));
         String extra = join("\n",
                 row("设备", getDeviceText()),
                 row("系统", getSystemText()),
@@ -601,8 +599,10 @@ public class PlayerOsdController {
             return "释放滞后 " + timing.lateReleaseFrameCount() + " 帧 / 最大延迟 " + bitrateFormat.format(timing.maxLateReleaseUs() / 1000f) + "ms";
         }
         if (timing.lateBatchCount() > 0) return "调度滞后 " + timing.lateBatchCount() + " 批";
-        if (timing.releaseJitterSampleCount() > 0) return "释放抖动 " + bitrateFormat.format(timing.averageReleaseJitterUs() / 1000f) + "ms";
-        return "正常";
+        if (timing.releaseJitterSampleCount() > 0 && timing.averageReleaseJitterUs() >= 5_000) {
+            return "释放抖动 " + bitrateFormat.format(timing.averageReleaseJitterUs() / 1000f) + "ms";
+        }
+        return "";
     }
 
     private String getColor(Format format) {
