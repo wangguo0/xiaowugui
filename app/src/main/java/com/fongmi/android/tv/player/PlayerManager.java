@@ -331,18 +331,17 @@ public class PlayerManager implements ParseCallback {
 
     public String getNetworkProtectionText() {
         if (!isExo() || !ExoPerformanceSetting.isNetworkProtectionEnabled()) return "";
-        if (Math.abs(userPlaybackSpeed - 1f) > 0.001f) return "已暂停 · 用户" + SPEED_FORMAT.format(userPlaybackSpeed);
-        if (!isVod()) return "仅点播";
+        if (Math.abs(userPlaybackSpeed - 1f) > 0.001f) return "手动倍速时停用";
+        if (!isVod()) return "仅支持点播";
         ExoNetworkGuardEligibility.Decision eligibility = getNetworkProtectionEligibility();
-        if (!eligibility.eligible()) return "休眠 · " + networkProtectionReasonText(eligibility.reason());
-        if (networkProtectionState == ExoNetworkGuardController.State.NORMAL && networkProtectionSpeed >= 0.999f) return "观察中";
-        if (networkProtectionState == ExoNetworkGuardController.State.UNSUSTAINABLE) {
-            return networkProtectionSpeed < 0.999f ? networkProtectionState.text() + " " + SPEED_FORMAT.format(networkProtectionSpeed) : networkProtectionState.text();
-        }
-        String prefix = networkProtectionTier == ExoNetworkGuardController.ProtectionTier.NONE
-                ? networkProtectionState.text()
-                : networkProtectionTier.text() + networkProtectionState.text();
-        return prefix + " " + SPEED_FORMAT.format(networkProtectionSpeed);
+        if (!eligibility.eligible()) return "未启用";
+        return switch (networkProtectionState) {
+            case NORMAL -> "正常";
+            case WARNING -> "评估中";
+            case PROTECT -> "降速中";
+            case RECOVERY -> "恢复中";
+            case UNSUSTAINABLE -> "网络不足";
+        };
     }
 
     public long getNetworkProtectionMediaBitrate() {
@@ -359,10 +358,6 @@ public class PlayerManager implements ParseCallback {
 
     public float getNetworkProtectionSupportedSpeed() {
         return networkProtectionSupportedSpeed;
-    }
-
-    public float getNetworkProtectionSpeed() {
-        return networkProtectionSpeed;
     }
 
     public boolean isEmpty() {
