@@ -307,17 +307,19 @@ public class PlayerOsdController {
         long mediaBitrate = player.getNetworkProtectionMediaBitrate();
         long stableThroughput = player.getNetworkProtectionStableThroughput();
         long consumption = player.getNetworkProtectionConsumption();
+        String networkProtection = player.getNetworkProtectionText();
+        String strategy = join(" / ",
+                TextUtils.isEmpty(networkProtection) ? "" : networkProtection,
+                "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()),
+                "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()));
         String network = join(" / ",
                 mediaBitrate > 0 ? "片段码率 " + formatBitrate(mediaBitrate) : "",
                 consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
                 stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
                 stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "",
-                "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()));
-        String nativeCache = summarizeNativeCache(player.getCacheState());
+                strategy);
         String renderDiagnostics = player.getRenderDiagnostics();
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
-        String networkProtection = player.getNetworkProtectionText();
-        String runtimeDiagnostics = player.getRuntimeDiagnostics();
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
         String audioText = summarizeAudio(audio, audioTrack, snapshot.audioDecoderName());
@@ -335,15 +337,11 @@ public class PlayerOsdController {
                 row("结论", getDiagnosis(player, snapshot, video, audioTrack)),
                 TextUtils.isEmpty(error) ? "" : row("错误", error),
                 row("视频", videoText),
-                row("设备HEVC能力", getHevcDecoderText()),
                 row("音频", audioText),
                 row("网络", network),
-                TextUtils.isEmpty(networkProtection) ? "" : row("网络保护", networkProtection + " / 实际 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed())),
-                TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
-                TextUtils.isEmpty(renderDiagnostics) ? "" : row(player.isExo() ? "EXO输出" : "MPV渲染", renderDiagnostics),
+                TextUtils.isEmpty(renderDiagnostics) ? "" : row("输出", renderDiagnostics),
                 TextUtils.isEmpty(frameTiming) ? "" : row("EXO帧调度", frameTiming),
-                TextUtils.isEmpty(runtimeDiagnostics) ? "" : row(player.isExo() ? "EXO运行" : "MPV运行", runtimeDiagnostics),
-                row("状态", playback),
+                row("播放", playback),
                 row("播放", playerText),
                 row("来源", summarizeSource(player.getUrl())));
         String extra = join("\n",
@@ -600,22 +598,13 @@ public class PlayerOsdController {
     private String summarizeFrameTiming() {
         com.fongmi.android.tv.player.exo.ExoFrameTimingMetrics.Snapshot timing = PlaybackAnalyticsListener.getFrameTimingSnapshot();
         if (timing.frameCount() <= 0 && timing.releaseFrameCount() <= 0 && timing.codecErrorCount() <= 0) return "";
-        String offset = timing.frameCount() <= 0 ? "" : timing.averageOffsetUs() >= 0
-                ? "平均提前 " + bitrateFormat.format(timing.averageOffsetUs() / 1000f) + "ms"
-                : "平均滞后 " + bitrateFormat.format(-timing.averageOffsetUs() / 1000f) + "ms";
-        String release = timing.releaseFrameCount() <= 0 ? "" : timing.averageReleaseLeadUs() >= 0
-                ? "释放提前 " + bitrateFormat.format(timing.averageReleaseLeadUs() / 1000f) + "ms"
-                : "释放滞后 " + bitrateFormat.format(-timing.averageReleaseLeadUs() / 1000f) + "ms";
-        return join(" / ",
-                offset,
-                release,
-                timing.frameCount() > 0 ? "样本 " + timing.frameCount() : "",
-                timing.lateBatchCount() > 0 ? "滞后批次 " + timing.lateBatchCount() : "滞后批次 0",
-                timing.lateReleaseFrameCount() > 0 ? "释放滞后帧 " + timing.lateReleaseFrameCount() + "(最大 " + bitrateFormat.format(timing.maxLateReleaseUs() / 1000f) + "ms)" : "释放滞后帧 0",
-                timing.releaseJitterSampleCount() > 0 ? "释放抖动 " + bitrateFormat.format(timing.averageReleaseJitterUs() / 1000f) + "ms" : "",
-                timing.callbackGapSampleCount() > 0 ? "回调间隔 " + bitrateFormat.format(timing.averageCallbackGapUs() / 1000f) + "ms" : "",
-                "codec错误 " + timing.codecErrorCount(),
-                TextUtils.isEmpty(timing.lastCodecError()) ? "" : shortText(timing.lastCodecError(), 72));
+        if (timing.codecErrorCount() > 0) return "解码错误 " + timing.codecErrorCount();
+        if (timing.lateReleaseFrameCount() > 0) {
+            return "释放滞后 " + timing.lateReleaseFrameCount() + " 帧 / 最大延迟 " + bitrateFormat.format(timing.maxLateReleaseUs() / 1000f) + "ms";
+        }
+        if (timing.lateBatchCount() > 0) return "调度滞后 " + timing.lateBatchCount() + " 批";
+        if (timing.releaseJitterSampleCount() > 0) return "释放抖动 " + bitrateFormat.format(timing.averageReleaseJitterUs() / 1000f) + "ms";
+        return "正常";
     }
 
     private String getColor(Format format) {
