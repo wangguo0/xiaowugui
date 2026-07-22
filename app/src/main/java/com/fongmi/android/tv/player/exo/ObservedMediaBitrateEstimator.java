@@ -13,6 +13,7 @@ import java.util.List;
 final class ObservedMediaBitrateEstimator {
 
     private static final long MIN_SAMPLE_SPAN_MS = 10_000;
+    private static final long MIN_LOAD_SAMPLE_SPAN_MS = 1_000;
     private static final long HIGH_CONFIDENCE_SPAN_MS = 30_000;
     private static final long MAX_SAMPLE_SPAN_MS = 60_000;
     private static final long MIN_VALID_BITRATE = 64_000;
@@ -51,7 +52,7 @@ final class ObservedMediaBitrateEstimator {
     synchronized void observeLoad(long bytesLoaded, long mediaStartTimeMs, long mediaEndTimeMs) {
         if (bytesLoaded <= 0 || mediaStartTimeMs == C.TIME_UNSET || mediaEndTimeMs == C.TIME_UNSET) return;
         long spanMs = mediaEndTimeMs - mediaStartTimeMs;
-        if (spanMs < MIN_SAMPLE_SPAN_MS || spanMs > MAX_SAMPLE_SPAN_MS) return;
+        if (spanMs < MIN_LOAD_SAMPLE_SPAN_MS || spanMs > MAX_SAMPLE_SPAN_MS) return;
         addRate(rateFor(bytesLoaded, spanMs));
     }
 

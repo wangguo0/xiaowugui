@@ -313,12 +313,11 @@ public class PlayerOsdController {
                 "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()),
                 "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()));
         String network = join(" / ",
-                mediaBitrate > 0 ? "片段码率 " + formatBitrate(mediaBitrate) : "",
+                mediaBitrate > 0 ? "片段码率 " + formatBitrate(mediaBitrate) : "片段码率 待采样",
                 consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
                 stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
                 stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "",
                 strategy);
-        String renderDiagnostics = player.getRenderDiagnostics();
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
@@ -339,10 +338,9 @@ public class PlayerOsdController {
                 row("视频", videoText),
                 row("音频", audioText),
                 row("网络", network),
-                TextUtils.isEmpty(renderDiagnostics) ? "" : row("输出", renderDiagnostics),
                 TextUtils.isEmpty(frameTiming) ? "" : row("EXO帧调度", frameTiming),
                 row("播放", playback),
-                row("播放", playerText),
+                row("配置", playerText),
                 row("来源", summarizeSource(player.getUrl())));
         String extra = join("\n",
                 row("设备", getDeviceText()),

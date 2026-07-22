@@ -79,6 +79,18 @@ public class ObservedMediaBitrateEstimatorTest {
     }
 
     @Test
+    public void hlsSegmentLoadsProvideBitrateEstimate() {
+        ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
+        estimator.observeLoad(6_000_000, 0, 6_000);
+        estimator.observeLoad(7_500_000, 6_000, 12_000);
+
+        ObservedMediaBitrateEstimator.Estimate estimate = estimator.estimateWithoutFormat();
+        assertEquals(ObservedMediaBitrateEstimator.Source.BYTE_SLOPE, estimate.source());
+        assertEquals(ObservedMediaBitrateEstimator.Confidence.MEDIUM, estimate.confidence());
+        assertTrue(estimate.bitrateBitsPerSecond() >= 10_000_000);
+    }
+
+    @Test
     public void seekOrSequenceChangeInvalidatesSlopeWindow() {
         ObservedMediaBitrateEstimator estimator = new ObservedMediaBitrateEstimator();
         estimator.observeBytePosition(0, 0, snapshot(1, 0), true);
