@@ -981,7 +981,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         addActionButton(PlayerButtonSetting.SPEED, mBinding.control.action.speed);
         addActionButton(PlayerButtonSetting.SCALE, mBinding.control.action.scale);
         addActionButton(PlayerButtonSetting.LUT, mBinding.control.action.lut);
-        addActionButton(PlayerButtonSetting.KARAOKE, mBinding.control.action.karaoke);
         addActionButton(PlayerButtonSetting.RESET, mBinding.control.action.reset);
         addActionButton(PlayerButtonSetting.REPEAT, mBinding.control.action.repeat);
         addActionButton(PlayerButtonSetting.TEXT, mBinding.control.action.text);
@@ -3409,14 +3408,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setKaraokeActionState() {
         if (mBinding.control.action.karaoke != null) {
             mBinding.control.action.karaoke.setSelected(PlayerSetting.isKaraokeMode());
-            mBinding.control.action.karaoke.setVisibility(isKaraokeActionAvailable() ? View.VISIBLE : View.GONE);
+            mBinding.control.action.karaoke.setVisibility(View.GONE);
         }
         if (mBinding.audioKaraokeAction != null) mBinding.audioKaraokeAction.setSelected(PlayerSetting.isKaraokeMode());
         applyActionButtonVisibility();
-    }
-
-    private boolean isKaraokeActionAvailable() {
-        return service() != null && (isAudioOnly() || isMusicLike());
     }
 
     private void applyKaraokeTrackChange(boolean enableMode) {

@@ -122,7 +122,9 @@ public final class ExoPerformanceSetting {
     }
 
     public static int getNetworkProtectionMode() {
-        return ExoNetworkProtectionPolicy.resolve(Prefers.getInt(KEY_NETWORK_PROTECTION_MODE, ExoNetworkProtectionPolicy.MODE_OFF)).mode();
+        int defaultMode = PlaybackPerformanceSetting.isAuto(PlayerSetting.EXO)
+                ? ExoNetworkProtectionPolicy.MODE_AUTO : ExoNetworkProtectionPolicy.MODE_OFF;
+        return ExoNetworkProtectionPolicy.resolve(Prefers.getInt(KEY_NETWORK_PROTECTION_MODE, defaultMode)).mode();
     }
 
     public static void putNetworkProtectionMode(int value) {
@@ -143,7 +145,7 @@ public final class ExoPerformanceSetting {
     }
 
     public static String getNetworkProtectionText() {
-        return isNetworkProtectionEnabled() ? "动态自动 · 0.85～1.00x" : "关闭";
+        return isNetworkProtectionEnabled() ? "开" : "关";
     }
 
     public static void applyRecommended() {
