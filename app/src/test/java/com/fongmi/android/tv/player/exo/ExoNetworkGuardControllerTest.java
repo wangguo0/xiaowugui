@@ -90,17 +90,19 @@ public class ExoNetworkGuardControllerTest {
     }
 
     @Test
-    public void deficitBelowConfiguredFloorDoesNotPretendItCanStabilize() {
+    public void deficitBelowConfiguredFloorStillAppliesMaximumRescue() {
         ExoNetworkGuardController controller = new ExoNetworkGuardController();
         evaluate(controller, 0, 30_000, true, -190, -190, -190, 10_000, 0, 1.00f);
 
         ExoNetworkGuardController.Decision decision = evaluate(controller, 10_000, 28_000, true, -190, -190, -190, 20_000, 0, 1.00f);
 
-        assertFalse(decision.changed());
-        assertEquals(1.00f, decision.targetSpeed(), 0.0001f);
-        assertEquals("below-protection-floor", decision.reason());
-        assertEquals(ExoNetworkGuardController.State.UNSUSTAINABLE, decision.state());
-        assertFalse(decision.rampFeasible());
+        assertTrue(decision.changed());
+        assertTrue(decision.targetSpeed() < 1.00f);
+        assertTrue(decision.targetSpeed() >= 0.85f);
+        assertEquals(0.85f, decision.calculatedTargetSpeed(), 0.0001f);
+        assertEquals(ExoNetworkGuardController.State.PROTECT, decision.state());
+        assertEquals(ExoNetworkGuardController.ProtectionTier.DEEP, decision.tier());
+        assertTrue(decision.rampFeasible());
     }
 
     @Test

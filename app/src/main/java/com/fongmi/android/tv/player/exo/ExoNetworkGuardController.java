@@ -101,13 +101,6 @@ public final class ExoNetworkGuardController {
 
     private Decision evaluateDecliningRisk(Input input, float currentSpeed, float minimumSpeed, Metrics metrics, boolean rebuffered) {
         recoverySinceMs = UNSET;
-        if (metrics.rawTargetSpeed() < minimumSpeed - EPSILON) {
-            warningSinceMs = UNSET;
-            state = State.UNSUSTAINABLE;
-            tier = tierForSpeed(currentSpeed);
-            return hold(currentSpeed, input, metrics, "below-protection-floor", false);
-        }
-
         float calculatedTarget = metrics.calculatedTargetSpeed();
         ProtectionTier requestedTier = calculatedTarget < ExoNetworkProtectionPolicy.PREFERRED_MIN_SPEED - EPSILON ? ProtectionTier.DEEP : ProtectionTier.LIGHT;
         boolean dualTrendEvidence = input.fastSlopeMsPerSecond() <= DECLINE_DEADBAND_MS_PER_SECOND
