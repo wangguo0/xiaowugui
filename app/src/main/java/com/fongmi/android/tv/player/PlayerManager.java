@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.media3.common.C;
@@ -87,6 +88,7 @@ import java.util.Map;
 public class PlayerManager implements ParseCallback {
 
     public static final String RELOAD_LUT_WARMUP = "__webhtv_lut_warmup_reload__";
+    private static final String NETWORK_GUARD_DEBUG = "EXO_NETWORK_GUARD";
 
     private static final long LOCAL_PROXY_READY_TIMEOUT_MS = 5000;
     private static final long LOCAL_PROXY_RETRY_DELAY_MS = 1000;
@@ -650,10 +652,19 @@ public class PlayerManager implements ParseCallback {
     }
 
     private void applyEffectiveSpeed(float speed, String reason) {
-        if (player == null || !player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) return;
+        if (player == null || !player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)) {
+            Log.d(NETWORK_GUARD_DEBUG, "apply skipped reason=" + reason + " player=" + (player != null)
+                    + " command=" + (player != null && player.isCommandAvailable(Player.COMMAND_SET_SPEED_AND_PITCH)));
+            return;
+        }
         float current = player.getPlaybackParameters().speed;
+        Log.d(NETWORK_GUARD_DEBUG, String.format(java.util.Locale.US,
+                "apply request reason=%s requested=%.3f current=%.3f user=%.3f state=%d playing=%s loading=%s",
+                reason, speed, current, userPlaybackSpeed, player.getPlaybackState(), player.isPlaying(), player.isLoading()));
         if (Math.abs(current - speed) < 0.001f) return;
         player.setPlaybackParameters(player.getPlaybackParameters().withSpeed(speed));
+        Log.d(NETWORK_GUARD_DEBUG, String.format(java.util.Locale.US,
+                "apply result reason=%s requested=%.3f actual=%.3f", reason, speed, player.getPlaybackParameters().speed));
         PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "speed %.3f->%.3f reason=%s user=%.2f", current, speed, reason, userPlaybackSpeed);
     }
 
@@ -694,6 +705,12 @@ public class PlayerManager implements ParseCallback {
     private void scheduleNetworkProtection(long delayMs) {
         App.removeCallbacks(networkProtectionRunnable);
         ExoNetworkGuardEligibility.Decision eligibility = getNetworkProtectionEligibility();
+        Log.d(NETWORK_GUARD_DEBUG, "schedule delay=" + delayMs + " eligible=" + eligibility.eligible()
+                + " reason=" + eligibility.reason() + " exo=" + isExo() + " vod=" + isVod()
+                + " userSpeed=" + userPlaybackSpeed + " tunnel=" + PlayerSetting.isTunnel()
+                + " passthrough=" + PlayerSetting.isAudioPassThrough(PlayerSetting.EXO)
+                + " state=" + (player == null ? -1 : player.getPlaybackState())
+                + " playing=" + (player != null && player.isPlaying()));
         if (!eligibility.eligible()) {
             if (networkProtectionSpeed < 0.999f) resetNetworkProtectionSession(eligibility.reason());
             else {
@@ -743,6 +760,14 @@ public class PlayerManager implements ParseCallback {
                 safeBufferMs,
                 networkEstimateKnown,
                 networkSupportedSpeed));
+        Log.d(NETWORK_GUARD_DEBUG, String.format(java.util.Locale.US,
+                "evaluate eligible=%s ready=%s playing=%s loading=%s buffered=%d safe=%d trendKnown=%s slope=%d fast=%d slow=%d window=%d rebuffer=%d current=%.3f networkKnown=%s networkSupported=%.3f decision=%s tier=%s reason=%s changed=%s target=%.3f supported=%.3f raw=%.3f calculated=%.3f tte=%d ttr=%d requiredSlew=%.4f appliedSlew=%.4f feasible=%s",
+                eligible, ready, playing, loading, bufferedMs, safeBufferMs, trend.known(), trend.slopeMsPerSecond(),
+                trend.fastSlopeMsPerSecond(), trend.slowSlopeMsPerSecond(), trend.windowMs(), analytics.rebufferCount(),
+                getEffectiveSpeed(), networkEstimateKnown, networkSupportedSpeed, decision.state(), decision.tier(), decision.reason(),
+                decision.changed(), decision.targetSpeed(), decision.supportedSpeed(), decision.rawTargetSpeed(),
+                decision.calculatedTargetSpeed(), decision.timeToEmptyMs(), decision.timeToReserveMs(),
+                decision.requiredSlewPerSecond(), decision.appliedSlewPerSecond(), decision.rampFeasible()));
         networkProtectionState = decision.state();
         networkProtectionTier = decision.tier();
         networkProtectionReason = decision.reason();
