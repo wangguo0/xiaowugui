@@ -304,7 +304,15 @@ public class PlayerOsdController {
         String state = stateText(player.getPlaybackState()) + (player.isLoading() ? " / 正在加载" : "");
         String buffer = join(" / ", formatDuration(player.getBufferedDuration()), player.getBufferedPercentage() > 0 ? player.getBufferedPercentage() + "%" : "");
         String rebuffer = snapshot.rebufferCount() <= 0 ? "0 次" : snapshot.rebufferCount() + " 次 / " + formatDuration(snapshot.rebufferTotalMs());
-        String network = join(" / ", "当前 " + emptyDash(lastSpeedText), "估算带宽 " + emptyDash(getBandwidthEstimateText(snapshot)), snapshot.lastLoadBytes() > 0 ? "最近加载 " + formatBytes(snapshot.lastLoadBytes()) + " / " + snapshot.lastLoadTimeMs() + " ms" : "");
+        long mediaBitrate = player.getNetworkProtectionMediaBitrate();
+        long stableThroughput = player.getNetworkProtectionStableThroughput();
+        long consumption = player.getNetworkProtectionConsumption();
+        String network = join(" / ",
+                mediaBitrate > 0 ? "片段码率 " + formatBitrate(mediaBitrate) : "",
+                consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
+                stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
+                stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "",
+                "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()));
         String nativeCache = summarizeNativeCache(player.getCacheState());
         String renderDiagnostics = player.getRenderDiagnostics();
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
@@ -562,6 +570,10 @@ public class PlayerOsdController {
         if (snapshot.bandwidthEstimate() > 0) return formatBitrate(snapshot.bandwidthEstimate());
         long realtimeEstimate = lastSpeedKBps * 1024L * 8L;
         return realtimeEstimate > 0 ? formatBitrate(realtimeEstimate) : "";
+    }
+
+    private String formatSignedBitrate(long bitsPerSecond) {
+        return (bitsPerSecond >= 0 ? "+" : "-") + formatBitrate(Math.abs(bitsPerSecond));
     }
 
     private String summarizeNativeCache(PlayerCacheState cache) {

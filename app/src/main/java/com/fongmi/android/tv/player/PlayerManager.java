@@ -175,6 +175,8 @@ public class PlayerManager implements ParseCallback {
     private int mpvAutoOutputProbeAttempts;
     private float userPlaybackSpeed = 1f;
     private float networkProtectionSpeed = 1f;
+    private float networkProtectionSupportedSpeed = 1f;
+    private long networkProtectionMediaBitrate;
     private ExoNetworkGuardController.State networkProtectionState = ExoNetworkGuardController.State.NORMAL;
     private ExoNetworkGuardController.ProtectionTier networkProtectionTier = ExoNetworkGuardController.ProtectionTier.NONE;
     private String networkProtectionReason = "waiting";
@@ -341,6 +343,22 @@ public class PlayerManager implements ParseCallback {
                 ? networkProtectionState.text()
                 : networkProtectionTier.text() + networkProtectionState.text();
         return prefix + " " + SPEED_FORMAT.format(networkProtectionSpeed);
+    }
+
+    public long getNetworkProtectionMediaBitrate() {
+        return networkProtectionMediaBitrate;
+    }
+
+    public long getNetworkProtectionStableThroughput() {
+        return networkProtectionMediaBitrate <= 0 ? 0 : Math.max(0, Math.round(networkProtectionMediaBitrate * networkProtectionSupportedSpeed));
+    }
+
+    public long getNetworkProtectionConsumption() {
+        return networkProtectionMediaBitrate <= 0 ? 0 : Math.max(0, Math.round(networkProtectionMediaBitrate * getEffectiveSpeed()));
+    }
+
+    public float getNetworkProtectionSupportedSpeed() {
+        return networkProtectionSupportedSpeed;
     }
 
     public boolean isEmpty() {
@@ -680,6 +698,8 @@ public class PlayerManager implements ParseCallback {
         networkProtectionTier = ExoNetworkGuardController.ProtectionTier.NONE;
         networkProtectionReason = reason;
         networkProtectionSpeed = 1f;
+        networkProtectionSupportedSpeed = 1f;
+        networkProtectionMediaBitrate = 0;
         applyEffectiveSpeed(userPlaybackSpeed, reason);
     }
 
@@ -776,6 +796,8 @@ public class PlayerManager implements ParseCallback {
         networkProtectionTier = decision.tier();
         networkProtectionReason = decision.reason();
         networkProtectionSpeed = decision.targetSpeed();
+        networkProtectionSupportedSpeed = decision.supportedSpeed();
+        networkProtectionMediaBitrate = media.bitrateBitsPerSecond();
         if (decision.changed()) applyEffectiveSpeed(networkProtectionSpeed, "guard-" + decision.reason());
         if (decision.changed() || previousState != networkProtectionState || previousTier != networkProtectionTier) {
             PlaybackTrace.log("exo-network-protection", playbackTrace.current(), "state=%s tier=%s reason=%s speed=%.3f supported=%.3f rawTarget=%.3f target=%.3f floor=%.2f buffered=%d safe=%d tte=%d ttr=%d requiredSlew=%.4f appliedSlew=%.4f feasible=%s loading=%s slope=%d fast=%d slow=%d window=%d rebuffer=%d networkKnown=%s networkSupported=%.3f route=%s",
