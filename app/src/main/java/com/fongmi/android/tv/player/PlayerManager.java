@@ -2393,12 +2393,18 @@ public class PlayerManager implements ParseCallback {
             if (isPlaying) scheduleNetworkProtection(0);
             else if (player.getPlaybackState() == Player.STATE_READY && !player.getPlayWhenReady()) {
                 resetNetworkProtectionSession("paused");
-            } else {
+            } else if (player.getPlaybackState() != Player.STATE_BUFFERING) {
                 App.removeCallbacks(networkProtectionRunnable);
                 networkProtectionController.disrupt(networkProtectionSpeed);
                 networkProtectionTrend.reset();
                 networkProtectionState = networkProtectionController.getState();
                 networkProtectionTier = networkProtectionController.getTier();
+            } else {
+                // A rebuffer is exactly the evidence the guard needs after playback resumes.
+                // Keep the current protection speed, controller history, and forward-buffer
+                // trend instead of forcing another warm-up window on every stall.
+                App.removeCallbacks(networkProtectionRunnable);
+                networkProtectionReason = "buffering-hold";
             }
         }
 
@@ -2415,11 +2421,11 @@ public class PlayerManager implements ParseCallback {
                 scheduleNetworkProtection(0);
             } else if (state == Player.STATE_BUFFERING) {
                 App.removeCallbacks(networkProtectionRunnable);
-                networkProtectionController.disrupt(networkProtectionSpeed);
-                networkProtectionTrend.reset();
-                networkProtectionState = networkProtectionController.getState();
-                networkProtectionTier = networkProtectionController.getTier();
-                networkProtectionReason = "buffering";
+                // Do not reset/disrupt the network guard here. BUFFERING is transient and
+                // clearing its trend makes repeated stalls permanently outrun the 10 s
+                // confirmation window. READY schedules an immediate evaluation using the
+                // retained pre-stall trend plus the newly recorded rebuffer count.
+                networkProtectionReason = "buffering-hold";
             } else {
                 resetNetworkProtectionSession(state == Player.STATE_ENDED ? "ended" : "inactive");
             }
