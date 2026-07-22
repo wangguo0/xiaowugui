@@ -311,11 +311,15 @@ public class PlayerOsdController {
                 TextUtils.isEmpty(networkProtection) ? "" : networkProtection,
                 "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()),
                 "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()));
-        String network = join(" / ",
+        String network = player.isExo() ? join(" / ",
                 consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
                 stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
-                stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "");
+                stableThroughput > 0 && consumption > 0 ? "网络余量 " + formatSignedBitrate(stableThroughput - consumption) : "")
+                : join(" / ", "当前 " + emptyDash(lastSpeedText));
         if (TextUtils.isEmpty(network)) network = "待采样";
+        String nativeCache = player.isMpv() ? summarizeNativeCache(player.getCacheState()) : "";
+        String renderDiagnostics = player.isMpv() ? player.getRenderDiagnostics() : "";
+        String runtimeDiagnostics = player.isMpv() ? player.getRuntimeDiagnostics() : "";
         String frameTiming = player.isExo() ? summarizeFrameTiming() : "";
         String videoText = summarizeVideo(video, player, snapshot.videoDecoderName(), getVideoTrackState(player));
         AudioTrackState audioTrack = getAudioTrackState(player);
@@ -335,7 +339,10 @@ public class PlayerOsdController {
                 row("视频", videoText),
                 row("音频", audioText),
                 row("网络", network),
-                row("保流畅", strategy),
+                player.isExo() ? row("保流畅", strategy) : "",
+                TextUtils.isEmpty(nativeCache) ? "" : row("MPV缓存", nativeCache),
+                TextUtils.isEmpty(renderDiagnostics) ? "" : row("MPV渲染", renderDiagnostics),
+                TextUtils.isEmpty(runtimeDiagnostics) ? "" : row("MPV运行", runtimeDiagnostics),
                 TextUtils.isEmpty(frameTiming) ? "" : row("帧调度", frameTiming),
                 row("播放", playback),
                 row("配置", playerText),
