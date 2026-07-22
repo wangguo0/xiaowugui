@@ -30,4 +30,13 @@ public class WebSniffHeadersTest {
 
         assertTrue(result.containsKey("User-Agent"));
     }
+
+    @Test
+    public void mediaUserAgentFallsBackToMobileBrowserIdentity() {
+        Map<String, String> result = WebSniffHeaders.forPage(
+                Map.of("User-Agent", "Lavf/59.27.100"),
+                "Mozilla/5.0 (Linux; Android 15; Device; wv) AppleWebKit/537.36 Version/4.0 Chrome/126 Mobile Safari/537.36");
+
+        assertEquals("Mozilla/5.0 (Linux; Android 15; Device) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36", result.get("User-Agent"));
+    }
 }

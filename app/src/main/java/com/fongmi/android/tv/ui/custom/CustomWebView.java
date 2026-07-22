@@ -109,7 +109,7 @@ public class CustomWebView extends WebView implements DialogInterface.OnDismissL
 
     private void start(Map<String, String> headers) {
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true);
-        Map<String, String> pageHeaders = WebSniffHeaders.forPage(headers);
+        Map<String, String> pageHeaders = WebSniffHeaders.forPage(headers, getSettings().getUserAgentString());
         checkHeader(url, pageHeaders);
         SpiderDebug.log("webview-parse", "page headers input=%s applied=%s ua=%s", headers == null ? "[]" : headers.keySet(), pageHeaders.keySet(), getSettings().getUserAgentString());
         loadUrl(url, pageHeaders);
