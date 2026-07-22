@@ -106,16 +106,16 @@ public class ExoNetworkGuardControllerTest {
     }
 
     @Test
-    public void deadlineFeasibilityRejectsARescueThatCannotReachTargetInTime() {
+    public void deadlineFeasibilityUsesEmergencyRescueInsteadOfHoldingFullSpeed() {
         ExoNetworkGuardController controller = new ExoNetworkGuardController();
         evaluate(controller, 0, 21_000, true, -140, -140, -140, 10_000, 0, 1.00f);
 
         ExoNetworkGuardController.Decision decision = evaluate(controller, 3_000, 21_000, true, -140, -140, -140, 13_000, 0, 1.00f);
 
-        assertFalse(decision.changed());
-        assertEquals("deadline-too-short", decision.reason());
-        assertFalse(decision.rampFeasible());
-        assertTrue(decision.requiredSlewPerSecond() > ExoNetworkGuardController.URGENT_MAX_SLEW_PER_SECOND);
+        assertTrue(decision.changed());
+        assertEquals(0.990f, decision.targetSpeed(), 0.0001f);
+        assertEquals("deadline-emergency-rescue", decision.reason());
+        assertTrue(decision.requiredSlewPerSecond() >= 0f);
     }
 
     @Test

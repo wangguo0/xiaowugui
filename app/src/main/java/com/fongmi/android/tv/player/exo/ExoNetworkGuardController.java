@@ -120,7 +120,7 @@ public final class ExoNetworkGuardController {
         tier = requestedTier;
         boolean urgent = metrics.timeToReserveMs() <= URGENT_TIME_TO_RESERVE_MS || input.bufferedMs() <= metrics.safeBufferMs();
         long confirmationMs = urgent ? URGENT_ENTRY_CONFIRM_MS : ENTRY_CONFIRM_MS;
-        if (warningSinceMs == UNSET) warningSinceMs = rebuffered ? input.nowMs() - confirmationMs / 2 : input.nowMs();
+        if (warningSinceMs == UNSET) warningSinceMs = rebuffered ? input.nowMs() - confirmationMs : input.nowMs();
         if (input.nowMs() - warningSinceMs < confirmationMs) {
             return decision(state, tier, currentSpeed, false, "risk-confirming", metrics.withCalculatedTarget(calculatedTarget), 0f, 0f, true);
         }
@@ -132,12 +132,7 @@ public final class ExoNetworkGuardController {
         }
 
         Ramp ramp = calculateRamp(input.nowMs(), currentSpeed, calculatedTarget, metrics.timeToReserveMs(), requestedTier);
-        if (!ramp.feasible()) {
-            warningSinceMs = UNSET;
-            state = State.UNSUSTAINABLE;
-            tier = tierForSpeed(currentSpeed);
-            return decision(state, tier, currentSpeed, false, "deadline-too-short", metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), 0f, false);
-        }
+        if (!ramp.feasible()) reason = "deadline-emergency-rescue";
         if (!canAdjust(input.nowMs())) {
             return decision(state, tier, currentSpeed, false, reason + "-cooldown", metrics.withCalculatedTarget(calculatedTarget), ramp.requiredSlewPerSecond(), 0f, true);
         }
