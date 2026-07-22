@@ -134,9 +134,9 @@ public class ExoNetworkGuardControllerTest {
     public void recoveredCapacityReturnsGraduallyToUnitSpeed() {
         ExoNetworkGuardController controller = new ExoNetworkGuardController();
         controller.disrupt(0.93f);
-        assertFalse(evaluate(controller, 0, 35_000, true, 70, 70, 70, 15_000, 0, 0.93f).changed());
+        assertFalse(evaluate(controller, 0, 17_000, true, 70, 70, 70, 15_000, 0, 0.93f).changed());
 
-        ExoNetworkGuardController.Decision decision = evaluate(controller, 25_000, 36_000, true, 70, 70, 70, 30_000, 0, 0.93f);
+        ExoNetworkGuardController.Decision decision = evaluate(controller, 8_000, 18_000, true, 70, 70, 70, 23_000, 0, 0.93f);
 
         assertTrue(decision.changed());
         assertEquals(0.932f, decision.targetSpeed(), 0.0001f);
@@ -147,9 +147,9 @@ public class ExoNetworkGuardControllerTest {
     public void fullBufferRecoversWithoutTreatingLoaderIdleAsNetworkFailure() {
         ExoNetworkGuardController controller = new ExoNetworkGuardController();
         controller.disrupt(0.93f);
-        assertFalse(evaluate(controller, 0, 55_000, false, 0, 0, 0, 0, 0, 0.93f).changed());
+        assertFalse(evaluate(controller, 0, 21_000, false, 0, 0, 0, 0, 0, 0.93f).changed());
 
-        ExoNetworkGuardController.Decision decision = evaluate(controller, 30_000, 55_000, false, 0, 0, 0, 0, 0, 0.93f);
+        ExoNetworkGuardController.Decision decision = evaluate(controller, 12_000, 21_000, false, 0, 0, 0, 0, 0, 0.93f);
 
         assertTrue(decision.changed());
         assertEquals(0.932f, decision.targetSpeed(), 0.0001f);

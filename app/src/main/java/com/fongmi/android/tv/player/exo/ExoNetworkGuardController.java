@@ -8,12 +8,11 @@ public final class ExoNetworkGuardController {
     static final long MIN_TREND_WINDOW_MS = 10_000;
     static final long ENTRY_CONFIRM_MS = 10_000;
     static final long URGENT_ENTRY_CONFIRM_MS = 3_000;
-    static final long RECOVERY_CONFIRM_MS = 25_000;
-    static final long FULL_BUFFER_RECOVERY_CONFIRM_MS = 30_000;
+    static final long RECOVERY_CONFIRM_MS = 8_000;
+    static final long FULL_BUFFER_RECOVERY_CONFIRM_MS = 12_000;
     static final long ADJUSTMENT_COOLDOWN_MS = 1_000;
     static final long RISK_BUFFER_HEADROOM_MS = 20_000;
     static final long RECOVERY_BUFFER_HEADROOM_MS = 5_000;
-    static final long FULL_BUFFER_HEADROOM_MS = 20_000;
     static final long RISK_TIME_TO_RESERVE_MS = 240_000;
     static final long DEEP_PROTECTION_TIME_TO_RESERVE_MS = 120_000;
     static final long URGENT_TIME_TO_RESERVE_MS = 30_000;
@@ -22,6 +21,7 @@ public final class ExoNetworkGuardController {
     static final long DECLINE_DEADBAND_MS_PER_SECOND = -15;
     static final long PROTECTED_DECLINE_DEADBAND_MS_PER_SECOND = -2;
     static final float SUPPORTED_RECOVERY_SPEED = 0.998f;
+    static final float RECOVERY_SPEED_HEADROOM = 0.03f;
     static final float SAFETY_MARGIN = 0.003f;
     static final float PROPORTIONAL_GAIN = 0.20f;
     static final float LIGHT_MAX_SLEW_PER_SECOND = 0.003f;
@@ -150,8 +150,11 @@ public final class ExoNetworkGuardController {
     private Decision evaluateRecovery(Input input, float currentSpeed, Metrics metrics) {
         state = State.PROTECT;
         tier = tierForSpeed(currentSpeed);
-        long recoveryBuffer = Math.max(30_000, metrics.safeBufferMs() + RECOVERY_BUFFER_HEADROOM_MS);
-        boolean recoveryReady = metrics.supportedSpeed() >= SUPPORTED_RECOVERY_SPEED && input.bufferedMs() >= recoveryBuffer;
+        long recoveryBuffer = Math.max(15_000, Math.round(metrics.safeBufferMs() * 0.65f));
+        float requiredRecoverySpeed = Math.max(SUPPORTED_RECOVERY_SPEED, currentSpeed + RECOVERY_SPEED_HEADROOM);
+        boolean recoveryReady = metrics.supportedSpeed() >= requiredRecoverySpeed
+                && input.slopeMsPerSecond() >= 0
+                && input.bufferedMs() >= recoveryBuffer;
         if (!recoveryReady) {
             recoverySinceMs = UNSET;
             return hold(currentSpeed, input, metrics, "protected-stable", true);
@@ -166,7 +169,7 @@ public final class ExoNetworkGuardController {
 
     private Decision evaluateFullBufferRecovery(Input input, float currentSpeed, Metrics metrics) {
         warningSinceMs = UNSET;
-        long fullBuffer = Math.max(50_000, metrics.safeBufferMs() + FULL_BUFFER_HEADROOM_MS);
+        long fullBuffer = Math.max(20_000, Math.round(metrics.safeBufferMs() * 0.85f));
         if (currentSpeed >= 1f - EPSILON || input.bufferedMs() < fullBuffer) {
             recoverySinceMs = UNSET;
             state = currentSpeed < 1f - EPSILON ? State.PROTECT : State.NORMAL;
