@@ -361,6 +361,10 @@ public class PlayerManager implements ParseCallback {
         return networkProtectionSupportedSpeed;
     }
 
+    public float getNetworkProtectionSpeed() {
+        return networkProtectionSpeed;
+    }
+
     public boolean isEmpty() {
         return spec == null || TextUtils.isEmpty(spec.getUrl());
     }

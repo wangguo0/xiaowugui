@@ -578,7 +578,6 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 TextUtils.isEmpty(audioDevice) ? "" : "device " + shortText(audioDevice, 32),
                 formatAvSync(),
                 formatDisplayFps(),
-                formatDroppedFrames(),
                 formatDisplaySync(),
                 formatShader());
     }

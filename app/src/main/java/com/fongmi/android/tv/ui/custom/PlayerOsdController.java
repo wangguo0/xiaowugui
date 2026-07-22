@@ -310,7 +310,8 @@ public class PlayerOsdController {
         String strategy = join(" / ",
                 TextUtils.isEmpty(networkProtection) ? "" : networkProtection,
                 "可支撑 " + new DecimalFormat("0.00x").format(player.getNetworkProtectionSupportedSpeed()),
-                "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()));
+                Math.abs(player.getNetworkProtectionSpeed() - player.getEffectiveSpeed()) >= 0.005f
+                        ? "当前 " + new DecimalFormat("0.00x").format(player.getEffectiveSpeed()) : "");
         String network = player.isExo() ? join(" / ",
                 consumption > 0 ? "消费需求 " + formatBitrate(consumption) : "",
                 stableThroughput > 0 ? "稳定吞吐 " + formatBitrate(stableThroughput) : "",
