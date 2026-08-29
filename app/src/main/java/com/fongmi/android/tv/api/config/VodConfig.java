@@ -3,6 +3,7 @@ package com.fongmi.android.tv.api.config;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.CspWarmup;
 import com.fongmi.android.tv.api.Decoder;
 import com.fongmi.android.tv.api.loader.BaseLoader;
@@ -15,6 +16,8 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.CustomCspSetting;
+import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.fongmi.android.tv.web.ext.WebHomeExtensionRegistry;
 import com.github.catvod.bean.Doh;
@@ -70,6 +73,33 @@ public class VodConfig extends BaseConfig {
 
     public static void load(Config config, Callback callback) {
         get().clear().config(config).load(callback);
+    }
+
+    public static List<Depot> getDepots(Config config) {
+        try {
+            String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
+            return Depot.arrayFrom(Json.parse(json).getAsJsonObject().getAsJsonArray("urls").toString());
+        } catch (Throwable e) {
+            return Collections.emptyList();
+        }
+    }
+
+    public static void switchDepot(Config parent, Depot depot, Callback callback) {
+        get().clear().config(parent);
+        callback.start();
+        Task.submit(() -> {
+            try {
+                get().loadDepotChild(parent, depot);
+                App.post(() -> Notify.show(parent.getNotice()));
+                App.post(callback::success);
+            } catch (Throwable e) {
+                e.printStackTrace();
+                String msg = Notify.getError(R.string.error_config_get, e);
+                App.post(() -> callback.error(msg));
+            } finally {
+                get().postEvent();
+            }
+        });
     }
 
     public VodConfig init() {
@@ -146,11 +176,29 @@ public class VodConfig extends BaseConfig {
 
     private void parseDepot(Config config, JsonObject object) throws Throwable {
         List<Depot> items = Depot.arrayFrom(object.getAsJsonArray("urls").toString());
-        List<Config> configs = new ArrayList<>();
-        for (Depot item : items) configs.add(Config.find(item, VOD));
-        if (configs.isEmpty()) throw new Exception("Depot urls is empty");
-        load(this.config = configs.get(0));
-        Config.delete(config.getUrl());
+        if (items.isEmpty()) throw new Exception("Depot urls is empty");
+        config.depot(true).save();
+        for (Depot depot : items) {
+            try {
+                loadDepotChild(config, depot);
+                return;
+            } catch (Throwable e) {
+                // try next child
+            }
+        }
+        throw new Exception("Depot urls is empty");
+    }
+
+    private void loadDepotChild(Config parent, Depot depot) throws Throwable {
+        String json = Decoder.getJson(UrlUtil.convert(depot.getUrl()), TAG);
+        JsonObject child = Json.parse(json).getAsJsonObject();
+        if (child.has("urls")) {
+            parseDepot(parent, child);
+        } else {
+            parseConfig(parent, child);
+        }
+        parent.setDepotActiveName(depot.getName());
+        parent.save();
     }
 
     private void parseConfig(Config config, JsonObject object) {
@@ -177,10 +225,9 @@ public class VodConfig extends BaseConfig {
     }
 
     private void initLive(Config config, JsonObject object) {
+        // 点播与直播订阅相互独立，禁止在加载点播配置时自动创建/同步直播订阅
         if (Json.isEmpty(object, "lives")) return;
-        Config temp = Config.find(config, LIVE).save();
-        boolean sync = LiveConfig.get().needSync(config.getUrl());
-        if (sync) LiveConfig.get().config(temp.update()).parse(object);
+        if (!LiveConfig.get().needSync(config.getUrl())) return;
     }
 
     private void initWall(Config config, JsonObject object) {

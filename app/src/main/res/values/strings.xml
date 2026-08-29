@@ -1,7 +1,7 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
     <!-- App -->
-    <string name="app_name">TV</string>
+    <string name="app_name">小乌龟</string>
 
     <!-- Live -->
     <string name="live_pass">Pass</string>
@@ -60,6 +60,7 @@
     <string name="play_config">Config</string>
     <string name="play_cast">Cast</string>
     <string name="play_change">Change</string>
+    <string name="play_switch_line">Line</string>
     <string name="play_short_display">Short</string>
     <string name="play_search">Search</string>
     <string name="play_fullscreen">Fullscreen</string>
@@ -150,6 +151,31 @@
     <!-- Setting -->
     <string name="setting_vod">Vod</string>
     <string name="setting_live">Live</string>
+    <string name="setting_live_visible">Show live page</string>
+    <string name="setting_source_group">Home &amp; Sources</string>
+    <string name="setting_subscription_manage">Vod Subscription Manage</string>
+    <string name="setting_subscription_manage_live">Live Subscription Manage</string>
+    <string name="setting_subscription_add">Add</string>
+    <string name="setting_subscription_empty">No subscription yet</string>
+    <string name="setting_subscription_pin">Pin</string>
+    <string name="setting_subscription_pinned">Pinned</string>
+    <string name="setting_subscription_edit">Edit</string>
+    <string name="setting_subscription_copy">Copy</string>
+    <string name="setting_subscription_copied">Link copied</string>
+    <string name="setting_subscription_share">Share</string>
+    <string name="setting_subscription_share_copied">Link copied</string>
+    <string name="setting_subscription_delete">Delete</string>
+    <string name="setting_subscription_scan">Scan</string>
+    <string name="setting_subscription_tutorial">Usage Tutorial</string>
+    <string name="setting_subscription_url_tap_copy">Tap the link to copy</string>
+    <string name="setting_subscription_depot">Multi-depot</string>
+    <string name="setting_subscription_used_source">Using: %1$s</string>
+    <string name="setting_subscription_select_depot">Select depot</string>
+    <string name="setting_subscription_depot_empty">No depots available</string>
+    <string name="setting_appearance_group">Appearance &amp; Theme</string>
+    <string name="setting_playback_group">Playback &amp; Danmaku</string>
+    <string name="setting_advanced_group">Advanced</string>
+    <string name="setting_data_group">Data &amp; Backup</string>
     <string name="setting_wall">Wallpaper</string>
     <string name="setting_config_dialog_title">%1$s %2$s</string>
     <string name="setting_builtin_wall">Built-in wallpapers</string>

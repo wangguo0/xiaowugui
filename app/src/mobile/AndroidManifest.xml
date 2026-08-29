@@ -82,6 +82,11 @@
         </activity>
 
         <activity
+            android:name=".ui.activity.SubSettingActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout"
+            android:screenOrientation="fullUser" />
+
+        <activity
             android:name=".ui.activity.SearchActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout"
             android:screenOrientation="fullUser"

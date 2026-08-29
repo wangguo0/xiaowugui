@@ -13,38 +13,17 @@
         app:navigationIconTint="@android:color/white"
         app:titleTextAppearance="@style/ToolbarTextAppearance" />
 
-    <androidx.appcompat.widget.LinearLayoutCompat
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="horizontal">
-
-        <com.fongmi.android.tv.ui.custom.CustomRecyclerView
-            android:id="@+id/collect"
-            android:layout_width="120dp"
-            android:layout_height="match_parent"
-            android:layout_marginTop="-8dp"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:overScrollMode="never"
-            android:paddingStart="8dp"
-            android:paddingEnd="0dp"
-            android:paddingBottom="8dp"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            tools:listitem="@layout/adapter_collect" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginTop="-8dp"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:overScrollMode="never"
-            android:paddingStart="0dp"
-            android:paddingEnd="8dp"
-            android:paddingBottom="8dp"
-            app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-            tools:listitem="@layout/adapter_search" />
-
-    </androidx.appcompat.widget.LinearLayoutCompat>
+        android:layout_marginTop="-8dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:overScrollMode="never"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp"
+        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        tools:listitem="@layout/adapter_search" />
 </androidx.appcompat.widget.LinearLayoutCompat>

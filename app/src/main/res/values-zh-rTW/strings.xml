@@ -1,7 +1,7 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
     <!-- App -->
-    <string name="app_name">影視</string>
+    <string name="app_name">小烏龜</string>
 
     <!-- Live -->
     <string name="live_pass">密碼</string>
@@ -59,6 +59,7 @@
     <string name="play_config">配置</string>
     <string name="play_cast">投屏</string>
     <string name="play_change">換源</string>
+    <string name="play_switch_line">切換站源</string>
     <string name="play_short_display">短顯</string>
     <string name="play_search">搜尋</string>
     <string name="play_fullscreen">全螢幕</string>
@@ -148,6 +149,31 @@
     <!-- Setting -->
     <string name="setting_vod">點播</string>
     <string name="setting_live">直播</string>
+    <string name="setting_live_visible">顯示直播頁面</string>
+    <string name="setting_source_group">首頁與內容源</string>
+    <string name="setting_subscription_manage">點播訂閱管理</string>
+    <string name="setting_subscription_manage_live">直播訂閱管理</string>
+    <string name="setting_subscription_add">添加</string>
+    <string name="setting_subscription_empty">暫無訂閱</string>
+    <string name="setting_subscription_pin">置頂</string>
+    <string name="setting_subscription_pinned">已置頂</string>
+    <string name="setting_subscription_edit">編輯</string>
+    <string name="setting_subscription_copy">複製</string>
+    <string name="setting_subscription_copied">連結已複製</string>
+    <string name="setting_subscription_share">分享</string>
+    <string name="setting_subscription_share_copied">連結已複製</string>
+    <string name="setting_subscription_delete">刪除</string>
+    <string name="setting_subscription_scan">掃一掃</string>
+    <string name="setting_subscription_tutorial">使用教程</string>
+    <string name="setting_subscription_url_tap_copy">點擊連結複製</string>
+    <string name="setting_subscription_depot">多倉</string>
+    <string name="setting_subscription_used_source">使用源:%1$s</string>
+    <string name="setting_subscription_select_depot">選擇倉源</string>
+    <string name="setting_subscription_depot_empty">暫無可切換倉源</string>
+    <string name="setting_appearance_group">外觀與主題</string>
+    <string name="setting_playback_group">播放與彈幕</string>
+    <string name="setting_advanced_group">高級設置</string>
+    <string name="setting_data_group">數據與備份</string>
     <string name="setting_wall">壁紙</string>
     <string name="setting_config_dialog_title">%1$s%2$s</string>
     <string name="setting_builtin_wall">內置壁紙</string>

@@ -14,7 +14,6 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
-import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -38,7 +37,6 @@ import java.util.concurrent.TimeoutException;
 public class Updater implements Download.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
-    private static final String SOURCE_CNB = "cnb";
     private static final String SOURCE_GITHUB = "github";
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
@@ -66,7 +64,6 @@ public class Updater implements Download.Callback, UpdateListener {
     private long lastTotal;
     private long lastSpeed;
     private long lastElapsed;
-    private boolean fallbackAttempted;
 
     private Updater() {
     }
@@ -141,17 +138,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private Update getUpdate(String channel) {
-        Update cnb = readUpdate(channel, Github.getCnbAsset(getManifestName(channel)), SOURCE_CNB);
-        // CNB is the primary distribution path.  A newer GitHub release must not
-        // silently move downloads to GitHub while CNB is reachable; GitHub is only
-        // a discovery/download fallback when the CNB manifest is unavailable.
-        if (cnb.hasManifest()) {
-            Update github = Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
-            attachDownloadFallback(cnb, cnb, github);
-            return cnb;
-        }
-        Update github = Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
-        return github.hasManifest() ? github : cnb;
+        return Update.CHANNEL_BETA.equals(channel) ? getGithubBetaUpdate(channel) : getGithubStableUpdate(channel);
     }
 
     private Update getGithubStableUpdate(String channel) {
@@ -202,10 +189,6 @@ public class Updater implements Download.Callback, UpdateListener {
         return readUpdate(channel, Github.getReleaseAssetApi(assetId), SOURCE_GITHUB, GITHUB_ASSET_HEADERS, release.optString("body"));
     }
 
-    private Update readUpdate(String channel, String manifestUrl, String source) {
-        return readUpdate(channel, manifestUrl, source, null, "");
-    }
-
     private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
@@ -231,22 +214,6 @@ public class Updater implements Download.Callback, UpdateListener {
             update.error = e.getMessage();
         }
         return update;
-    }
-
-    private void attachDownloadFallback(Update selected, Update cnb, Update github) {
-        if (selected == null || cnb == null || github == null) return;
-        if (!cnb.hasManifest() || !github.hasManifest()) return;
-        if (!sameRelease(cnb, github)) return;
-        String fallback = selected == cnb ? github.apkUrl : cnb.apkUrl;
-        if (!TextUtils.isEmpty(fallback) && !fallback.equals(selected.apkUrl)) selected.fallbackApkUrl = fallback;
-    }
-
-    private boolean sameRelease(Update first, Update second) {
-        return first.code == second.code && compareName(first.name, second.name) == 0;
-    }
-
-    private int compareName(String left, String right) {
-        return AppVersion.stripPrefix(left).compareToIgnoreCase(AppVersion.stripPrefix(right));
     }
 
     private String normalizeText(String text) {
@@ -275,9 +242,9 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private String getApkUrl(Update update, String source) {
         String apk = TextUtils.isEmpty(update.apk) ? getDefaultApkName(update.channel) : update.apk;
-        if (SOURCE_GITHUB.equals(source) && !TextUtils.isEmpty(update.name)) return Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
         if (apk.startsWith("http://") || apk.startsWith("https://")) return apk;
-        return Github.getCnbAsset(apk);
+        if (SOURCE_GITHUB.equals(source) && !TextUtils.isEmpty(update.name)) return Github.getGithubReleaseAsset(update.name, getFileName(apk, update.channel));
+        return Github.getGithubLatestAsset(getFileName(apk, update.channel));
     }
 
     private String getFileName(String value, String channel) {
@@ -330,7 +297,6 @@ public class Updater implements Download.Callback, UpdateListener {
         view.setEnabled(false);
         downloading = true;
         canceled = false;
-        fallbackAttempted = false;
         resetProgress();
         Path.clear(getFile());
         setDialogProgress(0, 0, selected.size, 0, 0);
@@ -340,16 +306,6 @@ public class Updater implements Download.Callback, UpdateListener {
     private void startDownload(String url) {
         download = Download.create(url, getFile()).tag(url);
         download.start(this);
-    }
-
-    private boolean retryFallback() {
-        if (canceled || selected == null || fallbackAttempted || TextUtils.isEmpty(selected.fallbackApkUrl)) return false;
-        fallbackAttempted = true;
-        Path.clear(getFile());
-        resetProgress();
-        setDialogProgress(0, 0, selected.size, 0, 0);
-        startDownload(selected.fallbackApkUrl);
-        return true;
     }
 
     @Override
@@ -417,7 +373,6 @@ public class Updater implements Download.Callback, UpdateListener {
     public void error(String msg) {
         if (canceled) return;
         download = null;
-        if (retryFallback()) return;
         downloading = false;
         resetProgress();
         Notify.show(msg);
@@ -437,9 +392,6 @@ public class Updater implements Download.Callback, UpdateListener {
                 resetProgress();
                 if (!TextUtils.isEmpty(error)) {
                     Path.clear(file);
-                    downloading = true;
-                    if (retryFallback()) return;
-                    downloading = false;
                     Notify.show(error);
                     dismiss();
                     return;

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/pin"
+        android:title="@string/setting_subscription_pin" />
+    <item
+        android:id="@+id/edit"
+        android:title="@string/setting_subscription_edit" />
+    <item
+        android:id="@+id/copy"
+        android:title="@string/setting_subscription_copy" />
+    <item
+        android:id="@+id/share"
+        android:title="@string/setting_subscription_share" />
+    <item
+        android:id="@+id/delete"
+        android:title="@string/setting_subscription_delete" />
+</menu>

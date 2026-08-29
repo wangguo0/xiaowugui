@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.activity;
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.app.SearchManager;
 import android.content.Intent;
@@ -37,10 +38,20 @@ import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
-import com.fongmi.android.tv.ui.fragment.SettingEnhanceFragment;
+import com.fongmi.android.tv.ui.fragment.CollectFragment;
+import com.fongmi.android.tv.ui.fragment.ConfigManageFragment;
+import com.fongmi.android.tv.ui.fragment.EpisodeFragment;
+import com.fongmi.android.tv.ui.fragment.FolderFragment;
+import com.fongmi.android.tv.ui.fragment.SearchFragment;
+import com.fongmi.android.tv.ui.fragment.SettingAdvancedFragment;
+import com.fongmi.android.tv.ui.fragment.SettingAppearanceFragment;
+import com.fongmi.android.tv.ui.fragment.SettingDataFragment;
 import com.fongmi.android.tv.ui.fragment.SettingDanmakuFragment;
+import com.fongmi.android.tv.ui.fragment.SettingEnhanceFragment;
 import com.fongmi.android.tv.ui.fragment.SettingFragment;
+import com.fongmi.android.tv.ui.fragment.SettingPlaybackFragment;
 import com.fongmi.android.tv.ui.fragment.SettingPlayerFragment;
+import com.fongmi.android.tv.ui.fragment.SettingSourceFragment;
 import com.fongmi.android.tv.ui.fragment.VodFragment;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.MobileWindow;
@@ -141,9 +152,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mManager = new FragmentStateManager(mBinding.container, getSupportFragmentManager(), position -> switch (position) {
             case 0 -> VodFragment.newInstance();
             case 1 -> SettingFragment.newInstance();
-            case 2 -> SettingPlayerFragment.newInstance();
             case 3 -> SettingEnhanceFragment.newInstance();
-            case 4 -> SettingDanmakuFragment.newInstance();
             default -> null;
         });
         if (savedInstanceState == null) change(0);
@@ -153,6 +162,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private void restorePosition(int position) {
         setNavigation();
         syncNavigationSelection();
+        setNavigationVisible(position < 2);
         changeFragment(position <= 0 ? 0 : position);
     }
 
@@ -191,7 +201,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private void setNavigation() {
         mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
-        mBinding.navigation.getMenu().findItem(R.id.live).setVisible(LiveConfig.hasUrl());
+        mBinding.navigation.getMenu().findItem(R.id.live).setVisible(Setting.isLiveVisible() && LiveConfig.hasUrl());
         syncNavigationSelection();
     }
 
@@ -209,7 +219,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     public void change(int position) {
         if (position != 3) returnVodFromEnhance = false;
-        setNavigationVisible(true);
+        setNavigationVisible(position < 2);
         if (position < 2) selectNavigation(position);
         else changeFragment(position);
     }
@@ -225,6 +235,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         }
         mBinding.container.setLayoutParams(params);
         mBinding.getRoot().requestApplyInsets();
+    }
+
+    public static void start(Activity activity, int position) {
+        activity.startActivity(new Intent(activity, HomeActivity.class).putExtra(EXTRA_NAV_POSITION, position));
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -278,6 +292,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private boolean changeFragment(int position) {
+        setNavigationVisible(position < 2);
         boolean changed = mManager.change(position);
         if (changed) currentPosition = position;
         refreshWebHomeChromeLayout();
@@ -353,7 +368,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     public void openEnhanceFromVod() {
         returnVodFromEnhance = true;
-        setNavigationVisible(true);
+        setNavigationVisible(false);
         changeFragment(3);
     }
 
@@ -416,11 +431,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             return;
         } else if (!mBinding.navigation.getMenu().findItem(R.id.vod).isVisible()) {
             setNavigation();
-        } else if (returnVodFromEnhance && mManager.isVisible(3)) {
+        } else if (mManager.isVisible(3)) {
+            boolean fromVod = returnVodFromEnhance;
             returnVodFromEnhance = false;
-            change(0);
-        } else if (mManager.isVisible(2) || mManager.isVisible(3) || mManager.isVisible(4)) {
-            change(1);
+            change(fromVod ? 0 : 1);
         } else if (mManager.isVisible(1)) {
             change(0);
         } else if (mManager.canBack(0)) {

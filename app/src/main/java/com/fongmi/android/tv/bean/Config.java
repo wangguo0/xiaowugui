@@ -41,6 +41,10 @@ public class Config {
     private String home;
     @SerializedName("parse")
     private String parse;
+    @SerializedName("depot")
+    private Boolean depot;
+    @SerializedName("depotActiveName")
+    private String depotActiveName;
 
     @Ignore
     @SerializedName("notice")
@@ -88,18 +92,25 @@ public class Config {
     }
 
     public static Config vod() {
-        Config item = AppDatabase.get().getConfigDao().findOne(0);
-        return item == null ? create(0) : item;
+        return active(0);
     }
 
     public static Config live() {
-        Config item = AppDatabase.get().getConfigDao().findOne(1);
-        return item == null ? create(1) : item;
+        return active(1);
     }
 
     public static Config wall() {
-        Config item = AppDatabase.get().getConfigDao().findOne(2);
-        return item == null ? create(2) : item;
+        return active(2);
+    }
+
+    private static Config active(int type) {
+        String url = Prefers.getString("config_" + type);
+        Config item = TextUtils.isEmpty(url) ? null : AppDatabase.get().getConfigDao().find(url, type);
+        return item == null ? create(type) : item;
+    }
+
+    public static void clearActive(int type) {
+        Prefers.put("config_" + type, "");
     }
 
     public static Config find(int id) {
@@ -194,6 +205,27 @@ public class Config {
         this.parse = parse;
     }
 
+    @Ignore
+    public boolean isDepot() {
+        return Boolean.TRUE.equals(getDepot());
+    }
+
+    public Boolean getDepot() {
+        return depot;
+    }
+
+    public void setDepot(Boolean depot) {
+        this.depot = depot;
+    }
+
+    public String getDepotActiveName() {
+        return depotActiveName;
+    }
+
+    public void setDepotActiveName(String depotActiveName) {
+        this.depotActiveName = depotActiveName;
+    }
+
     public long getTime() {
         return time;
     }
@@ -238,6 +270,16 @@ public class Config {
         return this;
     }
 
+    public Config depot(boolean depot) {
+        setDepot(depot);
+        return this;
+    }
+
+    public Config depotActiveName(String depotActiveName) {
+        setDepotActiveName(depotActiveName);
+        return this;
+    }
+
     public boolean isEmpty() {
         return TextUtils.isEmpty(getUrl());
     }
@@ -257,6 +299,10 @@ public class Config {
     public Config save() {
         if (isEmpty()) return this;
         AppDatabase.get().getConfigDao().insertOrUpdate(this);
+        if (getId() == 0) {
+            Config stored = AppDatabase.get().getConfigDao().find(getUrl(), getType());
+            if (stored != null) setId(stored.getId());
+        }
         return this;
     }
 

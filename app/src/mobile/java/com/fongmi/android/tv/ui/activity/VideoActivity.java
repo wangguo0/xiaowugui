@@ -123,6 +123,7 @@ import com.fongmi.android.tv.ui.adapter.FlagAdapter;
 import com.fongmi.android.tv.ui.adapter.ParseAdapter;
 import com.fongmi.android.tv.ui.adapter.QualityAdapter;
 import com.fongmi.android.tv.ui.adapter.QuickAdapter;
+import com.fongmi.android.tv.ui.adapter.SourceSwitchAdapter;
 import com.fongmi.android.tv.ui.base.ViewType;
 import com.fongmi.android.tv.ui.custom.AudioPlayerBackgroundDrawable;
 import com.fongmi.android.tv.ui.custom.CustomKeyDown;
@@ -141,6 +142,7 @@ import com.fongmi.android.tv.ui.dialog.InfoDialog;
 import com.fongmi.android.tv.ui.dialog.LutPanelDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerKernelDialog;
 import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
+import com.fongmi.android.tv.ui.dialog.SourceSwitchDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
 import com.fongmi.android.tv.ui.dialog.SubtitleDialog;
 import com.fongmi.android.tv.ui.dialog.TitleDialog;
@@ -224,6 +226,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private QualityAdapter mQualityAdapter;
     private QuickAdapter mQuickAdapter;
     private QuickSearchDialog mQuickSearchDialog;
+    private SourceSwitchDialog mSourceSwitchDialog;
     private String mQuickSearchKeyword;
     private ParseAdapter mParseAdapter;
     private LyricsController mLyrics;
@@ -752,6 +755,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.castAction.setOnClickListener(view -> onCast());
         mBinding.settingAction.setOnClickListener(view -> onSetting());
+        mBinding.switchLine.setOnClickListener(view -> showSourceSwitch());
         mBinding.actor.setOnClickListener(view -> onActor());
         mBinding.content.setOnClickListener(view -> onContent());
         mBinding.reverse.setOnClickListener(view -> onReverse());
@@ -1322,6 +1326,43 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setParse(Parse item) {
         VodConfig.get().setParse(item);
         notifyItemChanged(mBinding.control.parse, mParseAdapter);
+    }
+
+    private void showSourceSwitch() {
+        if (mFlagAdapter.isEmpty()) return;
+        if (mSourceSwitchDialog == null) {
+            mSourceSwitchDialog = SourceSwitchDialog.create().callback(new SourceSwitchDialog.Callback() {
+                @Override
+                public void switchFlag(Flag flag) {
+                    onItemClick(flag);
+                    scrollEpisodeToSelected();
+                }
+
+                @Override
+                public void switchVod(Vod vod) {
+                    Episode current = getEpisode();
+                    if (current != null) getIntent().putExtra("mark", current.getName());
+                    onItemClick(vod);
+                }
+            });
+        }
+        mSourceSwitchDialog.title(mBinding.name.getText());
+        mSourceSwitchDialog.setItems(buildSourceItems());
+        if (!mSourceSwitchDialog.isActive()) mSourceSwitchDialog.show(this);
+        if (mQuickAdapter.isEmpty()) {
+            String keyword = mBinding.name.getText().toString();
+            if (!TextUtils.isEmpty(keyword)) initSearch(keyword, false);
+        }
+    }
+
+    private List<SourceSwitchAdapter.Item> buildSourceItems() {
+        List<SourceSwitchAdapter.Item> result = new ArrayList<>();
+        for (Vod vod : mQuickAdapter.getItems()) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
+        return result;
+    }
+
+    private void refreshSourceSwitch() {
+        if (mSourceSwitchDialog != null && mSourceSwitchDialog.isActive()) mSourceSwitchDialog.setItems(buildSourceItems());
     }
 
     private void setEpisodeAdapter(List<Episode> items) {
@@ -5952,6 +5993,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.GONE);
         mQuickAdapter.addAll(items);
+        refreshSourceSwitch();
         if (isQuickSearchVisible()) mQuickSearchDialog.addAll(items);
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
         if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();

@@ -504,6 +504,14 @@ public class Setting {
         Prefers.put("web_home_fullscreen", fullscreen);
     }
 
+    public static boolean isLiveVisible() {
+        return Prefers.getBoolean("live_visible", true);
+    }
+
+    public static void putLiveVisible(boolean visible) {
+        Prefers.put("live_visible", visible);
+    }
+
     public static boolean isPlaybackArtworkWall() {
         return Prefers.getBoolean("playback_artwork_wall", true);
     }

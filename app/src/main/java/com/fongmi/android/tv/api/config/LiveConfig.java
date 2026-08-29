@@ -2,6 +2,8 @@ package com.fongmi.android.tv.api.config;
 
 import android.text.TextUtils;
 
+import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.Decoder;
 import com.fongmi.android.tv.api.LiveApi;
 import com.fongmi.android.tv.api.loader.BaseLoader;
@@ -18,6 +20,8 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.CustomCspSetting;
 import com.fongmi.android.tv.setting.LiveSetting;
+import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.github.catvod.bean.Header;
 import com.github.catvod.bean.Proxy;
@@ -79,6 +83,32 @@ public class LiveConfig extends BaseConfig {
 
     public static void load(Config config, Callback callback) {
         get().clear().config(config).load(callback);
+    }
+
+    public static List<Depot> getDepots(Config config) {
+        try {
+            String json = Decoder.getJson(UrlUtil.convert(config.getUrl()), TAG);
+            return Depot.arrayFrom(Json.parse(json).getAsJsonObject().getAsJsonArray("urls").toString());
+        } catch (Throwable e) {
+            return Collections.emptyList();
+        }
+    }
+
+    public static void switchDepot(Config parent, Depot depot, Callback callback) {
+        get().clear().config(parent);
+        callback.start();
+        Task.submit(() -> {
+            try {
+                get().loadDepotChild(parent, depot);
+                App.post(callback::success);
+            } catch (Throwable e) {
+                e.printStackTrace();
+                String msg = Notify.getError(R.string.error_config_get, e);
+                App.post(() -> callback.error(msg));
+            } finally {
+                get().postEvent();
+            }
+        });
     }
 
     public LiveConfig init() {
@@ -169,11 +199,32 @@ public class LiveConfig extends BaseConfig {
 
     private void parseDepot(Config config, JsonObject object) throws Throwable {
         List<Depot> items = Depot.arrayFrom(object.getAsJsonArray("urls").toString());
-        List<Config> configs = new ArrayList<>();
-        for (Depot item : items) configs.add(Config.find(item, LIVE));
-        if (configs.isEmpty()) throw new Exception("Depot urls is empty");
-        load(this.config = configs.get(0));
-        Config.delete(config.getUrl());
+        if (items.isEmpty()) throw new Exception("Depot urls is empty");
+        config.depot(true).save();
+        for (Depot depot : items) {
+            try {
+                loadDepotChild(config, depot);
+                return;
+            } catch (Throwable e) {
+                // try next child
+            }
+        }
+        throw new Exception("Depot urls is empty");
+    }
+
+    private void loadDepotChild(Config parent, Depot depot) throws Throwable {
+        String json = Decoder.getJson(UrlUtil.convert(depot.getUrl()), TAG);
+        if (Json.isObj(json)) {
+            JsonObject child = Json.parse(json).getAsJsonObject();
+            if (child.has("urls")) parseDepot(parent, child);
+            else parseConfig(parent, child);
+        } else if (!json.isEmpty()) {
+            parseText(parent, json);
+        } else {
+            throw new Exception("Depot child is empty");
+        }
+        parent.setDepotActiveName(depot.getName());
+        parent.save();
     }
 
     private void parseConfig(Config config, JsonObject object) {

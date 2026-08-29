@@ -706,6 +706,13 @@
                             app:drawableTopCompat="@drawable/ic_control_cast_shadow" />
 
                         <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/switchLine"
+                            style="@style/VideoActionButton"
+                            android:layout_marginEnd="8dp"
+                            android:text="@string/play_switch_line"
+                            app:drawableTopCompat="@drawable/ic_action_switch_line_shadow" />
+
+                        <com.google.android.material.textview.MaterialTextView
                             android:id="@+id/settingAction"
                             style="@style/VideoActionButton"
                             android:text="@string/nav_setting"

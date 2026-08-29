@@ -1,9 +1,11 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -13,6 +15,8 @@ import android.view.inputmethod.EditorInfo;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
@@ -38,9 +42,15 @@ public class ConfigDialog extends BaseAlertDialog {
     private boolean edit;
     private String ori;
     private int type;
+    private Config target;
 
     public static ConfigDialog create() {
         return new ConfigDialog();
+    }
+
+    public ConfigDialog target(Config target) {
+        this.target = target;
+        return this;
     }
 
     public ConfigDialog vod() {
@@ -72,6 +82,15 @@ public class ConfigDialog extends BaseAlertDialog {
         return binding = DialogConfigBinding.inflate(getLayoutInflater());
     }
 
+    @NonNull
+    @Override
+    public Dialog onCreateDialog(@Nullable Bundle savedInstanceState) {
+        Dialog dialog = super.onCreateDialog(savedInstanceState);
+        // 仅允许通过「取消/保存」按钮关闭，避免误触弹窗外部导致输入内容丢失
+        dialog.setCanceledOnTouchOutside(false);
+        return dialog;
+    }
+
     @Override
     protected MaterialAlertDialogBuilder getBuilder() {
         return new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog).setView(getBinding().getRoot());
@@ -83,7 +102,7 @@ public class ConfigDialog extends BaseAlertDialog {
         binding.title.setText(getDialogTitle());
         binding.positive.setText(edit ? R.string.dialog_edit : R.string.dialog_positive);
         binding.name.setText(edit ? config.getName() : "");
-        binding.url.setText(ori = config.getUrl());
+        binding.url.setText(ori = edit ? config.getUrl() : "");
         binding.url.setSelection(TextUtils.isEmpty(ori) ? 0 : ori.length());
     }
 
@@ -116,6 +135,7 @@ public class ConfigDialog extends BaseAlertDialog {
     }
 
     private Config getConfig() {
+        if (target != null) return target;
         return switch (type) {
             case 0 -> VodConfig.get().getConfig();
             case 1 -> LiveConfig.get().getConfig();
@@ -125,6 +145,7 @@ public class ConfigDialog extends BaseAlertDialog {
     }
 
     private Config getStoredConfig() {
+        if (target != null) return target;
         return switch (type) {
             case 0 -> Config.vod();
             case 1 -> Config.live();
@@ -133,8 +154,13 @@ public class ConfigDialog extends BaseAlertDialog {
         };
     }
 
+    private int getType() {
+        if (target != null) return target.getType();
+        return type;
+    }
+
     private int getTypeName() {
-        return switch (type) {
+        return switch (getType()) {
             case 0 -> R.string.setting_vod;
             case 1 -> R.string.setting_live;
             case 2 -> R.string.setting_wall;
@@ -183,15 +209,16 @@ public class ConfigDialog extends BaseAlertDialog {
 
     private Config saveConfig(String url, String name) {
         Config config;
+        int saveType = getType();
         if (url.isEmpty()) {
             if (!edit) return null;
-            if (!TextUtils.isEmpty(ori)) Config.delete(ori, type);
+            if (!TextUtils.isEmpty(ori)) Config.delete(ori, saveType);
             return getStoredConfig();
         } else if (edit) {
-            config = Config.find(ori, type).url(url).name(name).update();
+            config = Config.find(ori, saveType).url(url).name(name).update();
         } else {
-            Config exists = AppDatabase.get().getConfigDao().find(url, type);
-            config = exists != null ? exists : Config.create(type).url(url).name(name).update();
+            Config exists = AppDatabase.get().getConfigDao().find(url, saveType);
+            config = exists != null ? exists : Config.create(saveType).url(url).name(name).update();
         }
         return config;
     }

@@ -16,7 +16,6 @@ public class Update {
     public String notes;
     public String apk;
     public String apkUrl;
-    public String fallbackApkUrl;
     public String error;
     public String sha256;
     public int code;
