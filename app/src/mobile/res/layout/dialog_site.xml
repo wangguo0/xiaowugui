@@ -7,59 +7,192 @@
     android:orientation="vertical"
     android:padding="24dp">
 
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/topRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/searchBox"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@drawable/shape_danmaku_search_keyword"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:text="@string/site_search_hint_expand"
+                android:textColor="#8A8F98"
+                android:textSize="14sp"
+                app:drawableStartCompat="@drawable/ic_site_search"
+                app:drawableTint="@color/dialog_outlined_button_text" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/test"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:drawablePadding="2dp"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/site_test_connect"
+                android:textColor="@color/dialog_outlined_button_text"
+                android:textSize="13sp"
+                app:drawableTopCompat="@drawable/ic_site_test"
+                app:drawableTint="@color/dialog_outlined_button_text" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/block"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="12dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:drawablePadding="2dp"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/site_block_manage"
+                android:textColor="@color/dialog_outlined_button_text"
+                android:textSize="13sp"
+                app:drawableTopCompat="@drawable/ic_site_hidden"
+                app:drawableTint="@color/dialog_outlined_button_text" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/search"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:drawablePadding="2dp"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/site_column_double"
+                android:textColor="@color/dialog_outlined_button_text"
+                android:textSize="13sp"
+                app:drawableTopCompat="@drawable/ic_site_double_column"
+                app:drawableTint="@color/dialog_outlined_button_text" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/searchRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/keyword"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:background="@drawable/shape_danmaku_search_keyword"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:hint="@string/site_search_hint_expand"
+                android:imeOptions="actionSearch"
+                android:inputType="textCapWords|textAutoCorrect|textAutoComplete"
+                android:maxLength="255"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:singleLine="true"
+                android:textColor="#202124"
+                android:textColorHint="#8A8F98"
+                android:textSize="14sp"
+                app:drawableStartCompat="@drawable/ic_site_search"
+                app:drawableTint="@color/dialog_outlined_button_text" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/searchCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/dialog_cancel"
+                android:textColor="@color/dialog_outlined_button_text"
+                android:textSize="14sp" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+    </FrameLayout>
+
     <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/headerRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <View
             android:layout_width="8dp"
             android:layout_height="8dp"
-            android:layout_marginEnd="8dp" />
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/shape_site_health"
+            android:backgroundTint="#80FFFFFF" />
 
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/keyword"
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/site_header_health"
+            android:textColor="#8A8F98"
+            android:textSize="12sp" />
+
+        <com.google.android.material.textview.MaterialTextView
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
-            android:background="@drawable/shape_danmaku_search_keyword"
-            android:drawablePadding="8dp"
-            android:gravity="center_vertical"
-            android:hint="@string/site_search_hint"
-            android:imeOptions="actionSearch"
-            android:inputType="textCapWords|textAutoCorrect|textAutoComplete"
-            android:maxLength="255"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:singleLine="true"
-            android:textColor="#202124"
-            android:textColorHint="#8A8F98"
-            android:textSize="14sp"
-            app:drawableStartCompat="@drawable/ic_site_search"
-            app:drawableTint="@color/dialog_outlined_button_text" />
+            android:gravity="center"
+            android:text="@string/site_header_name"
+            android:textColor="#8A8F98"
+            android:textSize="12sp" />
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/block"
-            android:layout_width="24dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="16dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:padding="0dp"
-            android:scaleType="center"
-            android:src="@drawable/ic_site_hidden"
-            app:tint="@color/dialog_outlined_button_text" />
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/blockHeader"
+            android:layout_width="72dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:gravity="center"
+            android:text="@string/site_header_block"
+            android:textColor="#8A8F98"
+            android:textSize="12sp" />
 
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/search"
-            android:layout_width="24dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="16dp"
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/resetRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/reset"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:padding="0dp"
-            android:scaleType="center"
-            android:src="@drawable/ic_site_single_column"
-            app:tint="@color/dialog_outlined_button_text" />
+            android:paddingStart="6dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="4dp"
+            android:text="@string/site_reset_title"
+            android:textColor="@color/site_state_blocked"
+            android:textSize="12sp" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 

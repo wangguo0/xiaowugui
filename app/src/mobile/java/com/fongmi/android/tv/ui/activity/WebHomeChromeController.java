@@ -17,6 +17,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.databinding.ActivityHomeBinding;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.WebHomeChrome;
 import com.fongmi.android.tv.web.WebHomeChromeOptions;
@@ -180,7 +181,7 @@ final class WebHomeChromeController {
         binding.navigation.setVisibility(normal ? View.VISIBLE : View.GONE);
         WebHomeViewport current = buildViewport();
         int top = normal ? current.getSafeTop() : 0;
-        int bottom = normal ? current.getSafeBottom() : 0;
+        int bottom = normal ? capGestureInset(current.getSafeBottom()) : 0;
         binding.container.setPadding(0, top, 0, 0);
         binding.navigation.setPadding(0, 0, 0, bottom);
         ViewGroup.LayoutParams params = binding.navigation.getLayoutParams();
@@ -193,6 +194,11 @@ final class WebHomeChromeController {
         if (binding.navigation.getVisibility() == View.VISIBLE) container.addRule(RelativeLayout.ABOVE, binding.navigation.getId());
         else container.removeRule(RelativeLayout.ABOVE);
         binding.container.setLayoutParams(container);
+    }
+
+    // 贴底方案B：手势导航条最多预留8dp；三键导航栏仍完整避让
+    private int capGestureInset(int bottom) {
+        return bottom > ResUtil.dp2px(40) ? bottom : Math.min(bottom, ResUtil.dp2px(8));
     }
 
     private void dispatchViewport() {

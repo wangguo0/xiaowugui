@@ -23,6 +23,7 @@ import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -76,6 +77,7 @@ import com.fongmi.android.tv.bean.CastVideo;
 import com.fongmi.android.tv.bean.Danmaku;
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.Flag;
+import com.fongmi.android.tv.bean.BangumiBind;
 import com.fongmi.android.tv.bean.History;
 import com.fongmi.android.tv.bean.Keep;
 import com.fongmi.android.tv.bean.Parse;
@@ -116,6 +118,7 @@ import com.fongmi.android.tv.setting.LyricsSetting;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.setting.SiteBlockSetting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
 import com.fongmi.android.tv.ui.adapter.EpisodeGroupAdapter;
@@ -281,7 +284,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private List<String> mBroken;
     private History mHistory;
     private boolean fullscreen;
-    private boolean initAuto;
     private boolean autoMode;
     private boolean revealManualSearch;
     private boolean useParse;
@@ -304,6 +306,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Runnable mR2;
     private Runnable mR3;
     private Runnable mR4;
+    private Runnable mAutoSwitchCheck;
+    private long mAutoSwitchDeadline;
     private Clock mClock;
     private PiP mPiP;
     private String mContextWallUrl;
@@ -411,7 +415,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, String wallPic, String content) {
-        start(activity, key, id, name, pic, mark, false, wallPic, content);
+        start(activity, key, id, name, pic, mark, false, wallPic, content, null);
+    }
+
+    // 追番链路专用入口：携带追番卡片名，用于播放页展示"绑定追番"按钮
+    public static void startBangumi(Activity activity, String bangumiName, String key, String id, String name, String pic, String wallPic) {
+        start(activity, key, id, name, pic, null, false, wallPic, null, bangumiName);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect) {
@@ -423,6 +432,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic, String content) {
+        start(activity, key, id, name, pic, mark, collect, wallPic, content, null);
+    }
+
+    public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic, String content, String bangumiName) {
         ImgUtil.preload(activity, pic);
         if (Setting.isPlaybackArtworkWall() && !TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
@@ -434,6 +447,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         intent.putExtra("content", content);
         intent.putExtra("key", key);
         intent.putExtra("id", id);
+        intent.putExtra("bangumiName", bangumiName);
         activity.startActivity(intent);
     }
 
@@ -463,6 +477,47 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private String getId() {
         return Objects.toString(getIntent().getStringExtra("id"), "");
+    }
+
+    private String getBangumiName() {
+        return Objects.toString(getIntent().getStringExtra("bangumiName"), "");
+    }
+
+    // 追番卡片手动绑定：仅追番链路进入且追番入口开启时显示按钮
+    private void setupBangumiBind() {
+        String name = getBangumiName();
+        boolean visible = !TextUtils.isEmpty(name) && Setting.isBangumiVisible();
+        mBinding.bangumiRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (!visible) return;
+        boolean bound = BangumiBind.find(name) != null;
+        mBinding.bangumiBind.setText(getString(bound ? R.string.bangumi_unbind : R.string.bangumi_bind));
+    }
+
+    // 追番绑定/解绑确认弹窗：居中显示，皮肤与"搜索"弹窗一致（深色渐变+白描边）
+    private void showBangumiDialog(boolean bound) {
+        String name = getBangumiName();
+        if (TextUtils.isEmpty(name)) return;
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        ((android.widget.TextView) content.findViewById(R.id.title)).setText(R.string.bangumi_bind_title);
+        ((android.widget.TextView) content.findViewById(R.id.message)).setText(getString(bound ? R.string.bangumi_unbind_message : R.string.bangumi_bind_message));
+        android.widget.TextView confirm = content.findViewById(R.id.confirm);
+        confirm.setText(getString(bound ? R.string.bangumi_unbind_confirm : R.string.bangumi_bind_confirm));
+        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        confirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (bound) {
+                BangumiBind.remove(name);
+                mBinding.bangumiBind.setText(R.string.bangumi_bind);
+                Notify.show(R.string.bangumi_unbind_success);
+            } else {
+                BangumiBind.put(name, getKey(), getId(), getName(), getPic(), getWallPic());
+                mBinding.bangumiBind.setText(R.string.bangumi_unbind);
+                Notify.show(R.string.bangumi_bind_success);
+            }
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
     }
 
     private String getHistoryKey() {
@@ -622,6 +677,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
         mR4 = this::showEmpty;
+        mAutoSwitchCheck = this::autoSwitchCheck;
         mPiP = new PiP();
         checkDanmakuImg();
         setRecyclerView();
@@ -639,6 +695,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setVideoView();
         setViewModel();
         setShortDisplay();
+        setupBangumiBind();
         if (shouldUseImmersiveAudio()) {
             setAudioStageVisible(true);
             mBinding.progressLayout.showContent();
@@ -752,6 +809,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.name.setOnClickListener(view -> onName());
         mBinding.more.setOnClickListener(view -> onMore());
         mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
+        mBinding.bangumiBind.setOnClickListener(view -> showBangumiDialog(BangumiBind.find(getBangumiName()) != null));
         mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.castAction.setOnClickListener(view -> onCast());
         mBinding.settingAction.setOnClickListener(view -> onSetting());
@@ -1357,8 +1415,50 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private List<SourceSwitchAdapter.Item> buildSourceItems() {
         List<SourceSwitchAdapter.Item> result = new ArrayList<>();
-        for (Vod vod : mQuickAdapter.getItems()) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
+        for (Vod vod : buildQuickItems()) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
         return result;
+    }
+
+    // 换源候选统一清洗：按站点去重（每站保留集数最高的一条）+ 集数阈值过滤落后的站源
+    private List<Vod> buildQuickItems() {
+        Map<String, Vod> map = new java.util.LinkedHashMap<>();
+        for (Vod vod : mQuickAdapter.getItems()) {
+            Vod best = map.get(vod.getSiteKey());
+            if (best == null || parseEpisodeCount(vod.getRemarks()) > parseEpisodeCount(best.getRemarks())) map.put(vod.getSiteKey(), vod);
+        }
+        List<Vod> result = new ArrayList<>(map.values());
+        int threshold = Setting.getSwitchEpisodeThreshold();
+        if (threshold <= 0) return result;
+        int maxValue = 0;
+        for (Vod vod : result) maxValue = Math.max(maxValue, parseEpisodeCount(vod.getRemarks()));
+        if (maxValue <= 0) return result;
+        final int max = maxValue;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        result.removeIf(vod -> {
+            int count = parseEpisodeCount(vod.getRemarks());
+            if (count <= 0) return false;
+            if (vod.getSiteKey().equals(currentKey)) return false;
+            return count * 100 < max * threshold;
+        });
+        return result;
+    }
+
+    private static final java.util.regex.Pattern EPISODE_PATTERN = java.util.regex.Pattern.compile("(\\d+)\\s*(?:集|话|期|章)");
+
+    private int parseEpisodeCount(String remarks) {
+        if (TextUtils.isEmpty(remarks)) return 0;
+        java.util.regex.Matcher matcher = EPISODE_PATTERN.matcher(remarks);
+        int count = 0;
+        while (matcher.find()) count = parseIntSafe(matcher.group(1));
+        return count;
+    }
+
+    private int parseIntSafe(String text) {
+        try {
+            return Integer.parseInt(text);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void refreshSourceSwitch() {
@@ -1685,7 +1785,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 .keyword(mQuickSearchKeyword)
                 .listener(this)
                 .searchListener(this::onQuickSearch)
-                .items(mQuickAdapter.getItems());
+                .items(buildQuickItems());
         mQuickSearchDialog.show(this);
     }
 
@@ -4559,6 +4659,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.actor.setVisibility(visible ? View.GONE : mBinding.actor.getText().length() == 0 ? View.GONE : View.VISIBLE);
         mBinding.contentLayout.setVisibility(visible ? View.GONE : mBinding.content.getText().length() == 0 ? View.GONE : View.VISIBLE);
         mBinding.actionRow.setVisibility(visible ? View.GONE : View.VISIBLE);
+        if (TextUtils.isEmpty(getBangumiName())) mBinding.bangumiRow.setVisibility(View.GONE);
+        else mBinding.bangumiRow.setVisibility(visible || !Setting.isBangumiVisible() ? View.GONE : View.VISIBLE);
         mBinding.flag.setVisibility(visible || mFlagAdapter == null || mFlagAdapter.isEmpty() ? View.GONE : View.VISIBLE);
         boolean qualityVisible = mQualityAdapter != null && mQualityAdapter.getItemCount() > 1;
         boolean episodeGroupVisible = mEpisodeGroupAdapter != null && mEpisodeGroupAdapter.getItemCount() > 1;
@@ -5961,19 +6063,35 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void checkSearch(boolean force) {
         if (!force && !PlayerSetting.isAutoChange()) return;
-        if (mQuickAdapter.isEmpty()) initSearch(mBinding.name.getText().toString(), true);
-        else if (isAutoMode() || force) nextSite();
+        if (mQuickAdapter.isEmpty()) {
+            initSearch(mBinding.name.getText().toString(), true);
+            startAutoSwitchWait();
+        } else if (isAutoMode() || force) {
+            nextSite();
+        }
+    }
+
+    // 搜索发起后等待约5秒，让「切换站源」列表尽量加载齐全后再自动换站；无候选时每秒轮询，最长15秒
+    private void startAutoSwitchWait() {
+        App.removeCallbacks(mAutoSwitchCheck);
+        mAutoSwitchDeadline = System.currentTimeMillis() + 15000;
+        App.post(mAutoSwitchCheck, 5000);
+    }
+
+    private void autoSwitchCheck() {
+        if (!PlayerSetting.isAutoChange() || !isAutoMode()) return;
+        if (!buildQuickItems().isEmpty()) nextSite();
+        else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
     }
 
     private void initSearch(String keyword, boolean auto) {
         setAutoMode(auto);
-        setInitAuto(auto);
         revealManualSearch = !auto;
         startSearch(keyword);
     }
 
     private boolean isPass(Site item) {
-        if (isAutoMode() && !item.isChangeable()) return false;
+        if (!item.isChangeable()) return false;
         return item.isSearchable();
     }
 
@@ -5982,8 +6100,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickAdapter.clear();
         mBinding.quick.setVisibility(View.GONE);
         if (isQuickSearchVisible()) mQuickSearchDialog.clear();
-        List<Site> sites = new ArrayList<>();
-        for (Site item : VodConfig.get().getSites()) if (isPass(item)) sites.add(item);
+        List<Site> sites = SiteBlockSetting.filter(VodConfig.get().getSites(), false);
+        sites.removeIf(item -> !isPass(item));
         SiteHealthStore.sortSites(sites);
         mViewModel.searchContent(sites, keyword, true);
     }
@@ -5994,9 +6112,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.quick.setVisibility(View.GONE);
         mQuickAdapter.addAll(items);
         refreshSourceSwitch();
-        if (isQuickSearchVisible()) mQuickSearchDialog.addAll(items);
+        if (isQuickSearchVisible()) {
+            mQuickSearchDialog.clear();
+            mQuickSearchDialog.addAll(buildQuickItems());
+        }
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
-        if (isInitAuto() && PlayerSetting.isAutoChange()) nextSite();
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
     }
@@ -6025,14 +6145,19 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         onItemClick(flag);
     }
 
+    // 自动换站：按「切换站源」列表顺序取第一条，换过的移除不重复尝试，并记录当前集名以便续播同一集
     private void nextSite() {
-        if (mQuickAdapter.isEmpty()) return;
-        int position = mQuickAdapter.getBestPosition();
-        Vod item = mQuickAdapter.get(position);
+        App.removeCallbacks(mAutoSwitchCheck);
+        List<Vod> items = buildQuickItems();
+        if (items.isEmpty()) return;
+        Vod item = items.get(0);
+        int position = mQuickAdapter.getItems().indexOf(item);
+        if (position < 0) return;
+        Episode current = getEpisode();
+        if (current != null) getIntent().putExtra("mark", current.getName());
         Notify.show(getString(R.string.play_switch_site, item.getSiteName()));
         mQuickAdapter.remove(position);
         mBroken.add(getId());
-        setInitAuto(false);
         applySearchArtwork(item);
         getDetail(item);
     }
@@ -6056,14 +6181,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setFullscreen(boolean fullscreen) {
         Util.toggleFullscreen(this, this.fullscreen = fullscreen);
-    }
-
-    private boolean isInitAuto() {
-        return initAuto;
-    }
-
-    private void setInitAuto(boolean initAuto) {
-        this.initAuto = initAuto;
     }
 
     private boolean isAutoMode() {
@@ -6418,7 +6535,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         Timer.get().reset();
         DanmakuApi.cancel();
         RefreshEvent.keep();
-        App.removeCallbacks(mR1, mR2, mR3, mR4);
+        App.removeCallbacks(mR1, mR2, mR3, mR4, mAutoSwitchCheck);
         if (mOsd != null) mOsd.release();
         mViewModel.getResult().removeObserver(mObserveDetail);
         mViewModel.getPlayer().removeObserver(mObservePlayer);

@@ -52,6 +52,10 @@ public class SiteBlockSetting {
         return items;
     }
 
+    public static void clear() {
+        save(new LinkedHashSet<>());
+    }
+
     private static Set<String> keys() {
         try {
             List<String> items = App.gson().fromJson(Prefers.getString(KEY, "[]"), TYPE);

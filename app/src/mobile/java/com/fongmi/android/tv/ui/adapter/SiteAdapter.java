@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.R;
@@ -45,9 +46,9 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
 
         void onTextClick(Site item);
 
-        void onSearchClick(int position, Site item);
+        void onSearchClick(int position, Site item, View anchor);
 
-        void onChangeClick(int position, Site item);
+        void onChangeClick(int position, Site item, View anchor);
 
         boolean onTextLongClick(ViewHolder holder);
 
@@ -80,9 +81,13 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         notifyDataSetChanged();
     }
 
-    private void reload() {
+    public void reload() {
         mAllItems.clear();
         addAll();
+    }
+
+    public int indexOf(Site site) {
+        return mItems.indexOf(site);
     }
 
     private void addAll() {
@@ -170,24 +175,34 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         holder.binding.text.setSelected(block ? blocked : on && item.isSelected());
         holder.binding.text.setAlpha(block && blocked ? 0.55f : 1.0f);
         holder.binding.health.setAlpha(block && blocked ? 0.55f : 1.0f);
-        holder.binding.search.setImageResource(getSearchIcon(item));
-        holder.binding.change.setImageResource(getChangeIcon(item));
-        holder.binding.search.setVisibility(!block && search && singleColumn ? View.VISIBLE : View.GONE);
-        holder.binding.change.setVisibility(!block && change && singleColumn ? View.VISIBLE : View.GONE);
+        holder.binding.search.setText(getSearchLabel(item));
+        holder.binding.change.setText(getChangeLabel(item));
+        holder.binding.search.setTextColor(getStateColor(holder, item.isSearchable() ? 1 : 2));
+        holder.binding.change.setTextColor(getStateColor(holder, SiteBlockSetting.isBlocked(item) ? 3 : (item.isChangeable() ? 1 : 2)));
+        holder.binding.search.setVisibility(block && search && singleColumn ? View.VISIBLE : View.GONE);
+        holder.binding.change.setVisibility(block && change && singleColumn ? View.VISIBLE : View.GONE);
         holder.binding.text.setOnClickListener(v -> listener.onTextClick(item));
-        holder.binding.search.setOnClickListener(v -> listener.onSearchClick(position, item));
-        holder.binding.change.setOnClickListener(v -> listener.onChangeClick(position, item));
+        holder.binding.search.setOnClickListener(v -> listener.onSearchClick(position, item, v));
+        holder.binding.change.setOnClickListener(v -> listener.onChangeClick(position, item, v));
         holder.binding.text.setOnLongClickListener(v -> listener.onTextLongClick(holder));
         holder.binding.search.setOnLongClickListener(v -> listener.onSearchLongClick(item));
         holder.binding.change.setOnLongClickListener(v -> listener.onChangeLongClick(item));
     }
 
-    private int getSearchIcon(Site item) {
-        return item.isSearchable() ? R.drawable.ic_site_search : R.drawable.ic_site_block;
+    private int getSearchLabel(Site item) {
+        return item.isSearchable() ? R.string.site_state_search_on : R.string.site_state_search_off;
     }
 
-    private int getChangeIcon(Site item) {
-        return item.isChangeable() ? R.drawable.ic_site_change : R.drawable.ic_site_block;
+    // 三态：彻底屏蔽 > 关闭换源 > 参与换源
+    private int getChangeLabel(Site item) {
+        if (SiteBlockSetting.isBlocked(item)) return R.string.site_state_blocked;
+        return item.isChangeable() ? R.string.site_state_change_on : R.string.site_state_change_off;
+    }
+
+    // 状态色：1=正常灰 2=关闭灰 3=彻底屏蔽红
+    private int getStateColor(ViewHolder holder, int state) {
+        if (state == 3) return ContextCompat.getColor(holder.itemView.getContext(), R.color.site_state_blocked);
+        return ContextCompat.getColor(holder.itemView.getContext(), R.color.dialog_outlined_button_text);
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {

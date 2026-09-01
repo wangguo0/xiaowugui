@@ -178,6 +178,10 @@ public class Site implements Parcelable {
         return AppDatabase.get().getSiteDao().findAll();
     }
 
+    public static void deleteAll() {
+        AppDatabase.get().getSiteDao().delete();
+    }
+
     public String getKey() {
         return TextUtils.isEmpty(key) ? "" : key;
     }
@@ -392,7 +396,7 @@ public class Site implements Parcelable {
     }
 
     public Site setSearchable(boolean searchable) {
-        if (getSearchable() != 0) setSearchable(searchable ? 1 : 2);
+        setSearchable(searchable ? 1 : 2);
         return this;
     }
 
@@ -400,12 +404,16 @@ public class Site implements Parcelable {
         return getChangeable() == 1;
     }
 
+    public boolean isLocked() {
+        return getChangeable() == 0 || getSearchable() == 0;
+    }
+
     public void setChangeable(Integer changeable) {
         this.changeable = changeable;
     }
 
     public Site setChangeable(boolean changeable) {
-        if (getChangeable() != 0) setChangeable(changeable ? 1 : 2);
+        setChangeable(changeable ? 1 : 2);
         return this;
     }
 

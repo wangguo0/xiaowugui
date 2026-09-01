@@ -152,10 +152,40 @@
     <string name="setting_vod">Vod</string>
     <string name="setting_live">Live</string>
     <string name="setting_live_visible">Show live page</string>
+    <string name="setting_vod_visible">Show home page</string>
+    <string name="setting_history_visible">Show history entry</string>
+    <string name="setting_keep_visible">Show favorites entry</string>
+    <string name="setting_bangumi_visible">Show anime schedule entry</string>
+    <string name="bangumi_today">Today</string>
+    <string name="bangumi_stale">Live data unavailable, showing cached schedule</string>
+    <string name="bangumi_bind">Bind Anime</string>
+    <string name="bangumi_unbind">Bound · Tap to unbind</string>
+    <string name="bangumi_bind_title">Notice</string>
+    <string name="bangumi_bind_message">After binding, tapping this anime card in the schedule page will open this page directly for playback, skipping search. Tap Cancel if unsure.</string>
+    <string name="bangumi_unbind_message">After unbinding, tapping this anime card will no longer open this page directly, and you will need to search and bind again. Tap Cancel if unsure.</string>
+    <string name="bangumi_bind_confirm">Confirm</string>
+    <string name="bangumi_unbind_confirm">Unbind</string>
+    <string name="bangumi_bind_success">Bound successfully</string>
+    <string name="bangumi_unbind_success">Unbound</string>
+
+    <string-array name="bangumi_week">
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+        <item>Thu</item>
+        <item>Fri</item>
+        <item>Sat</item>
+        <item>Sun</item>
+    </string-array>
+
+    <string name="setting_link_visible">Home direct-link play floating button</string>
+    <string name="setting_switch_episode_threshold">Source switch episode threshold</string>
+    <string name="setting_threshold_none">No hide</string>
+    <string name="setting_percent">%d%%</string>
     <string name="setting_source_group">Home &amp; Sources</string>
     <string name="setting_subscription_manage">Vod Subscription Manage</string>
     <string name="setting_subscription_manage_live">Live Subscription Manage</string>
-    <string name="setting_subscription_add">Add</string>
+    <string name="setting_subscription_add">Add Source</string>
     <string name="setting_subscription_empty">No subscription yet</string>
     <string name="setting_subscription_pin">Pin</string>
     <string name="setting_subscription_pinned">Pinned</string>
@@ -718,10 +748,10 @@
     <string name="setting_on">On</string>
 
     <!-- About -->
-    <string name="about_title">About WebHomeTV</string>
+    <string name="about_title">About 小乌龟</string>
     <string name="about_free_badge">Free</string>
     <string name="about_version">Version %1$s · %2$s/%3$s</string>
-    <string name="about_disclaimer">WebHomeTV is a technical learning and research project based on open source ecosystems. The software itself is completely free and does not provide paid services, video content, live sources, API sources, resource storage, or content distribution.\n\nThis software is only for technical learning, research, and personal testing. Please uninstall it within 24 hours after downloading, installing, or trying it. All behavior and consequences arising from continued use are borne by the user.\n\nThis software does not embed, sell, or distribute any video resources, and is not responsible for interfaces, sources, plugins, scripts, links, cloud-drive resources, or third-party service content added by users. Users must comply with local laws and regulations, respect the rights of copyright owners and content providers, and must not use this software for infringement, piracy, illegal content distribution, or other illegal purposes.\n\nAny individual or organization is strictly prohibited from selling, traffic diversion, paid maintenance, membership services, advertising monetization, box preinstallation, TV box bundle sales, or any other form of profit-making in the name of this software. The project clearly opposes and condemns selling or promoting this software as part of TV boxes, set-top boxes, paid packages, or commercial services.\n\nIf you do not agree with this statement, please stop using and uninstall this software immediately.</string>
+    <string name="about_disclaimer">小乌龟 is a technical learning and research project based on open source ecosystems. The software itself is completely free and does not provide paid services, video content, live sources, API sources, resource storage, or content distribution.\n\nThis software is only for technical learning, research, and personal testing. Please uninstall it within 24 hours after downloading, installing, or trying it. All behavior and consequences arising from continued use are borne by the user.\n\nThis software does not embed, sell, or distribute any video resources, and is not responsible for interfaces, sources, plugins, scripts, links, cloud-drive resources, or third-party service content added by users. Users must comply with local laws and regulations, respect the rights of copyright owners and content providers, and must not use this software for infringement, piracy, illegal content distribution, or other illegal purposes.\n\nAny individual or organization is strictly prohibited from selling, traffic diversion, paid maintenance, membership services, advertising monetization, box preinstallation, TV box bundle sales, or any other form of profit-making in the name of this software. The project clearly opposes and condemns selling or promoting this software as part of TV boxes, set-top boxes, paid packages, or commercial services.\n\nIf you do not agree with this statement, please stop using and uninstall this software immediately.</string>
     <string name="about_check_update">Check updates</string>
     <string name="about_acknowledge">I understand</string>
 

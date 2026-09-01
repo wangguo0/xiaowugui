@@ -512,6 +512,54 @@ public class Setting {
         Prefers.put("live_visible", visible);
     }
 
+    public static boolean isVodVisible() {
+        return Prefers.getBoolean("vod_visible", true);
+    }
+
+    public static void putVodVisible(boolean visible) {
+        Prefers.put("vod_visible", visible);
+    }
+
+    public static boolean isHistoryVisible() {
+        return Prefers.getBoolean("history_visible", false);
+    }
+
+    public static void putHistoryVisible(boolean visible) {
+        Prefers.put("history_visible", visible);
+    }
+
+    public static boolean isKeepVisible() {
+        return Prefers.getBoolean("keep_visible", false);
+    }
+
+    public static void putKeepVisible(boolean visible) {
+        Prefers.put("keep_visible", visible);
+    }
+
+    public static boolean isBangumiVisible() {
+        return Prefers.getBoolean("bangumi_visible", false);
+    }
+
+    public static void putBangumiVisible(boolean visible) {
+        Prefers.put("bangumi_visible", visible);
+    }
+
+    public static boolean isLinkVisible() {
+        return Prefers.getBoolean("link_visible", true);
+    }
+
+    public static void putLinkVisible(boolean visible) {
+        Prefers.put("link_visible", visible);
+    }
+
+    public static int getSwitchEpisodeThreshold() {
+        return Prefers.getInt("switch_episode_threshold", 80);
+    }
+
+    public static void putSwitchEpisodeThreshold(int percent) {
+        Prefers.put("switch_episode_threshold", percent);
+    }
+
     public static boolean isPlaybackArtworkWall() {
         return Prefers.getBoolean("playback_artwork_wall", true);
     }

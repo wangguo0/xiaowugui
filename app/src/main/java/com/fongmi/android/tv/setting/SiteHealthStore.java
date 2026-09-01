@@ -88,6 +88,17 @@ public class SiteHealthStore {
         }
     }
 
+    public static void recordTest(Site site, Status status) {
+        if (skip(site)) return;
+        synchronized (SiteHealthStore.class) {
+            Health health = get(site.getKey());
+            health.updatedAt = System.currentTimeMillis();
+            health.testStatus = status.ordinal() + 1;
+            health.testAt = health.updatedAt;
+            markDirty();
+        }
+    }
+
     public static void sortSites(List<Site> sites) {
         if (!Setting.isSiteHealthSort()) return;
         if (sites == null || sites.size() < 2) return;
@@ -132,7 +143,9 @@ public class SiteHealthStore {
         if (skip(site)) return Status.UNKNOWN;
         synchronized (SiteHealthStore.class) {
             Health health = find(site.getKey());
-            if (health == null || health.total() == 0) return Status.UNKNOWN;
+            if (health == null) return Status.UNKNOWN;
+            if (health.testStatus > 0 && System.currentTimeMillis() - health.testAt < TimeUnit.DAYS.toMillis(1)) return Status.values()[health.testStatus - 1];
+            if (health.total() == 0) return Status.UNKNOWN;
             double score = health.score();
             if (health.lastPlayFailAt > health.lastPlaySuccessAt && health.playFail >= 3 && score < 0) return Status.BAD;
             if (score >= 20 || health.lastPlaySuccessAt >= health.lastPlayFailAt && health.playSuccess > 0) return Status.GOOD;
@@ -211,7 +224,7 @@ public class SiteHealthStore {
         return text.length() <= 120 ? text : text.substring(0, 120);
     }
 
-    private enum Status {GOOD, WARN, BAD, UNKNOWN}
+    public enum Status {GOOD, WARN, BAD, UNKNOWN}
 
     public static class Health {
 
@@ -231,6 +244,8 @@ public class SiteHealthStore {
         private long lastPlaySuccessAt;
         private long lastPlayFailAt;
         private long updatedAt;
+        private int testStatus;
+        private long testAt;
         private String lastSearchError;
         private String lastDetailError;
         private String lastPlayError;

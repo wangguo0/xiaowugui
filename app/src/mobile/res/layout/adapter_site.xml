@@ -28,22 +28,26 @@
         app:strokeColor="@color/dialog_outlined_button_stroke"
         tools:text="泥巴" />
 
-    <androidx.appcompat.widget.AppCompatImageView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/search"
-        android:layout_width="wrap_content"
+        android:layout_width="72dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="12dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_site_search"
-        app:tint="@color/dialog_outlined_button_text" />
+        android:gravity="center"
+        android:textColor="@color/dialog_outlined_button_text"
+        android:textSize="13sp"
+        tools:text="参与搜索" />
 
-    <androidx.appcompat.widget.AppCompatImageView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/change"
-        android:layout_width="wrap_content"
+        android:layout_width="72dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="12dp"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_site_change"
-        app:tint="@color/dialog_outlined_button_text" />
+        android:gravity="center"
+        android:textColor="@color/dialog_outlined_button_text"
+        android:textSize="13sp"
+        tools:text="参与换源" />
 
 </androidx.appcompat.widget.LinearLayoutCompat>

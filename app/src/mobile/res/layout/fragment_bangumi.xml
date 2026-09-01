@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <HorizontalScrollView
+            android:id="@+id/tabScroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@+id/refresh"
+            android:scrollbars="none">
+
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/tabContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp" />
+
+        </HorizontalScrollView>
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/refresh"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/shape_search_hot_word"
+            android:padding="8dp"
+            android:src="@drawable/ic_action_refresh"
+            app:tint="@color/white" />
+
+    </RelativeLayout>
+
+    <com.fongmi.android.tv.ui.custom.ProgressLayout
+        android:id="@+id/progressLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp"
+            tools:listitem="@layout/adapter_bangumi" />
+
+    </com.fongmi.android.tv.ui.custom.ProgressLayout>
+
+</androidx.appcompat.widget.LinearLayoutCompat>

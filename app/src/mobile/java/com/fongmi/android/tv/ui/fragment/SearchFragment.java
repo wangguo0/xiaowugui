@@ -74,11 +74,16 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
     }
 
     public static SearchFragment newInstance(String keyword, String siteKey, String pic, String wallPic) {
+        return newInstance(keyword, siteKey, pic, wallPic, null);
+    }
+
+    public static SearchFragment newInstance(String keyword, String siteKey, String pic, String wallPic, String bangumiName) {
         Bundle args = new Bundle();
         args.putString("keyword", keyword);
         args.putString("siteKey", siteKey);
         args.putString("pic", pic);
         args.putString("wallPic", wallPic);
+        args.putString("bangumiName", bangumiName);
         SearchFragment fragment = new SearchFragment();
         fragment.setArguments(args);
         return fragment;
@@ -98,6 +103,10 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
 
     private String getWallPic() {
         return getArguments().getString("wallPic");
+    }
+
+    private String getBangumiName() {
+        return getArguments().getString("bangumiName");
     }
 
     private boolean empty() {
@@ -192,7 +201,7 @@ public class SearchFragment extends BaseFragment implements MenuProvider, WordAd
         if (fm.findFragmentByTag(collectTag) != null) return;
         String searchTag = SearchFragment.class.getSimpleName();
         FragmentTransaction ft = fm.beginTransaction().setTransition(TRANSIT_FRAGMENT_OPEN);
-        ft.add(R.id.container, CollectFragment.newInstance(keyword, getSiteKey(), getPic(), getWallPic()), collectTag);
+        ft.add(R.id.container, CollectFragment.newInstance(keyword, getSiteKey(), getPic(), getWallPic(), getBangumiName()), collectTag);
         Optional.ofNullable(fm.findFragmentByTag(searchTag)).ifPresent(ft::hide);
         ft.setReorderingAllowed(true).addToBackStack(null).commit();
     }

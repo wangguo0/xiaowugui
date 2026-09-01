@@ -212,6 +212,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
             mBinding.filter.setVisibility(View.GONE);
             mBinding.link.show();
         }
+        // 用户关闭「首页直链播放悬浮窗」开关后，悬浮窗彻底隐藏
+        if (!Setting.isLinkVisible()) mBinding.link.setVisibility(View.GONE);
     }
 
     private void setTitle() {
@@ -228,6 +230,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private boolean onLink(View view) {
+        if (!Setting.isLinkVisible()) return false;
         LinkDialog.show(this);
         return true;
     }
@@ -516,6 +519,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     @Override
     public void onResume() {
         super.onResume();
+        setFabVisible(mBinding.pager.getCurrentItem());
         if (mWeb != null) mWeb.onResume();
     }
 

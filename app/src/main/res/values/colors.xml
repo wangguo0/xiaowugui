@@ -27,4 +27,9 @@
     <color name="white_80">#CCFFFFFF</color>
     <color name="white_90">#E6FFFFFF</color>
 
+    <!-- 追番（每日更新） -->
+    <color name="bangumi_orange">#FF7A1A</color>
+    <color name="bangumi_mark">#B3000000</color>
+    <color name="bangumi_desc">#99FFFFFF</color>
+
 </resources>

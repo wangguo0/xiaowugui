@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/shape_search_hot_word"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/image"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:background="@color/black_20"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/Vod.Grid"
+            tools:ignore="MissingConstraints" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignTop="@+id/image"
+            android:layout_alignEnd="@+id/image"
+            android:background="@drawable/bg_bangumi_badge"
+            android:singleLine="true"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:visibility="gone"
+            tools:text="独播"
+            tools:visibility="visible" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/mark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@+id/image"
+            android:layout_alignEnd="@+id/image"
+            android:background="@drawable/bg_bangumi_mark"
+            android:singleLine="true"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:visibility="gone"
+            tools:text="更新至156集"
+            tools:visibility="visible" />
+
+    </RelativeLayout>
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="@color/white"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        tools:text="仙逆" />
+
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:minLines="2"
+        android:textColor="@color/bangumi_desc"
+        android:textSize="12sp"
+        tools:text="VIP用户每周一10点更新1集，SVIP权益加码，可抢先1天看更新集" />
+
+</androidx.appcompat.widget.LinearLayoutCompat>

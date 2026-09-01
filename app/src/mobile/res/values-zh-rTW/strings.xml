@@ -7,6 +7,7 @@
     <!-- Nav -->
     <string name="nav_vod">點播</string>
     <string name="nav_live">直播</string>
+    <string name="nav_bangumi">追番</string>
     <string name="nav_setting">設定</string>
 
     <!-- Menu -->
@@ -109,5 +110,30 @@
         <item>全屏</item>
         <item>標準</item>
     </string-array>
+
+    <!-- 站點彈窗 -->
+    <string name="site_block_manage">封鎖管理</string>
+    <string name="site_column_double">雙列</string>
+    <string name="site_column_single">單列</string>
+    <string name="site_header_health">連接狀態</string>
+    <string name="site_header_name">站源名稱</string>
+    <string name="site_header_block">封鎖狀態</string>
+    <string name="site_state_change_on">參與換源</string>
+    <string name="site_desc_change_on">影片播放有問題時，參與自動換源</string>
+    <string name="site_desc_change_off">影片播放有問題時，不參與自動換源</string>
+    <string name="site_desc_blocked">屏蔽後這個站點任何資源不可用</string>
+    <string name="site_state_change_off">關閉換源</string>
+    <string name="site_state_blocked">徹底封鎖</string>
+    <string name="site_state_search_on">參與搜尋</string>
+    <string name="site_state_search_off">關閉搜尋</string>
+    <string name="site_lock_warning_title">謹慎操作</string>
+    <string name="site_lock_warning_msg">「%1$s」已被訂閱源作者鎖定。強制修改可能導致播放異常，確定繼續嗎？</string>
+    <string name="site_test_connect">測試連線</string>
+    <string name="site_search_hint_expand">搜尋站點名稱</string>
+    <string name="site_testing_progress">測試中 %1$d/%2$d</string>
+    <string name="site_test_result">測試完成：%1$d 正常 / %2$d 緩慢 / %3$d 失敗</string>
+    <string name="site_reset_title">恢復初始設置</string>
+    <string name="site_reset_msg">將清除全部封鎖與換源/搜尋設置，並按訂閱源原始配置恢復（含作者鎖定站）。確定繼續嗎？</string>
+    <string name="site_reset_done">已恢復初始設置</string>
 
 </resources>

@@ -7,6 +7,7 @@
     <!-- Nav -->
     <string name="nav_vod">Vod</string>
     <string name="nav_live">Live</string>
+    <string name="nav_bangumi">Schedule</string>
     <string name="nav_setting">Setting</string>
 
     <!-- Menu -->
@@ -109,5 +110,30 @@
         <item>Fullscreen</item>
         <item>Standard</item>
     </string-array>
+
+    <!-- Site dialog -->
+    <string name="site_block_manage">Block</string>
+    <string name="site_column_double">2 columns</string>
+    <string name="site_column_single">1 column</string>
+    <string name="site_header_health">Status</string>
+    <string name="site_header_name">Site name</string>
+    <string name="site_header_block">State</string>
+    <string name="site_state_change_on">Switchable</string>
+    <string name="site_desc_change_on">Included in auto source switching when playback fails</string>
+    <string name="site_desc_change_off">Excluded from auto source switching when playback fails</string>
+    <string name="site_desc_blocked">All resources from this site become unavailable</string>
+    <string name="site_state_change_off">No switch</string>
+    <string name="site_state_blocked">Blocked</string>
+    <string name="site_state_search_on">Searchable</string>
+    <string name="site_state_search_off">No search</string>
+    <string name="site_lock_warning_title">Proceed with caution</string>
+    <string name="site_lock_warning_msg">\"%1$s\" is locked by the config author. Forcing a change may cause playback issues. Continue?</string>
+    <string name="site_test_connect">Test</string>
+    <string name="site_search_hint_expand">Search site name</string>
+    <string name="site_testing_progress">Testing %1$d/%2$d</string>
+    <string name="site_test_result">Done: %1$d ok / %2$d slow / %3$d failed</string>
+    <string name="site_reset_title">Reset settings</string>
+    <string name="site_reset_msg">Clear all block and switch settings and restore the original config. Continue?</string>
+    <string name="site_reset_done">Settings reset</string>
 
 </resources>

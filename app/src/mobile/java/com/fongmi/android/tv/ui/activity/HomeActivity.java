@@ -38,10 +38,13 @@ import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
+import com.fongmi.android.tv.ui.fragment.BangumiFragment;
 import com.fongmi.android.tv.ui.fragment.CollectFragment;
 import com.fongmi.android.tv.ui.fragment.ConfigManageFragment;
 import com.fongmi.android.tv.ui.fragment.EpisodeFragment;
 import com.fongmi.android.tv.ui.fragment.FolderFragment;
+import com.fongmi.android.tv.ui.fragment.HistoryFragment;
+import com.fongmi.android.tv.ui.fragment.KeepFragment;
 import com.fongmi.android.tv.ui.fragment.SearchFragment;
 import com.fongmi.android.tv.ui.fragment.SettingAdvancedFragment;
 import com.fongmi.android.tv.ui.fragment.SettingAppearanceFragment;
@@ -79,6 +82,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private WebHomeChromeController mChrome;
     private Config mStartupConfig;
     private boolean wideWindow;
+    private boolean navInitialized;
     private int currentPosition;
     private boolean returnVodFromEnhance;
 
@@ -152,18 +156,22 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mManager = new FragmentStateManager(mBinding.container, getSupportFragmentManager(), position -> switch (position) {
             case 0 -> VodFragment.newInstance();
             case 1 -> SettingFragment.newInstance();
+            case 2 -> HistoryFragment.newInstance();
             case 3 -> SettingEnhanceFragment.newInstance();
+            case 4 -> KeepFragment.newInstance();
+            case 5 -> BangumiFragment.newInstance();
             default -> null;
         });
-        if (savedInstanceState == null) change(0);
+        if (savedInstanceState == null) change(defaultPosition());
         else restorePosition(currentPosition);
     }
 
     private void restorePosition(int position) {
         setNavigation();
         syncNavigationSelection();
-        setNavigationVisible(position < 2);
-        changeFragment(position <= 0 ? 0 : position);
+        int target = position == 3 || isEntryClosed(position) ? defaultPosition() : position;
+        setNavigationVisible(true);
+        changeFragment(target);
     }
 
     private void initConfig() {
@@ -199,10 +207,23 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void setNavigation() {
-        mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(true);
+        navInitialized = true;
+        mBinding.navigation.getMenu().findItem(R.id.vod).setVisible(Setting.isVodVisible());
+        mBinding.navigation.getMenu().findItem(R.id.history).setVisible(Setting.isHistoryVisible());
+        mBinding.navigation.getMenu().findItem(R.id.keep).setVisible(Setting.isKeepVisible());
+        mBinding.navigation.getMenu().findItem(R.id.bangumi).setVisible(Setting.isBangumiVisible());
         mBinding.navigation.getMenu().findItem(R.id.setting).setVisible(true);
         mBinding.navigation.getMenu().findItem(R.id.live).setVisible(Setting.isLiveVisible() && LiveConfig.hasUrl());
         syncNavigationSelection();
+    }
+
+    // 首页入口被关闭时落地页回退到设置页
+    private int defaultPosition() {
+        return Setting.isVodVisible() ? 0 : 1;
+    }
+
+    private boolean isNavigationInitialized() {
+        return navInitialized;
     }
 
     private boolean openLive() {
@@ -219,9 +240,19 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     public void change(int position) {
         if (position != 3) returnVodFromEnhance = false;
-        setNavigationVisible(position < 2);
-        if (position < 2) selectNavigation(position);
-        else changeFragment(position);
+        if (isEntryClosed(position)) position = defaultPosition();
+        setNavigationVisible(position != 3);
+        if (position == 3) changeFragment(position);
+        else selectNavigation(position);
+    }
+
+    // 入口被关闭的页面不可进入
+    private boolean isEntryClosed(int position) {
+        if (position == 0) return !Setting.isVodVisible();
+        if (position == 2) return !Setting.isHistoryVisible();
+        if (position == 4) return !Setting.isKeepVisible();
+        if (position == 5) return !Setting.isBangumiVisible();
+        return false;
     }
 
     public void setNavigationVisible(boolean visible) {
@@ -249,6 +280,8 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
                 break;
             case COMMON:
                 setNavigation();
+                // 当前停留页的入口被关闭时，立即回退到落地页
+                if (isEntryClosed(currentPosition)) change(defaultPosition());
                 break;
             case BOOT:
                 LiveActivity.start(this);
@@ -273,18 +306,30 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         setNavigationVisible(true);
         if (item.getItemId() == R.id.setting) return changeFragment(1);
         if (item.getItemId() == R.id.vod) return changeFragment(0);
+        if (item.getItemId() == R.id.history) return changeFragment(2);
+        if (item.getItemId() == R.id.keep) return changeFragment(4);
+        if (item.getItemId() == R.id.bangumi) return changeFragment(5);
         if (item.getItemId() == R.id.live) return openLive();
         return false;
     }
 
     private void selectNavigation(int position) {
-        int itemId = position == 0 ? R.id.vod : R.id.setting;
+        int itemId = getItemId(position);
         if (mBinding.navigation.getSelectedItemId() == itemId) changeFragment(position);
         else mBinding.navigation.setSelectedItemId(itemId);
     }
 
+    // 位置 → 导航标签；首页入口关闭时落地页由 vod 回退为 setting
+    private int getItemId(int position) {
+        if (position == 2) return R.id.history;
+        if (position == 4) return R.id.keep;
+        if (position == 5) return R.id.bangumi;
+        if (position != 0) return R.id.setting;
+        return Setting.isVodVisible() ? R.id.vod : R.id.setting;
+    }
+
     private void syncNavigationSelection() {
-        int itemId = currentPosition == 0 ? R.id.vod : R.id.setting;
+        int itemId = getItemId(currentPosition);
         if (mBinding.navigation.getSelectedItemId() == itemId) return;
         mBinding.navigation.setOnItemSelectedListener(null);
         mBinding.navigation.setSelectedItemId(itemId);
@@ -292,7 +337,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private boolean changeFragment(int position) {
-        setNavigationVisible(position < 2);
+        setNavigationVisible(position != 3);
         boolean changed = mManager.change(position);
         if (changed) currentPosition = position;
         refreshWebHomeChromeLayout();
@@ -429,13 +474,19 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     protected void onBackInvoked() {
         if (mChrome != null && mChrome.consumeBack()) {
             return;
-        } else if (!mBinding.navigation.getMenu().findItem(R.id.vod).isVisible()) {
+        } else if (!isNavigationInitialized()) {
             setNavigation();
         } else if (mManager.isVisible(3)) {
             boolean fromVod = returnVodFromEnhance;
             returnVodFromEnhance = false;
-            change(fromVod ? 0 : 1);
-        } else if (mManager.isVisible(1)) {
+            change(fromVod && Setting.isVodVisible() ? 0 : 1);
+        } else if (mManager.isVisible(2)) {
+            if (!mManager.canBack(2)) return;
+            change(defaultPosition());
+        } else if (mManager.isVisible(4)) {
+            if (!mManager.canBack(4)) return;
+            change(defaultPosition());
+        } else if (mManager.isVisible(1) && Setting.isVodVisible()) {
             change(0);
         } else if (mManager.canBack(0)) {
             if (PlaybackService.isRunning()) Util.moveToBackground(this);

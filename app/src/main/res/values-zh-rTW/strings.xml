@@ -150,10 +150,40 @@
     <string name="setting_vod">點播</string>
     <string name="setting_live">直播</string>
     <string name="setting_live_visible">顯示直播頁面</string>
+    <string name="setting_vod_visible">顯示首頁頁面</string>
+    <string name="setting_history_visible">顯示最近觀看入口</string>
+    <string name="setting_keep_visible">顯示我的收藏入口</string>
+    <string name="setting_bangumi_visible">顯示追番日曆入口</string>
+    <string name="bangumi_today">今天</string>
+    <string name="bangumi_stale">即時數據獲取失敗，展示緩存排期</string>
+    <string name="bangumi_bind">綁定追番</string>
+    <string name="bangumi_unbind">已綁定 · 點擊解綁</string>
+    <string name="bangumi_bind_title">溫馨提醒</string>
+    <string name="bangumi_bind_message">綁定追番後在追番功能頁面點擊追番卡片後會直接進入此頁面進行播放視頻，省去搜索過程。如果不明白點擊取消即可。</string>
+    <string name="bangumi_unbind_message">解綁後將無法通過追番視頻卡片直接進入此頁面播放視頻，需要重新搜索綁定。如果不明白點擊取消即可。</string>
+    <string name="bangumi_bind_confirm">確認綁定</string>
+    <string name="bangumi_unbind_confirm">確認解綁</string>
+    <string name="bangumi_bind_success">綁定成功</string>
+    <string name="bangumi_unbind_success">已解綁</string>
+
+    <string-array name="bangumi_week">
+        <item>週一</item>
+        <item>週二</item>
+        <item>週三</item>
+        <item>週四</item>
+        <item>週五</item>
+        <item>週六</item>
+        <item>週日</item>
+    </string-array>
+
+    <string name="setting_link_visible">首頁直鏈播放懸浮窗</string>
+    <string name="setting_switch_episode_threshold">換源集數閾值</string>
+    <string name="setting_threshold_none">不隱藏</string>
+    <string name="setting_percent">%d%%</string>
     <string name="setting_source_group">首頁與內容源</string>
     <string name="setting_subscription_manage">點播訂閱管理</string>
     <string name="setting_subscription_manage_live">直播訂閱管理</string>
-    <string name="setting_subscription_add">添加</string>
+    <string name="setting_subscription_add">添加源</string>
     <string name="setting_subscription_empty">暫無訂閱</string>
     <string name="setting_subscription_pin">置頂</string>
     <string name="setting_subscription_pinned">已置頂</string>
@@ -700,10 +730,10 @@
     <string name="setting_on">開</string>
 
     <!-- About -->
-    <string name="about_title">關於 WebHomeTV</string>
+    <string name="about_title">關於小烏龜</string>
     <string name="about_free_badge">完全免費</string>
     <string name="about_version">版本 %1$s · %2$s/%3$s</string>
-    <string name="about_disclaimer">WebHomeTV 是基於開源生態二次開發的技術學習與研究項目，軟體本體完全免費，不提供任何付費服務、影視內容、直播源、接口源、資源儲存或內容分發能力。\n\n本軟體僅供技術學習、研究和個人測試使用，請在下載、安裝或試用後 24 小時內自行解除安裝。繼續使用本軟體所產生的一切行為及後果，由使用者自行承擔。\n\n本軟體不內置、不售賣、不傳播任何影視資源，不對使用者自行添加的接口、站源、插件、腳本、連結、網盤資源或第三方服務內容負責。使用者應遵守所在地法律法規，尊重版權方和內容提供方的合法權益，不得將本軟體用於任何侵權、盜版、傳播非法內容或其他違法違規用途。\n\n嚴禁任何個人或組織以本軟體名義進行售賣、引流、收費維護、會員服務、廣告變現、盒子預裝、電視盒子捆綁銷售或其他任何形式的獲益行為。對於將本軟體內置於電視盒子、機頂盒、付費套餐或商業服務中進行銷售、推廣的行為，項目方明確反對並予以譴責。\n\n如你不同意以上聲明，請立即停止使用並解除安裝本軟體。</string>
+    <string name="about_disclaimer">小烏龜 是基於開源生態二次開發的技術學習與研究項目，軟體本體完全免費，不提供任何付費服務、影視內容、直播源、接口源、資源儲存或內容分發能力。\n\n本軟體僅供技術學習、研究和個人測試使用，請在下載、安裝或試用後 24 小時內自行解除安裝。繼續使用本軟體所產生的一切行為及後果，由使用者自行承擔。\n\n本軟體不內置、不售賣、不傳播任何影視資源，不對使用者自行添加的接口、站源、插件、腳本、連結、網盤資源或第三方服務內容負責。使用者應遵守所在地法律法規，尊重版權方和內容提供方的合法權益，不得將本軟體用於任何侵權、盜版、傳播非法內容或其他違法違規用途。\n\n嚴禁任何個人或組織以本軟體名義進行售賣、引流、收費維護、會員服務、廣告變現、盒子預裝、電視盒子捆綁銷售或其他任何形式的獲益行為。對於將本軟體內置於電視盒子、機頂盒、付費套餐或商業服務中進行銷售、推廣的行為，項目方明確反對並予以譴責。\n\n如你不同意以上聲明，請立即停止使用並解除安裝本軟體。</string>
     <string name="about_check_update">檢查更新</string>
     <string name="about_acknowledge">我已知悉</string>
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="site_state_blocked">#FF5252</color>
+    <color name="site_state_active">#1A73E8</color>
+</resources>

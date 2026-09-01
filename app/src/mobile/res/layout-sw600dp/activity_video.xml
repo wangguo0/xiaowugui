@@ -567,6 +567,29 @@
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
                     <androidx.appcompat.widget.LinearLayoutCompat
+                        android:id="@+id/bangumiRow"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginEnd="16dp"
+                        android:gravity="start"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/bangumiBind"
+                            style="@style/VideoActionButton"
+                            android:layout_width="wrap_content"
+                            android:layout_weight="0"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
+                            android:text="@string/bangumi_bind"
+                            app:drawableTopCompat="@drawable/ic_action_bangumi_bind_shadow" />
+
+                    </androidx.appcompat.widget.LinearLayoutCompat>
+
+                    <androidx.appcompat.widget.LinearLayoutCompat
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="16dp"

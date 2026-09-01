@@ -8,6 +8,24 @@
         android:visible="false" />
 
     <item
+        android:id="@+id/history"
+        android:icon="@drawable/ic_popup_history"
+        android:title="@string/app_history"
+        android:visible="false" />
+
+    <item
+        android:id="@+id/keep"
+        android:icon="@drawable/ic_popup_keep"
+        android:title="@string/app_keep"
+        android:visible="false" />
+
+    <item
+        android:id="@+id/bangumi"
+        android:icon="@drawable/ic_nav_bangumi"
+        android:title="@string/nav_bangumi"
+        android:visible="false" />
+
+    <item
         android:id="@+id/live"
         android:icon="@drawable/ic_nav_live"
         android:title="@string/nav_live"

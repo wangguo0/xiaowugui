@@ -35,6 +35,14 @@ public class SearchActivity extends BaseActivity {
         activity.startActivity(intent);
     }
 
+    // 追番链路专用入口：携带追番卡片名，选片进入播放页后展示"绑定追番"按钮
+    public static void startBangumi(Activity activity, String keyword, String bangumiName) {
+        Intent intent = new Intent(activity, SearchActivity.class);
+        intent.putExtra("keyword", keyword);
+        intent.putExtra("bangumiName", bangumiName);
+        activity.startActivity(intent);
+    }
+
     public static void direct(Activity activity, String keyword) {
         direct(activity, keyword, null);
     }
@@ -73,6 +81,10 @@ public class SearchActivity extends BaseActivity {
         return getIntent().getStringExtra("wallPic");
     }
 
+    private String getBangumiName() {
+        return getIntent().getStringExtra("bangumiName");
+    }
+
     @Override
     protected ViewBinding getBinding() {
         return ActivitySearchBinding.inflate(getLayoutInflater());
@@ -81,8 +93,8 @@ public class SearchActivity extends BaseActivity {
     @Override
     protected void initView(Bundle savedInstanceState) {
         if (savedInstanceState == null) {
-            if (isDirect()) getSupportFragmentManager().beginTransaction().replace(R.id.container, CollectFragment.newInstance(getKeyword(), getSiteKey(), getPic(), getWallPic()), CollectFragment.class.getSimpleName()).commit();
-            else getSupportFragmentManager().beginTransaction().replace(R.id.container, SearchFragment.newInstance(getKeyword(), getSiteKey(), getPic(), getWallPic()), SearchFragment.class.getSimpleName()).commit();
+            if (isDirect()) getSupportFragmentManager().beginTransaction().replace(R.id.container, CollectFragment.newInstance(getKeyword(), getSiteKey(), getPic(), getWallPic(), getBangumiName()), CollectFragment.class.getSimpleName()).commit();
+            else getSupportFragmentManager().beginTransaction().replace(R.id.container, SearchFragment.newInstance(getKeyword(), getSiteKey(), getPic(), getWallPic(), getBangumiName()), SearchFragment.class.getSimpleName()).commit();
         }
     }
 

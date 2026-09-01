@@ -90,6 +90,18 @@
         <item name="titleTextColor">@color/white</item>
     </style>
 
+    <!-- 工具栏菜单文字与标题同大小 -->
+    <style name="ToolbarMenuTextAppearance" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">20sp</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <style name="ToolbarMenuTheme" parent="">
+        <item name="actionMenuTextColor">@color/white</item>
+        <item name="actionMenuTextAppearance">@style/ToolbarMenuTextAppearance</item>
+        <item name="android:actionMenuTextAppearance">@style/ToolbarMenuTextAppearance</item>
+    </style>
+
     <style name="ToolbarPopupTheme" parent="ThemeOverlay.Material3.Light">
         <item name="android:popupBackground">@drawable/shape_toolbar_popup</item>
         <item name="android:textColorPrimary">#18333A</item>

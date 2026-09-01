@@ -78,6 +78,118 @@
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
+            <!-- 显示首页页面 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/vodVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_vod_visible"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/vodVisibleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 显示最近观看入口 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/historyVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_history_visible"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/historyVisibleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 显示我的收藏入口 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/keepVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_keep_visible"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/keepVisibleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 显示追番日历入口 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/bangumiVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_bangumi_visible"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/bangumiVisibleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
             <!-- 显示直播页面 -->
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/liveVisible"
@@ -103,6 +215,62 @@
                     android:textColor="@color/white"
                     android:textSize="16sp"
                     tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 首页直链播放悬浮窗 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/linkVisible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_link_visible"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/linkVisibleText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="Off" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 换源集数阈值 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/switchEpisodeThreshold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/setting_switch_episode_threshold"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/switchEpisodeThresholdText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="80%" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 

@@ -29,6 +29,7 @@ import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.FragmentCollectBinding;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.setting.SiteBlockSetting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.ui.activity.FolderActivity;
 import com.fongmi.android.tv.ui.activity.VideoActivity;
@@ -38,6 +39,7 @@ import com.fongmi.android.tv.utils.MobileWindow;
 import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,11 +65,16 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     }
 
     public static CollectFragment newInstance(String keyword, String siteKey, String pic, String wallPic) {
+        return newInstance(keyword, siteKey, pic, wallPic, null);
+    }
+
+    public static CollectFragment newInstance(String keyword, String siteKey, String pic, String wallPic, String bangumiName) {
         Bundle args = new Bundle();
         args.putString("keyword", keyword);
         args.putString("siteKey", siteKey);
         args.putString("pic", pic);
         args.putString("wallPic", wallPic);
+        args.putString("bangumiName", bangumiName);
         CollectFragment fragment = new CollectFragment();
         fragment.setArguments(args);
         return fragment;
@@ -87,6 +94,10 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     private String getWallPic() {
         return getArguments().getString("wallPic");
+    }
+
+    private String getBangumiName() {
+        return getArguments().getString("bangumiName");
     }
 
     @Override
@@ -136,12 +147,9 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     private void setSites() {
         String siteKey = getSiteKey();
-        mSites = new ArrayList<>();
-        for (Site site : VodConfig.get().getSites()) {
-            if (!site.isSearchable()) continue;
-            if (!TextUtils.isEmpty(siteKey) && !site.getKey().equals(siteKey)) continue;
-            mSites.add(site);
-        }
+        mSites = SiteBlockSetting.filter(VodConfig.get().getSites(), false);
+        mSites.removeIf(site -> !site.isSearchable());
+        if (!TextUtils.isEmpty(siteKey)) mSites.removeIf(site -> !site.getKey().equals(siteKey));
         SiteHealthStore.sortSites(mSites);
     }
 
@@ -209,7 +217,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void setCollect(Result result) {
         if (result == null || result.getList().isEmpty()) return;
         mAllResults.addAll(result.getList());
-        mSearchAdapter.setItems(dedupe(mAllResults));
+        mSearchAdapter.setItems(sortByRelevance(dedupe(mAllResults)));
     }
 
     private List<Vod> dedupe(List<Vod> items) {
@@ -222,12 +230,34 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         return new ArrayList<>(map.values());
     }
 
+    // 按「关键词长度 / 影片名长度」计算匹配度，降序排列；完全不包含关键词的结果隐藏。
+    private List<Vod> sortByRelevance(List<Vod> items) {
+        String keyword = normalize(getKeyword());
+        if (keyword.isEmpty()) return items;
+        List<Vod> result = new ArrayList<>();
+        for (Vod vod : items) {
+            if (normalize(vod.getName()).contains(keyword)) result.add(vod);
+        }
+        result.sort(Comparator.comparingDouble((Vod vod) -> getScore(normalize(vod.getName()), keyword)).reversed());
+        return result;
+    }
+
+    private double getScore(String name, String keyword) {
+        return (double) keyword.length() / name.length();
+    }
+
+    private String normalize(String text) {
+        return text == null ? "" : text.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
     @Override
     public void onItemClick(Vod item) {
         if (item.isFolder()) FolderActivity.start(requireActivity(), item.getSiteKey(), Result.folder(item));
         else {
             String pic = item.getPic().isEmpty() ? getPic() : item.getPic();
-            VideoActivity.collect(requireActivity(), item.getSiteKey(), item.getId(), item.getName(), pic, getWallPic());
+            String bangumiName = getBangumiName();
+            if (bangumiName == null || bangumiName.isEmpty()) VideoActivity.collect(requireActivity(), item.getSiteKey(), item.getId(), item.getName(), pic, getWallPic());
+            else VideoActivity.start(requireActivity(), item.getSiteKey(), item.getId(), item.getName(), pic, null, true, getWallPic(), null, bangumiName);
         }
     }
 
