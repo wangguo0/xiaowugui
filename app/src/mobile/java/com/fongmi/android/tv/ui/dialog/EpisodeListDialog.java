@@ -21,6 +21,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.bean.Flag;
 import com.fongmi.android.tv.databinding.DialogEpisodeListBinding;
@@ -45,6 +46,7 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
     private SpaceItemDecoration episodeDecoration;
     private FlagAdapter flagAdapter;
     private List<Flag> flags;
+    private Runnable sortListener;
     private int episodeSpanCount = 4;
     private boolean reverse;
 
@@ -59,6 +61,11 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
 
     public EpisodeListDialog reverse(boolean reverse) {
         this.reverse = reverse;
+        return this;
+    }
+
+    public EpisodeListDialog sortListener(Runnable listener) {
+        this.sortListener = listener;
         return this;
     }
 
@@ -121,12 +128,26 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
 
     private void initView() {
         setRecyclerView();
+        setSortText();
         flagAdapter.addAll(flags == null ? new ArrayList<>() : flags);
         setGroups(getSelectedFlag());
         binding.flag.scrollToPosition(flagAdapter.getPosition());
     }
 
+    private void onSortToggle(View view) {
+        reverse = !reverse;
+        if (sortListener != null) sortListener.run();
+        setSortText();
+        setGroups(getSelectedFlag());
+        binding.episode.scrollToPosition(episodeAdapter.getPosition());
+    }
+
+    private void setSortText() {
+        binding.sort.setText(reverse ? R.string.setting_order_normal : R.string.setting_order_reverse);
+    }
+
     private void setRecyclerView() {
+        binding.sort.setOnClickListener(this::onSortToggle);
         binding.flag.setHasFixedSize(true);
         binding.flag.setItemAnimator(null);
         binding.flag.setAdapter(flagAdapter = new FlagAdapter(this));

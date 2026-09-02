@@ -65,6 +65,7 @@ public class SettingAdvancedFragment extends BaseFragment {
     private void openEnhance() {
         Intent intent = new Intent(requireContext(), HomeActivity.class)
                 .putExtra(HomeActivity.EXTRA_NAV_POSITION, 3)
+                .putExtra(HomeActivity.EXTRA_FROM_ADVANCED, true)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         requireContext().startActivity(intent);
     }

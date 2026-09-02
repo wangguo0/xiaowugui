@@ -61,6 +61,11 @@
     <string name="play_change">换源</string>
     <string name="play_switch_line">切换站源</string>
     <string name="play_short_display">短显</string>
+    <string name="play_report_error">视频有误</string>
+    <string name="video_error_title">温馨提醒</string>
+    <string name="video_error_message">视频内容存在错误，与我要的视频内容无关，点击彻底屏蔽后当前站源将彻底屏蔽，不会出现在搜索、快搜、换源列表。如需解除手动去首页屏蔽管理自行解除！</string>
+    <string name="video_error_confirm">彻底屏蔽</string>
+    <string name="video_error_blocked">已彻底屏蔽当前站源</string>
     <string name="play_search">搜索</string>
     <string name="play_fullscreen">全屏</string>
     <string name="play_exit_fullscreen">退出全屏</string>
@@ -734,6 +739,10 @@
     <string name="setting_cache">缓存</string>
     <string name="setting_backup">备份</string>
     <string name="setting_restore">恢复</string>
+    <string name="setting_auto_backup">退出时自动备份</string>
+    <string name="setting_backup_confirm">确定要备份当前全部数据吗？</string>
+    <string name="setting_clear_cache_confirm">确定要清除全部缓存吗？</string>
+    <string name="setting_delete_backup_confirm">确定要删除该备份文件吗？删除后不可恢复。</string>
     <string name="setting_about">关于</string>
     <string name="setting_version">版本</string>
     <string name="setting_choose">选择</string>

@@ -629,18 +629,30 @@
                         android:layout_marginTop="10dp"
                         android:layout_marginEnd="16dp"
                         android:gravity="start"
-                        android:orientation="horizontal"
-                        android:visibility="gone">
+                        android:orientation="horizontal">
 
                         <com.google.android.material.textview.MaterialTextView
-                            android:id="@+id/bangumiBind"
+                            android:id="@+id/reportError"
                             style="@style/VideoActionButton"
                             android:layout_width="wrap_content"
                             android:layout_weight="0"
                             android:paddingStart="12dp"
                             android:paddingEnd="12dp"
+                            android:text="@string/play_report_error"
+                            app:drawableTopCompat="@drawable/ic_action_report_error_shadow" />
+
+                        <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/bangumiBind"
+                            style="@style/VideoActionButton"
+                            android:layout_width="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="0"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp"
                             android:text="@string/bangumi_bind"
-                            app:drawableTopCompat="@drawable/ic_action_bangumi_bind_shadow" />
+                            android:visibility="gone"
+                            app:drawableTopCompat="@drawable/ic_action_bangumi_bind_shadow"
+                            tools:visibility="visible" />
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -717,36 +729,22 @@
                         android:gravity="center_vertical">
 
                         <com.google.android.material.textview.MaterialTextView
+                            android:id="@+id/episodeTitle"
                             style="@style/Video.ContextText"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/detail_episode"
+                            android:background="?attr/selectableItemBackground"
+                            android:paddingStart="4dp"
+                            android:paddingEnd="4dp"
+                            android:text="@string/detail_episode_hint"
                             android:textColor="@color/white"
-                            android:textSize="16sp" />
-
-                        <androidx.appcompat.widget.AppCompatImageView
-                            android:id="@+id/reverse"
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_marginStart="8dp"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:src="@drawable/ic_action_reverse"
-                            android:visibility="gone"
+                            android:textSize="16sp"
                             tools:visibility="visible" />
 
                         <View
                             android:layout_width="0dp"
                             android:layout_height="0dp"
                             android:layout_weight="1" />
-
-                        <androidx.appcompat.widget.AppCompatImageView
-                            android:id="@+id/more"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:background="?attr/selectableItemBackgroundBorderless"
-                            android:src="@drawable/ic_action_more"
-                            android:visibility="gone"
-                            tools:visibility="visible" />
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 

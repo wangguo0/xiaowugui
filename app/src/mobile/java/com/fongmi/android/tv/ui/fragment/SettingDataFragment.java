@@ -12,12 +12,14 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.FragmentSettingDataBinding;
 import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.impl.Callback;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.BackupProgressDialog;
 import com.fongmi.android.tv.ui.dialog.RestoreDialog;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingDataFragment extends BaseFragment {
 
@@ -35,6 +37,7 @@ public class SettingDataFragment extends BaseFragment {
     @Override
     protected void initView() {
         setCacheText();
+        mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
     }
 
     @Override
@@ -42,6 +45,26 @@ public class SettingDataFragment extends BaseFragment {
         mBinding.cache.setOnClickListener(this::onCache);
         mBinding.backup.setOnClickListener(this::onBackup);
         mBinding.restore.setOnClickListener(this::onRestore);
+        mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+    }
+
+    private String getSwitch(boolean value) {
+        return getString(value ? R.string.setting_on : R.string.setting_off);
+    }
+
+    private void setAutoBackup(View view) {
+        Setting.putAutoBackup(!Setting.isAutoBackup());
+        mBinding.autoBackupText.setText(getSwitch(Setting.isAutoBackup()));
+    }
+
+    // 二次确认弹窗，样式与恢复弹窗一致（浅色居中）
+    private void confirm(int messageRes, Runnable action) {
+        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.video_error_title)
+                .setMessage(messageRes)
+                .setNegativeButton(R.string.dialog_negative, null)
+                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> action.run())
+                .show();
     }
 
     private void setCacheText() {
@@ -54,16 +77,16 @@ public class SettingDataFragment extends BaseFragment {
     }
 
     private void onCache(View view) {
-        FileUtil.clearCache(new Callback() {
+        confirm(R.string.setting_clear_cache_confirm, () -> FileUtil.clearCache(new Callback() {
             @Override
             public void success() {
                 setCacheText();
             }
-        });
+        }));
     }
 
     private void onBackup(View view) {
-        PermissionUtil.requestFile(this, allGranted -> {
+        confirm(R.string.setting_backup_confirm, () -> PermissionUtil.requestFile(this, allGranted -> {
             BackupProgressDialog progress = BackupProgressDialog.open(getParentFragmentManager(), getString(R.string.app_name));
             AppDatabase.backup(new Callback() {
                 @Override
@@ -78,7 +101,7 @@ public class SettingDataFragment extends BaseFragment {
                     Notify.show(R.string.backup_fail);
                 }
             }, progress::update);
-        });
+        }));
     }
 
     private void onRestore(View view) {

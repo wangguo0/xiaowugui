@@ -36,8 +36,11 @@ public abstract class BaseBottomSheetDialog extends BottomSheetDialogFragment {
         Window window = dialog.getWindow();
         if (window == null) return dialog;
         if (stableOverlay()) {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            window.setDimAmount(0f);
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+            if (!keepDim()) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(0f);
+            }
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
             WindowCompat.setDecorFitsSystemWindows(window, true);
         } else {
@@ -71,6 +74,11 @@ public abstract class BaseBottomSheetDialog extends BottomSheetDialogFragment {
     }
 
     protected boolean stableOverlay() {
+        return false;
+    }
+
+    // stableOverlay 弹窗是否保留背景遮罩（默认无遮罩纯覆盖）
+    protected boolean keepDim() {
         return false;
     }
 

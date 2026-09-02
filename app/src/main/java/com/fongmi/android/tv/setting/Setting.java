@@ -544,8 +544,17 @@ public class Setting {
         Prefers.put("bangumi_visible", visible);
     }
 
+    // 退出应用时自动备份数据库与设置，默认关闭
+    public static boolean isAutoBackup() {
+        return Prefers.getBoolean("auto_backup", false);
+    }
+
+    public static void putAutoBackup(boolean auto) {
+        Prefers.put("auto_backup", auto);
+    }
+
     public static boolean isLinkVisible() {
-        return Prefers.getBoolean("link_visible", true);
+        return Prefers.getBoolean("link_visible", false);
     }
 
     public static void putLinkVisible(boolean visible) {

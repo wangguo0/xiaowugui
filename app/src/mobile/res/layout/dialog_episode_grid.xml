@@ -3,36 +3,60 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:background="@drawable/shape_quick_search_panel"
+    android:orientation="vertical"
+    android:paddingTop="14dp">
 
     <androidx.appcompat.widget.LinearLayoutCompat
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="16dp">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="8dp">
 
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/detail_episode"
-            android:textColor="?attr/colorOnSurface"
-            android:textSize="16sp" />
+            android:textColor="@color/white"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/sort"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/shape_quick_search_icon_button"
+            android:drawablePadding="4dp"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:text="@string/setting_order_reverse"
+            android:textColor="@color/dialog_outlined_button_text"
+            android:textSize="13sp"
+            app:drawableStartCompat="@drawable/ic_action_reverse"
+            app:drawableTint="@color/dialog_outlined_button_text" />
 
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/column"
             android:layout_width="40dp"
             android:layout_height="40dp"
+            android:layout_marginStart="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="8dp"
             android:scaleType="center"
             android:src="@drawable/ic_site_single_column"
-            app:tint="?attr/colorOnSurface" />
+            app:tint="@color/white" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#12FFFFFF" />
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabs"
@@ -46,7 +70,7 @@
         app:tabIndicatorHeight="2dp"
         app:tabMode="scrollable"
         app:tabSelectedTextColor="?attr/colorPrimary"
-        app:tabTextColor="?attr/colorOnSurfaceVariant" />
+        app:tabTextColor="@color/white_70" />
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/pager"

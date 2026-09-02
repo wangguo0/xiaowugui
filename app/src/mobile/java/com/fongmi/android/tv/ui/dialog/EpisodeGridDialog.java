@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.dialog;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -27,6 +28,7 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
 
     private final List<String> titles;
     private DialogEpisodeGridBinding binding;
+    private Runnable sortListener;
     private List<Episode> episodes;
     private boolean reverse;
     private int spanCount;
@@ -51,6 +53,11 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
         return this;
     }
 
+    public EpisodeGridDialog sortListener(Runnable listener) {
+        this.sortListener = listener;
+        return this;
+    }
+
     public void show(FragmentActivity activity) {
         if (activity == null || activity.isFinishing() || activity.isDestroyed() || activity.getSupportFragmentManager().isStateSaved()) return;
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof EpisodeGridDialog) return;
@@ -65,6 +72,7 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     @Override
     protected void initView() {
         setSpanCount();
+        setSortText();
         setTitles();
         setPager();
     }
@@ -72,10 +80,23 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     @Override
     protected void initEvent() {
         binding.column.setOnClickListener(this::onColumnToggle);
+        binding.sort.setOnClickListener(this::onSortToggle);
         getChildFragmentManager().setFragmentResultListener("result", this, (requestKey, bundle) -> {
             ((EpisodeAdapter.OnClickListener) requireActivity()).onItemClick(bundle.getParcelable("episode"));
             dismiss();
         });
+    }
+
+    private void onSortToggle(View view) {
+        reverse = !reverse;
+        if (sortListener != null) sortListener.run();
+        setSortText();
+        setTitles();
+        setPager();
+    }
+
+    private void setSortText() {
+        binding.sort.setText(reverse ? R.string.setting_order_normal : R.string.setting_order_reverse);
     }
 
     private void onColumnToggle(View view) {
@@ -118,6 +139,16 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
                 break;
             }
         }
+    }
+
+    @Override
+    protected boolean transparent() {
+        return true;
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return true;
     }
 
     class PageAdapter extends FragmentStateAdapter {

@@ -483,11 +483,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return Objects.toString(getIntent().getStringExtra("bangumiName"), "");
     }
 
-    // 追番卡片手动绑定：仅追番链路进入且追番入口开启时显示按钮
+    // 追番链路换源后，绑定记录跟随到最新站源（不锁定站源，与历史观看逻辑一致）；仅在已绑定时更新
+    private void syncBangumiBind(Vod item) {
+        String name = getBangumiName();
+        if (TextUtils.isEmpty(name) || BangumiBind.find(name) == null) return;
+        BangumiBind.put(name, item.getSiteKey(), item.getId(), item.getName(), item.getPic(), getWallPic());
+    }
+
+    // 追番卡片手动绑定：仅追番链路进入且追番入口开启时显示按钮（与"视频有误"同行）
     private void setupBangumiBind() {
         String name = getBangumiName();
         boolean visible = !TextUtils.isEmpty(name) && Setting.isBangumiVisible();
-        mBinding.bangumiRow.setVisibility(visible ? View.VISIBLE : View.GONE);
+        mBinding.bangumiBind.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (!visible) return;
         boolean bound = BangumiBind.find(name) != null;
         mBinding.bangumiBind.setText(getString(bound ? R.string.bangumi_unbind : R.string.bangumi_bind));
@@ -515,6 +522,28 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 mBinding.bangumiBind.setText(R.string.bangumi_unbind);
                 Notify.show(R.string.bangumi_bind_success);
             }
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+    }
+
+    // 视频有误举报：确认后将当前站源彻底屏蔽（搜索/快搜/换源不再出现），并关闭播放页
+    private void showVideoErrorDialog() {
+        Site site = getSite();
+        if (site == null) return;
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        ((android.widget.TextView) content.findViewById(R.id.title)).setText(R.string.video_error_title);
+        ((android.widget.TextView) content.findViewById(R.id.message)).setText(R.string.video_error_message);
+        android.widget.TextView confirm = content.findViewById(R.id.confirm);
+        confirm.setText(R.string.video_error_confirm);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        confirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            site.setChangeable(true).save();
+            SiteBlockSetting.setBlocked(site, true);
+            Notify.show(R.string.video_error_blocked);
+            finish();
         });
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
@@ -807,8 +836,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @SuppressLint("ClickableViewAccessibility")
     protected void initEvent() {
         mBinding.name.setOnClickListener(view -> onName());
-        mBinding.more.setOnClickListener(view -> onMore());
+        mBinding.episodeTitle.setOnClickListener(view -> onMore());
         mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
+        mBinding.reportError.setOnClickListener(view -> showVideoErrorDialog());
         mBinding.bangumiBind.setOnClickListener(view -> showBangumiDialog(BangumiBind.find(getBangumiName()) != null));
         mBinding.search.setOnClickListener(view -> onSearch());
         mBinding.castAction.setOnClickListener(view -> onCast());
@@ -816,7 +846,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.switchLine.setOnClickListener(view -> showSourceSwitch());
         mBinding.actor.setOnClickListener(view -> onActor());
         mBinding.content.setOnClickListener(view -> onContent());
-        mBinding.reverse.setOnClickListener(view -> onReverse());
         mBinding.director.setOnClickListener(view -> onDirector());
         mBinding.name.setOnLongClickListener(view -> onChange());
         mBinding.content.setOnLongClickListener(view -> onCopy());
@@ -1137,6 +1166,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         revealManualSearch = false;
         if (!isAutoMode()) mViewModel.stopSearch();
         saveHistory();
+        syncBangumiBind(item);
         getIntent().putExtra("key", item.getSiteKey());
         getIntent().putExtra("pic", item.getPic());
         getIntent().putExtra("id", item.getId());
@@ -1473,9 +1503,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         applyActionButtonVisibility();
         mBinding.control.next.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
         mBinding.control.prev.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
-        mBinding.reverse.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
+        mBinding.episodeTitle.setVisibility(size < 2 ? View.GONE : View.VISIBLE);
         mBinding.episode.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
-        mBinding.more.setVisibility(View.GONE);
         List<EpisodeGroupAdapter.Group> groups = EpisodeGroupAdapter.build(size, getSelectedEpisodePosition(items), mHistory != null && mHistory.isRevSort());
         mEpisodeGroupAdapter.addAll(groups);
         mBinding.episodeGroup.setVisibility(groups.size() > 1 ? View.VISIBLE : View.GONE);
@@ -1761,7 +1790,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         Flag flag = getFlag();
         if (flag == null) return;
         syncSelectedEpisode(flag);
-        EpisodeGridDialog.create().reverse(mHistory.isRevSort()).episodes(flag.getEpisodes()).show(this);
+        EpisodeGridDialog.create().reverse(mHistory.isRevSort()).episodes(flag.getEpisodes()).sortListener(this::onReverse).show(this);
     }
 
     private void onActor() {
@@ -3928,7 +3957,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onEpisodes() {
         syncSelectedEpisode(getFlag());
-        EpisodeListDialog.create().flags(mFlagAdapter.getItems()).reverse(mHistory.isRevSort()).show(this);
+        EpisodeListDialog.create().flags(mFlagAdapter.getItems()).reverse(mHistory.isRevSort()).sortListener(this::onReverse).show(this);
     }
 
     private void onChoose() {
@@ -4659,8 +4688,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.actor.setVisibility(visible ? View.GONE : mBinding.actor.getText().length() == 0 ? View.GONE : View.VISIBLE);
         mBinding.contentLayout.setVisibility(visible ? View.GONE : mBinding.content.getText().length() == 0 ? View.GONE : View.VISIBLE);
         mBinding.actionRow.setVisibility(visible ? View.GONE : View.VISIBLE);
-        if (TextUtils.isEmpty(getBangumiName())) mBinding.bangumiRow.setVisibility(View.GONE);
-        else mBinding.bangumiRow.setVisibility(visible || !Setting.isBangumiVisible() ? View.GONE : View.VISIBLE);
+        mBinding.bangumiRow.setVisibility(visible ? View.GONE : View.VISIBLE);
         mBinding.flag.setVisibility(visible || mFlagAdapter == null || mFlagAdapter.isEmpty() ? View.GONE : View.VISIBLE);
         boolean qualityVisible = mQualityAdapter != null && mQualityAdapter.getItemCount() > 1;
         boolean episodeGroupVisible = mEpisodeGroupAdapter != null && mEpisodeGroupAdapter.getItemCount() > 1;

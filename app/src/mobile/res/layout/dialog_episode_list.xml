@@ -33,14 +33,38 @@
         tools:itemCount="3"
         tools:listitem="@layout/adapter_flag" />
 
-    <com.google.android.material.textview.MaterialTextView
-        android:layout_width="wrap_content"
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="@string/detail_episode"
-        android:textColor="@color/white"
-        android:textSize="15sp"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/detail_episode"
+            android:textColor="@color/white"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/sort"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/shape_quick_search_icon_button"
+            android:drawablePadding="4dp"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:text="@string/setting_order_reverse"
+            android:textColor="@color/dialog_outlined_button_text"
+            android:textSize="13sp"
+            app:drawableStartCompat="@drawable/ic_action_reverse"
+            app:drawableTint="@color/dialog_outlined_button_text" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/group"

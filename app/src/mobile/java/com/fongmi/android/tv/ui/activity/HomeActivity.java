@@ -74,7 +74,9 @@ import org.greenrobot.eventbus.ThreadMode;
 public class HomeActivity extends BaseActivity implements NavigationBarView.OnItemSelectedListener, WebHomeChromeController.Host {
 
     public static final String EXTRA_NAV_POSITION = "nav_position";
+    public static final String EXTRA_FROM_ADVANCED = "from_advanced";
     private static final String STATE_RETURN_VOD_FROM_ENHANCE = "returnVodFromEnhance";
+    private static final String STATE_RETURN_ADVANCED_FROM_ENHANCE = "returnAdvancedFromEnhance";
     private static final String STATE_CURRENT_POSITION = "currentPosition";
 
     private FragmentStateManager mManager;
@@ -85,6 +87,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private boolean navInitialized;
     private int currentPosition;
     private boolean returnVodFromEnhance;
+    private boolean returnAdvancedFromEnhance;
 
     @Override
     protected ViewBinding getBinding() {
@@ -107,6 +110,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     protected void initView(Bundle savedInstanceState) {
         wideWindow = MobileWindow.isWide(this);
         returnVodFromEnhance = savedInstanceState != null && savedInstanceState.getBoolean(STATE_RETURN_VOD_FROM_ENHANCE);
+        returnAdvancedFromEnhance = savedInstanceState != null && savedInstanceState.getBoolean(STATE_RETURN_ADVANCED_FROM_ENHANCE);
         currentPosition = savedInstanceState == null ? 0 : savedInstanceState.getInt(STATE_CURRENT_POSITION, 0);
         mStartupConfig = Config.vod();
         mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState, WebHomeChromeStartup.restore(mStartupConfig));
@@ -120,6 +124,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         outState.putBoolean(STATE_RETURN_VOD_FROM_ENHANCE, returnVodFromEnhance);
+        outState.putBoolean(STATE_RETURN_ADVANCED_FROM_ENHANCE, returnAdvancedFromEnhance);
         outState.putInt(STATE_CURRENT_POSITION, currentPosition);
         if (mChrome != null) mChrome.save(outState);
         super.onSaveInstanceState(outState);
@@ -132,8 +137,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     private void checkAction(Intent intent) {
         if (intent.hasExtra(EXTRA_NAV_POSITION)) {
+            returnAdvancedFromEnhance = intent.getBooleanExtra(EXTRA_FROM_ADVANCED, false);
             change(intent.getIntExtra(EXTRA_NAV_POSITION, 0));
             intent.removeExtra(EXTRA_NAV_POSITION);
+            intent.removeExtra(EXTRA_FROM_ADVANCED);
         } else if (Intent.ACTION_SEND.equals(intent.getAction())) {
             VideoActivity.push(this, intent.getStringExtra(Intent.EXTRA_TEXT));
         } else if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
@@ -239,7 +246,10 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     public void change(int position) {
-        if (position != 3) returnVodFromEnhance = false;
+        if (position != 3) {
+            returnVodFromEnhance = false;
+            returnAdvancedFromEnhance = false;
+        }
         if (isEntryClosed(position)) position = defaultPosition();
         setNavigationVisible(position != 3);
         if (position == 3) changeFragment(position);
@@ -303,6 +313,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
         returnVodFromEnhance = false;
+        returnAdvancedFromEnhance = false;
         setNavigationVisible(true);
         if (item.getItemId() == R.id.setting) return changeFragment(1);
         if (item.getItemId() == R.id.vod) return changeFragment(0);
@@ -478,8 +489,15 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             setNavigation();
         } else if (mManager.isVisible(3)) {
             boolean fromVod = returnVodFromEnhance;
+            boolean fromAdvanced = returnAdvancedFromEnhance;
             returnVodFromEnhance = false;
-            change(fromVod && Setting.isVodVisible() ? 0 : 1);
+            returnAdvancedFromEnhance = false;
+            if (fromAdvanced) {
+                change(1);
+                SubSettingActivity.start(this, 8);
+            } else {
+                change(fromVod && Setting.isVodVisible() ? 0 : 1);
+            }
         } else if (mManager.isVisible(2)) {
             if (!mManager.canBack(2)) return;
             change(defaultPosition());
@@ -499,7 +517,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         if (mChrome != null) mChrome.destroy();
         LiveConfig.get().clear();
         VodConfig.get().clear();
-        AppDatabase.backup();
+        if (Setting.isAutoBackup()) AppDatabase.backup();
         OkHttp.get().clear();
         Source.get().exit();
         Server.get().stop();

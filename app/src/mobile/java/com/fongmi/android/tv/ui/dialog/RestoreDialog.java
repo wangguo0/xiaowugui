@@ -10,11 +10,13 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.DialogRestoreBinding;
 import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.ui.adapter.RestoreAdapter;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.io.File;
 
@@ -32,6 +34,16 @@ public class RestoreDialog extends BaseBottomSheetDialog implements RestoreAdapt
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof RestoreDialog) return;
         show(activity.getSupportFragmentManager(), null);
         this.callback = callback;
+    }
+
+    @Override
+    protected boolean stableOverlay() {
+        return true;
+    }
+
+    @Override
+    protected boolean keepDim() {
+        return true;
     }
 
     @Override
@@ -69,6 +81,13 @@ public class RestoreDialog extends BaseBottomSheetDialog implements RestoreAdapt
 
     @Override
     public void onDeleteClick(File item) {
-        if (adapter.remove(item) == 0) dismiss();
+        new MaterialAlertDialogBuilder(requireContext(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.video_error_title)
+                .setMessage(R.string.setting_delete_backup_confirm)
+                .setNegativeButton(R.string.dialog_negative, null)
+                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
+                    if (adapter.remove(item) == 0) dismiss();
+                })
+                .show();
     }
 }
