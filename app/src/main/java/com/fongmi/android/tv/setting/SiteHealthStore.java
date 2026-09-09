@@ -99,6 +99,27 @@ public class SiteHealthStore {
         }
     }
 
+    // 标记该站源「曾因第三方 jar 解析崩溃而确定不可用」：持久化、一票否决，
+    // 用于在快搜/换源候选列表构建时把该源剔除（不出现在列表，用户便无法点击）。
+    public static void markParseCrash(Site site) {
+        if (skip(site)) return;
+        synchronized (SiteHealthStore.class) {
+            Health health = get(site.getKey());
+            health.updatedAt = System.currentTimeMillis();
+            health.parseCrashed = true;
+            markDirty();
+        }
+    }
+
+    // 该站是否被判为「恶意/解析崩溃」而应从候选列表剔除
+    public static boolean isCrashed(Site site) {
+        if (skip(site)) return false;
+        synchronized (SiteHealthStore.class) {
+            Health health = find(site.getKey());
+            return health != null && health.parseCrashed;
+        }
+    }
+
     public static void sortSites(List<Site> sites) {
         if (!Setting.isSiteHealthSort()) return;
         if (sites == null || sites.size() < 2) return;
@@ -139,7 +160,8 @@ public class SiteHealthStore {
         Task.execute(SiteHealthStore::saveNow);
     }
 
-    private static Status getStatus(Site site) {
+    // 对外暴露站点健康状态，供列表筛选使用
+    public static Status getStatus(Site site) {
         if (skip(site)) return Status.UNKNOWN;
         synchronized (SiteHealthStore.class) {
             Health health = find(site.getKey());
@@ -249,6 +271,7 @@ public class SiteHealthStore {
         private String lastSearchError;
         private String lastDetailError;
         private String lastPlayError;
+        private boolean parseCrashed;
 
         private int total() {
             return searchSuccess + searchFail + detailSuccess + detailFail + playSuccess + playFail;

@@ -64,7 +64,9 @@ public class TVBus implements Source.Extractor, Listener {
     }
 
     private void change() throws Exception {
+        com.fongmi.android.tv.utils.DiagLog.log("exit-point", "TVBus.change: 播放核心切换，主动重启进程");
         LiveSetting.putBoot(true);
+        com.fongmi.android.tv.api.TrialRun.expectSelfExit();
         App.post(() -> System.exit(0), 100);
         throw new ExtractException(ResUtil.getString(R.string.error_play_url));
     }

@@ -1,5 +1,8 @@
 package com.fongmi.android.tv.ui.activity;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
 
@@ -9,6 +12,7 @@ import androidx.viewbinding.ViewBinding;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.ActivityCrashBinding;
 import com.fongmi.android.tv.ui.base.BaseActivity;
+import com.fongmi.android.tv.utils.Notify;
 import com.github.catvod.utils.Prefers;
 
 import java.util.Objects;
@@ -55,10 +59,18 @@ public class CrashActivity extends BaseActivity {
     }
 
     private void showError() {
+        String details = CustomActivityOnCrash.getAllErrorDetailsFromIntent(this, getIntent());
         new AlertDialog.Builder(this)
                 .setTitle(R.string.crash_details_title)
-                .setMessage(CustomActivityOnCrash.getAllErrorDetailsFromIntent(this, getIntent()))
+                .setMessage(details)
+                .setNeutralButton(R.string.dialog_copy, (d, w) -> copyToClipboard(details))
                 .setPositiveButton(R.string.crash_details_close, null)
                 .show();
+    }
+
+    private void copyToClipboard(String text) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        if (clipboard != null) clipboard.setPrimaryClip(ClipData.newPlainText("crash", text));
+        Notify.show(R.string.copied);
     }
 }

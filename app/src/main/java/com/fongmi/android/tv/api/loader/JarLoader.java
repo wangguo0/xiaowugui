@@ -1,8 +1,10 @@
 package com.fongmi.android.tv.api.loader;
 
 import android.content.Context;
+import android.text.TextUtils;
 
 import com.fongmi.android.tv.App;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.UrlUtil;
 import com.github.catvod.crawler.Spider;
@@ -34,9 +36,66 @@ public class JarLoader {
     private final ConcurrentHashMap<String, Spider> spiders;
     private final ConcurrentHashMap<String, Object> locks;
     private volatile String recent;
+    // 最近一次正在 init 的 jar 地址：spider.Init 子线程崩溃时用于定位「肇事播放路线」
+    private volatile String lastInitJar;
+    // DexClassLoader -> jar 地址（md5(key) 映射），宿主崩溃时用栈帧类名的 ClassLoader 反查肇事 jar
+    private final ConcurrentHashMap<DexClassLoader, String> loaderJars;
+    private static volatile JarLoader instance;
+
+    public static JarLoader get() {
+        return instance;
+    }
+
+    public String getLastInitJar() {
+        return lastInitJar;
+    }
+
+    /**
+     * 宿主崩溃精准归因：从 exit 调用线程栈中逐帧解析类名，用 {@code Class.forName} 取到
+     * 其真实 ClassLoader，命中已登记的 jar 加载器即返回对应 jar 地址（肇事者铁证）。
+     * 比「最近 init / 心跳 jar」精准得多：多源并发（换源/快搜）时只锁定真正执行
+     * System.exit 的那一个 jar，绝不误伤当前正在播放但没有罪过的站源。
+     * 反查不到时返回 null，由调用方回退到心跳/最近 init 兜底。
+     */
+    public String blameJarFromStack(String exitStack) {
+        if (exitStack == null) return null;
+        try {
+            for (String line : exitStack.split("\n")) {
+                String className = extractClassName(line);
+                if (TextUtils.isEmpty(className)) continue;
+                // 只反查「动态 jar 内」的类，避开系统/本 app 帧
+                if (className.startsWith("com.") || className.startsWith("cn.")) {
+                    Class<?> clz = Class.forName(className);
+                    ClassLoader cl = clz.getClassLoader();
+                    if (cl instanceof DexClassLoader) {
+                        String jar = loaderJars.get(cl);
+                        if (!TextUtils.isEmpty(jar)) {
+                            DiagLog.log("jar-loader", "blame stack class=%s jar=%s", className, jar);
+                            return jar;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    // 解析栈帧形如：at com.foo.Bar.method(File.java:10) -> com.foo.Bar
+    private static String extractClassName(String line) {
+        String l = line.trim();
+        if (!l.startsWith("at ")) return null;
+        String rest = l.substring(3).trim();
+        int paren = rest.indexOf('(');
+        String mn = paren < 0 ? rest : rest.substring(0, paren);
+        int dot = mn.lastIndexOf('.');
+        return dot < 0 ? null : mn.substring(0, dot);
+    }
 
     public JarLoader() {
+        instance = this;
         loaders = new ConcurrentHashMap<>();
+        loaderJars = new ConcurrentHashMap<>();
         methods = new ConcurrentHashMap<>();
         spiders = new ConcurrentHashMap<>();
         locks = new ConcurrentHashMap<>();
@@ -46,6 +105,7 @@ public class JarLoader {
         SpiderDebug.log("jar-loader", "clear loaders=%s spiders=%s methods=%s", loaders.size(), spiders.size(), methods.size());
         spiders.values().forEach(Spider::destroy);
         loaders.clear();
+        loaderJars.clear();
         methods.clear();
         spiders.clear();
         locks.clear();
@@ -55,6 +115,11 @@ public class JarLoader {
     public void setRecent(String recent) {
         this.recent = recent;
         SpiderDebug.log("jar-loader", "recent=%s", recent);
+    }
+
+    // 崩溃回调里用于「换源/播放」场景反查肇事 jar（recent 是 md5(key)）
+    public String getRecent() {
+        return recent;
     }
 
     private void load(String key, File file) {
@@ -69,6 +134,17 @@ public class JarLoader {
         }
         if (!file.setReadOnly()) {
             SpiderDebug.log("jar-loader", "load skip readonly failed key=%s file=%s size=%s", key, file.getAbsolutePath(), file.length());
+            return;
+        }
+        // 加载前静态闸口：解析 DEX 方法引用，确认 jar 直引/反射明文引用
+        // System.exit / Runtime.exit|halt / Process.killProcess（宿主自杀）→ 永久拉黑并拒绝加载。
+        // 该 jar 代码永不进内存：无 Init 崩溃、无 System.exit 杀宿主、无任何用户提示。
+        // fail-open：检测自身异常一律放行，绝不误杀正常源。
+        // 受「添加源安全检测」开关控制：关闭时不执行静态扫描，直接加载。
+        if (com.fongmi.android.tv.setting.Setting.isProbeAdd() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(file)) {
+            com.fongmi.android.tv.setting.JarBlockSetting.add(lastInitJar);
+            com.fongmi.android.tv.utils.DiagLog.log("jar-guard", "load reject suicidal jar key=%s file=%s jar=%s", key, file.getAbsolutePath(), lastInitJar);
+            SpiderDebug.log("jar-loader", "load reject suicidal jar key=%s", key);
             return;
         }
         String cachePath = Path.jar().getAbsolutePath();
@@ -150,7 +226,13 @@ public class JarLoader {
 
     public void parseJar(String key, String jar) {
         if (loaders.containsKey(key)) return;
+        if (com.fongmi.android.tv.setting.JarBlockSetting.isBlocked(jar) || com.fongmi.android.tv.setting.JarBlockSetting.isBlocked(jar.split(";md5;")[0])) {
+            SpiderDebug.log("jar-loader", "parse skip blocked jar=%s", jar);
+            return;
+        }
         if (jar.startsWith("assets")) jar = UrlUtil.convert(jar);
+        lastInitJar = jar.split(";md5;")[0];
+        String base = lastInitJar;
         Object lock = locks.computeIfAbsent(key, k -> new Object());
         synchronized (lock) {
             if (loaders.containsKey(key)) return;
@@ -166,6 +248,9 @@ public class JarLoader {
             } else if (jar.startsWith("file")) {
                 load(key, Path.local(jar));
             }
+            // 登记 DexClassLoader -> jar 源地址，供宿主崩溃时栈帧类名精准反查
+            DexClassLoader loaded = loaders.get(key);
+            if (loaded != null) loaderJars.put(loaded, base);
         }
     }
 
@@ -181,6 +266,12 @@ public class JarLoader {
     }
 
     public Spider getSpider(String key, String api, String ext, String jar) {
+        // 双保险：entry 处直接拦截崩溃黑名单 jar，任何具备自杀逻辑的 jar（如被死亡归因/
+        // 静态扫描拉黑的）一律不进入加载与 init 流程，返回空 spider，避免反复触发杀宿主代码
+        if (com.fongmi.android.tv.setting.JarBlockSetting.isBlocked(jar) || com.fongmi.android.tv.setting.JarBlockSetting.isBlocked(jar.split(";md5;")[0])) {
+            SpiderDebug.log("jar-loader", "spider skip blocked jar=%s", jar);
+            return new SpiderNull();
+        }
         String jaKey = Util.md5(jar);
         String spKey = jaKey + key;
         return spiders.computeIfAbsent(spKey, k -> {

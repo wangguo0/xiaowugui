@@ -20,7 +20,10 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SourceProbe;
+import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.api.config.WallConfig;
@@ -28,10 +31,12 @@ import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.databinding.DialogConfigBinding;
 import com.fongmi.android.tv.impl.ConfigListener;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.custom.CustomTextListener;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.utils.Path;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -197,7 +202,80 @@ public class ConfigDialog extends BaseAlertDialog {
     private void onPositive() {
         String url = binding.url.getText().toString().trim();
         String name = binding.name.getText().toString().trim();
-        Config config = saveConfig(url, name);
+        if (url.isEmpty()) {
+            finishSave(saveConfig(url, name));
+            return;
+        }
+        // 添加前置静态扫描（开关开启，http 与本地文件源通用）：弹窗展示进度，命中恶意特征阻止添加
+        if (needStaticScan(url)) {
+            ProbeScanDialog scan = ProbeScanDialog.create();
+            scan.show(requireActivity());
+            binding.positive.setEnabled(false);
+            Task.submitLarge(() -> {
+                boolean dangerous = SourceProbe.scanDangerous(url, getType(), scan);
+                App.post(() -> {
+                    scan.dismissAllowingStateLoss();
+                    if (!isAdded()) return;
+                    binding.positive.setEnabled(true);
+                    if (dangerous) {
+                        ProbeDialog.showScanDanger(requireActivity());
+                        return;
+                    }
+                    if (!proceed(url)) return;
+                    finishSave(saveConfig(url, name));
+                });
+            });
+            return;
+        }
+        // 统一安全检测闸门；编辑未改地址则沿用原配置
+        if (!proceed(url)) return;
+        finishSave(saveConfig(url, name));
+    }
+
+    // 需前置静态扫描：开关开启 + 点播/直播 + http 或本地文件源（本软件合并产物豁免、非编辑未改地址）
+    private boolean needStaticScan(String url) {
+        if (!Setting.isProbeAdd() || (getType() != 0 && getType() != 1)) return false;
+        if (edit && url.equals(ori)) return false;
+        if (url.startsWith("file:") && SourceProbe.isSelfMerged(url)) return false;
+        return url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file:");
+    }
+
+    /**
+     * 统一安全检测闸门（添加订阅开关开启时生效）：http 与「非本软件合并」的本地文件源
+     * 均进入 25 秒试运行；本软件合并的源免检测（合并时已对各输入源逐一检测）。
+     * 永久黑名单地址直接拦截并返回 false。
+     */
+    private boolean proceed(String url) {
+        boolean needTrial = Setting.isProbeAdd() && (getType() == 0 || getType() == 1) && isProbeable(url) && !(edit && url.equals(ori));
+        if (!needTrial) {
+            // 需求4：点播订阅「免试运行」（本软件合并免检/关闭检测等）添加成功后直接自动参与换源
+            markEnableChange(url);
+            return true;
+        }
+        // 永久黑名单：曾被试运行实锤崩溃/杀进程的地址直接拦截
+        if (SourceProbe.isRuntimeDangerous(url)) {
+            ProbeDialog.showDanger(requireActivity());
+            return false;
+        }
+        // 永久白名单：曾通过试运行的地址直接添加，免重复试用
+        if (!SourceProbe.isRuntimePassed(url)) {
+            TrialRun.begin(url, getType());
+            Notify.show(R.string.source_probe_trial_started);
+        } else {
+            // 需求4：缓存直接 PASS → 直接添加免试运行，成功即自动设全部站点为「参与换源」
+            markEnableChange(url);
+        }
+        return true;
+    }
+
+    // 需求4：仅点播类型，且为新增链接（编辑未改地址除外）时记录待自动「参与换源」标记
+    private void markEnableChange(String url) {
+        if (getType() != 0) return;
+        if (edit && url.equals(ori)) return;
+        VodConfig.markEnableChange(url);
+    }
+
+    private void finishSave(Config config) {
         if (config == null) {
             Notify.show(R.string.remote_trust_config_url_required);
             binding.url.requestFocus();
@@ -205,6 +283,15 @@ public class ConfigDialog extends BaseAlertDialog {
         }
         ((ConfigListener) requireParentFragment()).setConfig(config);
         dismiss();
+    }
+
+    private boolean isHttp(String url) {
+        return url.startsWith("http://") || url.startsWith("https://");
+    }
+
+    // 本地文件源需检测；本软件合并产物（头部含标记）豁免
+    private boolean isProbeable(String url) {
+        return isHttp(url) || (url.startsWith("file:") && !SourceProbe.isSelfMerged(url));
     }
 
     private Config saveConfig(String url, String name) {
@@ -244,6 +331,8 @@ public class ConfigDialog extends BaseAlertDialog {
         String path = FileChooser.getPathFromUri(result.getData().getData());
         if (TextUtils.isEmpty(path)) return;
         String url = "file:/" + path.replace(Path.rootPath(), "");
+        // 本地文件添加同样经过安全检测闸门（本软件合并的源免检测）
+        if (!proceed(url)) return;
         ((ConfigListener) requireParentFragment()).setConfig(saveConfig(url, name));
         dismiss();
     });

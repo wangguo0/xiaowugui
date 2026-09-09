@@ -118,7 +118,17 @@ public class History implements Diffable<History> {
     }
 
     public static List<History> get(int cid) {
-        return AppDatabase.get().getHistoryDao().find(cid, System.currentTimeMillis() - Constant.HISTORY_TIME);
+        // 展示兜底：过滤掉站点已被永久屏蔽（SiteBlockSetting 锁定）的历史条目，
+        // 即使某些路径漏删，历史页也不再显示这些已失效的留言
+        return AppDatabase.get().getHistoryDao().find(cid, System.currentTimeMillis() - Constant.HISTORY_TIME).stream()
+                .filter(item -> {
+                    try {
+                        return !com.fongmi.android.tv.setting.SiteBlockSetting.isLocked(item.getSiteKey());
+                    } catch (Throwable t) {
+                        return true;
+                    }
+                })
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public static History find(String key) {
@@ -135,6 +145,12 @@ public class History implements Diffable<History> {
 
     public static void delete(int cid) {
         AppDatabase.get().getHistoryDao().delete(cid);
+    }
+
+    /** 移除某个站点源（永久屏蔽）的全部历史观看记录，按 key 前缀匹配，跨所有配置 cid */
+    public static void deleteBySite(String siteKey) {
+        if (TextUtils.isEmpty(siteKey)) return;
+        AppDatabase.get().getHistoryDao().deleteByKeyPrefixAll(siteKey + AppDatabase.SYMBOL);
     }
 
     public static void deleteAndSync(int cid) {

@@ -105,6 +105,7 @@ import com.fongmi.android.tv.player.lut.LutStore;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.LyricsSetting;
+import com.fongmi.android.tv.setting.JarBlockSetting;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
@@ -398,6 +399,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast, String wallPic, String content) {
+        // A 崩溃循环防重入：源站点的 jar 已被永久拉黑（死亡归因/静态扫描判定具备杀宿主逻辑）时，
+        // 拒绝进入播放页，避免从历史/详情/收藏等直连入口反复触发自杀线程陷入重启循环。
+        com.fongmi.android.tv.bean.Site blockedSite = com.fongmi.android.tv.api.config.VodConfig.get().getSite(key);
+        if (blockedSite != null && (JarBlockSetting.isBlocked(blockedSite.getJar()) || JarBlockSetting.blocksBase(blockedSite.getJar()))) {
+            com.fongmi.android.tv.utils.Notify.show(com.fongmi.android.tv.R.string.video_error_blocked);
+            return;
+        }
         long launch = System.currentTimeMillis();
         SpiderDebug.log("video-flow", "launch request key=%s id=%s name=%s collect=%s cast=%s", key, id, name, collect, cast);
         ImgUtil.preload(activity, pic);

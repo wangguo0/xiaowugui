@@ -342,6 +342,10 @@ public class SiteDialog extends BaseAlertDialog implements SiteAdapter.OnClickLi
     @Override
     public void onTextClick(Site item) {
         if (block) {
+            if (SiteBlockSetting.isLocked(item)) {
+                Notify.show(R.string.site_block_locked_toast);
+                return;
+            }
             SiteBlockSetting.toggle(item);
             filter();
             return;

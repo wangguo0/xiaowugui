@@ -104,6 +104,60 @@
         layout="@layout/view_progress"
         android:visibility="gone" />
 
+    <!-- 无生效订阅源时的引导空态：插画 + 双行文案 + 添加订阅 / 扫一扫 -->
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="?attr/actionBarSize"
+        android:background="@color/transparent"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <com.airbnb.lottie.LottieAnimationView
+            android:layout_width="160dp"
+            android:layout_height="180dp"
+            app:lottie_autoPlay="true"
+            app:lottie_loop="true"
+            app:lottie_rawRes="@raw/empty" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/vod_empty_title"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/vod_empty_subtitle"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyAdd"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="@string/vod_empty_add" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyScan"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/setting_subscription_scan" />
+
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/filter"
         android:layout_width="wrap_content"

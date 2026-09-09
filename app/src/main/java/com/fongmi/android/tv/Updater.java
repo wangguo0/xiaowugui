@@ -15,6 +15,7 @@ import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Github;
+import com.fongmi.android.tv.utils.GithubProxy;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
@@ -143,7 +144,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update getGithubStableUpdate(String channel) {
         try {
-            JSONObject release = new JSONObject(OkHttp.string(Github.getLatestReleaseApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            JSONObject release = new JSONObject(fetchGithub(Github.getLatestReleaseApi()));
             return readGithubReleaseUpdate(channel, release);
         } catch (Exception e) {
             e.printStackTrace();
@@ -154,7 +155,7 @@ public class Updater implements Download.Callback, UpdateListener {
     private Update getGithubBetaUpdate(String channel) {
         String manifestName = getManifestName(channel);
         try {
-            JSONArray releases = new JSONArray(OkHttp.string(Github.getReleasesApi(), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS));
+            JSONArray releases = new JSONArray(fetchGithub(Github.getReleasesApi()));
             for (int i = 0; i < releases.length(); i++) {
                 JSONObject release = releases.optJSONObject(i);
                 if (release == null || !isBetaRelease(release)) continue;
@@ -184,15 +185,33 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update readGithubReleaseUpdate(String channel, JSONObject release) {
         JSONObject asset = findAsset(release.optJSONArray("assets"), getManifestName(channel));
-        long assetId = asset == null ? 0 : asset.optLong("id");
-        if (assetId <= 0) return Update.empty(channel);
-        return readUpdate(channel, Github.getReleaseAssetApi(assetId), SOURCE_GITHUB, GITHUB_ASSET_HEADERS, release.optString("body"));
+        if (asset == null) return Update.empty(channel);
+        // 优先用资源直链（github.com 文件下载，镜像可代理），缺失时回退 API 地址
+        String url = asset.optString("browser_download_url");
+        boolean api = TextUtils.isEmpty(url);
+        if (api) url = Github.getReleaseAssetApi(asset.optLong("id"));
+        return readUpdate(channel, url, SOURCE_GITHUB, api ? GITHUB_ASSET_HEADERS : null, release.optString("body"));
+    }
+
+    // 版本信息 API：先试镜像加速（要求响应含 assets 字段防限流 JSON 误判），失败回退直连
+    private String fetchGithub(String url) throws Exception {
+        String body = GithubProxy.fetchJson(url);
+        if (body != null && body.contains("\"assets\"")) return body;
+        GithubProxy.clearJsonCache();
+        return OkHttp.string(url, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
     }
 
     private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
         Update update = Update.empty(channel);
         try {
-            String text = headers == null ? OkHttp.string(manifestUrl, GITHUB_REQUEST_TIMEOUT_MS) : OkHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            String text;
+            if (headers == null) {
+                // 文件直链清单：先试镜像加速，失败回退直连
+                text = GithubProxy.fetchJson(manifestUrl);
+                if (TextUtils.isEmpty(text)) text = OkHttp.string(manifestUrl, GITHUB_REQUEST_TIMEOUT_MS);
+            } else {
+                text = OkHttp.string(manifestUrl, headers, GITHUB_REQUEST_TIMEOUT_MS);
+            }
             if (TextUtils.isEmpty(text)) throw new IllegalStateException("Empty update manifest: " + manifestUrl);
             JSONObject object = new JSONObject(text);
             update.name = object.optString("name");
@@ -300,7 +319,12 @@ public class Updater implements Download.Callback, UpdateListener {
         resetProgress();
         Path.clear(getFile());
         setDialogProgress(0, 0, selected.size, 0, 0);
-        startDownload(selected.apkUrl);
+        // 后台探测加速线路（最长8秒），完成后开始下载；无可用线路自动回退原地址
+        String url = selected.apkUrl;
+        Task.execute(() -> {
+            if (canceled || !downloading) return;
+            startDownload(GithubProxy.accelerate(url));
+        });
     }
 
     private void startDownload(String url) {

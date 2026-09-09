@@ -3,6 +3,8 @@ package com.fongmi.android.tv.ui.fragment;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -20,6 +22,7 @@ import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.config.VodConfig;
@@ -37,6 +40,8 @@ import com.fongmi.android.tv.ui.adapter.SearchAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.utils.MobileWindow;
 import com.fongmi.android.tv.utils.ResUtil;
+import com.fongmi.android.tv.utils.Task;
+import com.fongmi.android.tv.utils.VodMatcher;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -49,12 +54,27 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     private static final int GRID_ITEM_MARGIN_DP = 4;
     private static final int GRID_TOP_PADDING_DP = 8;
+    private static final long REFRESH_THROTTLE_MS = 400;
+    private static final int MAX_RAW_RESULTS = 5000;
+    private static final int MAX_DISPLAY_RESULTS = 2000;
+    private static final int PAGE_SIZE = 12;
+    private static final int LOAD_MORE_SIZE = 10;
 
     private FragmentCollectBinding mBinding;
     private SearchAdapter mSearchAdapter;
     private SiteViewModel mViewModel;
     private List<Site> mSites;
     private final List<Vod> mAllResults = new ArrayList<>();
+    private List<Vod> mSortedItems = new ArrayList<>();
+    private int mDisplayCount = PAGE_SIZE;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private boolean mRefreshPending;
+    private boolean mRefreshing;
+    private boolean mRefreshAgain;
+    // 首页集满冻结：新到批次是否含 100% 精确匹配（唯一允许打破冻结的条件）
+    private boolean mPendingExact;
+    // 已提交到列表的卡片数（不含 footer），达到 PAGE_SIZE 即视为首页已满
+    private int mCommittedCount;
 
     public static CollectFragment newInstance(String keyword) {
         return newInstance(keyword, null);
@@ -135,9 +155,24 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     private void setRecyclerView() {
         mBinding.recycler.setHasFixedSize(true);
+        // 关闭重排动画：搜索结果持续插入/换位时避免逐条动画卡顿，且保证顶部即时刷新
+        mBinding.recycler.setItemAnimator(null);
         mBinding.recycler.setAdapter(mSearchAdapter = new SearchAdapter(this));
+        mSearchAdapter.setLoadMore(this::loadMore);
+        setSpanSizeLookup();
         setResultLayout(false);
         mBinding.recycler.post(() -> setResultLayout(false));
+    }
+
+    // 「加载更多」footer 在网格模式下占满整行
+    private void setSpanSizeLookup() {
+        if (!(mBinding.recycler.getLayoutManager() instanceof GridLayoutManager manager)) return;
+        manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+            @Override
+            public int getSpanSize(int position) {
+                return mSearchAdapter.isFooter(position) ? manager.getSpanCount() : 1;
+            }
+        });
     }
 
     private void setViewModel() {
@@ -156,6 +191,13 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void search() {
         if (mSites.isEmpty()) return;
         mAllResults.clear();
+        mSortedItems.clear();
+        mDisplayCount = PAGE_SIZE;
+        mRefreshPending = false;
+        mRefreshing = false;
+        mRefreshAgain = false;
+        mPendingExact = false;
+        mCommittedCount = 0;
         mViewModel.searchContent(mSites, getKeyword(), false);
     }
 
@@ -217,28 +259,145 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void setCollect(Result result) {
         if (result == null || result.getList().isEmpty()) return;
         mAllResults.addAll(result.getList());
-        mSearchAdapter.setItems(sortByRelevance(dedupe(mAllResults)));
+        if (mAllResults.size() > MAX_RAW_RESULTS) {
+            mAllResults.subList(0, mAllResults.size() - MAX_RAW_RESULTS).clear();
+        }
+        // 检测本批是否含 100% 精确匹配（片名与关键词完全一致），这是打破首页冻结的唯一条件
+        if (!mPendingExact) {
+            String word = normalize(getKeyword());
+            if (!word.isEmpty()) {
+                for (Vod vod : result.getList()) {
+                    if (normalize(vod.getName()).equals(word)) {
+                        mPendingExact = true;
+                        break;
+                    }
+                }
+            }
+        }
+        scheduleRefresh();
     }
 
+    // 节流刷新：无论有多少站点陆续返回，每 REFRESH_THROTTLE_MS 最多重排并刷新一次，
+    // 去重与排序在后台线程完成，避免源过多时主线程被占满导致卡死。
+    // 首页集满（PAGE_SIZE）后进入冻结：非 force 且新批次无 100% 精确匹配时只静默累积，
+    // 不再重排提交，杜绝卡片被替换；点「加载更多」(force) 或精确匹配到达时才刷新
+    private void scheduleRefresh() {
+        if (mRefreshPending) return;
+        mRefreshPending = true;
+        mHandler.postDelayed(() -> doRefresh(false), REFRESH_THROTTLE_MS);
+    }
+
+    private void doRefresh(boolean force) {
+        mRefreshPending = false;
+        if (!isAdded() || mRefreshing) {
+            mRefreshAgain = true;
+            return;
+        }
+        if (!force && !mPendingExact && mCommittedCount >= PAGE_SIZE) return;
+        List<Vod> snapshot = new ArrayList<>(mAllResults);
+        String keyword = getKeyword();
+        mRefreshing = true;
+        Task.execute(() -> {
+            List<Vod> sorted = sortByRelevance(dedupe(snapshot), keyword);
+            List<Vod> items = sorted.size() > MAX_DISPLAY_RESULTS ? new ArrayList<>(sorted.subList(0, MAX_DISPLAY_RESULTS)) : sorted;
+            App.post(() -> {
+                mRefreshing = false;
+                if (!isAdded()) return;
+                mSortedItems = items;
+                mPendingExact = false;
+                applyItems();
+                if (mRefreshAgain) {
+                    mRefreshAgain = false;
+                    scheduleRefresh();
+                }
+            });
+        });
+    }
+
+    // 分页提交：仅显示前 mDisplayCount 条，末尾追加「加载更多」哨兵行（滑到列表底部才可见），
+    // 使 DiffUtil 每次计算量固定在页大小级别，避免结果过多卡顿
+    private void applyItems() {
+        int total = mSortedItems.size();
+        int end = Math.min(mDisplayCount, total);
+        List<Vod> page = new ArrayList<>(mSortedItems.subList(0, end));
+        if (end < total) page.add(SearchAdapter.FOOTER);
+        mCommittedCount = end;
+        boolean atTop = !mBinding.recycler.canScrollVertically(-1);
+        mSearchAdapter.setItems(page, () -> {
+            if (!isAdded()) return;
+            if (atTop) mBinding.recycler.scrollToPosition(0);
+        });
+    }
+
+    // 加载更多：强制用后台最新全量结果重排一次（冻结期间晚到的高相关结果此时一并展示），再追加一页
+    private void loadMore() {
+        mDisplayCount += LOAD_MORE_SIZE;
+        if (mRefreshing) {
+            mRefreshAgain = true;
+            return;
+        }
+        doRefresh(true);
+    }
+
+    // 同名聚类去重：片名相同的条目按 5 维指纹（VodMatcher）分簇，
+    // 无冲突者合并为一簇（取站点健康度最优为代表，并用其它成员补齐空字段），
+    // 类型/年份/演员等冲突的（如动漫版与真人版同名）各自独立成卡片
     private List<Vod> dedupe(List<Vod> items) {
-        Map<String, Vod> map = new LinkedHashMap<>();
+        Map<String, List<Vod>> groups = new LinkedHashMap<>();
         for (Vod vod : items) {
             String key = vod.getName().trim().toLowerCase(Locale.ROOT);
-            Vod existing = map.get(key);
-            if (existing == null || SiteHealthStore.compareVods(existing, vod) > 0) map.put(key, vod);
+            List<Vod> group = groups.get(key);
+            if (group == null) {
+                group = new ArrayList<>();
+                groups.put(key, group);
+            }
+            group.add(vod);
         }
-        return new ArrayList<>(map.values());
+        List<Vod> result = new ArrayList<>();
+        for (List<Vod> group : groups.values()) {
+            List<Vod> representatives = new ArrayList<>();
+            for (Vod vod : group) {
+                int index = -1;
+                for (int i = 0; i < representatives.size(); i++) {
+                    if (!VodMatcher.isConflict(representatives.get(i), vod)) {
+                        index = i;
+                        break;
+                    }
+                }
+                if (index < 0) {
+                    representatives.add(vod);
+                } else {
+                    // 同簇：健康度更优的站点作为代表卡片，另一方空字段用于补齐
+                    Vod rep = representatives.get(index);
+                    if (SiteHealthStore.compareVods(rep, vod) > 0) {
+                        fillFields(vod, rep);
+                        representatives.set(index, vod);
+                    } else {
+                        fillFields(rep, vod);
+                    }
+                }
+            }
+            result.addAll(representatives);
+        }
+        return result;
+    }
+
+    // 簇内补齐代表条目的空字段（仅使用 Vod 已有 setter，避免改动共享 bean 影响 TV 版）
+    private void fillFields(Vod target, Vod other) {
+        if (target.getDirector().isEmpty()) target.setDirector(other.getDirector());
+        if (target.getPic().isEmpty()) target.setPic(other.getPic());
+        if (target.getContent().isEmpty()) target.setContent(other.getContent());
     }
 
     // 按「关键词长度 / 影片名长度」计算匹配度，降序排列；完全不包含关键词的结果隐藏。
-    private List<Vod> sortByRelevance(List<Vod> items) {
-        String keyword = normalize(getKeyword());
-        if (keyword.isEmpty()) return items;
+    private List<Vod> sortByRelevance(List<Vod> items, String keyword) {
+        String word = normalize(keyword);
+        if (word.isEmpty()) return items;
         List<Vod> result = new ArrayList<>();
         for (Vod vod : items) {
-            if (normalize(vod.getName()).contains(keyword)) result.add(vod);
+            if (normalize(vod.getName()).contains(word)) result.add(vod);
         }
-        result.sort(Comparator.comparingDouble((Vod vod) -> getScore(normalize(vod.getName()), keyword)).reversed());
+        result.sort(Comparator.comparingDouble((Vod vod) -> getScore(normalize(vod.getName()), word)).reversed());
         return result;
     }
 
@@ -293,6 +452,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        mHandler.removeCallbacksAndMessages(null);
         mViewModel.stopSearch();
         SiteHealthStore.flush();
         requireActivity().removeMenuProvider(this);

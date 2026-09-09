@@ -26,10 +26,6 @@ public class SettingPlaybackFragment extends BaseFragment {
         return new SettingPlaybackFragment();
     }
 
-    private String getSwitch(boolean value) {
-        return getString(value ? R.string.setting_on : R.string.setting_off);
-    }
-
     @Override
     protected ViewBinding getBinding(@NonNull LayoutInflater inflater, @Nullable ViewGroup container) {
         return mBinding = FragmentSettingPlaybackBinding.inflate(inflater, container, false);
@@ -37,12 +33,12 @@ public class SettingPlaybackFragment extends BaseFragment {
 
     @Override
     protected void initView() {
-        mBinding.liveVisibleText.setText(getSwitch(Setting.isLiveVisible()));
-        mBinding.linkVisibleText.setText(getSwitch(Setting.isLinkVisible()));
-        mBinding.vodVisibleText.setText(getSwitch(Setting.isVodVisible()));
-        mBinding.historyVisibleText.setText(getSwitch(Setting.isHistoryVisible()));
-        mBinding.keepVisibleText.setText(getSwitch(Setting.isKeepVisible()));
-        mBinding.bangumiVisibleText.setText(getSwitch(Setting.isBangumiVisible()));
+        mBinding.liveVisibleSwitch.setChecked(Setting.isLiveVisible());
+        mBinding.linkVisibleSwitch.setChecked(Setting.isLinkVisible());
+        mBinding.vodVisibleSwitch.setChecked(Setting.isVodVisible());
+        mBinding.historyVisibleSwitch.setChecked(Setting.isHistoryVisible());
+        mBinding.keepVisibleSwitch.setChecked(Setting.isKeepVisible());
+        mBinding.bangumiVisibleSwitch.setChecked(Setting.isBangumiVisible());
         mBinding.switchEpisodeThresholdText.setText(getString(R.string.setting_percent, Setting.getSwitchEpisodeThreshold()));
     }
 
@@ -50,48 +46,55 @@ public class SettingPlaybackFragment extends BaseFragment {
     protected void initEvent() {
         mBinding.player.setOnClickListener(view -> SubSettingActivity.start(requireActivity(), 2));
         mBinding.danmaku.setOnClickListener(view -> SubSettingActivity.start(requireActivity(), 4));
-        mBinding.liveVisible.setOnClickListener(this::setLiveVisible);
-        mBinding.linkVisible.setOnClickListener(this::setLinkVisible);
-        mBinding.vodVisible.setOnClickListener(this::setVodVisible);
-        mBinding.historyVisible.setOnClickListener(this::setHistoryVisible);
-        mBinding.keepVisible.setOnClickListener(this::setKeepVisible);
-        mBinding.bangumiVisible.setOnClickListener(this::setBangumiVisible);
+        mBinding.liveVisible.setOnClickListener(v -> setLiveVisible());
+        mBinding.liveVisibleSwitch.setOnClickListener(v -> setLiveVisible());
+        mBinding.linkVisible.setOnClickListener(v -> setLinkVisible());
+        mBinding.linkVisibleSwitch.setOnClickListener(v -> setLinkVisible());
+        mBinding.vodVisible.setOnClickListener(v -> setVodVisible());
+        mBinding.vodVisibleSwitch.setOnClickListener(v -> setVodVisible());
+        mBinding.historyVisible.setOnClickListener(v -> setHistoryVisible());
+        mBinding.historyVisibleSwitch.setOnClickListener(v -> setHistoryVisible());
+        mBinding.keepVisible.setOnClickListener(v -> setKeepVisible());
+        mBinding.keepVisibleSwitch.setOnClickListener(v -> setKeepVisible());
+        mBinding.bangumiVisible.setOnClickListener(v -> setBangumiVisible());
+        mBinding.bangumiVisibleSwitch.setOnClickListener(v -> setBangumiVisible());
         mBinding.switchEpisodeThreshold.setOnClickListener(this::onSwitchEpisodeThreshold);
     }
 
-    private void setVodVisible(View view) {
+    // 整行与开关均可点击切换；程序 setChecked 不触发点击，无回环风险。
+    private void setVodVisible() {
         Setting.putVodVisible(!Setting.isVodVisible());
-        mBinding.vodVisibleText.setText(getSwitch(Setting.isVodVisible()));
+        mBinding.vodVisibleSwitch.setChecked(Setting.isVodVisible());
         ConfigEvent.common();
     }
 
-    private void setHistoryVisible(View view) {
+    private void setHistoryVisible() {
         Setting.putHistoryVisible(!Setting.isHistoryVisible());
-        mBinding.historyVisibleText.setText(getSwitch(Setting.isHistoryVisible()));
+        mBinding.historyVisibleSwitch.setChecked(Setting.isHistoryVisible());
         ConfigEvent.common();
     }
 
-    private void setKeepVisible(View view) {
+    private void setKeepVisible() {
         Setting.putKeepVisible(!Setting.isKeepVisible());
-        mBinding.keepVisibleText.setText(getSwitch(Setting.isKeepVisible()));
+        mBinding.keepVisibleSwitch.setChecked(Setting.isKeepVisible());
         ConfigEvent.common();
     }
 
-    private void setBangumiVisible(View view) {
+    private void setBangumiVisible() {
         Setting.putBangumiVisible(!Setting.isBangumiVisible());
-        mBinding.bangumiVisibleText.setText(getSwitch(Setting.isBangumiVisible()));
+        mBinding.bangumiVisibleSwitch.setChecked(Setting.isBangumiVisible());
         ConfigEvent.common();
     }
 
-    private void setLiveVisible(View view) {
+    private void setLiveVisible() {
         Setting.putLiveVisible(!Setting.isLiveVisible());
-        mBinding.liveVisibleText.setText(getSwitch(Setting.isLiveVisible()));
+        mBinding.liveVisibleSwitch.setChecked(Setting.isLiveVisible());
         ConfigEvent.common();
     }
 
-    private void setLinkVisible(View view) {
+    private void setLinkVisible() {
         Setting.putLinkVisible(!Setting.isLinkVisible());
-        mBinding.linkVisibleText.setText(getSwitch(Setting.isLinkVisible()));
+        mBinding.linkVisibleSwitch.setChecked(Setting.isLinkVisible());
     }
 
     private void onSwitchEpisodeThreshold(View view) {

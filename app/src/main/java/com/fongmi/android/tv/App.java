@@ -1,9 +1,11 @@
 package com.fongmi.android.tv;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Application;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,6 +22,7 @@ import com.fongmi.android.tv.remote.RemoteAgent;
 import com.fongmi.android.tv.setting.ProxySetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.DanmakuSearchListFocusFixer;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.NsdDeviceDiscovery;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PreviousProcessExitLogger;
@@ -39,6 +42,7 @@ public class App extends Application implements Application.ActivityLifecycleCal
 
     private Activity activity;
     private Hook hook;
+    private String processName = "";
 
     public App() {
         instance = this;
@@ -93,6 +97,11 @@ public class App extends Application implements Application.ActivityLifecycleCal
     @Override
     public void onCreate() {
         super.onCreate();
+        processName = currentProcessName();
+        if (!isProbeProcess()) DiagLog.init(this);
+        // 主进程启动早期（任何 Activity 加载配置之前）消费「25 秒运行试用」遗留标记：
+        // 上次试用源若导致崩溃，此处删除该源并恢复原激活配置，避免启动即崩循环
+        if (!isProbeProcess()) com.fongmi.android.tv.api.TrialRun.checkOnStartup(this);
         PlaybackMemoryMonitor.process().initialize(this);
         PlaybackSystemConditionMonitor.process().initialize(this);
         Setting.applyLanguage();
@@ -104,8 +113,33 @@ public class App extends Application implements Application.ActivityLifecycleCal
         Notify.createChannel();
         ProxySetting.apply();
         DanmakuSearchListFocusFixer.start();
+        com.fongmi.android.tv.api.PopupShield.install(this);
         registerActivityLifecycleCallbacks(this);
-        post(this::startBackgroundServices, 1200);
+        // :probe 探测子进程仅执行沙箱探测，不启动后台服务，避免端口/路由冲突
+        if (!isProbeProcess()) post(this::startBackgroundServices, 1200);
+    }
+
+    public static boolean isProbeProcess() {
+        String name = get().processName;
+        if (android.text.TextUtils.isEmpty(name)) {
+            name = get().currentProcessName();
+            get().processName = name;
+        }
+        return name.endsWith(":probe");
+    }
+
+    private String currentProcessName() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return Application.getProcessName();
+            int pid = android.os.Process.myPid();
+            ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+            if (am == null) return "";
+            for (ActivityManager.RunningAppProcessInfo info : am.getRunningAppProcesses()) {
+                if (info != null && info.pid == pid) return info.processName;
+            }
+        } catch (Throwable ignored) {
+        }
+        return "";
     }
 
     @Override
@@ -141,6 +175,7 @@ public class App extends Application implements Application.ActivityLifecycleCal
 
     @Override
     public void onActivityResumed(@NonNull Activity activity) {
+        if (DiagLog.isEnabled()) DiagLog.log("activity", "resume " + activity.getClass().getSimpleName());
         if (activity != activity()) this.activity = activity;
     }
 

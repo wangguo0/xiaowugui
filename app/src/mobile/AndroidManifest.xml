@@ -127,6 +127,16 @@
             android:screenOrientation="fullUser" />
 
         <activity
+            android:name=".ui.activity.LogActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:screenOrientation="fullUser" />
+
+        <activity
+            android:name=".ui.activity.AvatarCropActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout"
+            android:screenOrientation="fullUser" />
+
+        <activity
             android:name=".ui.activity.VideoActivity"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|uiMode|orientation"
             android:launchMode="singleTop"
@@ -141,6 +151,12 @@
         <service
             android:name=".service.DLNACastService"
             android:exported="false" />
+
+        <!-- 源安全探测沙箱：独立子进程，探测恶意源导致崩溃时仅回收本进程 -->
+        <service
+            android:name="com.fongmi.android.tv.service.ProbeService"
+            android:exported="false"
+            android:process=":probe" />
 
     </application>
 </manifest>

@@ -1,6 +1,8 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,6 +20,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.setting.SiteBlockSetting;
 import com.fongmi.android.tv.setting.SiteOrderStore;
+import com.fongmi.android.tv.utils.ResUtil;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +37,12 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
     private boolean change;
     private boolean block;
     private int column = 1;
+
+    // 列筛选条件：null / 空 表示全部
+    private SiteHealthStore.Status healthFilter; // 连接状态
+    private String nameFilter;                   // 站源名称首字母（A-Z / "#"，null 全部）
+    private Boolean searchFilter;                // 是否参与搜索
+    private Integer blockFilter;                 // 屏蔽状态（0 参与换源 1 关闭换源 2 彻底屏蔽 3 已屏蔽·系统强制）
 
     public SiteAdapter(OnClickListener listener) {
         this.listener = listener;
@@ -123,9 +132,59 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
             boolean matchName = !TextUtils.isEmpty(name) && name.toLowerCase(Locale.ROOT).contains(text);
             boolean matchKey = !TextUtils.isEmpty(key) && key.toLowerCase(Locale.ROOT).contains(text);
             boolean matchKeyword = !searching || matchName || matchKey;
-            if (matchGroup && matchKeyword) mItems.add(site);
+            if (matchGroup && matchKeyword && matchFilters(site)) mItems.add(site);
         }
         notifyDataSetChanged();
+    }
+
+    /** 应用四列表头筛选条件（连接状态 / 站源名称首字母 / 参与搜索 / 屏蔽状态），条件为空表示该列筛选全部 */
+    public boolean matchFilters(Site site) {
+        if (healthFilter != null && SiteHealthStore.getStatus(site) != healthFilter) return false;
+        if (nameFilter != null) {
+            char first = !TextUtils.isEmpty(site.getName()) ? Character.toUpperCase(site.getName().charAt(0)) : '#';
+            boolean letter = first >= 'A' && first <= 'Z';
+            String bucket = letter ? String.valueOf(first) : "#";
+            if (!bucket.equals(nameFilter)) return false;
+        }
+        if (searchFilter != null && site.isSearchable() != searchFilter) return false;
+        if (blockFilter != null) {
+            boolean blocked = SiteBlockSetting.isBlocked(site);
+            boolean locked = SiteBlockSetting.isLocked(site);
+            int state;
+            if (blocked && locked) state = 3;
+            else if (blocked) state = 2;
+            else state = site.isChangeable() ? 0 : 1;
+            if (state != blockFilter) return false;
+        }
+        return true;
+    }
+
+    public void setHealthFilter(SiteHealthStore.Status status) {
+        this.healthFilter = status;
+        filter(group, keyword);
+    }
+
+    public void setNameFilter(String letter) {
+        this.nameFilter = letter;
+        filter(group, keyword);
+    }
+
+    public void setSearchFilter(Boolean searchable) {
+        this.searchFilter = searchable;
+        filter(group, keyword);
+    }
+
+    public void setBlockFilter(Integer state) {
+        this.blockFilter = state;
+        filter(group, keyword);
+    }
+
+    public void clearFilters() {
+        healthFilter = null;
+        nameFilter = null;
+        searchFilter = null;
+        blockFilter = null;
+        filter(group, keyword);
     }
 
     public boolean drag(int from, int to) {
@@ -177,8 +236,8 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         holder.binding.health.setAlpha(block && blocked ? 0.55f : 1.0f);
         holder.binding.search.setText(getSearchLabel(item));
         holder.binding.change.setText(getChangeLabel(item));
-        holder.binding.search.setTextColor(getStateColor(holder, item.isSearchable() ? 1 : 2));
-        holder.binding.change.setTextColor(getStateColor(holder, SiteBlockSetting.isBlocked(item) ? 3 : (item.isChangeable() ? 1 : 2)));
+        setSearchChip(holder.binding.search, item);
+        setChangeChip(holder.binding.change, item);
         holder.binding.search.setVisibility(block && search && singleColumn ? View.VISIBLE : View.GONE);
         holder.binding.change.setVisibility(block && change && singleColumn ? View.VISIBLE : View.GONE);
         holder.binding.text.setOnClickListener(v -> listener.onTextClick(item));
@@ -193,16 +252,32 @@ public class SiteAdapter extends RecyclerView.Adapter<SiteAdapter.ViewHolder> {
         return item.isSearchable() ? R.string.site_state_search_on : R.string.site_state_search_off;
     }
 
-    // 三态：彻底屏蔽 > 关闭换源 > 参与换源
+    // 三态：彻底屏蔽 > 关闭换源 > 参与换源（系统强制屏蔽显示专用标签）
     private int getChangeLabel(Site item) {
-        if (SiteBlockSetting.isBlocked(item)) return R.string.site_state_blocked;
+        if (SiteBlockSetting.isBlocked(item)) return SiteBlockSetting.isLocked(item) ? R.string.site_state_blocked_locked : R.string.site_state_blocked;
         return item.isChangeable() ? R.string.site_state_change_on : R.string.site_state_change_off;
     }
 
-    // 状态色：1=正常灰 2=关闭灰 3=彻底屏蔽红
-    private int getStateColor(ViewHolder holder, int state) {
-        if (state == 3) return ContextCompat.getColor(holder.itemView.getContext(), R.color.site_state_blocked);
-        return ContextCompat.getColor(holder.itemView.getContext(), R.color.dialog_outlined_button_text);
+    // 胶囊底色（圆角）应用
+    private void setSearchChip(android.view.View view, Site item) {
+        if (item.isSearchable()) setChip(view, 0xFF0B8043, Color.WHITE);
+        else setChip(view, 0xFFFF5252, Color.WHITE);
+    }
+
+    private void setChangeChip(android.view.View view, Site item) {
+        if (SiteBlockSetting.isBlocked(item)) setChip(view, 0xFFFF5252, Color.WHITE);
+        else if (item.isChangeable()) setChip(view, 0xFF0B8043, Color.WHITE);
+        else setChip(view, 0xFFFFD54F, 0xFF202124);
+    }
+
+    // 生成圆角胶囊并按状态填充底色
+    private static void setChip(android.view.View view, int bg, int fg) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(bg);
+        drawable.setCornerRadius(ResUtil.dp2px(20));
+        view.setBackground(drawable);
+        ((androidx.appcompat.widget.AppCompatTextView) view).setTextColor(fg);
+        view.setPadding(ResUtil.dp2px(8), ResUtil.dp2px(4), ResUtil.dp2px(8), ResUtil.dp2px(4));
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {

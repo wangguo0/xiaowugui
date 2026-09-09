@@ -105,7 +105,7 @@ export all_proxy=socks5://127.0.0.1:7897
 ## 从 clone 到重新生成 arm64 `.so`
 
 ```bash
-git clone https://github.com/fish2018/webhtv.git
+git clone https://github.com/wangguo0/xiaowugui.git
 cd webhtv
 printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
 scripts/build_mpv_native.sh --abi arm64-v8a --install

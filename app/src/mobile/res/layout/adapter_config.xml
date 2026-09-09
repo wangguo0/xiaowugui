@@ -21,6 +21,19 @@
         app:strokeColor="@color/dialog_outlined_button_stroke"
         tools:text="https://fongmi.github.io/cat.json" />
 
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/current"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:text="@string/source_merge_current"
+        android:textColor="#0B57D0"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        tools:text="当前使用"
+        tools:visibility="visible" />
+
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/delete"
         android:layout_width="wrap_content"

@@ -28,3 +28,12 @@ __pycache__/
 *.pyc
 third_party/sources/
 plans/
+# 本地调试/临时文件，不入库
+resp*.json
+sub_source*.json
+ua_test.json
+wl*.txt
+dec_run.ps1
+pm_delegates.txt
+spider_test.zip
+spider_extract/

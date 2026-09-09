@@ -115,6 +115,7 @@ import com.fongmi.android.tv.player.lut.LutStore;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.LyricsSetting;
+import com.fongmi.android.tv.setting.JarBlockSetting;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
@@ -152,6 +153,7 @@ import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
 import com.fongmi.android.tv.ui.dialog.VideoContentDialog;
 import com.fongmi.android.tv.utils.Clock;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.EpisodeTitleCompact;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
@@ -163,6 +165,7 @@ import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Timer;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
+import com.fongmi.android.tv.utils.VodMatcher;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
@@ -231,6 +234,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private QuickSearchDialog mQuickSearchDialog;
     private SourceSwitchDialog mSourceSwitchDialog;
     private String mQuickSearchKeyword;
+    private boolean mQuickRefreshPending;
+    private final android.os.Handler mQuickHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private ParseAdapter mParseAdapter;
     private LyricsController mLyrics;
     private KaraokeController mKaraoke;
@@ -269,6 +274,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private String mArtworkRequestUrl;
     private String mArtworkRequestOwner;
     private Vod mPendingDetailVod;
+    // 当前正在播放的详情 vod（字段最全），用于换源候选的同内容判定基准
+    private Vod mDetailVod;
     private Result mPendingPlayerResult;
     private int mAudioArtworkColor = Color.rgb(55, 45, 68);
     private final Map<String, String> mAudioQueueFlags = new HashMap<>();
@@ -308,6 +315,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Runnable mR4;
     private Runnable mAutoSwitchCheck;
     private long mAutoSwitchDeadline;
+    private boolean mBlockedSwitch;
     private Clock mClock;
     private PiP mPiP;
     private String mContextWallUrl;
@@ -436,6 +444,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, String wallPic, String content, String bangumiName) {
+        // A 崩溃循环防重入：源站点的 jar 已被永久拉黑（死亡归因/静态扫描判定具备杀宿主逻辑）时，
+        // 拒绝进入播放页。否则用户从历史、详情、收藏等「直连入口」反复进入会重复触发该 jar 的
+        // 自杀线程，陷入「进入播放 → 崩溃 → 系统恢复 → 再进入」的无限重启循环。
+        com.fongmi.android.tv.bean.Site blockedSite = com.fongmi.android.tv.api.config.VodConfig.get().getSite(key);
+        if (blockedSite != null && (JarBlockSetting.isBlocked(blockedSite.getJar()) || JarBlockSetting.blocksBase(blockedSite.getJar()))) {
+            Notify.show(R.string.video_error_blocked);
+            return;
+        }
         ImgUtil.preload(activity, pic);
         if (Setting.isPlaybackArtworkWall() && !TextUtils.isEmpty(wallPic) && !TextUtils.equals(wallPic, pic)) ImgUtil.preload(activity, wallPic);
         Intent intent = new Intent(activity, VideoActivity.class);
@@ -527,7 +543,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
     }
 
-    // 视频有误举报：确认后将当前站源彻底屏蔽（搜索/快搜/换源不再出现），并关闭播放页
+    // 视频有误举报：确认后将当前站源彻底屏蔽（搜索/快搜/换源不再出现），并原地自动换源续播
     private void showVideoErrorDialog() {
         Site site = getSite();
         if (site == null) return;
@@ -543,10 +559,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             site.setChangeable(true).save();
             SiteBlockSetting.setBlocked(site, true);
             Notify.show(R.string.video_error_blocked);
-            finish();
+            blockAndSwitch();
         });
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+    }
+
+    // 彻底屏蔽后原地换源：当前条目加入失效列表，重新快搜（已屏蔽站点被过滤）并自动切换续播，不退出播放页
+    private void blockAndSwitch() {
+        mBlockedSwitch = true;
+        mBroken.add(getId());
+        initSearch(mBinding.name.getText().toString(), true);
+        startAutoSwitchWait();
     }
 
     private String getHistoryKey() {
@@ -1195,6 +1219,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
+            DiagLog.log("video", "finish: detail empty collect=%s msg=%s", isFromCollect(), finish);
             finish();
         } else if (getName().isEmpty()) {
             showEmpty();
@@ -1219,6 +1244,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         item.checkPic(getPic());
         item.checkName(getName());
         item.checkContent(getContent());
+        mDetailVod = item;
         mBinding.name.setText(item.getName());
         mFlagAdapter.addAll(item.getFlags());
         App.removeCallbacks(mR4);
@@ -1450,32 +1476,79 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     // 换源候选统一清洗：按站点去重（每站保留集数最高的一条）+ 集数阈值过滤落后的站源
+    // + 同内容判定：与当前播放详情（mDetailVod）在类型/年份/地区/导演/主演上冲突的
+    // 同名异版内容（如动漫版 vs 真人版）不进入换源列表；当前站点自身始终保留
+    // + 类型硬过滤：当前为动漫时，真人版/古装版等类型桶冲突的候选直接剔除（typeName 缺失时按片名提示推断）；
+    //   用户显式改词时不做该过滤
+    // + 相关性分层排序：片名与关键词完全相等 > 前缀匹配 > 包含，层内按匹配度降序
     private List<Vod> buildQuickItems() {
+        String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        return filterAndSortQuick(mQuickAdapter.getItems(), currentKey, mDetailVod, keyword, Setting.getSwitchEpisodeThreshold(), respectTypeFilter(keyword));
+    }
+
+    // 用户显式改词（搜索词 ≠ 当前视频标题）时，尊重其意图，不做与当前视频的类型对比过滤
+    private boolean respectTypeFilter(String keyword) {
+        return normalizeQuick(keyword).equals(normalizeQuick(mBinding.name.getText().toString()));
+    }
+
+    // 纯函数清洗（主线程与后台线程共用，不触碰 UI）：去重 → 冲突/类型过滤 → 集数阈值 → 相关性排序
+    private static List<Vod> filterAndSortQuick(List<Vod> source, String currentKey, Vod detail, String keyword, int threshold, boolean typeFilter) {
         Map<String, Vod> map = new java.util.LinkedHashMap<>();
-        for (Vod vod : mQuickAdapter.getItems()) {
+        for (Vod vod : source) {
             Vod best = map.get(vod.getSiteKey());
             if (best == null || parseEpisodeCount(vod.getRemarks()) > parseEpisodeCount(best.getRemarks())) map.put(vod.getSiteKey(), vod);
         }
         List<Vod> result = new ArrayList<>(map.values());
-        int threshold = Setting.getSwitchEpisodeThreshold();
-        if (threshold <= 0) return result;
-        int maxValue = 0;
-        for (Vod vod : result) maxValue = Math.max(maxValue, parseEpisodeCount(vod.getRemarks()));
-        if (maxValue <= 0) return result;
-        final int max = maxValue;
-        String currentKey = getSite() == null ? "" : getSite().getKey();
-        result.removeIf(vod -> {
-            int count = parseEpisodeCount(vod.getRemarks());
-            if (count <= 0) return false;
-            if (vod.getSiteKey().equals(currentKey)) return false;
-            return count * 100 < max * threshold;
-        });
+        if (detail != null && typeFilter) result.removeIf(vod -> !vod.getSiteKey().equals(currentKey) && (VodMatcher.isConflict(detail, vod) || VodMatcher.isTypeConflict(detail, vod)));
+        if (threshold > 0) {
+            int maxValue = 0;
+            for (Vod vod : result) maxValue = Math.max(maxValue, parseEpisodeCount(vod.getRemarks()));
+            if (maxValue > 0) {
+                final int max = maxValue;
+                result.removeIf(vod -> {
+                    int count = parseEpisodeCount(vod.getRemarks());
+                    if (count <= 0) return false;
+                    if (vod.getSiteKey().equals(currentKey)) return false;
+                    return count * 100 < max * threshold;
+                });
+            }
+        }
+        sortQuickItems(result, keyword);
         return result;
+    }
+
+    // 相关性排序（快搜弹窗与换源列表共用）：tier 完全相等(0) > 前缀(1) > 包含(2) > 其它(3)；
+    // 同 tier 按「关键词长度/片名长度」降序；稳定排序保持同分条目的原有站点顺序（自动换源仍按源列表顺序）
+    private static void sortQuickItems(List<Vod> items, String keyword) {
+        String word = normalizeQuick(keyword);
+        if (word.isEmpty()) return;
+        items.sort((a, b) -> {
+            String nameA = normalizeQuick(a.getName());
+            String nameB = normalizeQuick(b.getName());
+            int tier = Integer.compare(tierOf(nameA, word), tierOf(nameB, word));
+            if (tier != 0) return tier;
+            double sa = (double) word.length() / Math.max(1, nameA.length());
+            double sb = (double) word.length() / Math.max(1, nameB.length());
+            return Double.compare(sb, sa);
+        });
+    }
+
+    private static int tierOf(String name, String word) {
+        if (name.equals(word)) return 0;
+        if (name.startsWith(word)) return 1;
+        if (name.contains(word)) return 2;
+        return 3;
+    }
+
+    // 归一化：去空白与标点（含中文全角标点，如「仙逆（年番）」→「仙逆年番」），便于精确/前缀/包含判定
+    private static String normalizeQuick(String text) {
+        return text == null ? "" : text.replaceAll("[\\s\\p{Punct}\\u3000-\\u303F\\uFF00-\\uFFEF]+", "").toLowerCase(Locale.ROOT);
     }
 
     private static final java.util.regex.Pattern EPISODE_PATTERN = java.util.regex.Pattern.compile("(\\d+)\\s*(?:集|话|期|章)");
 
-    private int parseEpisodeCount(String remarks) {
+    private static int parseEpisodeCount(String remarks) {
         if (TextUtils.isEmpty(remarks)) return 0;
         java.util.regex.Matcher matcher = EPISODE_PATTERN.matcher(remarks);
         int count = 0;
@@ -1483,7 +1556,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return count;
     }
 
-    private int parseIntSafe(String text) {
+    private static int parseIntSafe(String text) {
         try {
             return Integer.parseInt(text);
         } catch (Exception e) {
@@ -1493,6 +1566,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void refreshSourceSwitch() {
         if (mSourceSwitchDialog != null && mSourceSwitchDialog.isActive()) mSourceSwitchDialog.setItems(buildSourceItems());
+    }
+
+    // 后台线程已完成清洗排序，直接复用结果刷新换源列表，避免主线程重复计算
+    private void refreshSourceSwitch(List<Vod> sorted) {
+        if (mSourceSwitchDialog == null || !mSourceSwitchDialog.isActive()) return;
+        List<SourceSwitchAdapter.Item> result = new ArrayList<>();
+        for (Vod vod : sorted) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
+        mSourceSwitchDialog.setItems(result);
     }
 
     private void setEpisodeAdapter(List<Episode> items) {
@@ -4571,6 +4652,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
         @Override
         public void onStop() {
+            DiagLog.log("video", "finish: player callback onStop");
             finish();
         }
 
@@ -6107,6 +6189,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void autoSwitchCheck() {
+        if (mBlockedSwitch) {
+            if (!buildQuickItems().isEmpty()) nextSite();
+            else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
+            else {
+                mBlockedSwitch = false;
+                Notify.show(R.string.video_error_no_site);
+            }
+            return;
+        }
         if (!PlayerSetting.isAutoChange() || !isAutoMode()) return;
         if (!buildQuickItems().isEmpty()) nextSite();
         else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
@@ -6130,6 +6221,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (isQuickSearchVisible()) mQuickSearchDialog.clear();
         List<Site> sites = SiteBlockSetting.filter(VodConfig.get().getSites(), false);
         sites.removeIf(item -> !isPass(item));
+        // 坏源剔除：曾被第三方 jar 解析崩溃（parseCrashed）或已判 BAD 的源不进入快搜/换源候选，
+        // 即不出现在列表，用户便无法点击触发崩溃。
+        sites.removeIf(SiteHealthStore::isCrashed);
         SiteHealthStore.sortSites(sites);
         mViewModel.searchContent(sites, keyword, true);
     }
@@ -6139,14 +6233,35 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.GONE);
         mQuickAdapter.addAll(items);
-        refreshSourceSwitch();
-        if (isQuickSearchVisible()) {
-            mQuickSearchDialog.clear();
-            mQuickSearchDialog.addAll(buildQuickItems());
-        }
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
+        scheduleQuickRefresh();
+    }
+
+    // 节流刷新：多源并发返回时每 400ms 最多重排一次；去重/过滤/排序在后台线程完成，
+    // 避免主线程卡顿（与搜索结果页一致）
+    private void scheduleQuickRefresh() {
+        if (mQuickRefreshPending) return;
+        mQuickRefreshPending = true;
+        mQuickHandler.postDelayed(this::doQuickRefresh, 400);
+    }
+
+    private void doQuickRefresh() {
+        mQuickRefreshPending = false;
+        List<Vod> snapshot = mQuickAdapter.getItems();
+        String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        Vod detail = mDetailVod;
+        int threshold = Setting.getSwitchEpisodeThreshold();
+        boolean typeFilter = respectTypeFilter(keyword);
+        Task.execute(() -> {
+            List<Vod> sorted = filterAndSortQuick(snapshot, currentKey, detail, keyword, threshold, typeFilter);
+            mQuickHandler.post(() -> {
+                refreshSourceSwitch(sorted);
+                if (isQuickSearchVisible()) mQuickSearchDialog.setAll(sorted);
+            });
+        });
     }
 
     private boolean isQuickSearchVisible() {
@@ -6181,6 +6296,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         Vod item = items.get(0);
         int position = mQuickAdapter.getItems().indexOf(item);
         if (position < 0) return;
+        mBlockedSwitch = false;
         Episode current = getEpisode();
         if (current != null) getIntent().putExtra("mark", current.getName());
         Notify.show(getString(R.string.play_switch_site, item.getSiteName()));
@@ -6441,7 +6557,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         } else {
             showDanmaku();
             restoreContextWall();
-            if (isStop()) finish();
+            // 防误退：从 PiP 放大回全屏时，onStop 可能已置 stop=true，
+            // 延迟复查——若期间 onStart 已恢复（stop=false）则不 finish；真正关闭小窗才 finish
+            App.post(() -> {
+                if (!isStop()) return;
+                DiagLog.log("video", "finish: pip exit while stopped");
+                finish();
+            }, 300);
         }
     }
 

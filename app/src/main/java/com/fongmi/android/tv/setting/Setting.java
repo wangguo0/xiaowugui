@@ -521,7 +521,7 @@ public class Setting {
     }
 
     public static boolean isHistoryVisible() {
-        return Prefers.getBoolean("history_visible", false);
+        return Prefers.getBoolean("history_visible", true);
     }
 
     public static void putHistoryVisible(boolean visible) {
@@ -537,7 +537,7 @@ public class Setting {
     }
 
     public static boolean isBangumiVisible() {
-        return Prefers.getBoolean("bangumi_visible", false);
+        return Prefers.getBoolean("bangumi_visible", true);
     }
 
     public static void putBangumiVisible(boolean visible) {
@@ -551,6 +551,42 @@ public class Setting {
 
     public static void putAutoBackup(boolean auto) {
         Prefers.put("auto_backup", auto);
+    }
+
+    // 添加订阅源前安全检测，默认开启
+    public static boolean isProbeAdd() {
+        return Prefers.getBoolean("probe_add", true);
+    }
+
+    public static void putProbeAdd(boolean enable) {
+        Prefers.put("probe_add", enable);
+    }
+
+    // 源合并前安全检测，默认开启
+    public static boolean isProbeMerge() {
+        return Prefers.getBoolean("probe_merge", true);
+    }
+
+    public static void putProbeMerge(boolean enable) {
+        Prefers.put("probe_merge", enable);
+    }
+
+    // 第三方源弹窗拦截，默认开启
+    public static boolean isPopupShield() {
+        return Prefers.getBoolean("popup_shield", true);
+    }
+
+    public static void putPopupShield(boolean enable) {
+        Prefers.put("popup_shield", enable);
+    }
+
+    // 弹窗拦截关键字（换行分隔）：null 表示用户从未设置、使用内置默认词；空串表示用户主动清空
+    public static String getPopupKeywords() {
+        return Prefers.getString("popup_keywords", null);
+    }
+
+    public static void putPopupKeywords(String keywords) {
+        Prefers.put("popup_keywords", keywords);
     }
 
     public static boolean isLinkVisible() {

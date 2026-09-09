@@ -20,6 +20,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SourceProbe;
+import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Config;
@@ -28,10 +30,12 @@ import com.fongmi.android.tv.databinding.FragmentConfigManageBinding;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.impl.ConfigListener;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.ScanActivity;
 import com.fongmi.android.tv.ui.adapter.ConfigCardAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.ConfigDialog;
+import com.fongmi.android.tv.ui.dialog.ProbeDialog;
 import com.fongmi.android.tv.ui.dialog.ShareUrlDialog;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PermissionUtil;
@@ -249,6 +253,53 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
         String address = result.getData().getStringExtra("address");
         if (TextUtils.isEmpty(address)) return;
         Config config = Config.find(address, getType());
-        load(config);
+        boolean probe = Setting.isProbeAdd() && (getType() == 0 || getType() == 1);
+        boolean http = address.startsWith("http://") || address.startsWith("https://");
+        // 扫码添加与手动添加一致：开关开启先做前置静态扫描（弹窗展示进度），命中恶意特征阻止添加
+        if (probe && http) {
+            com.fongmi.android.tv.ui.dialog.ProbeScanDialog scan = com.fongmi.android.tv.ui.dialog.ProbeScanDialog.create();
+            scan.show(requireActivity());
+            Task.submitLarge(() -> {
+                boolean dangerous = SourceProbe.scanDangerous(address, getType(), scan);
+                com.fongmi.android.tv.App.post(() -> {
+                    scan.dismissAllowingStateLoss();
+                    if (!isAdded()) return;
+                    if (dangerous) ProbeDialog.showScanDanger(requireActivity());
+                    else afterScan(address, config);
+                });
+            });
+            return;
+        }
+        afterScan(address, config);
     });
+
+    // 前置扫描通过（或免扫描）后的原添加逻辑：黑名单拦截 → 试运行 / 直接添加
+    private void afterScan(String address, Config config) {
+        // 命中试运行规则时先做安全检测
+        boolean needTrial = Setting.isProbeAdd() && (getType() == 0 || getType() == 1) && (address.startsWith("http://") || address.startsWith("https://"));
+        if (!needTrial) {
+            markEnableChange(address);
+            load(config);
+            return;
+        }
+        if (SourceProbe.isRuntimeDangerous(address)) {
+            ProbeDialog.showDanger(requireActivity());
+            return;
+        }
+        if (!SourceProbe.isRuntimePassed(address)) {
+            // begin 需在激活前调用以记录原配置
+            TrialRun.begin(address, getType());
+            Notify.show(R.string.source_probe_trial_started);
+        } else {
+            // 需求4：缓存直接 PASS → 免试运行，成功即自动设全部站点为「参与换源」
+            markEnableChange(address);
+        }
+        load(config);
+    }
+
+    // 需求4：仅点播订阅（扫码添加）在免试运行的「新增成功」时记录待自动「参与换源」标记
+    private void markEnableChange(String url) {
+        if (getType() != 0) return;
+        VodConfig.markEnableChange(url);
+    }
 }

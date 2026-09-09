@@ -37,6 +37,27 @@ public class VodConfig extends BaseConfig {
 
     private static final String TAG = VodConfig.class.getSimpleName();
 
+    // 需求4：点播订阅「新增成功即自动设全部站点为参与换源」的一次性标记（缓存 PASS / 合并免检路径）
+    private static volatile String pendingEnableChange;
+
+    public static void markEnableChange(String url) {
+        pendingEnableChange = url;
+    }
+
+    /**
+     * 需求4：点播订阅「25 秒试运行」真正通过后（终审存活），将其全部站点设为「参与换源」并提示。
+     * 必须在试运行通过、配置已激活时调用（此时站点已在内存）。
+     */
+    public static void onTrialPassed(String url) {
+        try {
+            if (!getUrl().equals(url)) return;
+            com.fongmi.android.tv.setting.SiteBlockSetting.enableChange(get().getSites());
+        } catch (Throwable ignored) {
+        }
+        // 试运行路径紧随「试运行通过」toast，延时 3s 待其播放完再提示，避免两条 toast 重叠
+        App.post(() -> Notify.show(R.string.site_enable_change_all_toast), 3000L);
+    }
+
     private Site home;
     private String wall;
     private Parse parse;
@@ -162,6 +183,15 @@ public class VodConfig extends BaseConfig {
     @Override
     protected void onLoadSuccess() {
         CspWarmup.schedule("vod-config-loaded");
+        // 需求4：点播订阅「新增成功即自动设全部站点为参与换源」的一次性标记（缓存 PASS / 合并免检路径）
+        if (TextUtils.isEmpty(pendingEnableChange)) return;
+        if (!pendingEnableChange.equals(getUrl())) return;
+        pendingEnableChange = null;
+        List<Site> sites = getSites();
+        App.post(() -> {
+            com.fongmi.android.tv.setting.SiteBlockSetting.enableChange(sites);
+            Notify.show(R.string.site_enable_change_all_toast);
+        });
     }
 
     private void checkJson(Config config, JsonObject object) throws Throwable {

@@ -33,16 +33,20 @@ import java.util.List;
 
 public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAdapter.OnClickListener {
 
-    private final List<Vod> pending;
+    private static final int PAGE_SIZE = 12;
+    private static final int LOAD_MORE_SIZE = 10;
+
+    private final List<Vod> mAll;
     private DialogQuickSearchBinding binding;
     private QuickAdapter.OnClickListener listener;
     private OnSearchListener searchListener;
     private QuickAdapter adapter;
     private String keyword;
     private String title;
+    private int mDisplayCount = PAGE_SIZE;
 
     public QuickSearchDialog() {
-        this.pending = new ArrayList<>();
+        this.mAll = new ArrayList<>();
     }
 
     public static QuickSearchDialog create() {
@@ -74,7 +78,9 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
     }
 
     public QuickSearchDialog items(List<Vod> items) {
-        pending.addAll(items);
+        mAll.clear();
+        mAll.addAll(items);
+        mDisplayCount = PAGE_SIZE;
         return this;
     }
 
@@ -88,15 +94,40 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
     }
 
     public void clear() {
-        pending.clear();
+        mAll.clear();
+        mDisplayCount = PAGE_SIZE;
         if (adapter != null) adapter.clear();
         if (binding != null) binding.empty.setVisibility(View.GONE);
     }
 
+    // 新批次结果到达：合并进全量列表（调用方传入的 items 已是全量重排结果），
+    // 保留用户已加载条数，避免分页被重置回首页
+    public void setAll(List<Vod> items) {
+        mAll.clear();
+        if (items != null) mAll.addAll(items);
+        if (mDisplayCount < PAGE_SIZE) mDisplayCount = PAGE_SIZE;
+        applyPage();
+    }
+
     public void addAll(List<Vod> items) {
         if (items == null || items.isEmpty()) return;
-        if (adapter == null) pending.addAll(items);
-        else adapter.addAll(items);
+        mAll.addAll(items);
+        applyPage();
+    }
+
+    private void loadMore() {
+        mDisplayCount += LOAD_MORE_SIZE;
+        applyPage();
+    }
+
+    // 分页渲染：仅提交前 mDisplayCount 条，超出则末尾追加「加载更多」哨兵
+    private void applyPage() {
+        if (adapter == null) return;
+        int total = mAll.size();
+        int end = Math.min(mDisplayCount, total);
+        List<Vod> page = new ArrayList<>(mAll.subList(0, end));
+        if (end < total) page.add(QuickAdapter.FOOTER);
+        adapter.setItems(page);
         updateEmpty();
     }
 
@@ -131,8 +162,10 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
             return true;
         });
         binding.recycler.setHasFixedSize(true);
+        binding.recycler.setItemAnimator(null);
         binding.recycler.setAdapter(adapter = new QuickAdapter(this));
-        if (!pending.isEmpty()) adapter.addAll(pending);
+        adapter.setLoadMore(this::loadMore);
+        applyPage();
         binding.empty.setVisibility(View.GONE);
     }
 

@@ -14,6 +14,7 @@ import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseFragment;
+import com.fongmi.android.tv.ui.activity.LogActivity;
 import com.fongmi.android.tv.ui.dialog.BackupProgressDialog;
 import com.fongmi.android.tv.ui.dialog.RestoreDialog;
 import com.fongmi.android.tv.utils.FileUtil;
@@ -46,6 +47,7 @@ public class SettingDataFragment extends BaseFragment {
         mBinding.backup.setOnClickListener(this::onBackup);
         mBinding.restore.setOnClickListener(this::onRestore);
         mBinding.autoBackup.setOnClickListener(this::setAutoBackup);
+        mBinding.diagLog.setOnClickListener(v -> LogActivity.start(requireActivity()));
     }
 
     private String getSwitch(boolean value) {

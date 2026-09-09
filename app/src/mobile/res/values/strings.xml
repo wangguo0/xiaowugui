@@ -1,5 +1,9 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
+    <!-- Avatar Crop -->
+    <string name="avatar_crop_confirm">Confirm</string>
+    <string name="avatar_crop_cancel">Cancel</string>
+
     <!-- App -->
     <string name="app_keep">Keep</string>
     <string name="app_history">History</string>
@@ -125,6 +129,8 @@
     <string name="site_desc_blocked">All resources from this site become unavailable</string>
     <string name="site_state_change_off">No switch</string>
     <string name="site_state_blocked">Blocked</string>
+    <string name="site_state_blocked_locked">Blocked (locked)</string>
+    <string name="site_block_locked_toast">This site crashed the app and is force-blocked by the system. It cannot be unblocked.</string>
     <string name="site_state_search_on">Searchable</string>
     <string name="site_state_search_off">No search</string>
     <string name="site_lock_warning_title">Proceed with caution</string>
@@ -136,5 +142,47 @@
     <string name="site_reset_title">Reset settings</string>
     <string name="site_reset_msg">Clear all block and switch settings and restore the original config. Continue?</string>
     <string name="site_reset_done">Settings reset</string>
+    <string name="site_header_search">Search</string>
+    <string name="site_search_desc_on">This site\'s content can appear in search results.</string>
+    <string name="site_search_desc_off">This site\'s content will not appear in search results.</string>
+    <string name="site_help_title">Operation guide</string>
+    <string name="site_batch_help">Batch</string>
+    <string name="site_help_msg">Long press the \"Search\" or \"Switch\" button to toggle that switch for ALL sites at once.\n\nTap a site name to quickly block it entirely. Blocked sites are excluded from results.</string>
+    <string name="site_help_status_title">Connection status</string>
+    <string name="site_status_good">Normal</string>
+    <string name="site_status_warn">Slow / unstable</string>
+    <string name="site_status_bad">Unavailable</string>
+    <string name="site_status_unknown">Unknown</string>
+    <string name="site_testing_title">Testing connection</string>
+    <string name="site_test_done">Completed %1$d / %2$d</string>
+    <string name="site_test_finished">Test finished</string>
+    <string name="site_test_summary">Normal: %1$d    Slow: %2$d    Failed: %3$d</string>
+    <string name="site_test_normal_item">Normal: %1$d</string>
+    <string name="site_test_warn_item">Slow: %1$d</string>
+    <string name="site_test_bad_item">Failed: %1$d</string>
+    <string name="site_block_slow_l1">Block</string>
+    <string name="site_block_slow_l2">slow sites</string>
+    <string name="site_block_fail_l1">Block</string>
+    <string name="site_block_fail_l2">failed sites</string>
+    <string name="site_block_slow">Block slow sites</string>
+    <string name="site_block_fail">Block failed sites</string>
+    <string name="site_block_confirm_msg">Block all sites in this state? They will become unavailable. Continue?</string>
+    <string name="site_block_empty">No sites in this state to block</string>
+    <string name="site_filter_all">All</string>
+    <string name="site_clear_filter">Clear filters</string>
+    <string name="site_filter_none">No filters are currently set</string>
+
+    <!-- Popup shield -->
+    <string name="popup_shield">Block source pop-ups</string>
+    <string name="popup_keyword_manage">Pop-up keywords</string>
+    <string name="popup_keyword_title">Pop-up keywords</string>
+    <string name="popup_keyword_desc">Pop-ups containing any keyword below will be hidden automatically</string>
+    <string name="popup_keyword_add">Add</string>
+    <string name="popup_keyword_reset">Restore defaults</string>
+    <string name="popup_keyword_reset_msg">Current keywords will be replaced by the built-in defaults. Continue?</string>
+    <string name="popup_keyword_hint">Enter a keyword</string>
+    <string name="popup_keyword_empty">No keywords</string>
+    <string name="popup_keyword_exists">Keyword already added</string>
+    <string name="popup_keyword_blank">Please enter a keyword</string>
 
 </resources>

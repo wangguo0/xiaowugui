@@ -88,21 +88,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_vod_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/vodVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/vodVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -116,21 +114,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_history_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/historyVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/historyVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -144,21 +140,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_keep_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/keepVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/keepVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -172,21 +166,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_bangumi_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/bangumiVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/bangumiVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -200,21 +192,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_live_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/liveVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/liveVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
@@ -228,21 +218,19 @@
                 android:orientation="horizontal">
 
                 <com.google.android.material.textview.MaterialTextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="16dp"
+                    android:layout_weight="1"
                     android:text="@string/setting_link_visible"
                     android:textColor="@color/white"
                     android:textSize="16sp" />
 
-                <com.google.android.material.textview.MaterialTextView
-                    android:id="@+id/linkVisibleText"
-                    android:layout_width="match_parent"
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/linkVisibleSwitch"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="end"
-                    android:textColor="@color/white"
-                    android:textSize="16sp"
-                    tools:text="Off" />
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 

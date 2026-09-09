@@ -34,6 +34,9 @@ public abstract class HistoryDao extends BaseDao<History> {
     @Query("DELETE FROM History WHERE cid = :cid AND `key` LIKE :keyPrefix || '%'")
     public abstract int deleteByKeyPrefix(int cid, String keyPrefix);
 
+    @Query("DELETE FROM History WHERE `key` LIKE :keyPrefix || '%'")
+    public abstract int deleteByKeyPrefixAll(String keyPrefix);
+
     @Query("DELETE FROM History WHERE cid = :cid")
     public abstract int delete(int cid);
 

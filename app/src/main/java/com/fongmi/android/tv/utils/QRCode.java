@@ -26,6 +26,23 @@ public class QRCode {
         return getBitmap(content, size, margin, Color.BLACK, Color.WHITE);
     }
 
+    public static Bitmap getStandardBitmap(String content, int size, int margin) {
+        try {
+            BitMatrix matrix = encode(content, size, margin);
+            int width = matrix.getWidth();
+            int height = matrix.getHeight();
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    pixels[y * width + x] = matrix.get(x, y) ? Color.BLACK : Color.WHITE;
+                }
+            }
+            return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static Bitmap getBitmap(String content, int size, int margin, int foreground, int finderBackground) {
         try {
             BitMatrix matrix = encode(content, size, margin);

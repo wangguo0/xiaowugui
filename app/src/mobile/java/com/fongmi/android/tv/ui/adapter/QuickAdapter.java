@@ -9,16 +9,28 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterQuickBinding;
+import com.fongmi.android.tv.databinding.AdapterSearchFooterBinding;
 import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.utils.ImgUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> {
+public class QuickAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    private static final int VIEW_TYPE_ITEM = 0;
+    private static final int VIEW_TYPE_FOOTER = 1;
+
+    // 「加载更多」哨兵对象：作为分页列表最后一项，点击追加下一页（与搜索结果页一致）
+    public static final Vod FOOTER = new Vod();
+
+    static {
+        FOOTER.setId("quick_load_more_footer");
+    }
 
     private final OnClickListener listener;
     private final List<Vod> mItems;
+    private Runnable loadMore;
 
     public QuickAdapter(OnClickListener listener) {
         this.listener = listener;
@@ -30,8 +42,18 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
         void onItemClick(Vod item);
     }
 
+    public void setLoadMore(Runnable loadMore) {
+        this.loadMore = loadMore;
+    }
+
     public void clear() {
         mItems.clear();
+        notifyDataSetChanged();
+    }
+
+    public void setItems(List<Vod> items) {
+        mItems.clear();
+        mItems.addAll(items);
         notifyDataSetChanged();
     }
 
@@ -66,6 +88,15 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
         return getItemCount() == 0;
     }
 
+    public boolean isFooter(int position) {
+        return position >= 0 && position < mItems.size() && mItems.get(position) == FOOTER;
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return isFooter(position) ? VIEW_TYPE_FOOTER : VIEW_TYPE_ITEM;
+    }
+
     @Override
     public int getItemCount() {
         return mItems.size();
@@ -73,25 +104,44 @@ public class QuickAdapter extends RecyclerView.Adapter<QuickAdapter.ViewHolder> 
 
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_FOOTER) return new FooterHolder(AdapterSearchFooterBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
         return new ViewHolder(AdapterQuickBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        if (holder instanceof FooterHolder footerHolder) {
+            footerHolder.binding.getRoot().setOnClickListener(v -> {
+                if (loadMore != null) loadMore.run();
+            });
+            return;
+        }
         Vod item = mItems.get(position);
-        holder.binding.name.setText(item.getName());
-        holder.binding.site.setText(item.getSiteName());
-        holder.binding.remark.setText(item.getRemarks());
-        holder.binding.site.setVisibility(item.getSiteVisible());
-        holder.binding.remark.setVisibility(item.getRemarkVisible());
-        holder.binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
-        ImgUtil.load(item.getName(), item.getPic(), holder.binding.image);
+        ViewHolder viewHolder = (ViewHolder) holder;
+        viewHolder.binding.name.setText(item.getName());
+        viewHolder.binding.site.setText(item.getSiteName());
+        viewHolder.binding.remark.setText(item.getRemarks());
+        viewHolder.binding.site.setVisibility(item.getSiteVisible());
+        viewHolder.binding.remark.setVisibility(item.getRemarkVisible());
+        viewHolder.binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
+        ImgUtil.load(item.getName(), item.getPic(), viewHolder.binding.image);
     }
 
     @Override
-    public void onViewRecycled(@NonNull ViewHolder holder) {
-        Glide.with(holder.binding.image).clear(holder.binding.image);
+    public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+        if (!(holder instanceof ViewHolder viewHolder)) return;
+        Glide.with(viewHolder.binding.image).clear(viewHolder.binding.image);
+    }
+
+    public static class FooterHolder extends RecyclerView.ViewHolder {
+
+        private final AdapterSearchFooterBinding binding;
+
+        FooterHolder(@NonNull AdapterSearchFooterBinding binding) {
+            super(binding.getRoot());
+            this.binding = binding;
+        }
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {

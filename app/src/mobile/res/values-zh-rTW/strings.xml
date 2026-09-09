@@ -1,5 +1,9 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
+    <!-- Avatar Crop -->
+    <string name="avatar_crop_confirm">確定</string>
+    <string name="avatar_crop_cancel">取消</string>
+
     <!-- App -->
     <string name="app_keep">我的收藏</string>
     <string name="app_history">最近觀看</string>
@@ -125,6 +129,8 @@
     <string name="site_desc_blocked">屏蔽後這個站點任何資源不可用</string>
     <string name="site_state_change_off">關閉換源</string>
     <string name="site_state_blocked">徹底封鎖</string>
+    <string name="site_state_blocked_locked">已封鎖 · 系統強制</string>
+    <string name="site_block_locked_toast">該站點因導致軟件崩潰已被系統強制封鎖，無法解除</string>
     <string name="site_state_search_on">參與搜尋</string>
     <string name="site_state_search_off">關閉搜尋</string>
     <string name="site_lock_warning_title">謹慎操作</string>
@@ -136,5 +142,47 @@
     <string name="site_reset_title">恢復初始設置</string>
     <string name="site_reset_msg">將清除全部封鎖與換源/搜尋設置，並按訂閱源原始配置恢復（含作者鎖定站）。確定繼續嗎？</string>
     <string name="site_reset_done">已恢復初始設置</string>
+    <string name="site_header_search">是否參與搜尋</string>
+    <string name="site_search_desc_on">這個站台的影片內容可以出現在搜尋頁面</string>
+    <string name="site_search_desc_off">這個站台的影片內容不會出現在搜尋頁面</string>
+    <string name="site_help_title">批次操作說明</string>
+    <string name="site_batch_help">批次說明</string>
+    <string name="site_help_msg">長按上方「參與搜尋」或「參與換源」按鈕，可對全部站台一次批次反轉該開關。\n\n點擊站台名稱即可快速徹底屏蔽該源，屏蔽後的站台將不再出現在結果中。</string>
+    <string name="site_help_status_title">連線狀態</string>
+    <string name="site_status_good">正常</string>
+    <string name="site_status_warn">緩慢/不穩定</string>
+    <string name="site_status_bad">不可用</string>
+    <string name="site_status_unknown">未知</string>
+    <string name="site_testing_title">正在測試站台連線</string>
+    <string name="site_test_done">已完成 %1$d / %2$d</string>
+    <string name="site_test_finished">測試完成</string>
+    <string name="site_test_summary">正常：%1$d    緩慢：%2$d    失敗：%3$d</string>
+    <string name="site_test_normal_item">正常：%1$d條</string>
+    <string name="site_test_warn_item">緩慢：%1$d條</string>
+    <string name="site_test_bad_item">失敗：%1$d條</string>
+    <string name="site_block_slow_l1">徹底屏蔽</string>
+    <string name="site_block_slow_l2">緩慢站台</string>
+    <string name="site_block_fail_l1">徹底屏蔽</string>
+    <string name="site_block_fail_l2">失敗站台</string>
+    <string name="site_block_slow">徹底屏蔽緩慢站台</string>
+    <string name="site_block_fail">徹底屏蔽失敗站台</string>
+    <string name="site_block_confirm_msg">將徹底屏蔽該類站台，屏蔽後不再可用。確定繼續嗎？</string>
+    <string name="site_block_empty">該類站台為空，無需屏蔽</string>
+    <string name="site_filter_all">全部</string>
+    <string name="site_clear_filter">清除篩選</string>
+    <string name="site_filter_none">目前沒有篩選條件</string>
+
+    <!-- 彈窗攔截 -->
+    <string name="popup_shield">攔截來源彈窗</string>
+    <string name="popup_keyword_manage">彈窗攔截關鍵字</string>
+    <string name="popup_keyword_title">彈窗攔截關鍵字</string>
+    <string name="popup_keyword_desc">彈窗中出現以下任一關鍵字即自動攔截</string>
+    <string name="popup_keyword_add">新增</string>
+    <string name="popup_keyword_reset">恢復預設</string>
+    <string name="popup_keyword_reset_msg">目前關鍵字將被取代為內建預設詞，確定繼續嗎？</string>
+    <string name="popup_keyword_hint">請輸入關鍵字</string>
+    <string name="popup_keyword_empty">尚無關鍵字</string>
+    <string name="popup_keyword_exists">該關鍵字已存在</string>
+    <string name="popup_keyword_blank">請輸入關鍵字</string>
 
 </resources>

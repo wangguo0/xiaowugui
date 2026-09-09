@@ -1,5 +1,7 @@
 package com.fongmi.android.tv.ui.fragment;
 
+import android.app.Activity;
+import android.content.Intent;
 import android.net.Uri;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -23,6 +25,8 @@ import androidx.viewpager.widget.ViewPager;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.SourceProbe;
+import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.bean.Class;
 import com.fongmi.android.tv.bean.Config;
@@ -44,7 +48,9 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.HomeActivity;
 import com.fongmi.android.tv.ui.activity.HistoryActivity;
 import com.fongmi.android.tv.ui.activity.KeepActivity;
+import com.fongmi.android.tv.ui.activity.ScanActivity;
 import com.fongmi.android.tv.ui.activity.SearchActivity;
+import com.fongmi.android.tv.ui.activity.SubSettingActivity;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.ApkPushDialog;
@@ -52,6 +58,8 @@ import com.fongmi.android.tv.ui.dialog.FilterDialog;
 import com.fongmi.android.tv.ui.dialog.HistoryDialog;
 import com.fongmi.android.tv.ui.dialog.LinkDialog;
 import com.fongmi.android.tv.ui.dialog.OneKeySyncDialog;
+import com.fongmi.android.tv.ui.dialog.ProbeDialog;
+import com.fongmi.android.tv.ui.dialog.ProbeScanDialog;
 import com.fongmi.android.tv.ui.dialog.PushPlayDialog;
 import com.fongmi.android.tv.ui.dialog.PushPlayUrlDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
@@ -59,6 +67,8 @@ import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.ui.dialog.TypeDialog;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.Task;
+import com.fongmi.android.tv.utils.PermissionUtil;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.web.HomeWebController;
 import com.fongmi.android.tv.web.WebHomeChrome;
@@ -77,6 +87,8 @@ import java.util.Optional;
 public class VodFragment extends BaseFragment implements ConfigListener, SiteListener, FilterListener, TypeAdapter.OnClickListener, HomeWebController.Listener {
 
     private final ActivityResultLauncher<String[]> apkLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::onApkSelected);
+
+    private final ActivityResultLauncher<Intent> scanLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> onScanResult(result.getResultCode(), result.getData()));
 
     private FragmentVodBinding mBinding;
     private SiteViewModel mViewModel;
@@ -120,6 +132,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         setTitle();
         setLogo();
         updateToolbarMenu();
+        // 冷启动时完全没有订阅地址，直接展示引导空态；有订阅则等加载结果事件再决定
+        if (VodConfig.get().getSites().isEmpty() && TextUtils.isEmpty(getConfig().getUrl())) showEmptyGuide();
     }
 
     @Override
@@ -135,6 +149,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.filter.setOnLongClickListener(this::onLink);
         mBinding.toolbar.setOnMenuItemClickListener(this::onMenuItemClick);
         mBinding.toolbar.post(this::setSearchLongClick);
+        mBinding.emptyAdd.setOnClickListener(this::onEmptyAdd);
+        mBinding.emptyScan.setOnClickListener(this::onEmptyScan);
         mBinding.appBar.addOnOffsetChangedListener((appBarLayout, verticalOffset) -> {
             int range = appBarLayout.getTotalScrollRange();
             if (range <= 0) return;
@@ -172,6 +188,11 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     private void setAdapter(Result result) {
         if (mWeb != null && mWeb.isVisible()) return;
+        // 防止 Fragment 重建时 LiveData 重放旧结果，覆盖引导空态
+        if (VodConfig.get().getSites().isEmpty()) {
+            showEmptyGuide();
+            return;
+        }
         mAdapter.addAll(mResult = result);
         notifyPagerAdapter();
         setFabVisible(0);
@@ -193,6 +214,13 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void setFabVisible(int position) {
+        // 引导空态展示期间，悬浮按钮一律隐藏
+        if (mBinding.empty.getVisibility() == View.VISIBLE) {
+            mBinding.top.setVisibility(View.GONE);
+            mBinding.link.setVisibility(View.GONE);
+            mBinding.filter.setVisibility(View.GONE);
+            return;
+        }
         if (isNativeChromeHidden()) {
             mBinding.top.setVisibility(View.GONE);
             mBinding.link.setVisibility(View.GONE);
@@ -277,7 +305,9 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
                 Notify.dismiss();
                 Notify.show(msg);
                 hideProgress();
-                showContent();
+                // 重载失败且无可用源时回到引导空态
+                if (VodConfig.get().getSites().isEmpty()) showEmptyGuide();
+                else showContent();
             }
         });
         return true;
@@ -349,6 +379,79 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.progress.getRoot().setVisibility(View.VISIBLE);
     }
 
+    // 无生效订阅源的引导空态
+    private void showEmptyGuide() {
+        hideProgress();
+        hideContent();
+        mBinding.homeWeb.setVisibility(View.GONE);
+        mBinding.empty.setVisibility(View.VISIBLE);
+        mBinding.filter.setVisibility(View.GONE);
+        mBinding.link.setVisibility(View.GONE);
+        mBinding.top.setVisibility(View.GONE);
+    }
+
+    private void hideEmptyGuide() {
+        if (mBinding.empty.getVisibility() != View.VISIBLE) return;
+        mBinding.empty.setVisibility(View.GONE);
+    }
+
+    private void onEmptyAdd(View view) {
+        // 直接跳转「点播订阅管理」页，页内含添加源 / 扫一扫入口
+        SubSettingActivity.start(requireActivity(), 10);
+    }
+
+    private void onEmptyScan(View view) {
+        PermissionUtil.requestFile(this, granted -> {
+            if (granted) scanLauncher.launch(new Intent(requireActivity(), ScanActivity.class));
+        });
+    }
+
+    private void onScanResult(int code, Intent data) {
+        if (code != Activity.RESULT_OK || data == null) return;
+        String address = data.getStringExtra("address");
+        if (TextUtils.isEmpty(address)) return;
+        Config config = Config.find(address, 0);
+        // 扫码添加与订阅管理页一致：开关开启先做前置静态扫描（弹窗展示进度），命中恶意特征阻止添加
+        boolean http = address.startsWith("http://") || address.startsWith("https://");
+        if (Setting.isProbeAdd() && http) {
+            ProbeScanDialog scan = ProbeScanDialog.create();
+            scan.show(requireActivity());
+            Task.submitLarge(() -> {
+                boolean dangerous = SourceProbe.scanDangerous(address, 0, scan);
+                App.post(() -> {
+                    scan.dismissAllowingStateLoss();
+                    if (!isAdded()) return;
+                    if (dangerous) ProbeDialog.showScanDanger(requireActivity());
+                    else afterScan(address, config);
+                });
+            });
+            return;
+        }
+        afterScan(address, config);
+    }
+
+    // 前置扫描通过（或免扫描）后的原添加逻辑：命中试运行规则时先做安全检测
+    private void afterScan(String address, Config config) {
+        boolean needTrial = Setting.isProbeAdd() && (address.startsWith("http://") || address.startsWith("https://"));
+        if (needTrial) {
+            if (SourceProbe.isRuntimeDangerous(address)) {
+                ProbeDialog.showDanger(requireActivity());
+                return;
+            }
+            if (!SourceProbe.isRuntimePassed(address)) {
+                TrialRun.begin(address, 0);
+                Notify.show(R.string.source_probe_trial_started);
+            } else {
+                // 需求4：缓存直接 PASS → 免试运行，成功即自动设全部站点为「参与换源」
+                VodConfig.markEnableChange(address);
+            }
+        } else {
+            // 需求4：点播扫码添加免试运行（关闭检测等）→ 成功即自动设全部站点为「参与换源」
+            VodConfig.markEnableChange(address);
+        }
+        setConfig(config);
+    }
+
     private void hideProgress() {
         mBinding.progress.getRoot().setVisibility(View.GONE);
     }
@@ -360,12 +463,19 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void showContent() {
+        hideEmptyGuide();
         mBinding.type.setVisibility(View.VISIBLE);
         updateTypeMoreVisible();
         mBinding.pager.setVisibility(View.VISIBLE);
     }
 
     private void homeContent() {
+        // 无任何可用源时不请求首页，直接展示引导空态
+        if (VodConfig.get().getSites().isEmpty()) {
+            showEmptyGuide();
+            return;
+        }
+        hideEmptyGuide();
         requestNormalChrome();
         showProgress();
         mBinding.homeWeb.setVisibility(View.GONE);
@@ -377,6 +487,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void loadHome() {
+        hideEmptyGuide();
         Site home = getHome();
         WebHomeChromeStartup.remember(getConfig(), home);
         setTitle();
@@ -447,6 +558,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         switch (event.type()) {
             case EMPTY:
                 hideProgress();
+                // 订阅加载失败且无任何可用源 → 展示引导空态
+                if (VodConfig.get().getSites().isEmpty()) showEmptyGuide();
                 break;
             case PROGRESS:
                 showProgress();
@@ -464,6 +577,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         VodConfig.load(config, new Callback() {
             @Override
             public void start() {
+                hideEmptyGuide();
                 showProgress();
                 hideContent();
                 setTitle();
@@ -474,7 +588,9 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
             public void error(String msg) {
                 Notify.dismiss();
                 Notify.show(msg);
-                showContent();
+                // 加载失败且无可用源时回到引导空态
+                if (VodConfig.get().getSites().isEmpty()) showEmptyGuide();
+                else showContent();
             }
         });
     }

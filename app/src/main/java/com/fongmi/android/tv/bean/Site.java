@@ -445,13 +445,16 @@ public class Site implements Parcelable {
 
     public Site sync(Site item) {
         if (item == null) return this;
-        if (getChangeable() != 0) setChangeable(Math.max(1, item.getChangeable()));
-        if (getSearchable() != 0) setSearchable(Math.max(1, item.getSearchable()));
+        // 以本地已保存值为准：用户手动改过（1 参与换源 / 2 关闭换源）则保留，
+        // 仅当本地仍是作者默认 0 时才沿用重新解析到的默认值
+        if (item.getChangeable() != 0) setChangeable(Math.max(1, item.getChangeable()));
+        if (item.getSearchable() != 0) setSearchable(Math.max(1, item.getSearchable()));
         return this;
     }
 
     public Site recent() {
         BaseLoader.get().setRecent(getKey(), getApi(), getJar());
+        com.fongmi.android.tv.api.JarHeartbeat.write(getKey(), getJar());
         return this;
     }
 

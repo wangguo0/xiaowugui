@@ -372,6 +372,7 @@ public class Live {
 
     public Live recent() {
         BaseLoader.get().setRecent(getName(), getApi(), getJar());
+        com.fongmi.android.tv.api.JarHeartbeat.write(getName(), getJar());
         return this;
     }
 

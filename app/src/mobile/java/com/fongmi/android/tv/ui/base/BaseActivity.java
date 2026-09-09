@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.setting.Setting;
@@ -142,6 +143,81 @@ public abstract class BaseActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         Updater.create().resume(this);
+        showJarBlockNotice();
+        showJarGuardNotice();
+        showTrialNotice();
+    }
+
+    // jar 强制退出软件被归因后：在当前页面（而非仅首页）告知用户原因与处理方案（知道了关闭）。
+    // 消费点放 onResume 的原因：崩溃重启后任务栈可能恢复到搜索页/播放页，挂首页会被盖住看不见
+    private void showJarGuardNotice() {
+        String[] notice = com.fongmi.android.tv.api.JarGuard.takeNotice();
+        if (notice == null) return;
+        StringBuilder sb = new StringBuilder(getString("1".equals(notice[0]) ? R.string.jar_guard_notice_death : R.string.jar_guard_notice_autopsy));
+        if ("1".equals(notice[2])) {
+            int count = 2;
+            try {
+                count = Integer.parseInt(notice[1]);
+            } catch (Throwable ignored) {
+            }
+            sb.append(getString(R.string.jar_guard_notice_locked, count));
+        }
+        postNotice(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.jar_block_notice_title)
+                .setMessage(sb)
+                .setCancelable(false)
+                .setPositiveButton(R.string.source_probe_trial_rollback_confirm, null)
+                .show());
+    }
+
+    // 试用源因闪退 / 尝试杀进程被自动回滚后：在当前页面提示用户
+    private void showTrialNotice() {
+        String[] notice = com.fongmi.android.tv.api.TrialRun.takeNotice();
+        if (notice == null) return;
+        boolean exit = "1".equals(notice[1]);
+        int msg = exit ? R.string.source_probe_trial_exit_message : R.string.source_probe_trial_rollback_message;
+        postNotice(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.source_probe_trial_rollback_title)
+                .setMessage(msg)
+                .setCancelable(false)
+                .setPositiveButton(R.string.source_probe_trial_rollback_confirm, null)
+                .show());
+    }
+
+    private void postNotice(Runnable show) {
+        getWindow().getDecorView().post(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            show.run();
+        });
+    }
+
+    // 第三方 jar 崩溃被免疫后：在当前页面告知崩溃原因，确认后展示被永久屏蔽的播放路线地址
+    private void showJarBlockNotice() {
+        String[] notice = com.fongmi.android.tv.api.JarCrashShield.takeNotice();
+        if (notice == null) return;
+        String jar = notice[0];
+        String reason = notice[1];
+        getWindow().getDecorView().post(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, com.fongmi.android.tv.R.style.ThemeOverlay_WebHTV_LightDialog)
+                    .setTitle(com.fongmi.android.tv.R.string.jar_block_notice_title)
+                    .setMessage(getString(com.fongmi.android.tv.R.string.jar_block_notice_message, reason))
+                    .setCancelable(false)
+                    .setPositiveButton(com.fongmi.android.tv.R.string.dialog_confirm, (d, w) -> showJarBlockUrl(jar))
+                    .setNegativeButton(com.fongmi.android.tv.R.string.source_probe_trial_rollback_confirm, null)
+                    .show();
+        });
+    }
+
+    private void showJarBlockUrl(String jar) {
+        if (isFinishing() || isDestroyed()) return;
+        String text = android.text.TextUtils.isEmpty(jar) ? getString(com.fongmi.android.tv.R.string.jar_block_notice_detail) : jar;
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, com.fongmi.android.tv.R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(com.fongmi.android.tv.R.string.jar_block_url_title)
+                .setMessage(getString(com.fongmi.android.tv.R.string.jar_block_url_message, text))
+                .setCancelable(false)
+                .setPositiveButton(com.fongmi.android.tv.R.string.source_probe_trial_rollback_confirm, null)
+                .show();
     }
 
     @Override

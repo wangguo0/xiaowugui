@@ -14,6 +14,7 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.ActivitySubSettingBinding;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.fragment.ConfigManageFragment;
+import com.fongmi.android.tv.ui.fragment.PopupKeywordFragment;
 import com.fongmi.android.tv.ui.fragment.SettingAdvancedFragment;
 import com.fongmi.android.tv.ui.fragment.SettingAppearanceFragment;
 import com.fongmi.android.tv.ui.fragment.SettingDanmakuFragment;
@@ -21,6 +22,7 @@ import com.fongmi.android.tv.ui.fragment.SettingDataFragment;
 import com.fongmi.android.tv.ui.fragment.SettingPlaybackFragment;
 import com.fongmi.android.tv.ui.fragment.SettingPlayerFragment;
 import com.fongmi.android.tv.ui.fragment.SettingSourceFragment;
+import com.fongmi.android.tv.ui.fragment.SiteManageFragment;
 
 public class SubSettingActivity extends BaseActivity {
 
@@ -45,6 +47,8 @@ public class SubSettingActivity extends BaseActivity {
             case 9 -> SettingDataFragment.newInstance();
             case 10 -> ConfigManageFragment.newInstance(0);
             case 11 -> ConfigManageFragment.newInstance(1);
+            case 12 -> SiteManageFragment.newInstance();
+            case 13 -> PopupKeywordFragment.newInstance();
             default -> SettingSourceFragment.newInstance();
         };
     }

@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterSearchBinding;
+import com.fongmi.android.tv.databinding.AdapterSearchFooterBinding;
 import com.fongmi.android.tv.databinding.AdapterVodRectBinding;
 import com.fongmi.android.tv.utils.ImgUtil;
 
@@ -17,9 +18,18 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
 
     private static final int VIEW_TYPE_LIST = 0;
     private static final int VIEW_TYPE_GRID = 1;
+    private static final int VIEW_TYPE_FOOTER = 2;
+
+    // 「加载更多」哨兵对象：作为列表最后一项参与 diff，视图类型为 FOOTER
+    public static final Vod FOOTER = new Vod();
+
+    static {
+        FOOTER.setId("search_load_more_footer");
+    }
 
     private final OnClickListener listener;
     private boolean grid;
+    private Runnable loadMore;
     private int[] size = new int[]{0, 0};
 
     public SearchAdapter(OnClickListener listener) {
@@ -37,19 +47,35 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
         notifyDataSetChanged();
     }
 
+    public void setLoadMore(Runnable loadMore) {
+        this.loadMore = loadMore;
+    }
+
+    public boolean isFooter(int position) {
+        return position >= 0 && position < getItemCount() && getItem(position) == FOOTER;
+    }
+
     @Override
     public int getItemViewType(int position) {
+        if (isFooter(position)) return VIEW_TYPE_FOOTER;
         return grid ? VIEW_TYPE_GRID : VIEW_TYPE_LIST;
     }
 
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_FOOTER) return new FooterHolder(AdapterSearchFooterBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
         return viewType == VIEW_TYPE_GRID ? new GridHolder(AdapterVodRectBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false)) : new ListHolder(AdapterSearchBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
     }
 
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        if (holder instanceof FooterHolder footerHolder) {
+            footerHolder.binding.getRoot().setOnClickListener(v -> {
+                if (loadMore != null) loadMore.run();
+            });
+            return;
+        }
         Vod item = getItem(position);
         if (holder instanceof GridHolder gridHolder) {
             gridHolder.initView(item);
@@ -68,6 +94,16 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
         if (holder instanceof ListHolder listHolder) {
             Glide.with(listHolder.binding.image).clear(listHolder.binding.image);
             listHolder.setMarquee(false);
+        }
+    }
+
+    public static class FooterHolder extends RecyclerView.ViewHolder {
+
+        private final AdapterSearchFooterBinding binding;
+
+        FooterHolder(@NonNull AdapterSearchFooterBinding binding) {
+            super(binding.getRoot());
+            this.binding = binding;
         }
     }
 

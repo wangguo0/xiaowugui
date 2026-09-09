@@ -1,5 +1,9 @@
 <resources xmlns:xliff="http://schemas.android.com/apk/res-auto">
 
+    <!-- Avatar Crop -->
+    <string name="avatar_crop_confirm">确定</string>
+    <string name="avatar_crop_cancel">取消</string>
+
     <!-- App -->
     <string name="app_keep">我的收藏</string>
     <string name="app_history">最近观看</string>
@@ -125,6 +129,8 @@
     <string name="site_desc_blocked">屏蔽后这个站点任何资源不可用</string>
     <string name="site_state_change_off">关闭换源</string>
     <string name="site_state_blocked">彻底屏蔽</string>
+    <string name="site_state_blocked_locked">已屏蔽 · 系统强制</string>
+    <string name="site_block_locked_toast">该站点因导致软件崩溃已被系统强制屏蔽，无法解除</string>
     <string name="site_state_search_on">参与搜索</string>
     <string name="site_state_search_off">关闭搜索</string>
     <string name="site_lock_warning_title">谨慎操作</string>
@@ -136,5 +142,47 @@
     <string name="site_reset_title">恢复初始设置</string>
     <string name="site_reset_msg">将清除全部屏蔽与换源/搜索设置，并按订阅源原始配置恢复（含作者锁定站）。确定继续吗？</string>
     <string name="site_reset_done">已恢复初始设置</string>
+    <string name="site_header_search">是否参与搜索</string>
+    <string name="site_search_desc_on">这个站点的视频内容可以出现在搜索页面</string>
+    <string name="site_search_desc_off">这个站点的视频内容不会出现在搜索页面</string>
+    <string name="site_help_title">批量操作说明</string>
+    <string name="site_batch_help">批量说明</string>
+    <string name="site_help_msg">长按上方“参与搜索”或“参与换源”按钮，可对全部站点一次性批量反转该开关。\n\n点击站源名称即可快捷彻底屏蔽该源，屏蔽后的站点将不再出现在结果中。</string>
+    <string name="site_help_status_title">连接状态</string>
+    <string name="site_status_good">正常</string>
+    <string name="site_status_warn">缓慢/不稳定</string>
+    <string name="site_status_bad">不可用</string>
+    <string name="site_status_unknown">未知</string>
+    <string name="site_testing_title">正在测试站点连接</string>
+    <string name="site_test_done">已完成 %1$d / %2$d</string>
+    <string name="site_test_finished">测试完成</string>
+    <string name="site_test_summary">正常：%1$d    缓慢：%2$d    失败：%3$d</string>
+    <string name="site_test_normal_item">正常：%1$d条</string>
+    <string name="site_test_warn_item">缓慢：%1$d条</string>
+    <string name="site_test_bad_item">失败：%1$d条</string>
+    <string name="site_block_slow_l1">彻底屏蔽</string>
+    <string name="site_block_slow_l2">缓慢站源</string>
+    <string name="site_block_fail_l1">彻底屏蔽</string>
+    <string name="site_block_fail_l2">失败站源</string>
+    <string name="site_block_slow">彻底屏蔽缓慢站源</string>
+    <string name="site_block_fail">彻底屏蔽失败站源</string>
+    <string name="site_block_confirm_msg">将彻底屏蔽该类站源，屏蔽后不再可用。确定继续吗？</string>
+    <string name="site_block_empty">该类站源为空，无需屏蔽</string>
+    <string name="site_filter_all">全部</string>
+    <string name="site_clear_filter">清除筛选</string>
+    <string name="site_filter_none">当前没有筛选条件</string>
+
+    <!-- 弹窗拦截 -->
+    <string name="popup_shield">拦截源弹窗</string>
+    <string name="popup_keyword_manage">弹窗拦截关键字</string>
+    <string name="popup_keyword_title">弹窗拦截关键字</string>
+    <string name="popup_keyword_desc">弹窗中出现以下任一关键字即自动屏蔽</string>
+    <string name="popup_keyword_add">添加</string>
+    <string name="popup_keyword_reset">恢复默认</string>
+    <string name="popup_keyword_reset_msg">当前关键字将被替换为内置默认词，确定继续吗？</string>
+    <string name="popup_keyword_hint">请输入关键字</string>
+    <string name="popup_keyword_empty">暂无关键字</string>
+    <string name="popup_keyword_exists">该关键字已存在</string>
+    <string name="popup_keyword_blank">请输入关键字</string>
 
 </resources>
