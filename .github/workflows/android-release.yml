@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag = 项目名+版本号, e.g. 小乌龟1.1（不可重复，发新版请递增版本号）; blank = 小乌龟<versionName>-yyyyMMdd"
+        description: "Release tag = 项目名+版本号, e.g. 小乌龟1.1（不可重复，发新版请递增版本号）; blank = 小乌龟<versionName>-yyyyMMddHHmm"
         required: false
         type: string
       release_channel:
@@ -91,17 +91,17 @@ jobs:
               CHANNEL="stable"
             fi
           fi
-          # tag 格式：项目名+版本号（如 小乌龟1.1），可带 -yyyyMMdd 日期后缀；beta 通道带日期防互相覆盖
+          # tag 格式：项目名+版本号（如 小乌龟1.1），可带 -yyyyMMddHHmm 时间后缀；beta 通道带时间防互相覆盖
           if [ "$CHANNEL" = "beta" ]; then
             APK_SUFFIX="-beta"
-            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*-beta-[0-9]{8}$"
-            TAG_DEFAULT="小乌龟${VERSION_NAME}-beta-$(date +%Y%m%d)"
-            TAG_EXPECT="小乌龟1.1-beta-20260910"
+            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*-beta-[0-9]{12}$"
+            TAG_DEFAULT="小乌龟${VERSION_NAME}-beta-$(date +%Y%m%d%H%M)"
+            TAG_EXPECT="小乌龟1.1-beta-202609101530"
           else
             APK_SUFFIX=""
-            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*(-[0-9]{8})?$"
-            TAG_DEFAULT="小乌龟${VERSION_NAME}-$(date +%Y%m%d)"
-            TAG_EXPECT="小乌龟1.1 或 小乌龟1.1-20260910"
+            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*(-[0-9]{12})?$"
+            TAG_DEFAULT="小乌龟${VERSION_NAME}-$(date +%Y%m%d%H%M)"
+            TAG_EXPECT="小乌龟1.1 或 小乌龟1.1-202609101530"
           fi
           TAG="$INPUT_TAG"
           if [ -z "$TAG" ]; then
