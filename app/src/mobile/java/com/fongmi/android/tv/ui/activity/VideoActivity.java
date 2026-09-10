@@ -92,6 +92,7 @@ import com.fongmi.android.tv.event.CastEvent;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
+import com.fongmi.android.tv.model.SearchProgress;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.playback.PlaybackEventCollector;
 import com.fongmi.android.tv.playback.PlaybackOrientation;
@@ -226,6 +227,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Observer<Result> mObserveDetail;
     private Observer<Result> mObservePlayer;
     private Observer<Result> mObserveSearch;
+    private Observer<SearchProgress> mObserveSearchProgress;
     private EpisodeAdapter mEpisodeAdapter;
     private EpisodeGroupAdapter mEpisodeGroupAdapter;
     private SpaceItemDecoration mEpisodeDecoration;
@@ -236,6 +238,25 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private String mQuickSearchKeyword;
     private boolean mQuickRefreshPending;
     private final android.os.Handler mQuickHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    // 快搜/换源结果冻结：与搜索结果页一致，首屏集满 QUICK_PAGE_SIZE 条即钉死，后到结果只入池不重排，
+    // 「加载更多」时才从剩余候选按相关性顺序追加。原始结果存于 mQuickPool，mQuickAdapter 只渲染当前页。
+    private static final int QUICK_PAGE_SIZE = 12;
+    private static final int QUICK_LOAD_MORE_SIZE = 10;
+    // 已展示候选：首屏钉死，自动换源从此列表取第一条并移除，绝不重排
+    private final List<Vod> mQuickDisplayed = new ArrayList<>();
+    // 剩余候选：最近一次全量清洗后尚未展示的条目，按相关性降序，供「加载更多」追加
+    private final List<Vod> mQuickRest = new ArrayList<>();
+    // 原始后备池：所有站点返回的未清洗结果，冻结后只静默累积
+    private final List<Vod> mQuickPool = new ArrayList<>();
+    // 上次清洗时后备池规模：判断池内是否还有未参与排序的新结果
+    private int mQuickCleanedCount;
+    private boolean mQuickFrozen;
+    private boolean mQuickLoadingMore;
+    private boolean mQuickAllReturned;
+    // 自动换源已切完展示候选、正等待「加载更多」清洗结果：清洗完成后自动续跑换站
+    private boolean mQuickAutoNeedMore;
+    // 搜索轮次代号：startSearch 递增，异步清洗回投时校验，丢弃过期轮次的结果
+    private int mQuickEpoch;
     private ParseAdapter mParseAdapter;
     private LyricsController mLyrics;
     private KaraokeController mKaraoke;
@@ -720,6 +741,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mObserveDetail = this::setDetail;
         mObservePlayer = this::setPlayer;
         mObserveSearch = this::setSearch;
+        mObserveSearchProgress = this::setSearchProgress;
         mBroken = new ArrayList<>();
         mClock = Clock.create();
         mBinding.audioLyrics.setAudioStageMode(true);
@@ -1047,6 +1069,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.flag.addItemDecoration(new SpaceItemDecoration(8));
         mBinding.flag.setAdapter(mFlagAdapter = new FlagAdapter(this));
         mBinding.quick.setAdapter(mQuickAdapter = new QuickAdapter(this));
+        mQuickAdapter.setLoadMore(this::quickLoadMore);
         mBinding.episodeGroup.setHasFixedSize(true);
         mBinding.episodeGroup.setItemAnimator(null);
         mBinding.episodeGroup.setAdapter(mEpisodeGroupAdapter = new EpisodeGroupAdapter(this));
@@ -1167,6 +1190,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mViewModel.getResult().observeForever(mObserveDetail);
         mViewModel.getPlayer().observeForever(mObservePlayer);
         mViewModel.getSearch().observeForever(mObserveSearch);
+        mViewModel.getSearchProgress().observeForever(mObserveSearchProgress);
     }
 
     private void checkId() {
@@ -1188,7 +1212,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void getDetail(Vod item) {
         revealManualSearch = false;
-        if (!isAutoMode()) mViewModel.stopSearch();
+        // 手动切源后停止快搜：不会再有站点返回，标记池子已定格，避免「加载更多」入口残留
+        if (!isAutoMode()) {
+            mViewModel.stopSearch();
+            mQuickAllReturned = true;
+            submitQuickPage();
+        }
         saveHistory();
         syncBangumiBind(item);
         getIntent().putExtra("key", item.getSiteKey());
@@ -1458,33 +1487,28 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                     if (current != null) getIntent().putExtra("mark", current.getName());
                     onItemClick(vod);
                 }
-            });
+            }).loadMore(this::quickLoadMore);
         }
         mSourceSwitchDialog.title(mBinding.name.getText());
         mSourceSwitchDialog.setItems(buildSourceItems());
         if (!mSourceSwitchDialog.isActive()) mSourceSwitchDialog.show(this);
-        if (mQuickAdapter.isEmpty()) {
+        if (mQuickPool.isEmpty()) {
             String keyword = mBinding.name.getText().toString();
             if (!TextUtils.isEmpty(keyword)) initSearch(keyword, false);
         }
     }
 
+    // 换源弹窗当前页：已展示候选（钉死）+ 可选「加载更多」哨兵
     private List<SourceSwitchAdapter.Item> buildSourceItems() {
         List<SourceSwitchAdapter.Item> result = new ArrayList<>();
-        for (Vod vod : buildQuickItems()) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
+        for (Vod vod : mQuickDisplayed) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
+        if (!mQuickDisplayed.isEmpty() && hasMoreQuick()) result.add(SourceSwitchAdapter.FOOTER);
         return result;
     }
 
-    // 换源候选统一清洗：按站点去重（每站保留集数最高的一条）+ 集数阈值过滤落后的站源
-    // + 同内容判定：与当前播放详情（mDetailVod）在类型/年份/地区/导演/主演上冲突的
-    // 同名异版内容（如动漫版 vs 真人版）不进入换源列表；当前站点自身始终保留
-    // + 类型硬过滤：当前为动漫时，真人版/古装版等类型桶冲突的候选直接剔除（typeName 缺失时按片名提示推断）；
-    //   用户显式改词时不做该过滤
-    // + 相关性分层排序：片名与关键词完全相等 > 前缀匹配 > 包含，层内按匹配度降序
+    // 当前可换源的已展示候选（冻结首屏 + 已追加页），返回副本供调用方消费
     private List<Vod> buildQuickItems() {
-        String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
-        String currentKey = getSite() == null ? "" : getSite().getKey();
-        return filterAndSortQuick(mQuickAdapter.getItems(), currentKey, mDetailVod, keyword, Setting.getSwitchEpisodeThreshold(), respectTypeFilter(keyword));
+        return new ArrayList<>(mQuickDisplayed);
     }
 
     // 用户显式改词（搜索词 ≠ 当前视频标题）时，尊重其意图，不做与当前视频的类型对比过滤
@@ -1564,16 +1588,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
-    private void refreshSourceSwitch() {
+    // 提交当前页到详情页快搜行、快搜弹窗与换源弹窗：已展示卡片钉死，只追加不重排
+    private void submitQuickPage() {
+        List<Vod> page = new ArrayList<>(mQuickDisplayed);
+        if (!page.isEmpty() && hasMoreQuick()) page.add(QuickAdapter.FOOTER);
+        mQuickAdapter.setItems(page);
         if (mSourceSwitchDialog != null && mSourceSwitchDialog.isActive()) mSourceSwitchDialog.setItems(buildSourceItems());
-    }
-
-    // 后台线程已完成清洗排序，直接复用结果刷新换源列表，避免主线程重复计算
-    private void refreshSourceSwitch(List<Vod> sorted) {
-        if (mSourceSwitchDialog == null || !mSourceSwitchDialog.isActive()) return;
-        List<SourceSwitchAdapter.Item> result = new ArrayList<>();
-        for (Vod vod : sorted) result.add(SourceSwitchAdapter.Item.vod(vod.getSiteName(), vod));
-        mSourceSwitchDialog.setItems(result);
+        if (isQuickSearchVisible()) mQuickSearchDialog.setPage(page);
     }
 
     private void setEpisodeAdapter(List<Episode> items) {
@@ -1890,12 +1911,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void showQuickSearch(String keyword) {
         mQuickSearchKeyword = TextUtils.isEmpty(mQuickSearchKeyword) ? keyword : mQuickSearchKeyword;
+        List<Vod> page = new ArrayList<>(mQuickDisplayed);
+        if (!page.isEmpty() && hasMoreQuick()) page.add(QuickAdapter.FOOTER);
         mQuickSearchDialog = QuickSearchDialog.create()
                 .title(getString(R.string.detail_search, mQuickSearchKeyword))
                 .keyword(mQuickSearchKeyword)
                 .listener(this)
                 .searchListener(this::onQuickSearch)
-                .items(buildQuickItems());
+                .loadMore(this::quickLoadMore)
+                .items(page);
         mQuickSearchDialog.show(this);
     }
 
@@ -6173,7 +6197,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void checkSearch(boolean force) {
         if (!force && !PlayerSetting.isAutoChange()) return;
-        if (mQuickAdapter.isEmpty()) {
+        if (mQuickPool.isEmpty()) {
             initSearch(mBinding.name.getText().toString(), true);
             startAutoSwitchWait();
         } else if (isAutoMode() || force) {
@@ -6190,7 +6214,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void autoSwitchCheck() {
         if (mBlockedSwitch) {
-            if (!buildQuickItems().isEmpty()) nextSite();
+            if (!buildQuickItems().isEmpty() || hasMoreQuick()) nextSite();
             else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
             else {
                 mBlockedSwitch = false;
@@ -6199,7 +6223,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             return;
         }
         if (!PlayerSetting.isAutoChange() || !isAutoMode()) return;
-        if (!buildQuickItems().isEmpty()) nextSite();
+        if (!buildQuickItems().isEmpty() || hasMoreQuick()) nextSite();
         else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
     }
 
@@ -6216,6 +6240,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void startSearch(String keyword) {
         mQuickSearchKeyword = keyword;
+        mQuickEpoch++;
+        mQuickPool.clear();
+        mQuickDisplayed.clear();
+        mQuickRest.clear();
+        mQuickCleanedCount = 0;
+        mQuickFrozen = false;
+        mQuickLoadingMore = false;
+        mQuickAllReturned = false;
+        mQuickAutoNeedMore = false;
+        mQuickRefreshPending = false;
+        mQuickHandler.removeCallbacksAndMessages(null);
         mQuickAdapter.clear();
         mBinding.quick.setVisibility(View.GONE);
         if (isQuickSearchVisible()) mQuickSearchDialog.clear();
@@ -6232,24 +6267,35 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.GONE);
-        mQuickAdapter.addAll(items);
+        mQuickPool.addAll(items);
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
+        // 绝对冻结：首屏集满后新结果只入池，不触碰界面；「加载更多」时才参与清洗
+        if (mQuickFrozen) return;
         scheduleQuickRefresh();
     }
 
-    // 节流刷新：多源并发返回时每 400ms 最多重排一次；去重/过滤/排序在后台线程完成，
-    // 避免主线程卡顿（与搜索结果页一致）
+    private void setSearchProgress(SearchProgress progress) {
+        // 全部站点均已返回（成功或失败）：后备池不再增长，未冻结时补做一次收尾提交
+        if (progress == null || !progress.finished()) return;
+        mQuickAllReturned = true;
+        if (!mQuickFrozen) scheduleQuickRefresh();
+    }
+
+    // 首屏节流刷新：未冻结时每 400ms 最多清洗一次；去重/过滤/排序在后台线程完成，
+    // 集满 QUICK_PAGE_SIZE 条即冻结，后到结果不再改变已展示卡片
     private void scheduleQuickRefresh() {
-        if (mQuickRefreshPending) return;
+        if (mQuickFrozen || mQuickRefreshPending) return;
         mQuickRefreshPending = true;
         mQuickHandler.postDelayed(this::doQuickRefresh, 400);
     }
 
     private void doQuickRefresh() {
         mQuickRefreshPending = false;
-        List<Vod> snapshot = mQuickAdapter.getItems();
+        if (mQuickFrozen) return;
+        final int epoch = mQuickEpoch;
+        List<Vod> snapshot = new ArrayList<>(mQuickPool);
         String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
         String currentKey = getSite() == null ? "" : getSite().getKey();
         Vod detail = mDetailVod;
@@ -6258,10 +6304,89 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         Task.execute(() -> {
             List<Vod> sorted = filterAndSortQuick(snapshot, currentKey, detail, keyword, threshold, typeFilter);
             mQuickHandler.post(() -> {
-                refreshSourceSwitch(sorted);
-                if (isQuickSearchVisible()) mQuickSearchDialog.setAll(sorted);
+                if (epoch != mQuickEpoch) return;
+                commitQuickFirstPage(sorted, snapshot.size());
             });
         });
+    }
+
+    // 提交首屏：前 QUICK_PAGE_SIZE 条钉死展示，其余清洗结果留在剩余候选中等「加载更多」追加
+    private void commitQuickFirstPage(List<Vod> sorted, int poolSize) {
+        if (sorted.isEmpty()) return;
+        if (mQuickFrozen) return;
+        int end = Math.min(QUICK_PAGE_SIZE, sorted.size());
+        mQuickDisplayed.clear();
+        mQuickRest.clear();
+        mQuickDisplayed.addAll(sorted.subList(0, end));
+        mQuickRest.addAll(sorted.subList(end, sorted.size()));
+        mQuickCleanedCount = poolSize;
+        if (mQuickDisplayed.size() >= QUICK_PAGE_SIZE) mQuickFrozen = true;
+        submitQuickPage();
+        // 自动换源正等待候选：首屏就绪立即续跑换站
+        if (mQuickAutoNeedMore) {
+            mQuickAutoNeedMore = false;
+            nextSite();
+        }
+    }
+
+    // 是否还有可能追加新候选：剩余候选非空，或站点未全部返回（池子还会增长）
+    private boolean hasMoreQuick() {
+        return !mQuickRest.isEmpty() || !mQuickAllReturned;
+    }
+
+    // 「加载更多」：冻结期间若有新结果入池，此刻对全池重清洗一次（后台单飞，只此一轮），
+    // 然后从剩余候选按相关性顺序取一页追加——已展示卡片的位置与内容绝不变动
+    private void quickLoadMore() {
+        if (mQuickLoadingMore) return;
+        // 首屏尚未集满：走正常刷新，不叠加清洗任务
+        if (!mQuickFrozen) {
+            scheduleQuickRefresh();
+            return;
+        }
+        if (mQuickPool.size() != mQuickCleanedCount) recleanQuickPool();
+        else appendQuickRest();
+    }
+
+    private void recleanQuickPool() {
+        mQuickLoadingMore = true;
+        final int epoch = mQuickEpoch;
+        List<Vod> snapshot = new ArrayList<>(mQuickPool);
+        String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        Vod detail = mDetailVod;
+        int threshold = Setting.getSwitchEpisodeThreshold();
+        boolean typeFilter = respectTypeFilter(keyword);
+        Task.execute(() -> {
+            List<Vod> sorted = filterAndSortQuick(snapshot, currentKey, detail, keyword, threshold, typeFilter);
+            mQuickHandler.post(() -> {
+                if (epoch != mQuickEpoch) return;
+                mQuickLoadingMore = false;
+                mQuickRest.clear();
+                for (Vod vod : sorted) {
+                    if (!containsShown(vod)) mQuickRest.add(vod);
+                }
+                mQuickCleanedCount = snapshot.size();
+                appendQuickRest();
+                // 自动换源正等待新候选：追加完成立即续跑换站
+                if (mQuickAutoNeedMore && !mQuickDisplayed.isEmpty()) nextSite();
+            });
+        });
+    }
+
+    // 从剩余候选取一页追加展示（已展示卡片钉死，只做末尾追加）
+    private void appendQuickRest() {
+        int end = Math.min(QUICK_LOAD_MORE_SIZE, mQuickRest.size());
+        if (end > 0) {
+            mQuickDisplayed.addAll(mQuickRest.subList(0, end));
+            mQuickRest.subList(0, end).clear();
+        }
+        submitQuickPage();
+    }
+
+    // 展示列表按对象引用匹配（Vod.equals 基于 id/片名，会把不同站点误判为同一项）
+    private boolean containsShown(Vod vod) {
+        for (Vod item : mQuickDisplayed) if (item == vod) return true;
+        return false;
     }
 
     private boolean isQuickSearchVisible() {
@@ -6288,20 +6413,37 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         onItemClick(flag);
     }
 
-    // 自动换站：按「切换站源」列表顺序取第一条，换过的移除不重复尝试，并记录当前集名以便续播同一集
+    // 自动换站：按「切换站源」已展示列表顺序取第一条，换过的移除不重复尝试，并记录当前集名以便续播同一集；
+    // 已展示候选全部切完仍不能播放时，自动触发「加载更多」尝试更多站源
     private void nextSite() {
         App.removeCallbacks(mAutoSwitchCheck);
-        List<Vod> items = buildQuickItems();
-        if (items.isEmpty()) return;
-        Vod item = items.get(0);
-        int position = mQuickAdapter.getItems().indexOf(item);
-        if (position < 0) return;
+        if (mQuickDisplayed.isEmpty() && hasMoreQuick()) {
+            mQuickAutoNeedMore = true;
+            quickLoadMore();
+            if (mQuickDisplayed.isEmpty()) {
+                // 后台清洗尚未完成：在等待窗口内继续轮询
+                if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
+                return;
+            }
+        }
+        if (mQuickDisplayed.isEmpty()) {
+            mQuickAutoNeedMore = false;
+            return;
+        }
+        mQuickAutoNeedMore = false;
+        Vod item = mQuickDisplayed.remove(0);
+        for (int i = 0; i < mQuickPool.size(); i++) {
+            if (mQuickPool.get(i) == item) {
+                mQuickPool.remove(i);
+                break;
+            }
+        }
         mBlockedSwitch = false;
         Episode current = getEpisode();
         if (current != null) getIntent().putExtra("mark", current.getName());
         Notify.show(getString(R.string.play_switch_site, item.getSiteName()));
-        mQuickAdapter.remove(position);
         mBroken.add(getId());
+        submitQuickPage();
         applySearchArtwork(item);
         getDetail(item);
     }
@@ -6690,6 +6832,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mViewModel.getResult().removeObserver(mObserveDetail);
         mViewModel.getPlayer().removeObserver(mObservePlayer);
         mViewModel.getSearch().removeObserver(mObserveSearch);
+        mViewModel.getSearchProgress().removeObserver(mObserveSearchProgress);
         SiteHealthStore.flush();
         super.onDestroy();
     }

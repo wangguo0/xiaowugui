@@ -45,6 +45,7 @@ import com.fongmi.android.tv.utils.VodMatcher;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -56,7 +57,6 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private static final int GRID_TOP_PADDING_DP = 8;
     private static final long REFRESH_THROTTLE_MS = 400;
     private static final int MAX_RAW_RESULTS = 5000;
-    private static final int MAX_DISPLAY_RESULTS = 2000;
     private static final int PAGE_SIZE = 12;
     private static final int LOAD_MORE_SIZE = 10;
 
@@ -64,17 +64,26 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private SearchAdapter mSearchAdapter;
     private SiteViewModel mViewModel;
     private List<Site> mSites;
+    // 后备池：所有站点返回的原始结果，冻结后只静默累积，不做任何加工
     private final List<Vod> mAllResults = new ArrayList<>();
-    private List<Vod> mSortedItems = new ArrayList<>();
-    private int mDisplayCount = PAGE_SIZE;
+    // 已展示卡片：首屏 PAGE_SIZE 条一旦提交即钉死，「加载更多」只在其后追加，绝不重排
+    private final List<Vod> mDisplayed = new ArrayList<>();
+    // 剩余候选：最近一次全量清洗（去重+排序）后、尚未展示的条目，按相关性降序
+    private final List<Vod> mRest = new ArrayList<>();
+    // 上次清洗时后备池的规模：用于判断池内是否还有未参与过排序的新结果
+    private int mCleanedCount;
+    // 已展示卡片按归一化片名分桶，供「加载更多」O(1) 判重（不改动已展示卡片，重复项直接丢弃）
+    private final Map<String, List<Vod>> mShownByName = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private boolean mRefreshPending;
     private boolean mRefreshing;
     private boolean mRefreshAgain;
-    // 首页集满冻结：新到批次是否含 100% 精确匹配（唯一允许打破冻结的条件）
-    private boolean mPendingExact;
-    // 已提交到列表的卡片数（不含 footer），达到 PAGE_SIZE 即视为首页已满
-    private int mCommittedCount;
+    // 首屏集满即绝对冻结：后到结果（含 100% 精确匹配）一律不改变已展示卡片
+    private boolean mFrozen;
+    // 「加载更多」后台清洗单飞：未完成前不叠加任务，避免低性能设备排序任务堆积
+    private boolean mLoadingMore;
+    // 全部站点是否均已返回（决定后备池还会不会继续增长）
+    private boolean mAllReturned;
 
     public static CollectFragment newInstance(String keyword) {
         return newInstance(keyword, null);
@@ -178,6 +187,12 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void setViewModel() {
         mViewModel = new ViewModelProvider(this).get(SiteViewModel.class).init();
         mViewModel.getSearch().observe(this, this::setCollect);
+        mViewModel.getSearchProgress().observe(this, progress -> {
+            // 全部站点均已返回（成功或失败）：后备池不再增长，补做一次收尾清洗提交
+            if (progress == null || !progress.finished()) return;
+            mAllReturned = true;
+            if (!mFrozen) scheduleRefresh();
+        });
     }
 
     private void setSites() {
@@ -191,13 +206,16 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void search() {
         if (mSites.isEmpty()) return;
         mAllResults.clear();
-        mSortedItems.clear();
-        mDisplayCount = PAGE_SIZE;
+        mDisplayed.clear();
+        mRest.clear();
+        mShownByName.clear();
+        mCleanedCount = 0;
         mRefreshPending = false;
         mRefreshing = false;
         mRefreshAgain = false;
-        mPendingExact = false;
-        mCommittedCount = 0;
+        mFrozen = false;
+        mLoadingMore = false;
+        mAllReturned = false;
         mViewModel.searchContent(mSites, getKeyword(), false);
     }
 
@@ -262,50 +280,36 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         if (mAllResults.size() > MAX_RAW_RESULTS) {
             mAllResults.subList(0, mAllResults.size() - MAX_RAW_RESULTS).clear();
         }
-        // 检测本批是否含 100% 精确匹配（片名与关键词完全一致），这是打破首页冻结的唯一条件
-        if (!mPendingExact) {
-            String word = normalize(getKeyword());
-            if (!word.isEmpty()) {
-                for (Vod vod : result.getList()) {
-                    if (normalize(vod.getName()).equals(word)) {
-                        mPendingExact = true;
-                        break;
-                    }
-                }
-            }
-        }
+        // 绝对冻结：首屏集满后本方法只做一次入池，不拷贝快照、不排期刷新、不触碰 UI，
+        // 低性能设备在数十个站点陆续返回时主线程零工作量
+        if (mFrozen) return;
         scheduleRefresh();
     }
 
-    // 节流刷新：无论有多少站点陆续返回，每 REFRESH_THROTTLE_MS 最多重排并刷新一次，
-    // 去重与排序在后台线程完成，避免源过多时主线程被占满导致卡死。
-    // 首页集满（PAGE_SIZE）后进入冻结：非 force 且新批次无 100% 精确匹配时只静默累积，
-    // 不再重排提交，杜绝卡片被替换；点「加载更多」(force) 或精确匹配到达时才刷新
+    // 首屏填充节流：未冻结时每 REFRESH_THROTTLE_MS 最多整理并提交一次，
+    // 去重与排序在后台线程完成；集满 PAGE_SIZE 条即置 mFrozen，此后不再刷新界面
     private void scheduleRefresh() {
-        if (mRefreshPending) return;
+        if (mFrozen || mRefreshPending) return;
         mRefreshPending = true;
-        mHandler.postDelayed(() -> doRefresh(false), REFRESH_THROTTLE_MS);
+        mHandler.postDelayed(this::doRefresh, REFRESH_THROTTLE_MS);
     }
 
-    private void doRefresh(boolean force) {
+    private void doRefresh() {
         mRefreshPending = false;
-        if (!isAdded() || mRefreshing) {
+        if (!isAdded() || mFrozen) return;
+        if (mRefreshing) {
             mRefreshAgain = true;
             return;
         }
-        if (!force && !mPendingExact && mCommittedCount >= PAGE_SIZE) return;
         List<Vod> snapshot = new ArrayList<>(mAllResults);
         String keyword = getKeyword();
         mRefreshing = true;
         Task.execute(() -> {
             List<Vod> sorted = sortByRelevance(dedupe(snapshot), keyword);
-            List<Vod> items = sorted.size() > MAX_DISPLAY_RESULTS ? new ArrayList<>(sorted.subList(0, MAX_DISPLAY_RESULTS)) : sorted;
             App.post(() -> {
                 mRefreshing = false;
                 if (!isAdded()) return;
-                mSortedItems = items;
-                mPendingExact = false;
-                applyItems();
+                commitFirstPage(sorted);
                 if (mRefreshAgain) {
                     mRefreshAgain = false;
                     scheduleRefresh();
@@ -314,29 +318,99 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         });
     }
 
-    // 分页提交：仅显示前 mDisplayCount 条，末尾追加「加载更多」哨兵行（滑到列表底部才可见），
-    // 使 DiffUtil 每次计算量固定在页大小级别，避免结果过多卡顿
-    private void applyItems() {
-        int total = mSortedItems.size();
-        int end = Math.min(mDisplayCount, total);
-        List<Vod> page = new ArrayList<>(mSortedItems.subList(0, end));
-        if (end < total) page.add(SearchAdapter.FOOTER);
-        mCommittedCount = end;
+    // 提交首屏：前 PAGE_SIZE 条钉死展示，其余清洗结果留在剩余候选中等「加载更多」追加。
+    // 集满即冻结；未集满则等全部站点返回后由 progress 收尾冻结
+    private void commitFirstPage(List<Vod> sorted) {
+        if (sorted.isEmpty()) return;
+        int end = Math.min(PAGE_SIZE, sorted.size());
+        mDisplayed.clear();
+        mShownByName.clear();
+        mRest.clear();
+        for (int i = 0; i < end; i++) {
+            Vod vod = sorted.get(i);
+            mDisplayed.add(vod);
+            trackShown(vod);
+        }
+        mRest.addAll(sorted.subList(end, sorted.size()));
+        mCleanedCount = mAllResults.size();
+        if (mDisplayed.size() >= PAGE_SIZE) mFrozen = true;
+        submitPage();
+    }
+
+    // 是否还有可能追加新卡片：剩余候选非空，或站点未全部返回（池子还会增长）
+    private boolean hasMore() {
+        return !mRest.isEmpty() || !mAllReturned;
+    }
+
+    // 提交界面：已展示卡片 + 「加载更多」哨兵（无更多候选则不显示入口）。
+    // 卡片总量只随用户点击增长，DiffUtil 计算量始终停留在页大小量级
+    private void submitPage() {
+        List<Vod> page = new ArrayList<>(mDisplayed);
+        if (hasMore()) page.add(SearchAdapter.FOOTER);
         boolean atTop = !mBinding.recycler.canScrollVertically(-1);
         mSearchAdapter.setItems(page, () -> {
-            if (!isAdded()) return;
-            if (atTop) mBinding.recycler.scrollToPosition(0);
+            if (!isAdded() || !atTop) return;
+            mBinding.recycler.scrollToPosition(0);
         });
     }
 
-    // 加载更多：强制用后台最新全量结果重排一次（冻结期间晚到的高相关结果此时一并展示），再追加一页
+    // 加载更多：冻结期间若有新结果入池，此刻对全池重清洗一次（后台单飞，只此一轮），
+    // 然后从剩余候选按相关性顺序取一页「追加」到末尾——已展示卡片的位置与内容绝不变动
     private void loadMore() {
-        mDisplayCount += LOAD_MORE_SIZE;
-        if (mRefreshing) {
-            mRefreshAgain = true;
+        if (mLoadingMore) return;
+        if (mAllResults.size() != mCleanedCount) reclean();
+        else appendFromRest();
+    }
+
+    // 全池重清洗：去重 + 相关性排序，剔除已展示条目后重建剩余候选，再追加一页
+    private void reclean() {
+        mLoadingMore = true;
+        List<Vod> snapshot = new ArrayList<>(mAllResults);
+        String keyword = getKeyword();
+        Task.execute(() -> {
+            List<Vod> sorted = sortByRelevance(dedupe(snapshot), keyword);
+            App.post(() -> {
+                mLoadingMore = false;
+                if (!isAdded()) return;
+                mRest.clear();
+                for (Vod vod : sorted) {
+                    if (!mergeIntoShown(vod)) mRest.add(vod);
+                }
+                mCleanedCount = snapshot.size();
+                appendFromRest();
+            });
+        });
+    }
+
+    // 从剩余候选取一页追加展示（已展示卡片钉死，只做末尾追加）
+    private void appendFromRest() {
+        int end = Math.min(LOAD_MORE_SIZE, mRest.size());
+        if (end == 0) {
+            submitPage();
             return;
         }
-        doRefresh(true);
+        for (Vod vod : mRest.subList(0, end)) {
+            mDisplayed.add(vod);
+            trackShown(vod);
+        }
+        mRest.subList(0, end).clear();
+        submitPage();
+    }
+
+    // 登记已展示卡片到片名分桶，供后续判重
+    private void trackShown(Vod vod) {
+        mShownByName.computeIfAbsent(normalize(vod.getName()), k -> new ArrayList<>()).add(vod);
+    }
+
+    // 与已展示卡片同片名且内容不冲突（VodMatcher 五维指纹一致）即视为重复：
+    // 已展示卡片钉死不可改动，故直接丢弃新到条目并返回 true
+    private boolean mergeIntoShown(Vod vod) {
+        List<Vod> shown = mShownByName.get(normalize(vod.getName()));
+        if (shown == null) return false;
+        for (Vod item : shown) {
+            if (!VodMatcher.isConflict(item, vod)) return true;
+        }
+        return false;
     }
 
     // 同名聚类去重：片名相同的条目按 5 维指纹（VodMatcher）分簇，

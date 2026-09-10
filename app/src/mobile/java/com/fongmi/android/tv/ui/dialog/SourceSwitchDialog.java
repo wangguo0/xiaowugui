@@ -20,6 +20,7 @@ public class SourceSwitchDialog extends BaseAlertDialog implements SourceSwitchA
     private SourceSwitchAdapter adapter;
     private final List<SourceSwitchAdapter.Item> items = new ArrayList<>();
     private Callback callback;
+    private Runnable loadMore;
     private String title = "";
 
     public interface Callback {
@@ -43,11 +44,16 @@ public class SourceSwitchDialog extends BaseAlertDialog implements SourceSwitchA
         return this;
     }
 
+    public SourceSwitchDialog loadMore(Runnable loadMore) {
+        this.loadMore = loadMore;
+        return this;
+    }
+
     public void setItems(List<SourceSwitchAdapter.Item> items) {
         this.items.clear();
-        this.items.addAll(items);
+        if (items != null) this.items.addAll(items);
         if (binding != null && adapter != null) {
-            adapter.setItems(items);
+            adapter.setItems(this.items);
             updateEmpty();
         }
     }
@@ -80,6 +86,9 @@ public class SourceSwitchDialog extends BaseAlertDialog implements SourceSwitchA
     protected void initView() {
         binding.title.setText(title);
         binding.recycler.setAdapter(adapter = new SourceSwitchAdapter(this));
+        adapter.setLoadMore(() -> {
+            if (loadMore != null) loadMore.run();
+        });
         adapter.setItems(items);
         updateEmpty();
     }
@@ -97,6 +106,7 @@ public class SourceSwitchDialog extends BaseAlertDialog implements SourceSwitchA
 
     @Override
     public void onItemClick(SourceSwitchAdapter.Item item) {
+        if (item == SourceSwitchAdapter.FOOTER) return;
         if (callback == null) {
             dismiss();
             return;

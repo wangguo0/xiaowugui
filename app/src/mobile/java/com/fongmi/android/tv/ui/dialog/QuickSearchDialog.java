@@ -33,20 +33,18 @@ import java.util.List;
 
 public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAdapter.OnClickListener {
 
-    private static final int PAGE_SIZE = 12;
-    private static final int LOAD_MORE_SIZE = 10;
-
-    private final List<Vod> mAll;
+    // 当前页：由 Activity 推送的冻结结果（首屏钉死卡片 + 可选「加载更多」哨兵），弹窗只做渲染
+    private final List<Vod> mPage;
     private DialogQuickSearchBinding binding;
     private QuickAdapter.OnClickListener listener;
     private OnSearchListener searchListener;
     private QuickAdapter adapter;
+    private Runnable loadMore;
     private String keyword;
     private String title;
-    private int mDisplayCount = PAGE_SIZE;
 
     public QuickSearchDialog() {
-        this.mAll = new ArrayList<>();
+        this.mPage = new ArrayList<>();
     }
 
     public static QuickSearchDialog create() {
@@ -77,10 +75,14 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
         return this;
     }
 
+    public QuickSearchDialog loadMore(Runnable loadMore) {
+        this.loadMore = loadMore;
+        return this;
+    }
+
     public QuickSearchDialog items(List<Vod> items) {
-        mAll.clear();
-        mAll.addAll(items);
-        mDisplayCount = PAGE_SIZE;
+        mPage.clear();
+        if (items != null) mPage.addAll(items);
         return this;
     }
 
@@ -94,40 +96,21 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
     }
 
     public void clear() {
-        mAll.clear();
-        mDisplayCount = PAGE_SIZE;
+        mPage.clear();
         if (adapter != null) adapter.clear();
         if (binding != null) binding.empty.setVisibility(View.GONE);
     }
 
-    // 新批次结果到达：合并进全量列表（调用方传入的 items 已是全量重排结果），
-    // 保留用户已加载条数，避免分页被重置回首页
-    public void setAll(List<Vod> items) {
-        mAll.clear();
-        if (items != null) mAll.addAll(items);
-        if (mDisplayCount < PAGE_SIZE) mDisplayCount = PAGE_SIZE;
+    // Activity 推送新一页：已展示卡片钉死，「加载更多」只在末尾追加，弹窗不自行分页
+    public void setPage(List<Vod> items) {
+        mPage.clear();
+        if (items != null) mPage.addAll(items);
         applyPage();
     }
 
-    public void addAll(List<Vod> items) {
-        if (items == null || items.isEmpty()) return;
-        mAll.addAll(items);
-        applyPage();
-    }
-
-    private void loadMore() {
-        mDisplayCount += LOAD_MORE_SIZE;
-        applyPage();
-    }
-
-    // 分页渲染：仅提交前 mDisplayCount 条，超出则末尾追加「加载更多」哨兵
     private void applyPage() {
         if (adapter == null) return;
-        int total = mAll.size();
-        int end = Math.min(mDisplayCount, total);
-        List<Vod> page = new ArrayList<>(mAll.subList(0, end));
-        if (end < total) page.add(QuickAdapter.FOOTER);
-        adapter.setItems(page);
+        adapter.setItems(new ArrayList<>(mPage));
         updateEmpty();
     }
 
@@ -164,7 +147,9 @@ public class QuickSearchDialog extends BaseBottomSheetDialog implements QuickAda
         binding.recycler.setHasFixedSize(true);
         binding.recycler.setItemAnimator(null);
         binding.recycler.setAdapter(adapter = new QuickAdapter(this));
-        adapter.setLoadMore(this::loadMore);
+        adapter.setLoadMore(() -> {
+            if (loadMore != null) loadMore.run();
+        });
         applyPage();
         binding.empty.setVisibility(View.GONE);
     }

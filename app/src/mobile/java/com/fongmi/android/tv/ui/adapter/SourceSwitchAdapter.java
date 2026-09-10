@@ -10,18 +10,26 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Flag;
 import com.fongmi.android.tv.bean.Vod;
+import com.fongmi.android.tv.databinding.AdapterSearchFooterBinding;
 import com.fongmi.android.tv.databinding.AdapterSourceSwitchBinding;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class SourceSwitchAdapter extends RecyclerView.Adapter<SourceSwitchAdapter.ViewHolder> {
+public class SourceSwitchAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     public static final int TYPE_FLAG = 1;
     public static final int TYPE_VOD = 2;
 
+    private static final int VIEW_TYPE_ITEM = 0;
+    private static final int VIEW_TYPE_FOOTER = 1;
+
+    // 「加载更多」哨兵对象：作为分页列表最后一项，点击追加下一页（与搜索结果页一致）
+    public static final Item FOOTER = new Item(-1, "load_more_footer", "", false, null, null);
+
     private final OnClickListener listener;
     private final List<Item> mItems;
+    private Runnable loadMore;
 
     public SourceSwitchAdapter(OnClickListener listener) {
         this.listener = listener;
@@ -31,6 +39,14 @@ public class SourceSwitchAdapter extends RecyclerView.Adapter<SourceSwitchAdapte
     public interface OnClickListener {
 
         void onItemClick(Item item);
+    }
+
+    public void setLoadMore(Runnable loadMore) {
+        this.loadMore = loadMore;
+    }
+
+    public boolean isFooter(int position) {
+        return position >= 0 && position < mItems.size() && mItems.get(position) == FOOTER;
     }
 
     public static class Item {
@@ -71,26 +87,49 @@ public class SourceSwitchAdapter extends RecyclerView.Adapter<SourceSwitchAdapte
     }
 
     @Override
+    public int getItemViewType(int position) {
+        return isFooter(position) ? VIEW_TYPE_FOOTER : VIEW_TYPE_ITEM;
+    }
+
+    @Override
     public int getItemCount() {
         return mItems.size();
     }
 
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_FOOTER) return new FooterHolder(AdapterSearchFooterBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
         return new ViewHolder(AdapterSourceSwitchBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
     }
 
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        if (holder instanceof FooterHolder footerHolder) {
+            footerHolder.binding.getRoot().setOnClickListener(v -> {
+                if (loadMore != null) loadMore.run();
+            });
+            return;
+        }
         Item item = mItems.get(position);
+        ViewHolder viewHolder = (ViewHolder) holder;
         String text = item.line.isEmpty() ? item.site : item.site + " | " + item.line;
-        holder.binding.text.setText(text);
-        holder.binding.text.setSelected(item.selected);
-        holder.binding.icon.setSelected(item.selected);
-        holder.binding.icon.setImageTintList(ContextCompat.getColorStateList(holder.binding.getRoot().getContext(), R.color.selector_video_text));
-        holder.binding.check.setVisibility(item.selected ? android.view.View.VISIBLE : android.view.View.GONE);
-        holder.binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
+        viewHolder.binding.text.setText(text);
+        viewHolder.binding.text.setSelected(item.selected);
+        viewHolder.binding.icon.setSelected(item.selected);
+        viewHolder.binding.icon.setImageTintList(ContextCompat.getColorStateList(viewHolder.binding.getRoot().getContext(), R.color.selector_video_text));
+        viewHolder.binding.check.setVisibility(item.selected ? android.view.View.VISIBLE : android.view.View.GONE);
+        viewHolder.binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
+    }
+
+    public static class FooterHolder extends RecyclerView.ViewHolder {
+
+        private final AdapterSearchFooterBinding binding;
+
+        FooterHolder(@NonNull AdapterSearchFooterBinding binding) {
+            super(binding.getRoot());
+            this.binding = binding;
+        }
     }
 
     public class ViewHolder extends RecyclerView.ViewHolder {
