@@ -62,6 +62,18 @@ android {
         viewBinding = true
     }
 
+    // 安装包瘦身：原生库改为压缩存储（安装时解压，换取更小的下载体积）
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    // 安装包瘦身：仅保留中文与英文资源，剔除依赖库自带的其它语言
+    androidResources {
+        localeFilters += ['zh-rCN', 'zh-rTW', 'en']
+    }
+
     signingConfigs {
         release {
             if (hasReleaseSigning) {

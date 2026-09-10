@@ -687,6 +687,12 @@ stage_abi() {
     mkdir -p "$assets"
     cp "$output"/*.so "$assets/"
     verify_directory "$assets"
+    # 打包瘦身：assets 内改用 .sox 后缀存放，避免 aapt 对 .so 强制不压缩；
+    # App 运行时（MPVLib）释放到私有目录时会还原为 .so 再 System.load。
+    for so in "$assets"/*.so; do
+      [ -f "$so" ] || continue
+      mv "$so" "$so.x"
+    done
   fi
   log "$abi output ready: $output"
 }

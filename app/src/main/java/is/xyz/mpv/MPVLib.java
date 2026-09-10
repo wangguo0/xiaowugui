@@ -26,6 +26,7 @@ public final class MPVLib {
 
     private static final String TAG = "mpv";
     private static final String ASSET_ROOT = "mpv-libs";
+    private static final String ASSET_SUFFIX = "x";
     private static final String BUNDLE_MARKER = ".bundle-last-update";
     private static final String[] LOAD_ORDER = {
             "c++_shared",
@@ -200,7 +201,9 @@ public final class MPVLib {
     }
 
     private static String assetPath(String abi, String lib) {
-        return ASSET_ROOT + "/" + abi + "/" + System.mapLibraryName(lib);
+        // 打包瘦身：assets 内的原生库以 .sox 后缀存放，避免被 aapt 判定为原生库而强制不压缩；
+        // 释放到私有目录时仍还原为 .so 供 System.load 使用。
+        return ASSET_ROOT + "/" + abi + "/" + System.mapLibraryName(lib) + ASSET_SUFFIX;
     }
 
     private static boolean hasBundledFeature(AssetManager assets, String abi, String feature) throws IOException {

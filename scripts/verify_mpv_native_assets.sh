@@ -21,6 +21,14 @@ die() {
   exit 1
 }
 
+cleanup() {
+  local dir
+  for dir in ${TMP_DIRS:-}; do
+    [ -n "$dir" ] && rm -rf "$dir"
+  done
+}
+trap cleanup EXIT
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --require-elf) REQUIRE_ELF=1 ;;
@@ -160,10 +168,26 @@ verify_abi() {
   local flavor="$2"
   local file_pattern="$3"
   local directory="$ROOT/app/src/$flavor/assets/mpv-libs/$abi"
-  local required name file_path file_info dynamic soname mpv_dynamic
+  local required name file_path file_info dynamic soname mpv_dynamic staged found
 
   required="libc++_shared.so libmpv.so libmvcodec.so libmvdevice.so libmvfilter.so libmvformat.so libmvutil.so libmwresample.so libmwscale.so libplayer.so"
   [ -d "$directory" ] || die "missing asset directory: $directory"
+
+  # 打包瘦身：仓库内的 MPV 原生库以 .sox 后缀存放（避开 aapt 对 .so 的强制不压缩），
+  # 校验前还原成 .so 名称放入临时目录，后续 ELF/字符串检查逻辑保持不变。
+  if ! ls "$directory"/libmpv.so >/dev/null 2>&1; then
+    staged="$(mktemp -d)"
+    TMP_DIRS="${TMP_DIRS:-} $staged"
+    found=0
+    for file_path in "$directory"/*.sox; do
+      [ -f "$file_path" ] || continue
+      found=1
+      cp "$file_path" "$staged/$(basename "$file_path" x)"
+    done
+    [ "$found" -eq 1 ] || die "missing $abi asset: neither .so nor .sox found in $directory"
+    directory="$staged"
+  fi
+
   for name in $required; do
     [ -f "$directory/$name" ] || die "missing $abi asset: $name"
   done

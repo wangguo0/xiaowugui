@@ -206,9 +206,11 @@ build_abi() {
 
   if [ "$INSTALL_ASSETS" -eq 1 ]; then
     [ -d "$assets" ] || die "missing MPV asset directory: $assets"
-    cp "$out" "$assets/libplayer.so"
-    chmod 644 "$assets/libplayer.so"
-    printf 'Installed %s\n' "$assets/libplayer.so"
+    # 打包瘦身：assets 内以 .sox 后缀存放（与 MPVLib 运行时释放逻辑一致）
+    cp "$out" "$assets/libplayer.sox"
+    chmod 644 "$assets/libplayer.sox"
+    rm -f "$assets/libplayer.so"
+    printf 'Installed %s\n' "$assets/libplayer.sox"
   else
     printf 'Staged %s\n' "$out"
   fi
