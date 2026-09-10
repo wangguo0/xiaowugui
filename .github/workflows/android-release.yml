@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag, blank = v<versionName>-yyyyMMddHHmm or v<versionName>-beta-yyyyMMddHHmm"
+        description: "Release tag = 项目名+版本号, e.g. 小乌龟1.1（不可重复，发新版请递增版本号）; blank = 小乌龟<versionName>-yyyyMMdd"
         required: false
         type: string
       release_channel:
@@ -25,21 +25,12 @@ on:
         required: false
         default: false
         type: boolean
-      sync_cnb:
-        description: "Mirror APKs to CNB Release and sync CNB manifests"
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: write
 
 env:
   TZ: Asia/Shanghai
-  CNB_API_ENDPOINT: https://api.cnb.cool
-  CNB_WEB_ENDPOINT: https://cnb.cool
-  CNB_REPO_SLUG: fish2035/webhtv-release
-  CNB_REPO_URL: https://cnb.cool/fish2035/webhtv-release.git
 
 jobs:
   release:
@@ -85,43 +76,51 @@ jobs:
 
       - name: Resolve release tag
         id: meta
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+          INPUT_CHANNEL: ${{ inputs.release_channel }}
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle | head -1)"
           VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode[[:space:]]*\([0-9][0-9]*\).*/\1/p' app/build.gradle | head -1)"
-          CHANNEL="${{ inputs.release_channel }}"
+          CHANNEL="$INPUT_CHANNEL"
           if [ "$CHANNEL" = "auto" ] || [ -z "$CHANNEL" ]; then
-            if [ "${{ github.ref_name }}" = "fongmi-sync" ]; then
+            if [ "$BRANCH_NAME" = "fongmi-sync" ]; then
               CHANNEL="beta"
             else
               CHANNEL="stable"
             fi
           fi
+          # tag 格式：项目名+版本号（如 小乌龟1.1），可带 -yyyyMMdd 日期后缀；beta 通道带日期防互相覆盖
           if [ "$CHANNEL" = "beta" ]; then
             APK_SUFFIX="-beta"
-            TAG_PATTERN="^v${VERSION_NAME}-beta-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-beta-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-beta-yyyyMMddHHmm"
+            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*-beta-[0-9]{8}$"
+            TAG_DEFAULT="小乌龟${VERSION_NAME}-beta-$(date +%Y%m%d)"
+            TAG_EXPECT="小乌龟1.1-beta-20260910"
           else
             APK_SUFFIX=""
-            TAG_PATTERN="^v${VERSION_NAME}-[0-9]{12}$"
-            TAG_DEFAULT="v${VERSION_NAME}-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="v${VERSION_NAME}-yyyyMMddHHmm"
+            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*(-[0-9]{8})?$"
+            TAG_DEFAULT="小乌龟${VERSION_NAME}-$(date +%Y%m%d)"
+            TAG_EXPECT="小乌龟1.1 或 小乌龟1.1-20260910"
           fi
-          TAG="${{ inputs.release_tag }}"
+          TAG="$INPUT_TAG"
           if [ -z "$TAG" ]; then
             TAG="$TAG_DEFAULT"
           fi
           if ! printf '%s' "$TAG" | grep -Eq "$TAG_PATTERN"; then
-            echo "::error title=Invalid release tag::Expected $TAG_EXPECT, got: $TAG"
+            echo "::error title=Invalid release tag::格式应为 项目名+版本号（例如 $TAG_EXPECT），收到: $TAG"
             exit 1
           fi
           if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "::error title=Release tag exists::$TAG already exists"
+            echo "::error title=Release tag exists::$TAG 已发布过，版本号不可覆盖，请递增（如 $TAG → 下一版）"
             exit 1
           fi
+          # URL 百分号编码后的 tag（中文等非 ASCII 字符在下载链接/API 中必须编码）
+          TAG_ENCODED="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TAG")"
           {
             echo "tag=$TAG"
-            echo "title=${TAG#v}"
+            echo "tag_encoded=$TAG_ENCODED"
+            echo "title=$TAG"
             echo "version_name=$VERSION_NAME"
             echo "version_code=$VERSION_CODE"
             echo "short_sha=$(git rev-parse --short=7 HEAD)"
@@ -210,7 +209,8 @@ jobs:
       - name: Generate update manifests
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
-          GITHUB_RELEASE_DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          GITHUB_RELEASE_DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag_encoded }}
         run: |
           python3 - <<'PY'
           import glob
@@ -218,7 +218,7 @@ jobs:
           import json
           import os
 
-          tag = "${{ steps.meta.outputs.tag }}"
+          tag = os.environ["RELEASE_TAG"]
           notes = os.environ.get("RELEASE_NOTES", "").strip()
           release_download_base = os.environ["GITHUB_RELEASE_DOWNLOAD_BASE"]
           for apk in glob.glob("dist/*.apk"):
@@ -258,18 +258,6 @@ jobs:
             --notes "$NOTES" \
             $PRERELEASE_FLAG \
             dist/*.apk dist/*.json
-
-      - name: Sync to CNB
-        if: ${{ inputs.sync_cnb }}
-        env:
-          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
-          CNB_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
-          CNB_RELEASE_TITLE: ${{ steps.meta.outputs.title }}
-          CNB_RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
-          CNB_RELEASE_PRERELEASE: ${{ inputs.prerelease == true || steps.meta.outputs.channel == 'beta' }}
-          CNB_RELEASE_LATEST: ${{ steps.meta.outputs.channel == 'stable' }}
-        run: |
-          .github/scripts/sync-cnb-release.sh
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
