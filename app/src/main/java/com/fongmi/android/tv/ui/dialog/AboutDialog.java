@@ -28,14 +28,17 @@ public final class AboutDialog {
         configureContentHeight(activity, binding);
 
         Dialog dialog = LightDialog.create(activity, null, binding.getRoot());
+        // 取消 LightDialog 在 onShow 阶段的二次改窗，避免入场动画期间窗口尺寸重排导致晃动
+        dialog.setOnShowListener(null);
         binding.confirm.setOnClickListener(v -> dialog.dismiss());
         binding.checkUpdate.setOnClickListener(v -> {
             dialog.dismiss();
             if (updateAction != null) updateAction.run();
         });
         dialog.setCanceledOnTouchOutside(false);
-        dialog.show();
+        // 窗口配置提前到 show() 之前，addView 时即为最终尺寸，入场动画全程稳定
         configureWindow(activity, dialog);
+        dialog.show();
         binding.confirm.requestFocus();
     }
 
@@ -55,7 +58,10 @@ public final class AboutDialog {
         params.width = (int) (ResUtil.getScreenWidth(activity) * (ResUtil.isLand(activity) ? 0.62f : 0.92f));
         params.height = WindowManager.LayoutParams.WRAP_CONTENT;
         params.gravity = Gravity.CENTER;
+        params.dimAmount = 0.58f;
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        window.getDecorView().setPadding(0, 0, 0, 0);
+        window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         window.setAttributes(params);
         window.setLayout(params.width, WindowManager.LayoutParams.WRAP_CONTENT);
         return true;
