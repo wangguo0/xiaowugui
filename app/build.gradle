@@ -26,7 +26,9 @@ def versionProps = new Properties()
 if (versionPropsFile.exists()) versionPropsFile.withInputStream { versionProps.load(it) }
 def baseVersionName = versionProps.getProperty('versionName', '1.0.0')
 def baseVersionCode = (versionProps.getProperty('versionCode', '1') as int)
-def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+// versionBump=false 供 CI 使用：CI 发布版本号以 version.properties 基线为准（与 release tag 严格一致），不递增不写回
+def versionBump = (project.findProperty('versionBump') ?: 'true').toString().toBoolean()
+def isReleaseBuild = versionBump && gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
 def appVersionName = baseVersionName
 def appVersionCode = baseVersionCode
 if (isReleaseBuild) {
