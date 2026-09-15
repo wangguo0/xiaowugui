@@ -15,8 +15,8 @@ import com.fongmi.android.tv.utils.Notify;
 import com.github.catvod.utils.Prefers;
 
 /**
- * 「15 秒运行试用」终审机制（单独添加源的唯一安全闸门，无前置检测）：
- * 源添加即激活并真机运行 15 秒——存活即通过（永久信任，缓存 PASS，
+ * 「8 秒运行试用」终审机制（单独添加源的唯一安全闸门，无前置检测）：
+ * 源添加即激活并真机运行 8 秒——存活即通过（永久信任，缓存 PASS，
  * 后续添加/合并免检测）；期间表现出「杀/退软件」行为，无论是否被
  * 防护罩拦截成功，一律删除该源、恢复原配置并永久拉黑（缓存 DANGEROUS）。
  * <p>
@@ -36,7 +36,7 @@ public final class TrialRun {
     private static final String MARKER = "probe_trial";
     private static final String NOTICE = "probe_trial_notice";
     private static final String SELF_EXIT = "probe_self_exit";
-    private static final long WINDOW = 15_000L;   // 存活判定窗口
+    private static final long WINDOW = 8_000L;    // 存活判定窗口
     private static final long STALE = 10 * 60_000L; // 标记超时（App 被正常退出又久未启动）视为失效
 
     private static final String SEP = "\n";

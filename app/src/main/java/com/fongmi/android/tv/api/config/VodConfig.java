@@ -45,7 +45,7 @@ public class VodConfig extends BaseConfig {
     }
 
     /**
-     * 需求4：点播订阅「25 秒试运行」真正通过后（终审存活），将其全部站点设为「参与换源」并提示。
+     * 需求4：点播订阅「8 秒试运行」真正通过后（终审存活），将其全部站点设为「参与换源」并提示。
      * 必须在试运行通过、配置已激活时调用（此时站点已在内存）。
      */
     public static void onTrialPassed(String url) {
@@ -111,7 +111,7 @@ public class VodConfig extends BaseConfig {
         Task.submit(() -> {
             try {
                 get().loadDepotChild(parent, depot);
-                App.post(() -> Notify.show(parent.getNotice()));
+                App.post(() -> Notify.showNotice(parent.getNotice()));
                 App.post(callback::success);
             } catch (Throwable e) {
                 e.printStackTrace();

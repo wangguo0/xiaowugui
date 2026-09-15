@@ -250,7 +250,7 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
 
     private final ActivityResultLauncher<Intent> launcher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
-        String address = result.getData().getStringExtra("address");
+        String address = com.fongmi.android.tv.api.SourceProbe.cleanUrl(result.getData().getStringExtra("address"));
         if (TextUtils.isEmpty(address)) return;
         Config config = Config.find(address, getType());
         boolean probe = Setting.isProbeAdd() && (getType() == 0 || getType() == 1);

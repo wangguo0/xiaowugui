@@ -589,6 +589,15 @@ public class Setting {
         Prefers.put("popup_keywords", keywords);
     }
 
+    // 拦截接口返回的 toast 提示（配置 notice / 仓库 notice / Web 源 ext.toast），默认开启
+    public static boolean isBlockNotice() {
+        return Prefers.getBoolean("block_notice", true);
+    }
+
+    public static void putBlockNotice(boolean enable) {
+        Prefers.put("block_notice", enable);
+    }
+
     public static boolean isLinkVisible() {
         return Prefers.getBoolean("link_visible", false);
     }

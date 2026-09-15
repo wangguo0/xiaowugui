@@ -421,7 +421,7 @@ public class HomeWebBridge {
 
     private String extToast(JsonObject payload) {
         String message = Json.safeString(payload, "message");
-        if (!TextUtils.isEmpty(message)) App.post(() -> Notify.show(message));
+        if (!TextUtils.isEmpty(message)) App.post(() -> Notify.showNotice(message));
         return "{}";
     }
 

@@ -15,12 +15,19 @@ import androidx.core.content.ContextCompat;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.databinding.ViewProgressBinding;
+import com.fongmi.android.tv.setting.Setting;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class Notify {
 
     public static final String DEFAULT = "default";
     public static final int ID = 9527;
+    // 本应用自身弹过的 toast 文本，供窗口级拦截区分「自己人」与源内（jar/ext）弹出的提示
+    private static final Set<String> RECENT_TOASTS = new LinkedHashSet<>();
     private AlertDialog mDialog;
     private Toast mToast;
 
@@ -55,6 +62,12 @@ public class Notify {
         if (!TextUtils.isEmpty(text)) get().makeText(text);
     }
 
+    // 接口返回的 toast 专用入口：开启「拦截源提示」时直接丢弃，不影响本地操作提示
+    public static void showNotice(String text) {
+        if (Setting.isBlockNotice()) return;
+        if (!TextUtils.isEmpty(text)) get().makeText(text);
+    }
+
     public static void progress(Context context) {
         dismiss();
         get().create(context);
@@ -82,8 +95,28 @@ public class Notify {
     }
 
     private void makeText(String text) {
+        remember(text);
         if (mToast != null) mToast.cancel();
         mToast = Toast.makeText(App.get(), text, Toast.LENGTH_LONG);
         mToast.show();
+    }
+
+    // 文本是否属于本应用最近弹出的 toast（窗口级拦截放行依据）
+    public static boolean isRecent(String text) {
+        if (TextUtils.isEmpty(text)) return false;
+        synchronized (RECENT_TOASTS) {
+            return RECENT_TOASTS.contains(text);
+        }
+    }
+
+    private static void remember(String text) {
+        synchronized (RECENT_TOASTS) {
+            if (RECENT_TOASTS.size() >= 16) {
+                Iterator<String> iterator = RECENT_TOASTS.iterator();
+                iterator.next();
+                iterator.remove();
+            }
+            RECENT_TOASTS.add(text);
+        }
     }
 }

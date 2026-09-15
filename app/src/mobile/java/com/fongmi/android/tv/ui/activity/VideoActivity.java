@@ -6281,6 +6281,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (progress == null || !progress.finished()) return;
         mQuickAllReturned = true;
         if (!mQuickFrozen) scheduleQuickRefresh();
+        // 冻结状态下也要重提交一次：否则末次提交（当时还有站点未返回）留下的
+        // 「加载更多」footer 会一直残留（快搜行、快搜弹窗、换源列表共用同一份状态）
+        else submitQuickPage();
     }
 
     // 首屏节流刷新：未冻结时每 400ms 最多清洗一次；去重/过滤/排序在后台线程完成，
@@ -6329,9 +6332,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
-    // 是否还有可能追加新候选：剩余候选非空，或站点未全部返回（池子还会增长）
+    // 是否还有可能追加新候选：剩余候选非空，或站点未全部返回（池子还会增长），
+    // 或清洗池尚有未清洗结果（冻结期间入池的新结果要等「加载更多」重清洗后才可见）
     private boolean hasMoreQuick() {
-        return !mQuickRest.isEmpty() || !mQuickAllReturned;
+        return !mQuickRest.isEmpty() || mQuickPool.size() != mQuickCleanedCount || !mQuickAllReturned;
     }
 
     // 「加载更多」：冻结期间若有新结果入池，此刻对全池重清洗一次（后台单飞，只此一轮），

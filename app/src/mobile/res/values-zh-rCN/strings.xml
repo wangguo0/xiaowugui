@@ -184,5 +184,6 @@
     <string name="popup_keyword_empty">暂无关键字</string>
     <string name="popup_keyword_exists">该关键字已存在</string>
     <string name="popup_keyword_blank">请输入关键字</string>
+    <string name="block_interface_toast">屏蔽接口提示</string>
 
 </resources>

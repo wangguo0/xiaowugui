@@ -47,6 +47,7 @@ public class SiteViewModel extends ViewModel {
     private final List<Future<?>> searchFuture;
     private final ListeningExecutorService playerExecutor;
     private final AtomicInteger searchEpoch;
+    private final Object progressLock = new Object();
     private KaraokeResult karaokeResult;
     private int karaokeResultAction;
 
@@ -180,7 +181,13 @@ public class SiteViewModel extends ViewModel {
 
     private void postSearchProgress(int epoch, AtomicInteger completed, int total) {
         if (searchEpoch.get() != epoch) return;
-        searchProgress.postValue(SearchProgress.of(completed.incrementAndGet(), total));
+        // increment 与 post 必须串行：各站点回调在不同线程并发执行，若不串行，
+        // 「done=total 的 finished」postValue 可能被另一线程随后 post 的 done=total-1
+        // 覆盖（LiveData postValue 只保留最后一次），finished 永远到不了观察者，
+        // 搜索页/快搜/换源列表的「加载更多」入口就永远不会收尾消失
+        synchronized (progressLock) {
+            searchProgress.postValue(SearchProgress.of(completed.incrementAndGet(), total));
+        }
     }
 
     private void execute(TaskType type, MutableLiveData<Result> liveData, Callable<Result> callable) {

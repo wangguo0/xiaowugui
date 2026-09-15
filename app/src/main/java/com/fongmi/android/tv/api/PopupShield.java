@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.Context;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.Choreographer;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -19,6 +20,7 @@ import com.fongmi.android.tv.api.loader.JarLoader;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.DiagLog;
+import com.fongmi.android.tv.utils.Notify;
 import com.github.catvod.utils.Util;
 
 import java.lang.reflect.Field;
@@ -44,6 +46,11 @@ import java.util.WeakHashMap;
  *       {@link JarCrashShield} 判定为 jar 崩溃，进而永久屏蔽整个站源。</li>
  *   <li>页面内遮罩：只检查 content 新增的直接子 View，且仅当其中出现 jar 自有类
  *       （com.github.catvod.spider.*）时才摘除，避免误删播放器字幕层等同级 View。</li>
+ *   <li>源内 Toast：spider.jar 会用 App 交给它的 Context 直接 Toast.makeText 弹提示，
+ *       完全绕过 {@link com.fongmi.android.tv.utils.Notify}。因此额外按窗口类型
+ *       TYPE_TOAST 拦截：文本命中 {@code Notify.isRecent}（本应用自身刚弹过的）
+ *       则放行，否则 WMS 层透明化后整窗移除（仅置 GONE 留不住画面，见 killToast）。扫描为逐帧驱动，
+ *       toast 最多闪现一帧。受「屏蔽接口提示」开关控制，与弹窗拦截开关相互独立。</li>
  * </ul>
  * 独立窗口依赖 {@code WindowManagerGlobal} 反射枚举；若被系统限制，会记录一次降级日志，
  * 页面内遮罩的拦截仍然有效。
@@ -55,7 +62,6 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
 
     private static final String TAG = "popup-shield";
     private static final String JAR_PREFIX = "com.github.catvod.spider.";
-    private static final long INTERVAL_MS = 250;
 
     private static volatile PopupShield instance;
 
@@ -73,14 +79,16 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
     private volatile List<String> keywords;
     private volatile String keywordsRaw;
 
-    private final Runnable pulse = new Runnable() {
+    private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
-        public void run() {
+        public void doFrame(long frameTimeNanos) {
             try {
-                if (running && Setting.isPopupShield()) scan();
+                // 逐帧驱动（约 16ms）：toast 窗口出现后下一帧即被处理，最多闪现一帧，肉眼不可见。
+                // scan 内部按「弹窗拦截」「屏蔽接口提示」两个开关各自分流。
+                if (running) scan();
             } catch (Throwable ignored) {
             }
-            if (running) App.post(pulse, INTERVAL_MS);
+            if (running) Choreographer.getInstance().postFrameCallback(frameCallback);
         }
     };
 
@@ -91,20 +99,31 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
         if (App.isProbeProcess()) return;
         if (instance == null) instance = new PopupShield();
         app.registerActivityLifecycleCallbacks(instance);
-        instance.apply(Setting.isPopupShield());
+        instance.apply(active());
+        DiagLog.log(TAG, "初始化 模式=逐帧+透明化+移除窗口");
     }
 
     public static void setEnabled(boolean enable) {
-        if (instance != null) instance.apply(enable);
+        reload();
+    }
+
+    // 弹窗拦截或接口提示拦截任一开启，扫描脉冲即需运行
+    private static boolean active() {
+        return Setting.isPopupShield() || Setting.isBlockNotice();
+    }
+
+    // 开关变化后重算脉冲是否运行（扫描内部按各自开关分流）
+    public static void reload() {
+        if (instance != null) instance.apply(active());
     }
 
     private synchronized void apply(boolean enable) {
         if (enable == running) return;
         running = enable;
         if (enable) {
-            App.post(pulse, INTERVAL_MS);
+            Choreographer.getInstance().postFrameCallback(frameCallback);
         } else {
-            App.removeCallbacks(pulse);
+            Choreographer.getInstance().removeFrameCallback(frameCallback);
             checked.clear();
             blocked.clear();
             contentCount.clear();
@@ -163,7 +182,9 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
     private void scan() {
         reassert();
         List<String> words = keywords();
-        for (View decor : new ArrayList<>(decors)) checkOverlay(decor);
+        boolean popup = Setting.isPopupShield();
+        boolean toastBlock = Setting.isBlockNotice();
+        if (popup) for (View decor : new ArrayList<>(decors)) checkOverlay(decor);
         List<View> roots = WindowRoots.get();
         if (roots.isEmpty()) {
             logCapability();
@@ -173,7 +194,92 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
         for (View root : roots) {
             if (root == null || root.getWindowToken() == null) continue;
             if (isDecor(root)) continue;
-            checkWindow(root, words);
+            // Toast 窗口一律按 toast 规则处理，不走弹窗关键字判定，避免误杀本应用自身提示
+            if (checkToast(root, toastBlock)) continue;
+            if (popup) checkWindow(root, words);
+        }
+    }
+
+    /**
+     * TYPE_TOAST 窗口拦截：文本属于本应用最近弹出的（Notify.isRecent）则放行，
+     * 否则视为源内（jar 等）弹出的提示并隐藏。
+     * 每个新出现的 toast 窗口都会记录一次观测日志（拦截/放行），便于按日志定位漏网环节。
+     *
+     * @return true 表示该窗口为 toast 类型（无论是否隐藏），调用方无需再按弹窗逻辑判定
+     */
+    private boolean checkToast(View root, boolean block) {
+        if (!(root.getLayoutParams() instanceof WindowManager.LayoutParams lp)) return false;
+        if (lp.type != WindowManager.LayoutParams.TYPE_TOAST) return false;
+        if (!checked.containsKey(root)) {
+            checked.put(root, Boolean.TRUE);
+            String text = toastText(root);
+            if (block && !Notify.isRecent(text)) {
+                String method = killToast(root);
+                DiagLog.log(TAG, "拦截Toast 文本=%s 站点=%s 方式=%s", text, currentSite(), method);
+            } else if (block) {
+                DiagLog.log(TAG, "放行自家Toast 文本=%s", text);
+            } else {
+                DiagLog.log(TAG, "观测Toast(拦截关闭) 文本=%s", text);
+            }
+        }
+        return true;
+    }
+
+    private String toastText(View view) {
+        StringBuilder builder = new StringBuilder();
+        collectText(view, builder);
+        return builder.toString().trim();
+    }
+
+    /**
+     * 杀 toast，三层保险，返回实际生效方式（写入日志，便于定位漏网环节）：
+     * <ol>
+     * <li>WMS 层窗口透明化：lp.alpha=0 + FLAG_NOT_TOUCHABLE + updateViewLayout。
+     *     alpha 由 SurfaceFlinger 直接作用于 surface，不依赖 view 重绘——「GONE 后
+     *     surface 保留最后一帧导致画面残留」的失效模式在此被彻底堵死；</li>
+     * <li>removeView 整窗销毁：物理移除窗口。TN.handleHide 对已移除视图（parent==null）
+     *     会跳过系统侧 removeView，jar 再 cancel()/show() 无副作用，不会引发崩溃；</li>
+     * <li>兜底：GONE + 强制重绘（仅当前两层都抛异常时才会走到）。</li>
+     * </ol>
+     */
+    private String killToast(View root) {
+        root.setVisibility(View.GONE);
+        StringBuilder failed = new StringBuilder();
+        Object service = root.getContext().getSystemService(Context.WINDOW_SERVICE);
+        if (service instanceof WindowManager wm) {
+            try {
+                if (root.getLayoutParams() instanceof WindowManager.LayoutParams lp) {
+                    lp.alpha = 0f;
+                    lp.flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
+                    wm.updateViewLayout(root, lp);
+                }
+            } catch (Throwable e) {
+                failed.append("透明化失败:").append(e.getClass().getSimpleName()).append('/');
+            }
+            try {
+                wm.removeView(root);
+                return failed.length() == 0 ? "透明化+移除" : "移除(" + failed.substring(0, failed.length() - 1) + ")";
+            } catch (Throwable e) {
+                failed.append("移除失败:").append(e.getClass().getSimpleName()).append('/');
+            }
+        } else {
+            failed.append("WM获取失败/");
+        }
+        root.invalidate();
+        root.requestLayout();
+        return "GONE兜底(" + failed.substring(0, failed.length() - 1) + ")";
+    }
+
+    private void collectText(View view, StringBuilder builder) {
+        if (view instanceof TextView text) {
+            String value = text.getText() == null ? "" : text.getText().toString();
+            if (!value.isEmpty()) {
+                if (builder.length() > 0) builder.append("\n");
+                builder.append(value);
+            }
+        }
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) collectText(group.getChildAt(i), builder);
         }
     }
 

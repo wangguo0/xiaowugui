@@ -184,5 +184,6 @@
     <string name="popup_keyword_empty">尚無關鍵字</string>
     <string name="popup_keyword_exists">該關鍵字已存在</string>
     <string name="popup_keyword_blank">請輸入關鍵字</string>
+    <string name="block_interface_toast">攔截來源提示</string>
 
 </resources>

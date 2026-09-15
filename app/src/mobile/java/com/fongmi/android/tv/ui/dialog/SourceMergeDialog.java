@@ -313,7 +313,7 @@ public class SourceMergeDialog extends BaseAlertDialog {
                     setProgress(sliceStart(index + 1, urlTotal, 0f, probeWeight));
                 });
                 boolean http = url.startsWith("http://") || url.startsWith("https://");
-                // 免检测：本软件合并产物（合并时已逐一检测）或曾通过 25 秒试运行（永久信任）
+                // 免检测：本软件合并产物（合并时已逐一检测）或曾通过 8 秒试运行（永久信任）
                 boolean merged = SourceProbe.isSelfMerged(url);
                 boolean probeable = http || (url.startsWith("file:") && !merged);
                 int verdict = SourceProbe.PASS;

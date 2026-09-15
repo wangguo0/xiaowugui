@@ -408,7 +408,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     private void onScanResult(int code, Intent data) {
         if (code != Activity.RESULT_OK || data == null) return;
-        String address = data.getStringExtra("address");
+        String address = SourceProbe.cleanUrl(data.getStringExtra("address"));
         if (TextUtils.isEmpty(address)) return;
         Config config = Config.find(address, 0);
         // 扫码添加与订阅管理页一致：开关开启先做前置静态扫描（弹窗展示进度），命中恶意特征阻止添加

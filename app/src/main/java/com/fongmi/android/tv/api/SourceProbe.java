@@ -339,7 +339,7 @@ public final class SourceProbe {
     }
 
     /**
-     * 该地址是否曾通过 25 秒试运行（合并源流程据此免检测）。
+     * 该地址是否曾通过 8 秒试运行（合并源流程据此免检测）。
      */
     public static boolean isRuntimePassed(String url) {
         return readRuntime(url) == PASS;
@@ -373,8 +373,19 @@ public final class SourceProbe {
         return scanDangerous(url, type, null);
     }
 
+    /**
+     * 地址清洗：去除首尾全部空白（半角空格、全角空格 U+3000、不间断空格 U+00A0、
+     * 制表符、换行）。添加/检测/试运行/存储各环节统一使用清洗后的地址，避免
+     * 「尾部空格」这类格式问题污染缓存 key 与运行时标记（同一地址出现两套记录），
+     * 也避免带空格请求触发服务器错误页被可疑载荷启发式误判为恶意代码。
+     */
+    public static String cleanUrl(String url) {
+        return url == null ? "" : url.replaceAll("^[\\s\\u00A0\\u3000]+|[\\s\\u00A0\\u3000]+$", "");
+    }
+
     public static boolean scanDangerous(String url, int type, ScanProgress progress) {
         try {
+            url = cleanUrl(url);
             if (progress != null) progress.onPhase(1, 0);
             String content = Decoder.getJson(UrlUtil.convert(url), "PreScan");
             if (progress != null) progress.onPhase(2, 0);

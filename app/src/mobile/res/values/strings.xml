@@ -184,5 +184,6 @@
     <string name="popup_keyword_empty">No keywords</string>
     <string name="popup_keyword_exists">Keyword already added</string>
     <string name="popup_keyword_blank">Please enter a keyword</string>
+    <string name="block_interface_toast">Block source notices</string>
 
 </resources>

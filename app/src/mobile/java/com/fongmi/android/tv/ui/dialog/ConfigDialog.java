@@ -200,7 +200,7 @@ public class ConfigDialog extends BaseAlertDialog {
     }
 
     private void onPositive() {
-        String url = binding.url.getText().toString().trim();
+        String url = SourceProbe.cleanUrl(binding.url.getText().toString());
         String name = binding.name.getText().toString().trim();
         if (url.isEmpty()) {
             finishSave(saveConfig(url, name));
@@ -242,7 +242,7 @@ public class ConfigDialog extends BaseAlertDialog {
 
     /**
      * 统一安全检测闸门（添加订阅开关开启时生效）：http 与「非本软件合并」的本地文件源
-     * 均进入 25 秒试运行；本软件合并的源免检测（合并时已对各输入源逐一检测）。
+     * 均进入 8 秒试运行；本软件合并的源免检测（合并时已对各输入源逐一检测）。
      * 永久黑名单地址直接拦截并返回 false。
      */
     private boolean proceed(String url) {

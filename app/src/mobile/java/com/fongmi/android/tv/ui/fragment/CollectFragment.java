@@ -192,6 +192,9 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             if (progress == null || !progress.finished()) return;
             mAllReturned = true;
             if (!mFrozen) scheduleRefresh();
+            // 冻结状态下也要重提交一次：否则末次提交（当时还有站点未返回）留下的
+            // 「加载更多」footer 会一直残留，即使剩余候选已耗尽、再无新结果
+            else submitPage();
         });
     }
 
@@ -337,9 +340,10 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         submitPage();
     }
 
-    // 是否还有可能追加新卡片：剩余候选非空，或站点未全部返回（池子还会增长）
+    // 是否还有可能追加新卡片：剩余候选非空，或站点未全部返回（池子还会增长），
+    // 或清洗池尚有未清洗结果（冻结期间入池的新结果要等「加载更多」重清洗后才可见）
     private boolean hasMore() {
-        return !mRest.isEmpty() || !mAllReturned;
+        return !mRest.isEmpty() || mAllResults.size() != mCleanedCount || !mAllReturned;
     }
 
     // 提交界面：已展示卡片 + 「加载更多」哨兵（无更多候选则不显示入口）。

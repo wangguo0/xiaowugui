@@ -17,6 +17,29 @@ def buildTime = fastRelease ? "fast-${buildTimestamp}" : buildTimestamp
 def releaseTag = (System.getenv('WEBHTV_RELEASE_TAG') ?: '').replace('\\', '\\\\').replace('"', '\\"')
 def apkSuffix = (System.getenv('WEBHTV_APK_SUFFIX') ?: '').replaceAll('[^A-Za-z0-9._-]', '')
 
+// 版本号管理：仓库根目录 version.properties 为持久基线。
+// 正式版构建（任务名含 release）时 patch 位与 versionCode 自动 +1 并写回基线；
+// debug 构建仅读取基线，不递增、不写回。一次构建调用只递增一次（多 flavor 共享）。
+// 发大版本（如 1.1.0 / 2.0.0）直接手改文件里的 versionName 即可，versionCode 继续自动递增。
+def versionPropsFile = rootProject.file('version.properties')
+def versionProps = new Properties()
+if (versionPropsFile.exists()) versionPropsFile.withInputStream { versionProps.load(it) }
+def baseVersionName = versionProps.getProperty('versionName', '1.0.0')
+def baseVersionCode = (versionProps.getProperty('versionCode', '1') as int)
+def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+def appVersionName = baseVersionName
+def appVersionCode = baseVersionCode
+if (isReleaseBuild) {
+    def parts = baseVersionName.split('\\.')
+    if (parts.length < 3) parts = ['1', '0', '0']
+    parts[parts.length - 1] = ((parts[parts.length - 1] as int) + 1) as String
+    appVersionName = parts.join('.')
+    appVersionCode = baseVersionCode + 1
+    versionProps.setProperty('versionName', appVersionName)
+    versionProps.setProperty('versionCode', appVersionCode as String)
+    versionPropsFile.withWriter { versionProps.store(it, 'Auto-incremented on release build') }
+}
+
 android {
     namespace = 'com.fongmi.android.tv'
 
@@ -26,8 +49,8 @@ android {
         applicationId "com.xiaowugui.ci"
         minSdk libs.versions.minSdk.get().toInteger()
         targetSdk libs.versions.targetSdk.get().toInteger()
-        versionCode 1
-        versionName "1.0.0"
+        versionCode appVersionCode
+        versionName appVersionName
         buildConfigField "String", "BUILD_TIME", "\"${buildTime}\""
         buildConfigField "String", "BUILD_TAG", "\"${releaseTag}\""
         buildConfigField "String", "MEDIA3_VERSION", "\"${libs.versions.media3.get()}\""

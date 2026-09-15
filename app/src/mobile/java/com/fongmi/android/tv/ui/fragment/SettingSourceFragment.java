@@ -35,6 +35,7 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.probeAdd.setChecked(Setting.isProbeAdd());
         mBinding.probeMerge.setChecked(Setting.isProbeMerge());
         mBinding.popupShield.setChecked(Setting.isPopupShield());
+        mBinding.blockNotice.setChecked(Setting.isBlockNotice());
     }
 
     @Override
@@ -51,6 +52,8 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.popupShieldRow.setOnClickListener(v -> mBinding.popupShield.performClick());
         mBinding.popupShield.setOnClickListener(v -> togglePopupShield());
         mBinding.popupKeyword.setOnClickListener(this::onPopupKeyword);
+        mBinding.blockNoticeRow.setOnClickListener(v -> mBinding.blockNotice.performClick());
+        mBinding.blockNotice.setOnClickListener(this::toggleBlockNotice);
     }
 
     // 弹窗拦截即时生效，无需二次确认
@@ -58,6 +61,12 @@ public class SettingSourceFragment extends BaseFragment {
         boolean enable = mBinding.popupShield.isChecked();
         Setting.putPopupShield(enable);
         PopupShield.setEnabled(enable);
+    }
+
+    // 接口提示拦截即时生效：Notify.showNotice 实时读设置，jar 自弹 toast 由 PopupShield 窗口级拦截
+    private void toggleBlockNotice(View view) {
+        Setting.putBlockNotice(mBinding.blockNotice.isChecked());
+        PopupShield.reload();
     }
 
     private void onPopupKeyword(View view) {
