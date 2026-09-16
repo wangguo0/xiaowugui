@@ -1236,6 +1236,7 @@
     <string name="update_version">New version <xliff:g name="name">%s</xliff:g></string>
     <string name="update_title">Version update</string>
     <string name="update_hint">Choose a version to view release notes and update.</string>
+    <string name="update_force_hint">This version is no longer supported. Please update to continue using the app.</string>
     <string name="update_check">Checking for updates…</string>
     <string name="update_latest">Already on the latest version</string>
     <string name="update_failed">Update check failed</string>

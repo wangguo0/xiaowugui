@@ -571,6 +571,16 @@ public class Setting {
         Prefers.put("probe_merge", enable);
     }
 
+    // 杀进程指令中和，默认开启：含 killProcess/exit 的源不再阻止添加，
+    // 加载前原地 NOP 危险 invoke；关闭则回退为阻止添加（拉黑）
+    public static boolean isNeutralizeKill() {
+        return Prefers.getBoolean("neutralize_kill", true);
+    }
+
+    public static void putNeutralizeKill(boolean enable) {
+        Prefers.put("neutralize_kill", enable);
+    }
+
     // 第三方源弹窗拦截，默认开启
     public static boolean isPopupShield() {
         return Prefers.getBoolean("popup_shield", true);

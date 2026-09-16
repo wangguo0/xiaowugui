@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -411,41 +412,28 @@ public final class SourceScanner {
      */
     private static long[] scanDex(byte[] dex) {
         try {
-            if (dex.length < 0x70) return null;
-            // magic: dex\n035\0 等
-            if (!(dex[0] == 'd' && dex[1] == 'e' && dex[2] == 'x' && dex[3] == '\n')) return null;
-            int stringIdsSize = readLe32(dex, 0x38);
-            int stringIdsOff = readLe32(dex, 0x3C);
-            int typeIdsSize = readLe32(dex, 0x44);
-            int typeIdsOff = readLe32(dex, 0x48);
-            int methodIdsSize = readLe32(dex, 0x58);
-            int methodIdsOff = readLe32(dex, 0x5C);
-            if (stringIdsSize <= 0 || methodIdsSize <= 0 || typeIdsSize <= 0) return null;
-            if ((long) stringIdsOff + (long) stringIdsSize * 4 > dex.length || (long) typeIdsOff + (long) typeIdsSize * 4 > dex.length || (long) methodIdsOff + (long) methodIdsSize * 8 > dex.length) return null;
-            boolean kill = false;
+            int[] tables = dexTables(dex);
+            if (tables == null) return null;
+            int stringIdsSize = tables[0], stringIdsOff = tables[1];
+            int typeIdsSize = tables[2], typeIdsOff = tables[3];
+            int methodIdsSize = tables[4], methodIdsOff = tables[5];
+            boolean kill = !dangerousMethodIds(dex, stringIdsSize, stringIdsOff, typeIdsSize, typeIdsOff, methodIdsSize, methodIdsOff).isEmpty();
             boolean detect = false;
-            for (int i = 0; i < methodIdsSize; i++) {
-                int base = methodIdsOff + i * 8;
-                int classIdx = readLeU16(dex, base + 4);
-                int nameIdx = readLe32(dex, base + 6);
-                if (classIdx < 0 || classIdx >= typeIdsSize || nameIdx < 0 || nameIdx >= stringIdsSize) continue;
-                String cls = readDexString(dex, stringIdsOff, stringIdsSize, readLe32(dex, typeIdsOff + classIdx * 4));
-                String name = readDexString(dex, stringIdsOff, stringIdsSize, nameIdx);
-                if (cls == null || name == null || name.isEmpty()) continue;
-                // 自杀退出：类描述符 + 方法名成对精确命中
-                if (NAME_EXIT.equals(name) && (DESC_SYSTEM.equals(cls) || DESC_RUNTIME.equals(cls)) ||
-                        NAME_HALT.equals(name) && DESC_RUNTIME.equals(cls) ||
-                        NAME_KILL_PROCESS.equals(name) && DESC_PROCESS.equals(cls)) {
-                    kill = true;
-                    break;
-                }
-                if (!detect) {
+            if (!kill) {
+                // 仅在未定罪时继续找「包名/环境检测」特征（定罪后 detect 标志无意义）
+                for (int i = 0; i < methodIdsSize; i++) {
+                    int base = methodIdsOff + i * 8;
+                    int nameIdx = readLe32(dex, base + 4);
+                    if (nameIdx < 0 || nameIdx >= stringIdsSize) continue;
+                    String name = readDexString(dex, stringIdsOff, stringIdsSize, nameIdx);
+                    if (name == null) continue;
                     for (String dn : DETECT_NAMES) {
                         if (dn.equals(name)) {
                             detect = true;
                             break;
                         }
                     }
+                    if (detect) break;
                 }
             }
             // 反射兜底：killProcess 字面量必然明文在 string_ids 区
@@ -462,6 +450,58 @@ public final class SourceScanner {
         } catch (Throwable e) {
             return null;
         }
+    }
+
+    /**
+     * 校验并读取 DEX 关键表头：[stringIdsSize, stringIdsOff, typeIdsSize, typeIdsOff, methodIdsSize, methodIdsOff]。
+     * 偏移严格按 DEX 规范：string_ids@0x38、type_ids@0x40、method_ids@0x58。
+     * 非法/非 DEX 返回 null。
+     */
+    static int[] dexTables(byte[] dex) {
+        if (dex == null || dex.length < 0x70) return null;
+        if (!(dex[0] == 'd' && dex[1] == 'e' && dex[2] == 'x' && dex[3] == '\n')) return null;
+        int stringIdsSize = readLe32(dex, 0x38);
+        int stringIdsOff = readLe32(dex, 0x3C);
+        int typeIdsSize = readLe32(dex, 0x40);
+        int typeIdsOff = readLe32(dex, 0x44);
+        int methodIdsSize = readLe32(dex, 0x58);
+        int methodIdsOff = readLe32(dex, 0x5C);
+        if (stringIdsSize <= 0 || methodIdsSize <= 0 || typeIdsSize <= 0) return null;
+        if ((long) stringIdsOff + (long) stringIdsSize * 4 > dex.length) return null;
+        if ((long) typeIdsOff + (long) typeIdsSize * 4 > dex.length) return null;
+        if ((long) methodIdsOff + (long) methodIdsSize * 8 > dex.length) return null;
+        return new int[]{stringIdsSize, stringIdsOff, typeIdsSize, typeIdsOff, methodIdsSize, methodIdsOff};
+    }
+
+    /**
+     * 解析 method_ids 表，返回「自杀退出」危险 API 的方法索引集合（供 DexPatch 中和定位）。
+     * method_id_item 布局（DEX 规范）：class_idx@+0 u16、proto_idx@+2 u16、name_idx@+4 u32。
+     */
+    static Set<Integer> dangerousMethodIds(byte[] dex, int stringIdsSize, int stringIdsOff, int typeIdsSize, int typeIdsOff, int methodIdsSize, int methodIdsOff) {
+        Set<Integer> ids = new HashSet<>();
+        for (int i = 0; i < methodIdsSize; i++) {
+            int base = methodIdsOff + i * 8;
+            int classIdx = readLeU16(dex, base);
+            int nameIdx = readLe32(dex, base + 4);
+            if (classIdx < 0 || classIdx >= typeIdsSize || nameIdx < 0 || nameIdx >= stringIdsSize) continue;
+            String cls = readDexString(dex, stringIdsOff, stringIdsSize, readLe32(dex, typeIdsOff + classIdx * 4));
+            String name = readDexString(dex, stringIdsOff, stringIdsSize, nameIdx);
+            if (cls == null || name == null || name.isEmpty()) continue;
+            // 自杀退出：类描述符 + 方法名成对精确命中
+            if (NAME_EXIT.equals(name) && (DESC_SYSTEM.equals(cls) || DESC_RUNTIME.equals(cls)) ||
+                    NAME_HALT.equals(name) && DESC_RUNTIME.equals(cls) ||
+                    NAME_KILL_PROCESS.equals(name) && DESC_PROCESS.equals(cls)) {
+                ids.add(i);
+            }
+        }
+        return ids;
+    }
+
+    /** 单 DEX 的危险方法索引集合；非 DEX/解析失败返回空集。 */
+    static Set<Integer> dangerousMethodIds(byte[] dex) {
+        int[] t = dexTables(dex);
+        if (t == null) return new HashSet<>();
+        return dangerousMethodIds(dex, t[0], t[1], t[2], t[3], t[4], t[5]);
     }
 
     // string_id（string_ids 表下标）-> utf-16 解码字符串（长度前缀为 ULEB128 的 utf16 字符数）
@@ -495,7 +535,7 @@ public final class SourceScanner {
         }
     }
 
-    private static int readLe32(byte[] b, int off) {
+    static int readLe32(byte[] b, int off) {
         return (b[off] & 0xFF) | (b[off + 1] & 0xFF) << 8 | (b[off + 2] & 0xFF) << 16 | (b[off + 3] & 0xFF) << 24;
     }
 

@@ -185,5 +185,13 @@
     <string name="popup_keyword_exists">該關鍵字已存在</string>
     <string name="popup_keyword_blank">請輸入關鍵字</string>
     <string name="block_interface_toast">攔截來源提示</string>
+    <string name="neutralize_kill">中和殺進程指令</string>
+    <string name="neutralize_kill_confirm">開啟後，含殺進程代碼的源將不再被阻止新增，軟件會在載入前原地中和其殺進程指令（其餘功能不受影響）。被中和的源仍會執行其他代碼，存在一定風險。確定開啟嗎？</string>
+    <string name="dex_patch_notice_title">殺進程指令中和失敗</string>
+    <string name="dex_patch_notice_walk">該源的殺進程代碼經過加固混淆，軟件無法安全定位並中和。</string>
+    <string name="dex_patch_notice_not_found">該源的殺進程邏輯藏在加密載荷中，軟件無法中和。</string>
+    <string name="dex_patch_notice_io">處理該源檔案時發生錯誤，軟件無法中和。</string>
+    <string name="dex_patch_notice_result">處理結果：該 jar 已被永久封鎖，對應站源無法播放；訂閱源本身已保留，其他源不受影響。</string>
+    <string name="dex_patch_notice_hint">建議：可在「源設定 → 封鎖管理」查看被封鎖的 jar 網址（%1$s）。若確認該源可信，可關閉「新增源安全偵測」後重新新增，風險自負。</string>
 
 </resources>

@@ -396,7 +396,9 @@ public final class SourceProbe {
             for (String jar : jars) {
                 if (progress != null) progress.onJar(++index, jars.size(), jar);
                 if (com.fongmi.android.tv.setting.JarBlockSetting.blocksBase(jar)) return true;
-                if (SourceScanner.hasExitRef(jar)) return true;
+                // 「杀进程中和」开启时，kill 特征不再阻止添加：加载期由 DexPatch 原地 NOP 中和；
+                // 黑名单与结构异常（疑似加密载荷）仍照常阻止
+                if (!com.fongmi.android.tv.setting.Setting.isNeutralizeKill() && SourceScanner.hasExitRef(jar)) return true;
             }
             return false;
         } catch (Throwable e) {

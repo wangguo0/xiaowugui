@@ -36,6 +36,7 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.probeMerge.setChecked(Setting.isProbeMerge());
         mBinding.popupShield.setChecked(Setting.isPopupShield());
         mBinding.blockNotice.setChecked(Setting.isBlockNotice());
+        mBinding.neutralizeKill.setChecked(Setting.isNeutralizeKill());
     }
 
     @Override
@@ -54,6 +55,23 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.popupKeyword.setOnClickListener(this::onPopupKeyword);
         mBinding.blockNoticeRow.setOnClickListener(v -> mBinding.blockNotice.performClick());
         mBinding.blockNotice.setOnClickListener(this::toggleBlockNotice);
+        mBinding.neutralizeKillRow.setOnClickListener(v -> mBinding.neutralizeKill.performClick());
+        mBinding.neutralizeKill.setOnClickListener(v -> toggleNeutralizeKill());
+    }
+
+    // 开启「中和杀进程指令」= 放行含杀进程代码的源（安全放宽），需二次确认；关闭即时生效
+    private void toggleNeutralizeKill() {
+        boolean enable = mBinding.neutralizeKill.isChecked();
+        if (!enable) {
+            Setting.putNeutralizeKill(false);
+            return;
+        }
+        new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.video_error_title)
+                .setMessage(R.string.neutralize_kill_confirm)
+                .setNegativeButton(R.string.dialog_negative, (dialog, which) -> mBinding.neutralizeKill.setChecked(false))
+                .setPositiveButton(R.string.dialog_positive, (dialog, which) -> Setting.putNeutralizeKill(true))
+                .show();
     }
 
     // 弹窗拦截即时生效，无需二次确认

@@ -1233,6 +1233,7 @@
     <string name="update_version">发现新版本 <xliff:g name="name">%s</xliff:g></string>
     <string name="update_title">版本更新</string>
     <string name="update_hint">选择版本查看更新内容并安装。</string>
+    <string name="update_force_hint">当前版本已停止支持，必须更新后才能继续使用。</string>
     <string name="update_check">正在检测更新…</string>
     <string name="update_latest">已是最新版本</string>
     <string name="update_failed">检测更新失败</string>

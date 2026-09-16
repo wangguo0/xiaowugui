@@ -146,6 +146,42 @@ public abstract class BaseActivity extends AppCompatActivity {
         showJarBlockNotice();
         showJarGuardNotice();
         showTrialNotice();
+        showDexPatchNotice();
+    }
+
+    // 「中和杀进程指令」失败被拉黑后：在当前页面告知用户失败原因与处理结果
+    private void showDexPatchNotice() {
+        java.util.List<String[]> notices = com.fongmi.android.tv.api.DexPatch.takeNotice();
+        if (notices == null || notices.isEmpty()) return;
+        StringBuilder sb = new StringBuilder();
+        StringBuilder urls = new StringBuilder();
+        for (String[] n : notices) {
+            if (sb.length() > 0) sb.append("\n\n");
+            sb.append(dexPatchReason(n[1]));
+            sb.append("\n").append(n[0]);
+            if (urls.length() > 0) urls.append("、");
+            urls.append(n[0]);
+        }
+        sb.append("\n\n").append(getString(R.string.dex_patch_notice_result));
+        sb.append("\n").append(getString(R.string.dex_patch_notice_hint, urls.toString()));
+        String message = sb.toString();
+        postNotice(() -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.dex_patch_notice_title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.source_probe_trial_rollback_confirm, null)
+                .show());
+    }
+
+    private String dexPatchReason(String code) {
+        switch (code) {
+            case "1":
+                return getString(R.string.dex_patch_notice_walk);
+            case "3":
+                return getString(R.string.dex_patch_notice_io);
+            default:
+                return getString(R.string.dex_patch_notice_not_found);
+        }
     }
 
     // jar 强制退出软件被归因后：在当前页面（而非仅首页）告知用户原因与处理方案（知道了关闭）。

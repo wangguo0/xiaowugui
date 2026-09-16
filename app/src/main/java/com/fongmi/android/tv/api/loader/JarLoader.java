@@ -132,20 +132,42 @@ public class JarLoader {
             SpiderDebug.log("jar-loader", "load skip missing key=%s file=%s", key, file);
             return;
         }
-        if (!file.setReadOnly()) {
+        // 已中和标记：杀进程 invoke 已被 NOP（见 DexPatch），跳过闸口直接加载。
+        // 注意：中和后 string_ids 区仍残留 "killProcess" 字面量（method_ids 名字未删），
+        // hasExitRef 兜底仍会报 true，必须靠该标记短路，否则会二次 patch 失败被误拉黑。
+        File marker = new File(file.getAbsolutePath() + ".patched");
+        if (!marker.exists() && !file.setReadOnly()) {
             SpiderDebug.log("jar-loader", "load skip readonly failed key=%s file=%s size=%s", key, file.getAbsolutePath(), file.length());
             return;
         }
         // 加载前静态闸口：解析 DEX 方法引用，确认 jar 直引/反射明文引用
-        // System.exit / Runtime.exit|halt / Process.killProcess（宿主自杀）→ 永久拉黑并拒绝加载。
+        // System.exit / Runtime.exit|halt / Process.killProcess（宿主自杀）。
+        // 「杀进程中和」开启时先原地 NOP 危险 invoke 并重算校验和，成功则打标记继续加载；
+        // 中和失败（走码失准/内嵌载荷）或未开启中和时，永久拉黑并拒绝加载——
         // 该 jar 代码永不进内存：无 Init 崩溃、无 System.exit 杀宿主、无任何用户提示。
         // fail-open：检测自身异常一律放行，绝不误杀正常源。
         // 受「添加源安全检测」开关控制：关闭时不执行静态扫描，直接加载。
-        if (com.fongmi.android.tv.setting.Setting.isProbeAdd() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(file)) {
-            com.fongmi.android.tv.setting.JarBlockSetting.add(lastInitJar);
-            com.fongmi.android.tv.utils.DiagLog.log("jar-guard", "load reject suicidal jar key=%s file=%s jar=%s", key, file.getAbsolutePath(), lastInitJar);
-            SpiderDebug.log("jar-loader", "load reject suicidal jar key=%s", key);
-            return;
+        if (!marker.exists() && com.fongmi.android.tv.setting.Setting.isProbeAdd() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(file)) {
+            boolean neutralizing = com.fongmi.android.tv.setting.Setting.isNeutralizeKill();
+            int code = neutralizing ? com.fongmi.android.tv.api.DexPatch.patchJarFile(file) : com.fongmi.android.tv.api.DexPatch.ERR_NOT_FOUND;
+            if (neutralizing && code == com.fongmi.android.tv.api.DexPatch.OK) {
+                // 原地重写产生的新文件是可写的，中和后必须补回只读（Android 高版本拒绝加载可写 dex）
+                if (!file.setReadOnly()) DiagLog.log("dex-patch", "readonly after patch failed file=%s", file.getAbsolutePath());
+                try {
+                    if (!marker.createNewFile()) DiagLog.log("dex-patch", "marker create failed file=%s", marker.getAbsolutePath());
+                } catch (Throwable e) {
+                    DiagLog.log("dex-patch", "marker write error file=%s error=%s", marker.getAbsolutePath(), e);
+                }
+                DiagLog.log("jar-guard", "load neutralized suicidal jar key=%s file=%s jar=%s", key, file.getAbsolutePath(), lastInitJar);
+                SpiderDebug.log("jar-loader", "load neutralized suicidal jar key=%s", key);
+            } else {
+                com.fongmi.android.tv.setting.JarBlockSetting.add(lastInitJar);
+                DiagLog.log("jar-guard", "load reject suicidal jar key=%s file=%s jar=%s", key, file.getAbsolutePath(), lastInitJar);
+                SpiderDebug.log("jar-loader", "load reject suicidal jar key=%s", key);
+                // 仅「尝试过中和但失败」才提示用户；开关关闭属正常阻止，不打扰
+                if (neutralizing) com.fongmi.android.tv.api.DexPatch.enqueueNotice(lastInitJar, code);
+                return;
+            }
         }
         String cachePath = Path.jar().getAbsolutePath();
         SpiderDebug.log("jar-loader", "load start key=%s file=%s size=%s cache=%s", key, file.getAbsolutePath(), file.length(), cachePath);
@@ -241,8 +263,14 @@ public class JarLoader {
             if (md5.startsWith("http")) md5 = OkHttp.string(md5).trim();
             jar = texts[0];
             SpiderDebug.log("jar-loader", "parse start key=%s source=%s md5=%s", key, source(jar), !md5.isEmpty());
-            if (!md5.isEmpty() && Util.equals(jar, md5)) {
-                load(key, Path.jar(jar));
+            // .patched 存在说明该 jar 已被原地中和，磁盘字节与作者声明 md5 必然不符：
+            // 跳过 md5 校验直接加载，否则会重新下载覆盖中和结果，陷入「下载→中和→再下载」死循环
+            File jarFile = Path.jar(jar);
+            boolean neutralized = new File(jarFile.getAbsolutePath() + ".patched").exists();
+            if (neutralized && Path.exists(jarFile)) {
+                load(key, jarFile);
+            } else if (!md5.isEmpty() && Util.equals(jar, md5)) {
+                load(key, jarFile);
             } else if (jar.startsWith("http")) {
                 load(key, Download.create(jar, Path.jar(jar)).get());
             } else if (jar.startsWith("file")) {
