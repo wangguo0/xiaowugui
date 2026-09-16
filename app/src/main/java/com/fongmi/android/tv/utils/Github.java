@@ -10,6 +10,12 @@ public class Github {
     private static final String GITHUB_API = "https://api.github.com/repos/wangguo0/xiaowugui/releases/tags";
     private static final String GITHUB_RELEASES_API = "https://api.github.com/repos/wangguo0/xiaowugui/releases";
     private static final String GITHUB_RELEASE_ASSETS_API = "https://api.github.com/repos/wangguo0/xiaowugui/releases/assets";
+    private static final String GITHUB_RAW = "https://raw.githubusercontent.com/wangguo0/xiaowugui/main";
+
+    // 强制更新策略文件（仓库可随时改，无需发版）
+    public static String getForcePolicyRaw() {
+        return GITHUB_RAW + "/update/force.json";
+    }
 
     // release tag 可能是中文（如「小乌龟1.1」），拼进 URL 前必须百分号编码，否则镜像加速与 API 请求会 404
     private static String encode(String tag) {

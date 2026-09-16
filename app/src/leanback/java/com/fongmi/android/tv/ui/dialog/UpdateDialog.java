@@ -33,9 +33,18 @@ public class UpdateDialog extends BaseAlertDialog {
     private boolean stableExpanded = true;
     private boolean betaExpanded;
     private boolean downloading;
+    private boolean forceMode;
+    private String forceMsg = "";
 
     public static UpdateDialog create() {
         return new UpdateDialog();
+    }
+
+    // 强制更新态：不可关闭、不可取消下载，仅保留「立即更新」
+    public UpdateDialog force(boolean forceMode, String forceMsg) {
+        this.forceMode = forceMode;
+        this.forceMsg = forceMsg == null ? "" : forceMsg;
+        return this;
     }
 
     public UpdateDialog stable(Update stable) {
@@ -104,7 +113,7 @@ public class UpdateDialog extends BaseAlertDialog {
         clearWindowInset();
         configureWindow();
         configureScrollHeight();
-        binding.stableItem.requestFocus();
+        (forceMode ? binding.cancel : binding.stableItem).requestFocus();
     }
 
     private void select(String channel) {
@@ -113,6 +122,7 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void toggle(String channel) {
+        if (forceMode) return;
         if (isExpanded(channel)) {
             update(channel, getItem(channel));
             return;
@@ -135,26 +145,41 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void close(View view) {
-        if (downloading) return;
+        if (downloading || forceMode) return;
         if (listener != null) listener.onClose();
         dismissAllowingStateLoss();
     }
 
     private void update(String channel, View view) {
+        // 强制更新态锁定目标版本，禁止切换通道
+        if (forceMode && !channel.equals(selected)) return;
         select(channel);
         if (listener != null) listener.onConfirm(view);
     }
 
     private void render() {
         normalizeSelection();
-        binding.betaItem.setVisibility(hasBeta() ? View.VISIBLE : View.GONE);
-        renderItem(Update.CHANNEL_STABLE, stable);
-        if (hasBeta()) renderItem(Update.CHANNEL_BETA, beta);
+        binding.betaItem.setVisibility(hasBeta() && !forceMode ? View.VISIBLE : View.GONE);
+        renderItem(Update.CHANNEL_STABLE, forceMode ? getSelected() : stable);
+        if (hasBeta() && !forceMode) renderItem(Update.CHANNEL_BETA, beta);
         renderAction();
         updateFocusLinks();
-        binding.close.setVisibility(View.VISIBLE);
+        binding.close.setVisibility(forceMode ? View.GONE : View.VISIBLE);
+        binding.hint.setText(forceMode ? getForceHint() : getString(R.string.update_hint));
         binding.progressPanel.setVisibility(View.GONE);
         downloading = false;
+    }
+
+    private String getForceHint() {
+        return TextUtils.isEmpty(forceMsg) ? getString(R.string.update_force_hint) : forceMsg;
+    }
+
+    // 强制更新态下载失败后回到可重试状态（非强制态返回 false 让调用方关闭弹窗）
+    public boolean reset() {
+        if (!forceMode || !isProgressTarget()) return false;
+        render();
+        binding.stableItem.requestFocus();
+        return true;
     }
 
     private void renderItem(String channel, Update update) {
@@ -187,25 +212,31 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private void renderAction() {
         Update update = getSelected();
+        if (forceMode) {
+            binding.cancel.setText(R.string.update_confirm);
+            binding.cancel.setEnabled(update != null && update.hasUpdate());
+            return;
+        }
         if (update == null || !update.hasUpdate()) binding.cancel.setText(R.string.about_acknowledge);
         else binding.cancel.setText(hasBeta() ? getString(R.string.update_confirm_channel, getSelectedName()) : getString(R.string.update_confirm));
     }
 
     private void updateFocusLinks() {
-        int nextAfterStable = hasBeta() ? R.id.betaItem : R.id.cancel;
+        int nextAfterStable = hasBeta() && !forceMode ? R.id.betaItem : R.id.cancel;
+        int nextBeforeStable = forceMode ? R.id.stableItem : R.id.close;
         binding.close.setFocusable(true);
         binding.close.setNextFocusUpId(R.id.close);
         binding.close.setNextFocusLeftId(R.id.close);
         binding.close.setNextFocusRightId(R.id.close);
         binding.close.setNextFocusDownId(R.id.stableItem);
-        binding.stableItem.setNextFocusUpId(R.id.close);
+        binding.stableItem.setNextFocusUpId(nextBeforeStable);
         binding.stableItem.setNextFocusDownId(nextAfterStable);
         binding.stableConfirm.setNextFocusDownId(nextAfterStable);
         binding.betaItem.setNextFocusUpId(R.id.stableItem);
         binding.betaItem.setNextFocusDownId(R.id.cancel);
         binding.betaConfirm.setNextFocusUpId(R.id.betaItem);
         binding.betaConfirm.setNextFocusDownId(R.id.cancel);
-        binding.cancel.setNextFocusUpId(hasBeta() ? R.id.betaItem : R.id.stableItem);
+        binding.cancel.setNextFocusUpId(nextAfterStable == R.id.cancel ? R.id.stableItem : R.id.betaItem);
         binding.cancel.setNextFocusDownId(R.id.cancel);
         binding.cancel.setNextFocusLeftId(R.id.cancel);
         binding.cancel.setNextFocusRightId(R.id.cancel);
@@ -213,6 +244,8 @@ public class UpdateDialog extends BaseAlertDialog {
 
     private boolean onDialogKey(int keyCode, KeyEvent event) {
         if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) return false;
+        // 强制更新态：返回键不可关闭/取消
+        if (forceMode) return true;
         if (downloading) action(binding.cancel);
         else close(binding.close);
         return true;
@@ -320,7 +353,7 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.betaItem.setEnabled(false);
         binding.stableConfirm.setEnabled(false);
         binding.betaConfirm.setEnabled(false);
-        binding.cancel.setEnabled(true);
+        binding.cancel.setEnabled(!forceMode);
         binding.close.setVisibility(View.GONE);
         binding.progressPanel.setVisibility(View.VISIBLE);
         binding.progress.setIndeterminate(indeterminate);

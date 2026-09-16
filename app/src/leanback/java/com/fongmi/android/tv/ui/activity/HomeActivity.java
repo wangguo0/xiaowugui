@@ -26,6 +26,7 @@ import androidx.viewbinding.ViewBinding;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.Product;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.Updater;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.api.config.WallConfig;
@@ -158,6 +159,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         App.post(this::initConfig, 80);
         App.post(() -> PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this)), 1800);
         App.post(() -> DLNARendererService.start(this), 2500);
+        App.post(() -> Updater.create().checkOnLaunch(this), 3000);
     }
 
     private void runAfterFirstFrame(Runnable runnable) {

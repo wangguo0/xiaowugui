@@ -25,6 +25,15 @@ on:
         required: false
         default: false
         type: boolean
+      force_update:
+        description: "Force update: old versions must update before continuing"
+        required: false
+        default: false
+        type: boolean
+      force_msg:
+        description: "Force update message (optional, blank = default text)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -217,6 +226,8 @@ jobs:
         env:
           RELEASE_NOTES: ${{ steps.release_notes.outputs.notes }}
           RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          FORCE_UPDATE: ${{ inputs.force_update }}
+          FORCE_MSG: ${{ inputs.force_msg }}
           GITHUB_RELEASE_DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag_encoded }}
         run: |
           python3 - <<'PY'
@@ -227,6 +238,8 @@ jobs:
 
           tag = os.environ["RELEASE_TAG"]
           notes = os.environ.get("RELEASE_NOTES", "").strip()
+          force = os.environ.get("FORCE_UPDATE", "").strip().lower() == "true"
+          force_msg = os.environ.get("FORCE_MSG", "").strip()
           release_download_base = os.environ["GITHUB_RELEASE_DOWNLOAD_BASE"]
           for apk in glob.glob("dist/*.apk"):
               base = os.path.splitext(os.path.basename(apk))[0]
@@ -243,6 +256,10 @@ jobs:
               }
               if notes:
                   data["notes"] = notes
+              if force:
+                  data["force"] = True
+                  if force_msg:
+                      data["forceMsg"] = force_msg
               with open(f"dist/{base}.json", "w", encoding="utf-8") as fh:
                   json.dump(data, fh, ensure_ascii=False, indent=2)
                   fh.write("\n")

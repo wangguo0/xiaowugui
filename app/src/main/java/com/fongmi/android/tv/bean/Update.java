@@ -18,8 +18,10 @@ public class Update {
     public String apkUrl;
     public String error;
     public String sha256;
+    public String forceMsg;
     public int code;
     public long size;
+    public boolean force;
 
     public static Update empty(String channel) {
         Update update = new Update();
@@ -29,6 +31,11 @@ public class Update {
 
     public boolean isBeta() {
         return CHANNEL_BETA.equals(channel);
+    }
+
+    // 该版本被开发者标记为强制更新，且当前确实落后需要升级
+    public boolean isForceUpdate() {
+        return force && hasUpdate();
     }
 
     public boolean hasManifest() {

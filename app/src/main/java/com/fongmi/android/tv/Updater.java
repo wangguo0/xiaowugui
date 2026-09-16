@@ -14,6 +14,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
+import com.fongmi.android.tv.utils.ForcePolicy;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.GithubProxy;
 import com.fongmi.android.tv.utils.Notify;
@@ -60,6 +61,9 @@ public class Updater implements Download.Callback, UpdateListener {
     private boolean force;
     private boolean downloading;
     private boolean canceled;
+    private boolean launchChecked;
+    private boolean forceMode;
+    private String forceMsg = "";
     private int lastProgress = -1;
     private long lastBytes;
     private long lastTotal;
@@ -97,20 +101,41 @@ public class Updater implements Download.Callback, UpdateListener {
             return;
         }
         if (!Setting.getUpdate()) return;
-        Task.execute(() -> doInBackground(activity, forceCheck));
+        Task.execute(() -> doInBackground(activity, forceCheck, false));
+    }
+
+    // 冷启动静默检查：仅命中强制更新（发布清单 force 或远端最低版本策略）才弹窗，否则完全不打扰
+    public void checkOnLaunch(FragmentActivity activity) {
+        if (launchChecked) return;
+        launchChecked = true;
+        if (downloading || dialog != null) return;
+        Task.execute(() -> doInBackground(activity, false, true));
     }
 
     public void resume(FragmentActivity activity) {
         bind(activity);
-        restoreDialog(activity);
+        if (downloading) {
+            restoreDialog(activity);
+            return;
+        }
+        if (forceMode && selected != null && selected.hasUpdate()) {
+            if (dialog == null || !dialog.isAdded()) show(activity);
+        }
     }
 
-    private void doInBackground(FragmentActivity activity, boolean forceCheck) {
+    private void doInBackground(FragmentActivity activity, boolean forceCheck, boolean launch) {
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
+        Future<ForcePolicy> policyFuture = Task.executor().submit(ForcePolicy::fetch);
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
+        applyForce(awaitPolicy(policyFuture, deadline));
+        if (launch) {
+            if (!forceMode || selected == null || !selected.hasUpdate()) return;
+            App.post(() -> show(activity));
+            return;
+        }
         if (!stable.hasUpdate() && !beta.hasUpdate()) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = stable;
@@ -120,8 +145,41 @@ public class Updater implements Download.Callback, UpdateListener {
             if (forceCheck) App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
             return;
         }
-        selected = stable;
+        if (!forceMode) selected = stable;
         App.post(() -> show(activity));
+    }
+
+    // 合并 A（发布清单 force 字段）+ B（远端 force.json 最低版本策略）判定强制更新态
+    private void applyForce(ForcePolicy policy) {
+        forceMode = false;
+        forceMsg = "";
+        Update target = null;
+        if (stable.isForceUpdate()) target = stable;
+        else if (beta.isForceUpdate()) target = beta;
+        if (target != null) {
+            forceMode = true;
+            forceMsg = TextUtils.isEmpty(target.forceMsg) ? policy.message : target.forceMsg;
+            selected = target;
+            return;
+        }
+        if (!policy.force) return;
+        target = stable.hasUpdate() ? stable : (beta.hasUpdate() ? beta : null);
+        // 策略要求强制但无可安装目标（清单缺失/网络异常）→ 无法执行，不弹窗卡死用户
+        if (target == null) return;
+        forceMode = true;
+        forceMsg = policy.message;
+        selected = target;
+    }
+
+    private ForcePolicy awaitPolicy(Future<ForcePolicy> future, long deadline) {
+        try {
+            long remaining = deadline - SystemClock.elapsedRealtime();
+            if (remaining <= 0) return ForcePolicy.none();
+            return future.get(remaining, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            future.cancel(true);
+            return ForcePolicy.none();
+        }
     }
 
     private Update awaitUpdate(Future<Update> future, String channel, long deadline) {
@@ -222,6 +280,8 @@ public class Updater implements Download.Callback, UpdateListener {
             update.apk = object.optString("apk");
             update.size = object.optLong("size");
             update.sha256 = object.optString("sha256");
+            update.force = object.optBoolean("force");
+            update.forceMsg = normalizeText(object.optString("forceMsg"));
             update.apkUrl = getApkUrl(update, source);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
@@ -302,9 +362,13 @@ public class Updater implements Download.Callback, UpdateListener {
         if (activity.getSupportFragmentManager().isStateSaved()) return;
         bind(activity);
         dismiss();
+        // 旋转后 FragmentManager 会自动恢复一个无状态的旧实例，统一移除后以完整状态重建
+        for (androidx.fragment.app.Fragment fragment : activity.getSupportFragmentManager().getFragments()) {
+            if (fragment instanceof UpdateDialog) ((UpdateDialog) fragment).dismissAllowingStateLoss();
+        }
         Notify.dismissToast();
         String channel = selected == null ? Update.CHANNEL_STABLE : selected.channel;
-        dialog = UpdateDialog.create().stable(stable).beta(beta).selected(channel).listener(this).show(activity);
+        dialog = UpdateDialog.create().stable(stable).beta(beta).selected(channel).force(forceMode, forceMsg).listener(this).show(activity);
     }
 
     @Override
@@ -334,6 +398,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     @Override
     public void onCancel(View view) {
+        // 强制更新态：拒绝取消（下载中不可中断、弹窗不可关闭）
+        if (forceMode) return;
         if (downloading) {
             canceled = true;
             downloading = false;
@@ -400,6 +466,8 @@ public class Updater implements Download.Callback, UpdateListener {
         downloading = false;
         resetProgress();
         Notify.show(msg);
+        // 强制更新态下载失败：保留弹窗供重试，不关闭
+        if (forceMode && dialog != null && dialog.reset()) return;
         dismiss();
     }
 
