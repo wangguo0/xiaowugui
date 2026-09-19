@@ -6,6 +6,7 @@ import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.api.CspWarmup;
 import com.fongmi.android.tv.api.Decoder;
+import com.fongmi.android.tv.api.HomeProbe;
 import com.fongmi.android.tv.api.loader.BaseLoader;
 import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.bean.Depot;
@@ -42,6 +43,8 @@ public class VodConfig extends BaseConfig {
 
     public static void markEnableChange(String url) {
         pendingEnableChange = url;
+        // 重新添加订阅时重置首页探测失败标记与自动切换记录
+        HomeProbe.reset(url);
     }
 
     /**
@@ -183,6 +186,8 @@ public class VodConfig extends BaseConfig {
     @Override
     protected void onLoadSuccess() {
         CspWarmup.schedule("vod-config-loaded");
+        // 首页站点自动切换兜底：后台探测默认站，空则切换候选站（受设置开关节制）
+        HomeProbe.trigger();
         // 需求4：点播订阅「新增成功即自动设全部站点为参与换源」的一次性标记（缓存 PASS / 合并免检路径）
         if (TextUtils.isEmpty(pendingEnableChange)) return;
         if (!pendingEnableChange.equals(getUrl())) return;

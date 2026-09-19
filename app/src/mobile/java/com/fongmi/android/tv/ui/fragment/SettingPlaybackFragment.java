@@ -12,9 +12,12 @@ import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.FragmentSettingPlaybackBinding;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.ui.activity.SubSettingActivity;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.ChoiceDialog;
+import com.fongmi.android.tv.ui.dialog.SiteHealthDialog;
+import com.fongmi.android.tv.utils.Notify;
 
 public class SettingPlaybackFragment extends BaseFragment {
 
@@ -40,6 +43,12 @@ public class SettingPlaybackFragment extends BaseFragment {
         mBinding.keepVisibleSwitch.setChecked(Setting.isKeepVisible());
         mBinding.bangumiVisibleSwitch.setChecked(Setting.isBangumiVisible());
         mBinding.switchEpisodeThresholdText.setText(getString(R.string.setting_percent, Setting.getSwitchEpisodeThreshold()));
+        setSiteHealthText();
+    }
+
+    // 站点健康排序摘要（自增强功能页迁入）
+    private void setSiteHealthText() {
+        mBinding.siteHealthSortText.setText(getString(Setting.isSiteHealthSort() ? R.string.setting_enable : R.string.setting_disable));
     }
 
     @Override
@@ -59,6 +68,15 @@ public class SettingPlaybackFragment extends BaseFragment {
         mBinding.bangumiVisible.setOnClickListener(v -> setBangumiVisible());
         mBinding.bangumiVisibleSwitch.setOnClickListener(v -> setBangumiVisible());
         mBinding.switchEpisodeThreshold.setOnClickListener(this::onSwitchEpisodeThreshold);
+        mBinding.siteHealthSort.setOnClickListener(view -> SiteHealthDialog.show(this, this::setSiteHealthText));
+        mBinding.siteHealthSort.setOnLongClickListener(this::clearSiteHealth);
+    }
+
+    // 长按清除站点健康数据（行为与迁入前一致）
+    private boolean clearSiteHealth(View view) {
+        SiteHealthStore.clear();
+        Notify.show(R.string.site_health_clear_done);
+        return true;
     }
 
     // 整行与开关均可点击切换；程序 setChecked 不触发点击，无回环风险。

@@ -117,7 +117,7 @@
     </string-array>
 
     <!-- 站点弹窗 -->
-    <string name="site_block_manage">屏蔽管理</string>
+    <string name="site_block_manage">屏蔽订阅源管理</string>
     <string name="site_column_double">双列</string>
     <string name="site_column_single">单列</string>
     <string name="site_header_health">连接状态</string>
@@ -173,9 +173,9 @@
     <string name="site_filter_none">当前没有筛选条件</string>
 
     <!-- 弹窗拦截 -->
-    <string name="popup_shield">拦截源弹窗</string>
-    <string name="popup_keyword_manage">弹窗拦截关键字</string>
-    <string name="popup_keyword_title">弹窗拦截关键字</string>
+    <string name="popup_shield">拦截订阅源广告弹窗</string>
+    <string name="popup_keyword_manage">自定义拦截订阅源广告弹窗关键字</string>
+    <string name="popup_keyword_title">自定义拦截订阅源广告弹窗关键字</string>
     <string name="popup_keyword_desc">弹窗中出现以下任一关键字即自动屏蔽</string>
     <string name="popup_keyword_add">添加</string>
     <string name="popup_keyword_reset">恢复默认</string>
@@ -184,14 +184,15 @@
     <string name="popup_keyword_empty">暂无关键字</string>
     <string name="popup_keyword_exists">该关键字已存在</string>
     <string name="popup_keyword_blank">请输入关键字</string>
-    <string name="block_interface_toast">屏蔽接口提示</string>
-    <string name="neutralize_kill">中和杀进程指令</string>
+    <string name="block_interface_toast">屏蔽订阅源接口toast提示</string>
+    <string name="neutralize_kill">订阅源检测包名中和指令</string>
     <string name="neutralize_kill_confirm">开启后，含杀进程代码的源将不再被阻止添加，软件会在加载前原地中和其杀进程指令（其余功能不受影响）。被中和的源仍会执行其它代码，存在一定风险。确定开启吗？</string>
+    <string name="neutralize_kill_close_confirm">关闭此功能后，对软件包名/软件名带检测的订阅源将无法添加，是否确认关闭？</string>
     <string name="dex_patch_notice_title">杀进程指令中和失败</string>
     <string name="dex_patch_notice_walk">该源的杀进程代码经过加固混淆，软件无法安全定位并中和。</string>
     <string name="dex_patch_notice_not_found">该源的杀进程逻辑藏在加密载荷中，软件无法中和。</string>
     <string name="dex_patch_notice_io">处理该源文件时发生错误，软件无法中和。</string>
     <string name="dex_patch_notice_result">处理结果：该 jar 已被永久屏蔽，对应站源无法播放；订阅源本身已保留，其它源不受影响。</string>
-    <string name="dex_patch_notice_hint">建议：可在「源设置 → 屏蔽管理」查看被屏蔽的 jar 地址（%1$s）。若确认该源可信，可关闭「添加源安全检测」后重新添加，风险自负。</string>
+    <string name="dex_patch_notice_hint">建议：可在「源设置 → 屏蔽订阅源管理」查看被屏蔽的 jar 地址（%1$s）。若确认该源可信，可关闭「添加订阅源安全检测」后重新添加，风险自负。</string>
 
 </resources>

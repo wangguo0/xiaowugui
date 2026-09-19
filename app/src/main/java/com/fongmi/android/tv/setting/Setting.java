@@ -599,6 +599,15 @@ public class Setting {
         Prefers.put("popup_keywords", keywords);
     }
 
+    // 首页站点自动切换兜底，默认开启：默认站无数据时后台探测候选站并自动切换首页
+    public static boolean isHomeAutoSwitch() {
+        return Prefers.getBoolean("home_auto_switch", true);
+    }
+
+    public static void putHomeAutoSwitch(boolean enable) {
+        Prefers.put("home_auto_switch", enable);
+    }
+
     // 拦截接口返回的 toast 提示（配置 notice / 仓库 notice / Web 源 ext.toast），默认开启
     public static boolean isBlockNotice() {
         return Prefers.getBoolean("block_notice", true);

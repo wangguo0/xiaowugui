@@ -164,7 +164,9 @@ public class SiteViewModel extends ViewModel {
                     },
                     error -> {
                         if (searchEpoch.get() != epoch) return;
-                        if (error instanceof CancellationException) return;
+                        // 主动取消（stopSearch/onCleared）会先推进 epoch，已被上一行拦截；
+                        // 走到这里的 CancellationException 只来自 withTimeout 超时，必须计入完成数，
+                        // 否则 finished() 永不触发，「加载更多」footer 永久残留且点击无反应
                         SiteHealthStore.recordSearch(site, false, 0, System.currentTimeMillis() - start, error.getMessage());
                         postSearchProgress(epoch, completed, total);
                         error.printStackTrace();

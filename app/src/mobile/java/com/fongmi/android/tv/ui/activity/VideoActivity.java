@@ -137,6 +137,7 @@ import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.custom.KaraokeResultView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.custom.SpaceItemDecoration;
+import com.fongmi.android.tv.ui.dialog.ActionChoiceSheet;
 import com.fongmi.android.tv.ui.dialog.CastDialog;
 import com.fongmi.android.tv.ui.dialog.CodecCapabilityDialog;
 import com.fongmi.android.tv.ui.dialog.ControlDialog;
@@ -145,7 +146,6 @@ import com.fongmi.android.tv.ui.dialog.EpisodeGridDialog;
 import com.fongmi.android.tv.ui.dialog.EpisodeListDialog;
 import com.fongmi.android.tv.ui.dialog.InfoDialog;
 import com.fongmi.android.tv.ui.dialog.LutPanelDialog;
-import com.fongmi.android.tv.ui.dialog.PlayerKernelDialog;
 import com.fongmi.android.tv.ui.dialog.QuickSearchDialog;
 import com.fongmi.android.tv.ui.dialog.SourceSwitchDialog;
 import com.fongmi.android.tv.ui.dialog.ReceiveDialog;
@@ -179,7 +179,9 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -338,6 +340,32 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private long mAutoSwitchDeadline;
     private boolean mBlockedSwitch;
     private Clock mClock;
+    // 全屏点播控制层右上角当前时间：每分钟刷新一次
+    private final Runnable mControlClockTick = new Runnable() {
+        @Override
+        public void run() {
+            if (mBinding == null || isFinishing() || isDestroyed()) return;
+            mBinding.control.clock.setText(new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date()));
+            App.post(this, 60_000L - System.currentTimeMillis() % 60_000L);
+        }
+    };
+    // 定时关闭：到期时间戳（0=未设置）、"本集播放完"标志、当前选项下标（0=不定时）
+    private long mSleepDeadlineMs;
+    private boolean mSleepAfterEpisode;
+    private int mSleepChoiceIndex;
+    private final Runnable mSleepTick = new Runnable() {
+        @Override
+        public void run() {
+            if (mBinding == null || isFinishing() || isDestroyed()) return;
+            long remain = mSleepDeadlineMs - System.currentTimeMillis();
+            if (remain <= 0) {
+                quitBySleepTimer();
+                return;
+            }
+            mBinding.control.action.timer.setText(getString(R.string.play_timer) + formatCountdown(remain));
+            App.post(this, 1000L);
+        }
+    };
     private PiP mPiP;
     private String mContextWallUrl;
     private String mContextWallLockedUrl;
@@ -897,7 +925,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.content.setOnLongClickListener(view -> onCopy());
         mBinding.control.back.setOnClickListener(view -> onBack());
         mBinding.control.cast.setOnClickListener(view -> onCast());
-        mBinding.control.info.setOnClickListener(view -> onInfo());
+        mBinding.control.right.info.setOnClickListener(view -> onInfo());
         mBinding.control.keep.setOnClickListener(view -> onKeep());
         mBinding.control.osdDiagnostics.setOnClickListener(view -> onOsdDiagnostics());
         mBinding.control.play.setOnClickListener(view -> checkPlay());
@@ -912,27 +940,28 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.text.setOnClickListener(this::onTrack);
         mBinding.control.action.audio.setOnClickListener(this::onTrack);
         mBinding.control.action.video.setOnClickListener(this::onTrack);
-        mBinding.control.action.scale.setOnClickListener(view -> onScale());
+        mBinding.control.action.scale.setOnClickListener(this::onScale);
         mBinding.control.action.lut.setOnClickListener(view -> onLut());
         mBinding.control.action.karaoke.setOnClickListener(view -> onKaraokeMode());
-        mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
+        mBinding.control.action.speed.setOnClickListener(this::onSpeed);
         mBinding.control.action.reset.setOnClickListener(view -> onReset());
         mBinding.control.action.title.setOnClickListener(view -> onTitle());
-        mBinding.control.action.player.setOnClickListener(view -> onPlayerKernel());
+        mBinding.control.action.player.setOnClickListener(this::onPlayerKernel);
         mBinding.control.action.player.setOnLongClickListener(view -> onChooseLong());
         mBinding.control.action.prev.setOnClickListener(view -> checkPrev());
         mBinding.control.action.next.setOnClickListener(view -> checkNext());
-        mBinding.control.action.decode.setOnClickListener(view -> onDecode());
+        mBinding.control.action.decode.setOnClickListener(this::onDecode);
         mBinding.control.action.playParams.setOnClickListener(view -> onPlayParams());
-        mBinding.control.action.ending.setOnClickListener(view -> onEnding());
-        mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
-        mBinding.control.action.opening.setOnClickListener(view -> onOpening());
+        mBinding.control.action.ending.setOnClickListener(this::onEnding);
+        mBinding.control.action.repeat.setOnClickListener(this::onRepeat);
+        mBinding.control.action.opening.setOnClickListener(this::onOpening);
+        mBinding.control.action.timer.setOnClickListener(this::onSleepTimer);
         mBinding.control.action.danmaku.setOnClickListener(view -> onDanmaku());
         mBinding.control.action.episodes.setOnClickListener(view -> onEpisodes());
         mBinding.audioPlay.setOnClickListener(view -> checkPlay());
         mBinding.audioNext.setOnClickListener(view -> checkNext());
         mBinding.audioPrev.setOnClickListener(view -> checkPrev());
-        mBinding.audioRepeatAction.setOnClickListener(view -> onRepeat());
+        mBinding.audioRepeatAction.setOnClickListener(this::onRepeat);
         mBinding.audioLyricsAction.setOnClickListener(view -> onLyricsSearch());
         mBinding.audioQueueAction.setOnClickListener(view -> onAudioQueue());
         mBinding.audioCastAction.setOnClickListener(view -> onCast());
@@ -3838,7 +3867,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         showDanmaku();
     }
 
-    private void onRepeat() {
+    private void onRepeat(View anchor) {
+        String[] items = new String[]{getString(R.string.repeat_none), getString(R.string.repeat_one)};
+        int current = player().isRepeatOne() ? 1 : 0;
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, items, current, which -> {
+            if (which == current) return;
+            applyRepeat();
+        }, this::setR1Callback);
+    }
+
+    private void applyRepeat() {
         player().setRepeatOne(!player().isRepeatOne());
         mBinding.control.action.repeat.setSelected(player().isRepeatOne());
         setAudioRepeatSelected(player().isRepeatOne());
@@ -3850,12 +3889,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setAudioRepeatSelected(player().isRepeatOne());
     }
 
-    private void onScale() {
-        int index = getScale();
+    private void onScale(View anchor) {
         String[] array = ResUtil.getStringArray(R.array.select_scale);
-        if (mKeyDown.getScale() != 1.0f) mKeyDown.resetScale();
-        else setScale(index == array.length - 1 ? 0 : ++index);
-        setR1Callback();
+        int current = getScale();
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, array, current, which -> {
+            if (which == current) return;
+            if (mKeyDown.getScale() != 1.0f) mKeyDown.resetScale();
+            setScale(which);
+            setR1Callback();
+        }, this::setR1Callback);
     }
 
     private void onLut() {
@@ -3924,10 +3967,23 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setR1Callback();
     }
 
-    private void onSpeed() {
-        mBinding.control.action.speed.setText(player().addSpeed());
-        saveDefaultSpeed();
-        setR1Callback();
+    private void onSpeed(View anchor) {
+        float[] presets = PlayerManager.getSpeedPresets();
+        String[] items = new String[presets.length];
+        float current = player().getSpeed();
+        int checked = 0;
+        for (int i = 0; i < presets.length; i++) {
+            items[i] = PlayerManager.formatSpeedText(presets[i]);
+            if (Math.abs(presets[i] - current) < 0.01f) checked = i;
+        }
+        final int checkedIndex = checked;
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, items, checkedIndex, which -> {
+            if (Math.abs(presets[which] - current) < 0.01f) return;
+            mBinding.control.action.speed.setText(player().setSpeed(presets[which]));
+            saveDefaultSpeed();
+            setR1Callback();
+        }, this::setR1Callback);
     }
 
     private boolean onSpeedLong() {
@@ -3972,7 +4028,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return true;
     }
 
-    private void onDecode() {
+    private void onDecode(View anchor) {
+        String[] items = ResUtil.getStringArray(R.array.select_decode);
+        int current = player().getDecodeIndex();
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, items, current, which -> {
+            if (which == current) return;
+            toggleDecodeFlow();
+        }, this::setR1Callback);
+    }
+
+    private void toggleDecodeFlow() {
         if (refreshAndSwitchDecode()) return;
         mClock.setCallback(null);
         clearLyrics();
@@ -4024,11 +4090,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setDecode();
     }
 
-    private void onEnding() {
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (player().canSetEnding(position, duration)) setEnding(duration - position);
-        setR1Callback();
+    private void onEnding(View anchor) {
+        // 改为用户自定义选择片尾时间（结尾前 N 秒自动跳过），不再直接取当前播放位置
+        int current = (int) Math.min(300, Math.max(0, mHistory.getEnding() / 1000));
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.showSecondsPicker(anchor, getString(R.string.play_ed), current, seconds -> {
+            setEnding(seconds * 1000L);
+            setR1Callback();
+        }, this::setR1Callback);
     }
 
     private boolean onEndingReset() {
@@ -4042,11 +4111,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.ending.setText(ending <= 0 ? getString(R.string.play_ed) : Util.timeMs(mHistory.getEnding()));
     }
 
-    private void onOpening() {
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (player().canSetOpening(position, duration)) setOpening(position);
-        setR1Callback();
+    private void onOpening(View anchor) {
+        // 改为用户自定义选择片头时间（开头 N 秒自动跳过），不再直接取当前播放位置
+        int current = (int) Math.min(300, Math.max(0, mHistory.getOpening() / 1000));
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.showSecondsPicker(anchor, getString(R.string.play_op), current, seconds -> {
+            setOpening(seconds * 1000L);
+            setR1Callback();
+        }, this::setR1Callback);
     }
 
     private boolean onOpeningReset() {
@@ -4058,6 +4130,61 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setOpening(long opening) {
         mHistory.setOpening(opening);
         mBinding.control.action.opening.setText(opening <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
+    }
+
+    private void onSleepTimer(View anchor) {
+        String[] items = new String[]{
+                getString(R.string.timer_off), getString(R.string.timer_1m), getString(R.string.timer_5m),
+                getString(R.string.timer_10m), getString(R.string.timer_15m), getString(R.string.timer_30m),
+                getString(R.string.timer_1h), getString(R.string.timer_2h), getString(R.string.timer_after_episode)};
+        long[] minutes = {0, 1, 5, 10, 15, 30, 60, 120, -1};
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, items, mSleepChoiceIndex, which -> {
+            App.removeCallbacks(mSleepTick);
+            mSleepAfterEpisode = false;
+            mSleepDeadlineMs = 0;
+            mSleepChoiceIndex = which;
+            if (which == 0) {
+                resetTimerButton();
+                Notify.show(getString(R.string.timer_set_format, items[which]));
+                return;
+            }
+            mBinding.control.action.timer.setSelected(true);
+            if (which == items.length - 1) {
+                mSleepAfterEpisode = true;
+                mBinding.control.action.timer.setText(getString(R.string.play_timer) + getString(R.string.timer_after_episode));
+            } else {
+                mSleepDeadlineMs = System.currentTimeMillis() + minutes[which] * 60_000L;
+                mSleepTick.run();
+            }
+            Notify.show(getString(R.string.timer_set_format, items[which]));
+        }, this::setR1Callback);
+    }
+
+    private void resetTimerButton() {
+        mBinding.control.action.timer.setSelected(false);
+        mBinding.control.action.timer.setText(getString(R.string.play_timer));
+    }
+
+    private String formatCountdown(long remainMs) {
+        long total = (remainMs + 999) / 1000;
+        long h = total / 3600;
+        long m = (total % 3600) / 60;
+        long s = total % 60;
+        return h > 0 ? String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s) : String.format(Locale.getDefault(), "%02d:%02d", m, s);
+    }
+
+    // 定时关闭到期：停止播放并回到首页（不退出 App，播放进度保留）
+    private void quitBySleepTimer() {
+        App.removeCallbacks(mSleepTick);
+        DiagLog.log("video", "sleepTimer back to home");
+        try {
+            stopService(new Intent(this, PlaybackService.class));
+        } catch (Throwable ignored) {
+        }
+        startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        Notify.show(getString(R.string.timer_finished));
+        finish();
     }
 
     private void onEpisodes() {
@@ -4075,9 +4202,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return true;
     }
 
-    private void onPlayerKernel() {
+    private void onPlayerKernel(View anchor) {
         if (playerKernelSwitchRefreshing) return;
-        PlayerKernelDialog.show(this, player().getPlayerType(), this::switchPlayerKernel);
+        String[] items = ResUtil.getStringArray(R.array.select_player_kernel);
+        int current = PlayerSetting.sanitizePlayer(player().getPlayerType());
+        App.removeCallbacks(mR1);
+        ActionChoiceSheet.show(anchor, items, current, which -> {
+            int target = PlayerSetting.sanitizePlayer(which);
+            if (target == current) return;
+            switchPlayerKernel(target);
+        }, this::setR1Callback);
     }
 
     private void switchPlayerKernel(int type) {
@@ -4276,13 +4410,21 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.parse.setVisibility(isFullscreen() && isUseParse() ? View.VISIBLE : View.GONE);
         mBinding.control.action.getRoot().setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
         mBinding.control.right.lock.setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
-        mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
+        mBinding.control.right.info.setVisibility(isLock() || player().isEmpty() ? View.GONE : View.VISIBLE);
         mBinding.control.cast.setVisibility(View.GONE);
         mBinding.control.center.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.bottom.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.back.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.top.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.getRoot().setVisibility(View.VISIBLE);
+        // 全屏播放时在控制层右上角显示当前时间，显示期间每分钟刷新
+        App.removeCallbacks(mControlClockTick);
+        if (isFullscreen() && !isLock()) {
+            mBinding.control.clock.setVisibility(View.VISIBLE);
+            mControlClockTick.run();
+        } else {
+            mBinding.control.clock.setVisibility(View.GONE);
+        }
         if (mOsd != null) mOsd.setControlsVisible(true);
         checkFullscreenImg();
         setR1Callback();
@@ -4292,6 +4434,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.getRoot().setVisibility(View.GONE);
         if (mOsd != null) mOsd.setControlsVisible(false);
         App.removeCallbacks(mR1);
+        App.removeCallbacks(mControlClockTick);
     }
 
     private void onOsdDiagnostics() {
@@ -4665,6 +4808,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private final PlaybackService.NavigationCallback mNavigationCallback = new PlaybackService.NavigationCallback() {
         @Override
         public void onNext() {
+            // 定时关闭选择了"本集播放完"：本集播完直接退出 App，不再自动播下一集
+            if (mSleepAfterEpisode) {
+                quitBySleepTimer();
+                return;
+            }
             if (SpiderDebug.isEnabled()) SpiderDebug.log("audio-auto-next", "activity onNext audioStage=%s episode=%s", mAudioStageVisible, getEpisode() == null ? "null" : getEpisode().getName());
             if (!mAudioStageVisible || !playNextAudioPlaylistEntry()) checkNext();
         }
@@ -6831,7 +6979,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         Timer.get().reset();
         DanmakuApi.cancel();
         RefreshEvent.keep();
-        App.removeCallbacks(mR1, mR2, mR3, mR4, mAutoSwitchCheck);
+        App.removeCallbacks(mR1, mR2, mR3, mR4, mAutoSwitchCheck, mSleepTick, mControlClockTick);
         if (mOsd != null) mOsd.release();
         mViewModel.getResult().removeObserver(mObserveDetail);
         mViewModel.getPlayer().removeObserver(mObservePlayer);

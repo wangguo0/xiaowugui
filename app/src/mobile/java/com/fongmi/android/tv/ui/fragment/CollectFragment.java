@@ -73,6 +73,8 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     // 上次清洗时后备池的规模：用于判断池内是否还有未参与过排序的新结果
     private int mCleanedCount;
     // 已展示卡片按归一化片名分桶，供「加载更多」O(1) 判重（不改动已展示卡片，重复项直接丢弃）
+    // 冻结后原位换源的相关度门槛：关键词长度/片名长度 > 0.9 才允许替换已展示卡片
+    private static final double UPGRADE_MIN_SCORE = 0.9;
     private final Map<String, List<Vod>> mShownByName = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private boolean mRefreshPending;
@@ -283,9 +285,12 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         if (mAllResults.size() > MAX_RAW_RESULTS) {
             mAllResults.subList(0, mAllResults.size() - MAX_RAW_RESULTS).clear();
         }
-        // 绝对冻结：首屏集满后本方法只做一次入池，不拷贝快照、不排期刷新、不触碰 UI，
-        // 低性能设备在数十个站点陆续返回时主线程零工作量
-        if (mFrozen) return;
+        // 绝对冻结：首屏集满后本方法只做一次入池，不拷贝快照、不排期刷新；
+        // 仅允许相关度 > 90% 的高相关卡片原位换到更健康的播放站点
+        if (mFrozen) {
+            upgradeShownForFrozen(result.getList());
+            return;
+        }
         scheduleRefresh();
     }
 
@@ -312,7 +317,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             App.post(() -> {
                 mRefreshing = false;
                 if (!isAdded()) return;
-                commitFirstPage(sorted);
+                commitFirstPage(sorted, snapshot.size());
                 if (mRefreshAgain) {
                     mRefreshAgain = false;
                     scheduleRefresh();
@@ -323,7 +328,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     // 提交首屏：前 PAGE_SIZE 条钉死展示，其余清洗结果留在剩余候选中等「加载更多」追加。
     // 集满即冻结；未集满则等全部站点返回后由 progress 收尾冻结
-    private void commitFirstPage(List<Vod> sorted) {
+    private void commitFirstPage(List<Vod> sorted, int cleanedCount) {
         if (sorted.isEmpty()) return;
         int end = Math.min(PAGE_SIZE, sorted.size());
         mDisplayed.clear();
@@ -335,7 +340,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             trackShown(vod);
         }
         mRest.addAll(sorted.subList(end, sorted.size()));
-        mCleanedCount = mAllResults.size();
+        mCleanedCount = cleanedCount;
         if (mDisplayed.size() >= PAGE_SIZE) mFrozen = true;
         submitPage();
     }
@@ -351,6 +356,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     private void submitPage() {
         List<Vod> page = new ArrayList<>(mDisplayed);
         if (hasMore()) page.add(SearchAdapter.FOOTER);
+        else if (!mDisplayed.isEmpty()) page.add(SearchAdapter.END);
         boolean atTop = !mBinding.recycler.canScrollVertically(-1);
         mSearchAdapter.setItems(page, () -> {
             if (!isAdded() || !atTop) return;
@@ -415,6 +421,40 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             if (!VodMatcher.isConflict(item, vod)) return true;
         }
         return false;
+    }
+
+    // 冻结后原位换源：新到结果与已展示卡片同名同簇、相关度 > 90% 且新站点健康度严格更优时，
+    // 原位替换该卡片（位置不变，仅换播放站点），保证高相关结果拿到最优播放源。
+    // 每条新结果仅做一次归一化 + 哈希查桶，未命中直接跳过，冻结期主线程开销可忽略
+    private void upgradeShownForFrozen(List<Vod> items) {
+        String word = normalize(getKeyword());
+        if (word.isEmpty()) return;
+        boolean changed = false;
+        for (Vod vod : items) {
+            String key = normalize(vod.getName());
+            if (getScore(key, word) <= UPGRADE_MIN_SCORE) continue;
+            List<Vod> shown = mShownByName.get(key);
+            if (shown == null || shown.isEmpty()) continue;
+            for (int i = 0; i < shown.size(); i++) {
+                Vod item = shown.get(i);
+                if (VodMatcher.isConflict(item, vod)) continue;
+                if (SiteHealthStore.compareVods(item, vod) <= 0) break;
+                int index = -1;
+                for (int j = 0; j < mDisplayed.size(); j++) {
+                    if (mDisplayed.get(j) == item) {
+                        index = j;
+                        break;
+                    }
+                }
+                if (index < 0) break;
+                fillFields(vod, item);
+                mDisplayed.set(index, vod);
+                shown.set(i, vod);
+                changed = true;
+                break;
+            }
+        }
+        if (changed) submitPage();
     }
 
     // 同名聚类去重：片名相同的条目按 5 维指纹（VodMatcher）分簇，

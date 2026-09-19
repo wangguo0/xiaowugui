@@ -715,6 +715,20 @@ public class PlayerManager implements ParseCallback {
         return SPEED_FORMAT.format(getSpeed());
     }
 
+    public static float[] getSpeedPresets() {
+        return SPEED_PRESETS.clone();
+    }
+
+    public static String formatSpeedText(float speed) {
+        synchronized (SPEED_FORMAT) {
+            return SPEED_FORMAT.format(speed);
+        }
+    }
+
+    public int getDecodeIndex() {
+        return engine != null ? engine.getDecode() : PlayerEngine.SOFT;
+    }
+
     public String getDecodeText() {
         return engine.getDecodeText();
     }

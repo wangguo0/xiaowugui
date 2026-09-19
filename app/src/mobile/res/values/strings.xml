@@ -117,7 +117,7 @@
     </string-array>
 
     <!-- Site dialog -->
-    <string name="site_block_manage">Block</string>
+    <string name="site_block_manage">Blocked sources</string>
     <string name="site_column_double">2 columns</string>
     <string name="site_column_single">1 column</string>
     <string name="site_header_health">Status</string>
@@ -173,9 +173,9 @@
     <string name="site_filter_none">No filters are currently set</string>
 
     <!-- Popup shield -->
-    <string name="popup_shield">Block source pop-ups</string>
-    <string name="popup_keyword_manage">Pop-up keywords</string>
-    <string name="popup_keyword_title">Pop-up keywords</string>
+    <string name="popup_shield">Block source ad pop-ups</string>
+    <string name="popup_keyword_manage">Custom ad pop-up keywords</string>
+    <string name="popup_keyword_title">Custom ad pop-up keywords</string>
     <string name="popup_keyword_desc">Pop-ups containing any keyword below will be hidden automatically</string>
     <string name="popup_keyword_add">Add</string>
     <string name="popup_keyword_reset">Restore defaults</string>
@@ -184,14 +184,15 @@
     <string name="popup_keyword_empty">No keywords</string>
     <string name="popup_keyword_exists">Keyword already added</string>
     <string name="popup_keyword_blank">Please enter a keyword</string>
-    <string name="block_interface_toast">Block source notices</string>
-    <string name="neutralize_kill">Neutralize process-kill</string>
+    <string name="block_interface_toast">Block source interface toasts</string>
+    <string name="neutralize_kill">Neutralize kill on package check</string>
     <string name="neutralize_kill_confirm">When on, sources containing process-killing code will no longer be blocked. The app neutralizes the kill instructions in place before loading (other features are unaffected). Neutralized sources still run their remaining code, which carries some risk. Turn it on?</string>
+    <string name="neutralize_kill_close_confirm">If you turn this off, sources that check the app package name or app name cannot be added. Turn it off?</string>
     <string name="dex_patch_notice_title">Process-kill neutralization failed</string>
     <string name="dex_patch_notice_walk">The kill code in this source is hardened/obfuscated, so the app cannot safely locate and neutralize it.</string>
     <string name="dex_patch_notice_not_found">The kill logic of this source is hidden in an encrypted payload and cannot be neutralized.</string>
     <string name="dex_patch_notice_io">An error occurred while processing this source file, so it could not be neutralized.</string>
     <string name="dex_patch_notice_result">Result: this jar has been permanently blocked, so its sites cannot play. The subscription itself is kept, and other sources are unaffected.</string>
-    <string name="dex_patch_notice_hint">Suggestion: view the blocked jar URL (%1$s) under Source settings → Block manager. If you trust this source, turn off Add-source security scan and re-add it at your own risk.</string>
+    <string name="dex_patch_notice_hint">Suggestion: view the blocked jar URL (%1$s) under Source settings → Blocked sources. If you trust this source, turn off the subscription source check on add and re-add it at your own risk.</string>
 
 </resources>

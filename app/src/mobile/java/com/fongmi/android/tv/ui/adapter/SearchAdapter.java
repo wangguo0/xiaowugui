@@ -1,13 +1,16 @@
 package com.fongmi.android.tv.ui.adapter;
 
+import android.graphics.Color;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.AdapterSearchBinding;
 import com.fongmi.android.tv.databinding.AdapterSearchFooterBinding;
@@ -19,12 +22,17 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
     private static final int VIEW_TYPE_LIST = 0;
     private static final int VIEW_TYPE_GRID = 1;
     private static final int VIEW_TYPE_FOOTER = 2;
+    private static final int VIEW_TYPE_END = 3;
 
     // 「加载更多」哨兵对象：作为列表最后一项参与 diff，视图类型为 FOOTER
     public static final Vod FOOTER = new Vod();
 
+    // 「到底了」哨兵对象：无更多结果时作为列表最后一项参与 diff，视图类型为 END，不可点击
+    public static final Vod END = new Vod();
+
     static {
         FOOTER.setId("search_load_more_footer");
+        END.setId("search_end_footer");
     }
 
     private final OnClickListener listener;
@@ -51,12 +59,20 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
         this.loadMore = loadMore;
     }
 
+    // 底部栏（FOOTER / END）统一识别，供网格模式占满整行使用
     public boolean isFooter(int position) {
-        return position >= 0 && position < getItemCount() && getItem(position) == FOOTER;
+        if (position < 0 || position >= getItemCount()) return false;
+        Vod item = getItem(position);
+        return item == FOOTER || item == END;
+    }
+
+    public boolean isEnd(int position) {
+        return position >= 0 && position < getItemCount() && getItem(position) == END;
     }
 
     @Override
     public int getItemViewType(int position) {
+        if (isEnd(position)) return VIEW_TYPE_END;
         if (isFooter(position)) return VIEW_TYPE_FOOTER;
         return grid ? VIEW_TYPE_GRID : VIEW_TYPE_LIST;
     }
@@ -64,16 +80,27 @@ public class SearchAdapter extends BaseDiffAdapter<Vod, RecyclerView.ViewHolder>
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        if (viewType == VIEW_TYPE_FOOTER) return new FooterHolder(AdapterSearchFooterBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
+        if (viewType == VIEW_TYPE_FOOTER || viewType == VIEW_TYPE_END) return new FooterHolder(AdapterSearchFooterBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
         return viewType == VIEW_TYPE_GRID ? new GridHolder(AdapterVodRectBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false)) : new ListHolder(AdapterSearchBinding.inflate(LayoutInflater.from(parent.getContext()), parent, false));
     }
 
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof FooterHolder footerHolder) {
-            footerHolder.binding.getRoot().setOnClickListener(v -> {
-                if (loadMore != null) loadMore.run();
-            });
+            var root = footerHolder.binding.getRoot();
+            if (isEnd(position)) {
+                root.setText(R.string.search_load_end);
+                root.setTextColor(ContextCompat.getColor(root.getContext(), android.R.color.darker_gray));
+                root.setClickable(false);
+                root.setOnClickListener(null);
+            } else {
+                root.setText(R.string.search_load_more);
+                root.setTextColor(Color.WHITE);
+                root.setClickable(true);
+                root.setOnClickListener(v -> {
+                    if (loadMore != null) loadMore.run();
+                });
+            }
             return;
         }
         Vod item = getItem(position);

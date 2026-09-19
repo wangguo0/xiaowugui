@@ -20,9 +20,12 @@ import com.fongmi.android.tv.service.ProbeService;
 import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.UrlUtil;
+import com.github.catvod.utils.Json;
 import com.github.catvod.utils.Path;
 import com.github.catvod.utils.Prefers;
 import com.github.catvod.utils.Util;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -383,6 +386,57 @@ public final class SourceProbe {
         return url == null ? "" : url.replaceAll("^[\\s\\u00A0\\u3000]+|[\\s\\u00A0\\u3000]+$", "");
     }
 
+    /**
+     * 空源判定：「成功拉到内容且确认无任何站点/频道」或「域名 DNS 解析失败（已注销死源，
+     * 确定性信号）」返回 true；其余拉取失败（超时、连接拒绝等网络差异）返回 false（无法判定，保留）。
+     * 必须在非主线程调用。
+     */
+    public static boolean isEmptySource(String url, int type) {
+        try {
+            url = cleanUrl(url);
+            String content = Decoder.getJson(UrlUtil.convert(url), "EmptyCheck");
+            if (content == null) return false;
+            content = content.trim();
+            if (content.isEmpty()) return false;
+            return type == 0 ? vodEmpty(content) : liveEmpty(content);
+        } catch (java.net.UnknownHostException e) {
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    // 点播：sites 或多仓 urls 任一非空即有内容；非法 JSON（HTML 错误页等）视为确认空
+    private static boolean vodEmpty(String content) {
+        try {
+            JsonElement root = Json.parse(content);
+            if (root == null || !root.isJsonObject()) return true;
+            JsonObject obj = root.getAsJsonObject();
+            if (!Json.safeListElement(obj, "sites").isEmpty()) return false;
+            return Json.safeListElement(obj, "urls").isEmpty();
+        } catch (Throwable e) {
+            return true;
+        }
+    }
+
+    // 直播：JSON 看 lives 非空；txt/m3u 看 #EXTINF 或「名称,地址」频道行；均无则确认空
+    private static boolean liveEmpty(String content) {
+        try {
+            JsonElement root = Json.parse(content);
+            if (root != null && root.isJsonObject()) {
+                return Json.safeListElement(root.getAsJsonObject(), "lives").isEmpty();
+            }
+        } catch (Throwable ignored) {
+        }
+        if (content.toLowerCase().contains("#extinf")) return false;
+        for (String line : content.split("\n")) {
+            String t = line.trim();
+            if (t.isEmpty() || t.startsWith("#")) continue;
+            if (t.contains(",")) return false;
+        }
+        return true;
+    }
+
     public static boolean scanDangerous(String url, int type, ScanProgress progress) {
         try {
             url = cleanUrl(url);
@@ -397,7 +451,7 @@ public final class SourceProbe {
                 if (progress != null) progress.onJar(++index, jars.size(), jar);
                 if (com.fongmi.android.tv.setting.JarBlockSetting.blocksBase(jar)) return true;
                 // 「杀进程中和」开启时，kill 特征不再阻止添加：加载期由 DexPatch 原地 NOP 中和；
-                // 黑名单与结构异常（疑似加密载荷）仍照常阻止
+                // 短路避免下载 jar（否则前台扫描耗时大增）。黑名单与结构异常仍照常阻止
                 if (!com.fongmi.android.tv.setting.Setting.isNeutralizeKill() && SourceScanner.hasExitRef(jar)) return true;
             }
             return false;

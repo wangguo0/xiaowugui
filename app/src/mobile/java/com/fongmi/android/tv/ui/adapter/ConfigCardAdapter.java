@@ -10,6 +10,7 @@ import androidx.appcompat.widget.PopupMenu;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.CommunityProbe;
 import com.fongmi.android.tv.bean.Config;
 import com.fongmi.android.tv.databinding.AdapterConfigCardBinding;
 
@@ -102,7 +103,28 @@ public class ConfigCardAdapter extends RecyclerView.Adapter<ConfigCardAdapter.Vi
             if (isChecked && !active) listener.onSelect(item);
             else if (!isChecked && active) listener.onDeactivate(item);
         });
+        bindCheckBadge(holder, item);
         holder.binding.menu.setOnClickListener(v -> showMenu(holder, item));
+    }
+
+    // 安全检测角标：社区/手动/扫码新增的点播、直播源均纳入。有结论显示绿/红，尚无结论（排队检测中）显示黄色「未检测」
+    private void bindCheckBadge(ViewHolder holder, Config item) {
+        if (!CommunityProbe.isCommunityAdded(item.getUrl())) {
+            holder.binding.checkBadge.setVisibility(View.GONE);
+            return;
+        }
+        Boolean pass = CommunityProbe.result(item.getUrl());
+        holder.binding.checkBadge.setVisibility(View.VISIBLE);
+        if (pass == null) {
+            holder.binding.checkBadge.setText(R.string.community_check_pending);
+            holder.binding.checkBadge.setBackgroundResource(R.drawable.shape_check_pending);
+        } else if (pass) {
+            holder.binding.checkBadge.setText(R.string.community_check_pass);
+            holder.binding.checkBadge.setBackgroundResource(R.drawable.shape_check_pass);
+        } else {
+            holder.binding.checkBadge.setText(R.string.community_check_fail);
+            holder.binding.checkBadge.setBackgroundResource(R.drawable.shape_check_fail);
+        }
     }
 
     private void showMenu(ViewHolder holder, Config item) {

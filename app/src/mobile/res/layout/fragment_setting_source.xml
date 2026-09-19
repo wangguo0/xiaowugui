@@ -130,6 +130,32 @@
                     android:textSize="18sp" />
             </androidx.appcompat.widget.LinearLayoutCompat>
 
+            <!-- 订阅源全网资源社区 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/communityRepo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/community_repo_title"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=">"
+                    android:textColor="@color/white"
+                    android:textSize="18sp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
             <!-- 添加源安全检测开关 -->
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/probeAddRow"
@@ -179,6 +205,34 @@
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/probeMerge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 首页站点自动切换开关 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/homeAutoSwitchRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:gravity="center_vertical"
+                android:minHeight="0dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/home_auto_switch_setting"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/homeAutoSwitch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:checked="true"

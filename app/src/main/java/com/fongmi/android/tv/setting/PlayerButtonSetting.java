@@ -43,6 +43,10 @@ public class PlayerButtonSetting {
 
     private static final String ORDER = "player_button_order";
     private static final String HIDDEN = "player_button_hidden";
+    private static final String SHOWN = "player_button_shown";
+
+    // 默认关闭（隐藏）的按钮；用户手动打开后记入 SHOWN 永久生效
+    private static final Set<String> DEFAULT_HIDDEN = Set.of(PLAY_PARAMS, LUT, RESET, AUDIO, VIDEO, TITLE);
     private static final List<Item> DEFAULT = List.of(
             new Item(PLAYER, R.string.play_exo),
             new Item(DECODE, R.string.play_decode),
@@ -92,10 +96,18 @@ public class PlayerButtonSetting {
     }
 
     public static void putVisible(String id, boolean visible) {
-        Set<String> hidden = getHidden();
-        if (visible) hidden.remove(id);
-        else hidden.add(id);
+        // 在原始存储值（不含默认隐藏推导）基础上修改，避免把默认隐藏项误存为用户手动隐藏
+        Set<String> hidden = getStoredHidden();
+        Set<String> shown = new HashSet<>(split(Prefers.getString(SHOWN)));
+        if (visible) {
+            hidden.remove(id);
+            shown.add(id);
+        } else {
+            hidden.add(id);
+            shown.remove(id);
+        }
         Prefers.put(HIDDEN, join(hidden));
+        Prefers.put(SHOWN, join(shown));
     }
 
     public static void move(String id, int offset) {
@@ -118,6 +130,7 @@ public class PlayerButtonSetting {
     public static void reset() {
         Prefers.remove(ORDER);
         Prefers.remove(HIDDEN);
+        Prefers.remove(SHOWN);
     }
 
     public static void applyOrder(ViewGroup container, Map<String, View> views) {
@@ -151,6 +164,14 @@ public class PlayerButtonSetting {
     }
 
     private static Set<String> getHidden() {
+        Set<String> hidden = getStoredHidden();
+        // 默认隐藏的按钮，除非用户手动打开过（SHOWN），否则始终隐藏
+        Set<String> shown = new HashSet<>(split(Prefers.getString(SHOWN)));
+        for (String id : DEFAULT_HIDDEN) if (!shown.contains(id)) hidden.add(id);
+        return hidden;
+    }
+
+    private static Set<String> getStoredHidden() {
         Set<String> hidden = new HashSet<>();
         for (String id : split(Prefers.getString(HIDDEN))) if (contains(id)) hidden.add(id);
         return hidden;

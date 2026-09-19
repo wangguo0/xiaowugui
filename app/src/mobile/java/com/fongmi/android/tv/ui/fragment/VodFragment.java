@@ -25,6 +25,7 @@ import androidx.viewpager.widget.ViewPager;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.CommunityProbe;
 import com.fongmi.android.tv.api.SourceProbe;
 import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.VodConfig;
@@ -449,6 +450,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
             // 需求4：点播扫码添加免试运行（关闭检测等）→ 成功即自动设全部站点为「参与换源」
             VodConfig.markEnableChange(address);
         }
+        // 扫码新增源纳入角标检测（试运行缓存优先，后台静态扫描兜底）
+        CommunityProbe.track(address, 0);
         setConfig(config);
     }
 

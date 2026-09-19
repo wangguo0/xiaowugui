@@ -90,6 +90,12 @@
             android:text="@string/play_ed" />
 
         <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/timer"
+            style="@style/Control"
+            android:fontFeatureSettings="tnum"
+            android:text="@string/play_timer" />
+
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/danmaku"
             style="@style/Control"
             android:text="@string/danmaku"

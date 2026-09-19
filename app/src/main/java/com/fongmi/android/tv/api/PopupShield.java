@@ -213,6 +213,8 @@ public final class PopupShield implements Application.ActivityLifecycleCallbacks
         if (!checked.containsKey(root)) {
             checked.put(root, Boolean.TRUE);
             String text = toastText(root);
+            // 防魔改 Toast 信号：jar 拒供数据时触发首页站点自动切换（不受 toast 拦截开关影响）
+            if (!Notify.isRecent(text)) HomeProbe.onAntiTamperToast(text, currentSite());
             if (block && !Notify.isRecent(text)) {
                 String method = killToast(root);
                 DiagLog.log(TAG, "拦截Toast 文本=%s 站点=%s 方式=%s", text, currentSite(), method);

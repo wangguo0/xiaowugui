@@ -77,6 +77,7 @@ public final class TrialRun {
         if ((int) parseLong(p[1], 0) == 0) VodConfig.onTrialPassed(p[0]);
         SourceProbe.markRuntime(p[0], SourceProbe.PASS);
         Notify.show(R.string.source_probe_trial_passed);
+        com.fongmi.android.tv.event.ConfigEvent.common(); // 刷新订阅源卡片角标
         DiagLog.log("trial", "passed url=%s", p[0]);
     }
 

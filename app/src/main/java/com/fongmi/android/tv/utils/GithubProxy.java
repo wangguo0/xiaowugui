@@ -117,6 +117,13 @@ public class GithubProxy {
         return best + url;
     }
 
+    // 预热文件线路：探测一次最快镜像并缓存，返回已验证前缀（无可用镜像返回 null）。
+    // 调用方后续直接拼 前缀+直链，避免每个文件重复探测（省一半往返）。
+    public static String warmFile(String url) {
+        accelerate(url);
+        return FILE_PREFIX.get();
+    }
+
     private static String get(String url) {
         try (Response res = FETCH.newCall(new Request.Builder().url(url).addHeader("User-Agent", UA).build()).execute()) {
             return res.body() == null ? null : res.body().string();

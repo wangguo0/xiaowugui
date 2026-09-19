@@ -89,6 +89,13 @@ public class CastDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
         return this;
     }
 
+    // 投屏弹窗覆盖在全屏播放器上：走稳定覆盖层模式（ADJUST_NOTHING、不复制全屏标志），
+    // 避免系统栏/inset 振荡导致画面上下晃动，与选集/快搜等播放页弹窗保持一致
+    @Override
+    protected boolean stableOverlay() {
+        return true;
+    }
+
     public void show(FragmentActivity activity) {
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof CastDialog) return;
         show(activity.getSupportFragmentManager(), null);

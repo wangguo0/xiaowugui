@@ -22,6 +22,7 @@ import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.CommunityProbe;
 import com.fongmi.android.tv.api.SourceProbe;
 import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.LiveConfig;
@@ -222,14 +223,25 @@ public class ConfigDialog extends BaseAlertDialog {
                         return;
                     }
                     if (!proceed(url)) return;
-                    finishSave(saveConfig(url, name));
+                    Config saved = saveConfig(url, name);
+                    // 手动新增（非编辑）纳入角标检测：与免扫描路径一致（试运行缓存优先，后台静态扫描兜底）
+                    if (saved != null && !edit) {
+                        CommunityProbe.markAdded(url);
+                        CommunityProbe.enqueue(url, getType());
+                    }
+                    finishSave(saved);
                 });
             });
             return;
         }
         // 统一安全检测闸门；编辑未改地址则沿用原配置
         if (!proceed(url)) return;
-        finishSave(saveConfig(url, name));
+        Config saved = saveConfig(url, name);
+        // 手动新增（非编辑）的点播/直播源纳入角标检测：与社区源同一结论链路（试运行缓存优先，后台静态扫描兜底）
+        if (saved != null && !edit && (getType() == 0 || getType() == 1)) {
+            CommunityProbe.track(url, getType());
+        }
+        finishSave(saved);
     }
 
     // 需前置静态扫描：开关开启 + 点播/直播 + http 或本地文件源（本软件合并产物豁免、非编辑未改地址）

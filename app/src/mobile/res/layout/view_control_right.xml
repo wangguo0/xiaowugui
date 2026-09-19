@@ -6,6 +6,15 @@
     android:gravity="center"
     android:orientation="vertical">
 
+    <!-- 信息（感叹号）：从顶栏移至小锁上方 -->
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/info"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:scaleType="center"
+        android:src="@drawable/ic_control_info" />
+
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/lock"
         android:layout_width="48dp"

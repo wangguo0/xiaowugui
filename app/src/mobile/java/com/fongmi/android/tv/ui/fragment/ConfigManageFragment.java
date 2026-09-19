@@ -20,6 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
+import com.fongmi.android.tv.api.CommunityProbe;
 import com.fongmi.android.tv.api.SourceProbe;
 import com.fongmi.android.tv.api.TrialRun;
 import com.fongmi.android.tv.api.config.LiveConfig;
@@ -152,6 +153,21 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
 
     @Override
     public void onSelect(Config item) {
+        // 社区等后台添加的源从未跑过真机试运行：首次启用（前台激活）时补跑 8 秒试运行终审
+        String url = item.getUrl();
+        boolean http = url != null && (url.startsWith("http://") || url.startsWith("https://"));
+        if (Setting.isProbeAdd() && (getType() == 0 || getType() == 1) && http) {
+            if (SourceProbe.isRuntimeDangerous(url)) {
+                ProbeDialog.showDanger(requireActivity());
+                refresh();
+                return;
+            }
+            if (!SourceProbe.isRuntimePassed(url)) {
+                // begin 需在激活（load）之前调用，以记录原激活地址用于回滚
+                TrialRun.begin(url, getType());
+                Notify.show(R.string.source_probe_trial_started);
+            }
+        }
         load(item);
     }
 
@@ -189,6 +205,7 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
     @Override
     public void onDelete(Config item) {
         boolean active = TextUtils.equals(item.getUrl(), getCurrentUrl());
+        CommunityProbe.clear(item.getUrl());
         mAdapter.remove(item);
         refresh();
         if (active) load(Config.create(getType()));
@@ -287,13 +304,15 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
             return;
         }
         if (!SourceProbe.isRuntimePassed(address)) {
-            // begin 需在激活前调用以记录原配置
+            // begin 需在激活前调用以记录原激活地址用于回滚
             TrialRun.begin(address, getType());
             Notify.show(R.string.source_probe_trial_started);
         } else {
             // 需求4：缓存直接 PASS → 免试运行，成功即自动设全部站点为「参与换源」
             markEnableChange(address);
         }
+        // 扫码新增源纳入角标检测（试运行缓存优先，后台静态扫描兜底）
+        CommunityProbe.track(address, getType());
         load(config);
     }
 

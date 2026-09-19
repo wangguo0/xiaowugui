@@ -14,10 +14,14 @@ import com.fongmi.android.tv.databinding.FragmentSettingSourceBinding;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.activity.SubSettingActivity;
 import com.fongmi.android.tv.ui.base.BaseFragment;
+import com.fongmi.android.tv.ui.dialog.CommunityRepoDialog;
 import com.fongmi.android.tv.ui.dialog.SourceMergeDialog;
+import com.github.catvod.utils.Prefers;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class SettingSourceFragment extends BaseFragment {
+
+    private static final String DISCLAIMER_KEY = "community_disclaimer_ok";
 
     private FragmentSettingSourceBinding mBinding;
 
@@ -37,6 +41,7 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.popupShield.setChecked(Setting.isPopupShield());
         mBinding.blockNotice.setChecked(Setting.isBlockNotice());
         mBinding.neutralizeKill.setChecked(Setting.isNeutralizeKill());
+        mBinding.homeAutoSwitch.setChecked(Setting.isHomeAutoSwitch());
     }
 
     @Override
@@ -45,6 +50,7 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.liveManage.setOnClickListener(this::onLiveManage);
         mBinding.vodMerge.setOnClickListener(this::onVodMerge);
         mBinding.liveMerge.setOnClickListener(this::onLiveMerge);
+        mBinding.communityRepo.setOnClickListener(v -> onCommunityRepo());
         mBinding.probeAddRow.setOnClickListener(v -> mBinding.probeAdd.performClick());
         mBinding.probeMergeRow.setOnClickListener(v -> mBinding.probeMerge.performClick());
         mBinding.probeAdd.setOnClickListener(v -> toggleProbe(mBinding.probeAdd, true));
@@ -57,13 +63,65 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.blockNotice.setOnClickListener(this::toggleBlockNotice);
         mBinding.neutralizeKillRow.setOnClickListener(v -> mBinding.neutralizeKill.performClick());
         mBinding.neutralizeKill.setOnClickListener(v -> toggleNeutralizeKill());
+        mBinding.homeAutoSwitchRow.setOnClickListener(v -> mBinding.homeAutoSwitch.performClick());
+        mBinding.homeAutoSwitch.setOnClickListener(v -> Setting.putHomeAutoSwitch(mBinding.homeAutoSwitch.isChecked()));
     }
 
-    // 开启「中和杀进程指令」= 放行含杀进程代码的源（安全放宽），需二次确认；关闭即时生效
+    // 首次进入社区需手动输入指定文字确认免责声明，输入一致才能继续
+    private void onCommunityRepo() {
+        if (Prefers.getBoolean(DISCLAIMER_KEY, false)) {
+            CommunityRepoDialog.create().show(this);
+            return;
+        }
+        com.fongmi.android.tv.databinding.DialogCommunityDisclaimerBinding view =
+                com.fongmi.android.tv.databinding.DialogCommunityDisclaimerBinding.inflate(getLayoutInflater());
+        String keyword = getString(R.string.community_disclaimer_keyword);
+        androidx.appcompat.app.AlertDialog dialog = new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.community_disclaimer_title)
+                .setView(view.getRoot())
+                .setNegativeButton(R.string.dialog_negative, null)
+                .setPositiveButton(R.string.community_disclaimer_continue, null)
+                .setCancelable(false)
+                .show();
+        android.widget.Button positive = dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE);
+        positive.setEnabled(false);
+        view.inputText.addTextChangedListener(new android.text.TextWatcher() {
+
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                positive.setEnabled(keyword.contentEquals(s == null ? "" : s.toString().trim()));
+            }
+        });
+        dialog.setOnShowListener(d -> {
+            view.inputText.requestFocus();
+            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) requireActivity().getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(view.inputText, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+        });
+        positive.setOnClickListener(v -> {
+            Prefers.put(DISCLAIMER_KEY, true);
+            dialog.dismiss();
+            CommunityRepoDialog.create().show(this);
+        });
+    }
+
+    // 开启「中和杀进程指令」= 放行含杀进程代码的源（安全放宽），需二次确认；关闭同样需二次确认（关闭后带包名检测的源将不可添加）
     private void toggleNeutralizeKill() {
         boolean enable = mBinding.neutralizeKill.isChecked();
         if (!enable) {
-            Setting.putNeutralizeKill(false);
+            new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
+                    .setTitle(R.string.video_error_title)
+                    .setMessage(R.string.neutralize_kill_close_confirm)
+                    .setNegativeButton(R.string.dialog_negative, (dialog, which) -> mBinding.neutralizeKill.setChecked(true))
+                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> Setting.putNeutralizeKill(false))
+                    .show();
             return;
         }
         new MaterialAlertDialogBuilder(requireActivity(), R.style.ThemeOverlay_WebHTV_LightDialog)
