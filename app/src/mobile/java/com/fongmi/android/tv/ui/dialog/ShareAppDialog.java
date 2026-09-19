@@ -75,7 +75,8 @@ public class ShareAppDialog extends BaseAlertDialog {
     private String shareUrl = getLatestApkUrl();
 
     private static String getLatestApkUrl() {
-        return Github.getGithubLatestAsset(BuildConfig.FLAVOR_mode + "-" + BuildConfig.FLAVOR_abi + ".apk");
+        // 分享链接指向拼音命名的发布产物（mobile→shouji），与 CI 上传的附件名一致
+        return Github.getGithubLatestAsset("shouji-" + BuildConfig.FLAVOR_abi + ".apk");
     }
 
     public static ShareAppDialog create() {

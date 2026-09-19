@@ -81,8 +81,11 @@ public class Updater implements Download.Callback, UpdateListener {
         return Path.cache("update.apk");
     }
 
+    // 发布产物文件名模式段用拼音（mobile→shouji、leanback→dianshi），与 CI 上传的 Release 附件名保持一致
     private String getName() {
-        return BuildConfig.FLAVOR_mode + "-" + BuildConfig.FLAVOR_abi;
+        String mode = BuildConfig.FLAVOR_mode;
+        String name = "mobile".equals(mode) ? "shouji" : "leanback".equals(mode) ? "dianshi" : mode;
+        return name + "-" + BuildConfig.FLAVOR_abi;
     }
 
     public Updater force() {

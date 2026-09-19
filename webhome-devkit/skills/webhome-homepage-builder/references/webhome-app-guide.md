@@ -61,8 +61,8 @@ bash gradlew assembleMobileArm64_v8aRelease
 当前项目常见 APK 输出路径：
 
 ```text
-app/build/outputs/apk/mobileArm64_v8a/release/mobile-arm64_v8a.apk
-Release/apk/mobile-arm64_v8a.apk
+app/build/outputs/apk/mobileArm64_v8a/release/shouji-arm64_v8a.apk
+Release/apk/shouji-arm64_v8a.apk
 ```
 
 实际以 Gradle 本次构建输出为准。
