@@ -276,22 +276,12 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
           NOTES="${RELEASE_NOTES:-手动触发 GitHub Actions 构建发布。}"
-          TAG="${{ steps.meta.outputs.tag }}"
-          # 幂等发布：Release 已存在（重跑/中断恢复）则只更新元数据，附件统一 --clobber 覆盖上传，避免 422 name already exists
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, updating metadata"
-            gh release edit "$TAG" \
-              --title "${{ steps.meta.outputs.title }}" \
-              --notes "$NOTES" \
-              $PRERELEASE_FLAG
-          else
-            gh release create "$TAG" \
-              --target "$GITHUB_SHA" \
-              --title "${{ steps.meta.outputs.title }}" \
-              --notes "$NOTES" \
-              $PRERELEASE_FLAG
-          fi
-          gh release upload "$TAG" dist/*.apk dist/*.json --clobber
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.meta.outputs.title }}" \
+            --notes "$NOTES" \
+            $PRERELEASE_FLAG \
+            dist/*.apk dist/*.json
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4

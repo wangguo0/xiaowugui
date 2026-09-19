@@ -150,9 +150,9 @@ android {
 androidComponents {
     onVariants(selector().all()) { variant ->
         def flavors = variant.productFlavors.collectEntries { [(it.first): it.second] }
-        // 产物文件名中文化：leanback=电视版、mobile=手机版；arm64_v8a=64位、armeabi_v7a=32位
-        def modeName = ['leanback': '电视版', 'mobile': '手机版'].getOrDefault(flavors['mode'], flavors['mode'] ?: 'mode')
-        def abiName = ['arm64_v8a': '64位', 'armeabi_v7a': '32位'].getOrDefault(flavors['abi'], flavors['abi'] ?: 'abi')
+        // 产物文件名用拼音：leanback=dianshi(电视)、mobile=shouji(手机)；GitHub Release 附件名不支持中文，必须全 ASCII
+        def modeName = ['leanback': 'dianshi', 'mobile': 'shouji'].getOrDefault(flavors['mode'], flavors['mode'] ?: 'mode')
+        def abiName = flavors['abi'] ?: 'abi'
         def buildTypeName = variant.buildType == 'debug' ? '-debug' : ''
         variant.outputs.each { output ->
             output.outputFileName.set("${modeName}-${abiName}${buildTypeName}${apkSuffix}.apk")
