@@ -148,14 +148,18 @@ android {
 }
 
 androidComponents {
+    // 输出文件名优化：flavor 与任务名保持英文原名（源码目录/CI 依赖），
+    // 仅 APK 文件名把模式改为拼音，方便不熟悉英语的用户识别：
+    // leanback（电视端）→ dianshi，mobile（手机端）→ shouji
+    def modeNameMap = [leanback: 'dianshi', mobile: 'shouji']
     onVariants(selector().all()) { variant ->
         def flavors = variant.productFlavors.collectEntries { [(it.first): it.second] }
-        // 产物文件名用拼音：leanback=dianshi(电视)、mobile=shouji(手机)；GitHub Release 附件名不支持中文，必须全 ASCII
-        def modeName = ['leanback': 'dianshi', 'mobile': 'shouji'].getOrDefault(flavors['mode'], flavors['mode'] ?: 'mode')
-        def abiName = flavors['abi'] ?: 'abi'
-        def buildTypeName = variant.buildType == 'debug' ? '-debug' : ''
+        def mode = modeNameMap[flavors['mode']] ?: flavors['mode'] ?: 'mode'
+        def abi = flavors['abi'] ?: 'abi'
+        def buildType = variant.buildType
         variant.outputs.each { output ->
-            output.outputFileName.set("${modeName}-${abiName}${buildTypeName}${apkSuffix}.apk")
+            // release 保留版本后缀 apkSuffix；其余（debug）文件名带构建类型便于区分
+            output.outputFileName.set(buildType == 'release' ? "${mode}-${abi}${apkSuffix}.apk" : "${mode}-${abi}-${buildType}.apk")
         }
     }
 }
