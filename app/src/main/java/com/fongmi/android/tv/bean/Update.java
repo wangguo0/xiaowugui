@@ -3,7 +3,6 @@ package com.fongmi.android.tv.bean;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.BuildConfig;
-import com.fongmi.android.tv.utils.AppVersion;
 
 public class Update {
 
@@ -42,9 +41,11 @@ public class Update {
         return !TextUtils.isEmpty(name) && !TextUtils.isEmpty(apkUrl);
     }
 
+    // 只有清单版本码严格大于本机才视为可更新：相等（已装上）与更旧（镜像陈旧缓存）一律不算，
+    // 从源头杜绝把旧包递给安装器后被系统按降级拒装
     public boolean hasUpdate() {
         if (!hasManifest()) return false;
-        return code != BuildConfig.VERSION_CODE || !AppVersion.isCurrent(name);
+        return code > BuildConfig.VERSION_CODE;
     }
 
     public String getText() {

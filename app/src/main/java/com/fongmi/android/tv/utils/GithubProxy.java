@@ -46,8 +46,11 @@ public class GithubProxy {
     private static final String TAG = "GithubProxy";
     private static final int PROBE_TIMEOUT = 4000;
     private static final int FETCH_BUDGET = 5000;
-    private static final int PROBE_BUDGET = 8000;
+    // 每线两段 Range（头 2KB + 尾 64KB）验证，预算相应放宽
+    private static final int PROBE_BUDGET = 12000;
     private static final int LIST_BUDGET = 6000;
+    private static final int HEAD_BYTES = 2048;
+    private static final long TAIL_BYTES = 64 * 1024;
 
     private static final OkHttpClient PROBE = new OkHttpClient.Builder()
             .connectTimeout(PROBE_TIMEOUT, TimeUnit.MILLISECONDS)
@@ -276,18 +279,49 @@ public class GithubProxy {
     }
 
     private static boolean verify(String fullUrl, long size) {
-        Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=0-2047").build();
+        long total = verifyHead(fullUrl, size);
+        if (total <= 0) return false;
+        return verifyTail(fullUrl, total);
+    }
+
+    // 第一段：头 2KB。必须核出文件总大小且与清单 size 严格一致（拿不到总大小 = 无法证明内容正确，直接淘汰），
+    // 同时核对文件头为合法 zip（PK）
+    private static long verifyHead(String fullUrl, long size) {
+        Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=0-" + (HEAD_BYTES - 1)).build();
         try (Response res = RANGE.newCall(request).execute()) {
-            if (!res.isSuccessful() && res.code() != 206) return false;
+            if (!res.isSuccessful() && res.code() != 206) return -1;
             long total = contentRangeTotal(res);
             if (total <= 0) total = res.body() != null && res.code() == 200 ? getLength(res) : -1;
-            if (size > 0 && total > 0 && total != size) return false;
+            if (total <= 0) return -1;
+            if (size > 0 && total != size) return -1;
             byte[] head = new byte[2];
             int read = res.body() == null ? -1 : readFully(res.body(), head, 2);
-            return read == 2 && head[0] == 'P' && head[1] == 'K';
+            if (read != 2 || head[0] != 'P' || head[1] != 'K') return -1;
+            return total;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    // 第二段：尾 64KB。尾部必须存在 zip 中央目录结束记录，证明整包结构完整、不是被截断或替换的内容
+    private static boolean verifyTail(String fullUrl, long total) {
+        long start = Math.max(0, total - TAIL_BYTES);
+        Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=" + start + "-" + (total - 1)).build();
+        try (Response res = RANGE.newCall(request).execute()) {
+            if (!res.isSuccessful() && res.code() != 206) return false;
+            return hasCentralDirectoryEnd(res.body() == null ? null : res.body().bytes());
         } catch (Exception e) {
             return false;
         }
+    }
+
+    // zip 中央目录结束记录（EOCD）签名 PK\x05\x06
+    private static boolean hasCentralDirectoryEnd(byte[] tail) {
+        if (tail == null || tail.length < 4) return false;
+        for (int i = tail.length - 4; i >= 0; i--) {
+            if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06) return true;
+        }
+        return false;
     }
 
     private static long getLength(Response res) {

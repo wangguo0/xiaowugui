@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.BuildConfig;
 import com.fongmi.android.tv.bean.Update;
+import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.WebViewUtil;
 import com.github.catvod.crawler.DebugLogStore;
 import com.github.catvod.crawler.SpiderDebug;
@@ -714,7 +715,7 @@ public class Setting {
                 reason,
                 BuildConfig.VERSION_NAME,
                 BuildConfig.VERSION_CODE,
-                BuildConfig.FLAVOR_mode,
+                AppVersion.modeName(),
                 BuildConfig.FLAVOR_abi,
                 BuildConfig.DEBUG,
                 hardwareAccelerated,

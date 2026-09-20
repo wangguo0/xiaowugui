@@ -1306,11 +1306,14 @@
     <string name="update_download_checksum">更新包校验失败，请重试。</string>
     <string name="update_download_invalid">更新包无效，请重试。</string>
     <string name="update_download_version">下载包版本与目标版本不符</string>
+    <string name="update_download_package">更新包与当前应用不匹配，请重试。</string>
+    <string name="update_download_older">下载到的不是更新版本（不高于当前已安装版本），已阻止安装，请稍后重试。</string>
     <string name="update_line_title">选择更新线路</string>
     <string name="update_line_direct">GitHub 官方直连</string>
     <string name="update_line_auto">自动选择</string>
     <string name="update_line_empty">无已验证的镜像线路，改用官方直连下载</string>
     <string name="update_retry_direct">下载包校验失败，正在改用官方直连重试</string>
+    <string name="update_retry_latest">下载包校验失败，正在改用最新发布直链重试</string>
     <string name="update_confirm">更新</string>
     <string name="update_confirm_channel">更新%1$s</string>
     <string name="update_cancel">取消更新</string>

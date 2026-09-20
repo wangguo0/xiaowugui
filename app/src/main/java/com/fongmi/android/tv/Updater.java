@@ -13,6 +13,7 @@ import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
+import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.ForcePolicy;
@@ -77,6 +78,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private String forceMsg = "";
     private GithubProxy.Line currentLine;
     private boolean retriedDirect;
+    private boolean retriedLatest;
+    private Snapshot snapshot;
     private int lastProgress = -1;
     private long lastBytes;
     private long lastTotal;
@@ -84,6 +87,24 @@ public class Updater implements Download.Callback, UpdateListener {
     private long lastElapsed;
 
     private Updater() {
+    }
+
+    // 下载期冻结的清单快照：检查结果即使被后续静默刷新覆盖，本次下载与核对对象也不会脱节
+    private static final class Snapshot {
+
+        private final String asset;
+        private final String url;
+        private final String sha256;
+        private final long size;
+        private final long code;
+
+        Snapshot(Update update, String asset) {
+            this.asset = asset;
+            this.url = update.apkUrl;
+            this.sha256 = update.sha256;
+            this.size = update.size;
+            this.code = update.code;
+        }
     }
 
     public static Updater create() {
@@ -96,9 +117,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     // 发布产物文件名模式段用拼音（mobile→shouji、leanback→dianshi），与 CI 上传的 Release 附件名保持一致
     private String getName() {
-        String mode = BuildConfig.FLAVOR_mode;
-        String name = "mobile".equals(mode) ? "shouji" : "leanback".equals(mode) ? "dianshi" : mode;
-        return name + "-" + BuildConfig.FLAVOR_abi;
+        return AppVersion.deviceName();
     }
 
     public Updater force() {
@@ -153,6 +172,8 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private void doInBackground(FragmentActivity activity, boolean forceCheck, boolean launch) {
+        // 静默检查不得覆盖正在展示的检查结果，避免用户已看到的"最新版本"与随后下载对象脱节
+        if (launch && dialog != null && dialog.isAdded()) return;
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
@@ -507,6 +528,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     @Override
     public void onConfirm(View view) {
+        // 闸门①：清单版本码必须严格大于本机已安装版本码，否则绝不进入下载（更旧的清单在此被拦下）
         if (selected == null || !selected.hasUpdate()) {
             Notify.show(R.string.update_latest);
             return;
@@ -515,11 +537,14 @@ public class Updater implements Download.Callback, UpdateListener {
         downloading = true;
         canceled = false;
         retriedDirect = false;
+        retriedLatest = false;
         resetProgress();
         Path.clear(getFile());
-        setDialogProgress(0, 0, selected.size, 0, 0);
-        String url = selected.apkUrl;
-        long size = selected.size;
+        // 闸门②：冻结本次下载对象（直链/大小/SHA/版本码），后续任何检查刷新都不得改变它
+        snapshot = new Snapshot(selected, getFileName(selected.apkUrl, selected.channel));
+        setDialogProgress(0, 0, snapshot.size, 0, 0);
+        String url = snapshot.url;
+        long size = snapshot.size;
         FragmentActivity act = activityRef == null ? null : activityRef.get();
         // 下载前核对：24 镜像+直连并发 Range 探测（每线仅 2KB），总大小与 PK 文件头都对上的线路才有资格进列表；
         // 用户在弹窗手点线路或选「自动选择」（最快），从源头杜绝下载到陈旧/残缺内容
@@ -554,7 +579,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private void startDownload(String url, GithubProxy.Line line) {
         currentLine = line;
         // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
-        download = Download.create(url, getFile()).tag(url).client(GithubProxy.downloadClient());
+        long limit = snapshot == null || retriedLatest ? 0 : snapshot.size;
+        download = Download.create(url, getFile()).tag(url).limit(limit).client(GithubProxy.downloadClient());
         download.start(this);
     }
 
@@ -609,7 +635,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private void setDialogProgress(int progress, long bytes, long total, long speed, long elapsed) {
         if (canceled || !downloading) return;
-        long manifestSize = selected == null ? 0 : selected.size;
+        long manifestSize = snapshot == null ? 0 : snapshot.size;
         if (total <= 0 && manifestSize > 0) total = manifestSize;
         if (progress < 0 && total > 0 && bytes > 0) progress = (int) (bytes * 100.0 / total);
         lastProgress = progress;
@@ -637,7 +663,7 @@ public class Updater implements Download.Callback, UpdateListener {
     public void success(File file) {
         if (canceled) return;
         download = null;
-        Update target = selected;
+        Snapshot target = snapshot;
         Task.execute(() -> {
             String error = validate(file, target);
             App.post(() -> {
@@ -645,10 +671,17 @@ public class Updater implements Download.Callback, UpdateListener {
                 if (!TextUtils.isEmpty(error)) {
                     Path.clear(file);
                     // 校验不过且当前走的是镜像线路：自动改用官方直连重试一次（罕见兜底，防传输中途坏数据）
-                    if (!retriedDirect && currentLine != null && target != null && !TextUtils.isEmpty(target.apkUrl)) {
+                    if (!retriedDirect && currentLine != null && target != null && !TextUtils.isEmpty(target.url)) {
                         retriedDirect = true;
                         Notify.show(R.string.update_retry_direct);
-                        startDownload(target.apkUrl, null);
+                        startDownload(target.url, null);
+                        return;
+                    }
+                    // 官方直连仍不过：最后改用与分享软件同源的 latest 直链（latest 永远指向最新 Release）
+                    if (!retriedLatest && target != null) {
+                        retriedLatest = true;
+                        Notify.show(R.string.update_retry_latest);
+                        startDownload(Github.getGithubLatestAsset(target.asset), null);
                         return;
                     }
                     downloading = false;
@@ -671,15 +704,22 @@ public class Updater implements Download.Callback, UpdateListener {
         setDialogProgress(lastProgress, lastBytes, lastTotal, lastSpeed, lastElapsed);
     }
 
-    private String validate(File file, Update update) {
+    private String validate(File file, Snapshot update) {
         if (file == null || !file.exists() || file.length() <= 0) return ResUtil.getString(R.string.update_download_invalid);
-        if (update != null && update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
-        if (update != null && !TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
         android.content.pm.PackageInfo info = App.get().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0);
         if (info == null) return ResUtil.getString(R.string.update_download_invalid);
-        // 版本核对（零流量，只读本地文件头）：APK 实际 versionCode 必须与清单一致，杜绝任何环节把旧包冒充新包递给安装器
-        if (update != null && update.code > 0 && androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info) != update.code)
-            return ResUtil.getString(R.string.update_download_version);
+        // 包名核对：杜绝任何环节把别的应用递给安装器
+        if (!BuildConfig.APPLICATION_ID.equals(info.packageName)) return ResUtil.getString(R.string.update_download_package);
+        long real = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info);
+        // 闸门③（装前铁律）：APK 内嵌版本码必须严格大于本机已安装版本码，否则一律拒绝送装
+        if (real <= BuildConfig.VERSION_CODE) return ResUtil.getString(R.string.update_download_older);
+        if (update == null) return "";
+        // latest 直链兜底：该地址可能已指向比清单更新的一版，只要求不旧于清单所描述的一版
+        if (retriedLatest) return real < update.code ? ResUtil.getString(R.string.update_download_older) : "";
+        if (update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
+        if (!TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
+        // 零流量核对（只读本地文件头）：APK 实际 versionCode 必须与冻结清单一致
+        if (update.code > 0 && real != update.code) return ResUtil.getString(R.string.update_download_version);
         return "";
     }
 

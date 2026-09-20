@@ -84,7 +84,8 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.vodUrl.setText(VodConfig.getDesc());
         mBinding.liveUrl.setText(LiveConfig.getDesc());
         setWallText();
-        mBinding.versionText.setText(AppVersion.fullName());
+        // 版本串与关于页统一：机型名用拼音（mobile→shouji、leanback→dianshi）
+        mBinding.versionText.setText(AppVersion.fullName() + " · " + AppVersion.deviceName());
         setCacheText();
         setOtherText();
     }

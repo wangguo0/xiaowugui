@@ -249,21 +249,60 @@ jobs:
           import hashlib
           import json
           import os
+          import re
+          import subprocess
+
+          def find_aapt2():
+              sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT") or ""
+              for root in reversed(sorted(glob.glob(os.path.join(sdk, "build-tools", "*")))):
+                  for name in ("aapt2", "aapt2.exe"):
+                      path = os.path.join(root, name)
+                      if os.path.exists(path):
+                          return path
+              return ""
+
+          def read_apk_badging(apk, aapt2):
+              if not aapt2:
+                  raise SystemExit("::error title=aapt2 missing::未找到 aapt2，无法从 APK 本体回读版本号")
+              result = subprocess.run([aapt2, "dump", "badging", apk], capture_output=True, text=True)
+              if result.returncode != 0:
+                  raise SystemExit(f"::error title=aapt2 failed::aapt2 dump badging 失败: {result.stderr.strip()}")
+              first = (result.stdout or "").splitlines()[0] if result.stdout else ""
+              code = re.search(r"versionCode='(\d+)'", first)
+              name = re.search(r"versionName='([^']*)'", first)
+              package = re.search(r"name='([^']*)'", first)
+              if not code or not name or not package:
+                  raise SystemExit(f"::error title=aapt2 parse failed::无法解析 badging 输出: {first}")
+              return int(code.group(1)), name.group(1), package.group(1)
 
           tag = os.environ["RELEASE_TAG"]
           notes = os.environ.get("RELEASE_NOTES", "").strip()
           force = os.environ.get("FORCE_UPDATE", "").strip().lower() == "true"
           force_msg = os.environ.get("FORCE_MSG", "").strip()
           release_download_base = os.environ["GITHUB_RELEASE_DOWNLOAD_BASE"]
+          expected_code = int("${{ steps.meta.outputs.version_code }}")
+          expected_name = "${{ steps.meta.outputs.version_name }}"
+          expected_package = "com.xiaowugui.ci"
+          aapt2 = find_aapt2()
           for apk in glob.glob("dist/*.apk"):
               base = os.path.splitext(os.path.basename(apk))[0]
               with open(apk, "rb") as fh:
                   content = fh.read()
+              # 自证：从 APK 本体回读 versionCode/versionName/包名，与版本基线断言一致。
+              # 清单里的 code 直接取回读值，杜绝"清单写 A、APK 实为 B"导致应用内更新拿错版本
+              code, version_name, package = read_apk_badging(apk, aapt2)
+              if package != expected_package:
+                  raise SystemExit(f"::error title=Package name mismatch::{apk} 包名 {package} 与 {expected_package} 不一致")
+              if code != expected_code or version_name != expected_name:
+                  raise SystemExit(
+                      f"::error title=APK version mismatch::{apk} 实际 code={code} name={version_name}，"
+                      f"基线为 code={expected_code} name={expected_name}"
+                  )
               data = {
                   "name": tag,
                   "desc": f"{tag} - ${{ steps.meta.outputs.short_sha }}",
                   "channel": "${{ steps.meta.outputs.channel }}",
-                  "code": int("${{ steps.meta.outputs.version_code }}"),
+                  "code": code,
                   "apk": f"{release_download_base}/{base}.apk",
                   "size": len(content),
                   "sha256": hashlib.sha256(content).hexdigest(),

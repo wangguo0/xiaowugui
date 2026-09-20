@@ -1309,11 +1309,14 @@
     <string name="update_download_checksum">The update package failed verification. Please try again.</string>
     <string name="update_download_invalid">The update package is invalid. Please try again.</string>
     <string name="update_download_version">The downloaded package version does not match the target version</string>
+    <string name="update_download_package">The update package does not match this app. Please try again.</string>
+    <string name="update_download_older">The downloaded package is not newer than the installed version. Installation was blocked, please try again later.</string>
     <string name="update_line_title">Select update line</string>
     <string name="update_line_direct">GitHub official direct</string>
     <string name="update_line_auto">Auto select</string>
     <string name="update_line_empty">No verified mirror line available, downloading via official direct</string>
     <string name="update_retry_direct">Package failed verification, retrying via official direct</string>
+    <string name="update_retry_latest">Package failed verification, retrying via the latest release link</string>
     <string name="update_confirm">Update</string>
     <string name="update_confirm_channel">Update %1$s</string>
     <string name="update_cancel">Cancel update</string>

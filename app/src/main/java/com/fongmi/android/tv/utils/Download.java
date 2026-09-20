@@ -22,6 +22,7 @@ public class Download {
     private Future<?> future;
     private String tag;
     private okhttp3.OkHttpClient client;
+    private long maxSize;
     private volatile okhttp3.Call call;
     private volatile boolean canceled;
 
@@ -43,6 +44,12 @@ public class Download {
     // 指定独立 OkHttpClient（如 GitHub 裸下载客户端），不传则沿用 App 爬虫网络栈
     public Download client(okhttp3.OkHttpClient client) {
         this.client = client;
+        return this;
+    }
+
+    // 期望大小上限（清单 size）：写入字节数一旦超过它立即中止，杜绝线路返回被拼接/放大的内容
+    public Download limit(long maxSize) {
+        this.maxSize = maxSize;
         return this;
     }
 
@@ -104,6 +111,7 @@ public class Download {
             while ((readBytes = input.read(buffer)) != -1) {
                 if (canceled || Thread.currentThread().isInterrupted()) return false;
                 totalBytes += readBytes;
+                if (maxSize > 0 && totalBytes > maxSize) throw new IOException("Download exceeds expected size");
                 os.write(buffer, 0, readBytes);
                 if (callback == null) continue;
                 long now = System.currentTimeMillis();

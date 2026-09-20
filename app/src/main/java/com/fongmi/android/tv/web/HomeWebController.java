@@ -762,7 +762,7 @@ public class HomeWebController {
                 (function(){
                   if(window.fm&&window.fongmi){window.dispatchEvent(new CustomEvent('fmsdk'));return;}
                   if(document&&document.documentElement)document.documentElement.classList.add('fm-native');
-                  window.fongmiClient={mode:'%s',isLeanback:%s};
+                  window.fongmiClient={mode:'%s',deviceName:'%s',isLeanback:%s};
                   const callbacks={};
                   let seq=0;
                   function invoke(method,payload){
@@ -875,7 +875,7 @@ public class HomeWebController {
                   };
                   window.dispatchEvent(new CustomEvent('fmsdk'));
                 })();
-                """, com.fongmi.android.tv.BuildConfig.FLAVOR_mode, com.fongmi.android.tv.utils.Util.isLeanback(), debugTools ? debugSdkHook() : "");
+                """, com.fongmi.android.tv.BuildConfig.FLAVOR_mode, com.fongmi.android.tv.utils.AppVersion.deviceName(), com.fongmi.android.tv.utils.Util.isLeanback(), debugTools ? debugSdkHook() : "");
     }
 
     private String debugSdkHook() {

@@ -24,7 +24,8 @@ public final class AboutDialog {
 
     public static void show(FragmentActivity activity, Runnable updateAction) {
         DialogAboutBinding binding = DialogAboutBinding.inflate(LayoutInflater.from(activity));
-        binding.version.setText(activity.getString(R.string.about_version, AppVersion.fullName(), BuildConfig.FLAVOR_mode, BuildConfig.FLAVOR_abi));
+        // 机型名显示为拼音（mobile→shouji、leanback→dianshi），与发布产物名（GitHub Release 附件名）保持一致
+        binding.version.setText(activity.getString(R.string.about_version, AppVersion.fullName(), AppVersion.modeName(), BuildConfig.FLAVOR_abi));
         configureContentHeight(activity, binding);
 
         Dialog dialog = LightDialog.create(activity, null, binding.getRoot());
