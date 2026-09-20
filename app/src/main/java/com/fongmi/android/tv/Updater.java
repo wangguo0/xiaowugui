@@ -30,11 +30,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Updater implements Download.Callback, UpdateListener {
 
@@ -42,6 +45,11 @@ public class Updater implements Download.Callback, UpdateListener {
     private static final String SOURCE_GITHUB = "github";
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
+    // 直连 API 失败后的降级预算：动态镜像（最多 24 条）+ 直连共 25 源并发拉清单取最新
+    private static final long FALLBACK_COLLECT_MS = TimeUnit.SECONDS.toMillis(6);
+    // tag 形如「小乌龟1.2-202609201200」：版本号 + 可选构建时间戳
+    private static final Pattern TAG_VERSION = Pattern.compile("(\\d+(?:\\.\\d+)+)");
+    private static final Pattern TAG_TIME = Pattern.compile("(\\d{12})");
     private static final Map<String, String> GITHUB_API_HEADERS = Map.of("Accept", "application/vnd.github+json", "X-GitHub-Api-Version", "2022-11-28");
     private static final Map<String, String> GITHUB_ASSET_HEADERS = Map.of("Accept", "application/octet-stream", "X-GitHub-Api-Version", "2022-11-28");
     private static final Updater INSTANCE = new Updater();
@@ -223,7 +231,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update getGithubStableUpdate(String channel) {
         try {
-            JSONObject release = new JSONObject(fetchGithub(Github.getLatestReleaseApi()));
+            JSONObject release = new JSONObject(fetchGithub(Github.getLatestReleaseApi(), Update.CHANNEL_STABLE));
             return readGithubReleaseUpdate(channel, release);
         } catch (Exception e) {
             e.printStackTrace();
@@ -234,7 +242,7 @@ public class Updater implements Download.Callback, UpdateListener {
     private Update getGithubBetaUpdate(String channel) {
         String manifestName = getManifestName(channel);
         try {
-            JSONArray releases = new JSONArray(fetchGithub(Github.getReleasesApi()));
+            JSONArray releases = new JSONArray(fetchGithub(Github.getReleasesApi(), channel));
             for (int i = 0; i < releases.length(); i++) {
                 JSONObject release = releases.optJSONObject(i);
                 if (release == null || !isBetaRelease(release)) continue;
@@ -272,12 +280,106 @@ public class Updater implements Download.Callback, UpdateListener {
         return readUpdate(channel, url, SOURCE_GITHUB, api ? GITHUB_ASSET_HEADERS : null, release.optString("body"));
     }
 
-    // 版本信息 API：先试镜像加速（要求响应含 assets 字段防限流 JSON 误判），失败回退直连
-    private String fetchGithub(String url) throws Exception {
+    // 版本信息 API（latest/releases 移动指针）：直连优先（GitHub API 永不缓存，响应仅 2KB），
+    // 直连失败才降级为多源并发拉清单取最新——陈旧镜像缓存不可能在比较中胜出
+    private String fetchGithub(String url, String channel) throws Exception {
+        try {
+            String body = OkHttp.string(url, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
+            if (isReleaseJson(body)) return body;
+        } catch (Exception ignored) {
+        }
+        GithubProxy.clearJsonCache();
+        String best = pickLatest(GithubProxy.fetchJsonAll(url, FALLBACK_COLLECT_MS), channel);
+        if (best == null) throw new IllegalStateException("Update check failed: " + url);
+        return best;
+    }
+
+    // tag 钉死的 API 地址（内容不可变，镜像缓存无害）：镜像优先加速，失败回退直连
+    private String fetchGithubPinned(String url) throws Exception {
         String body = GithubProxy.fetchJson(url);
-        if (body != null && body.contains("\"assets\"")) return body;
+        if (isReleaseJson(body)) return body;
         GithubProxy.clearJsonCache();
         return OkHttp.string(url, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
+    }
+
+    private boolean isReleaseJson(String body) {
+        return body != null && body.contains("\"assets\"");
+    }
+
+    // 多源取最新：比较 tag 版本号 → 平局优先直连份 → 再比 tag 内构建时间戳；返回胜出源的完整响应体
+    private String pickLatest(List<GithubProxy.Source> sources, String channel) {
+        String bestBody = null;
+        String bestTag = null;
+        boolean bestDirect = false;
+        for (GithubProxy.Source source : sources) {
+            if (!isReleaseJson(source.body)) continue;
+            String tag = candidateTag(source.body, channel);
+            if (TextUtils.isEmpty(tag)) continue;
+            if (bestTag == null || compareTag(tag, bestTag, source.direct, bestDirect) > 0) {
+                bestBody = source.body;
+                bestTag = tag;
+                bestDirect = source.direct;
+            }
+        }
+        return bestBody;
+    }
+
+    // 从 API 响应提取候选发布 tag：stable 为单对象；beta 从数组取首个带清单的预发布
+    private String candidateTag(String body, String channel) {
+        try {
+            String text = body.trim();
+            if (text.startsWith("[")) {
+                JSONArray releases = new JSONArray(text);
+                String manifestName = getManifestName(channel);
+                for (int i = 0; i < releases.length(); i++) {
+                    JSONObject release = releases.optJSONObject(i);
+                    if (release == null || !isBetaRelease(release)) continue;
+                    if (findAsset(release.optJSONArray("assets"), manifestName) == null) continue;
+                    return release.optString("tag_name");
+                }
+                return null;
+            }
+            return new JSONObject(text).optString("tag_name");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private int compareTag(String a, String b, boolean aDirect, boolean bDirect) {
+        int c = compareVersion(tagVersion(a), tagVersion(b));
+        if (c != 0) return c;
+        if (aDirect != bDirect) return aDirect ? 1 : -1;
+        return tagTime(a).compareTo(tagTime(b));
+    }
+
+    private String tagVersion(String tag) {
+        Matcher matcher = TAG_VERSION.matcher(tag);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private String tagTime(String tag) {
+        Matcher matcher = TAG_TIME.matcher(tag);
+        return matcher.find() ? matcher.group(1) : "";
+    }
+
+    private int compareVersion(String a, String b) {
+        if (a.isEmpty() || b.isEmpty()) return 0;
+        String[] pa = a.split("\\.");
+        String[] pb = b.split("\\.");
+        for (int i = 0; i < Math.max(pa.length, pb.length); i++) {
+            long x = i < pa.length ? parseSegment(pa[i]) : 0;
+            long y = i < pb.length ? parseSegment(pb[i]) : 0;
+            if (x != y) return x > y ? 1 : -1;
+        }
+        return 0;
+    }
+
+    private long parseSegment(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private Update readUpdate(String channel, String manifestUrl, String source, Map<String, String> headers, String fallbackNotes) {
@@ -368,8 +470,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private String readReleaseNotes(String tag) {
         try {
-            // 与版本清单同源：优先镜像加速线路，全部失败才回退直连
-            return new JSONObject(fetchGithub(Github.getReleaseApi(tag))).optString("body");
+            // release notes 按 tag 钉死取，内容不可变：优先镜像加速线路，全部失败才回退直连
+            return new JSONObject(fetchGithubPinned(Github.getReleaseApi(tag))).optString("body");
         } catch (Exception ignored) {
             return "";
         }
