@@ -61,7 +61,9 @@ public class Updater implements Download.Callback, UpdateListener {
     private boolean force;
     private boolean downloading;
     private boolean canceled;
-    private boolean launchChecked;
+    private volatile boolean launchChecked;
+    private volatile boolean launchChecking;
+    private volatile long lastLaunchCheckAt;
     private boolean forceMode;
     private String forceMsg = "";
     private int lastProgress = -1;
@@ -108,11 +110,21 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     // 冷启动静默检查：仅命中强制更新（发布清单 force 或远端最低版本策略）才弹窗，否则完全不打扰
+    // 检查失败（镜像+直连全挂/超时）不锁定状态，回前台经 resume() 自动重试（节流 30 秒）
     public void checkOnLaunch(FragmentActivity activity) {
-        if (launchChecked) return;
-        launchChecked = true;
+        if (launchChecked || launchChecking) return;
         if (downloading || dialog != null) return;
-        Task.execute(() -> doInBackground(activity, false, true));
+        long now = SystemClock.elapsedRealtime();
+        if (lastLaunchCheckAt > 0 && now - lastLaunchCheckAt < TimeUnit.SECONDS.toMillis(30)) return;
+        lastLaunchCheckAt = now;
+        launchChecking = true;
+        Task.execute(() -> {
+            try {
+                doInBackground(activity, false, true);
+            } finally {
+                launchChecking = false;
+            }
+        });
     }
 
     public void resume(FragmentActivity activity) {
@@ -123,7 +135,10 @@ public class Updater implements Download.Callback, UpdateListener {
         }
         if (forceMode && selected != null && selected.hasUpdate()) {
             if (dialog == null || !dialog.isAdded()) show(activity);
+            return;
         }
+        // 启动检查曾失败：回前台自动重试（内部含状态判断与 30 秒节流）
+        if (!launchChecked) checkOnLaunch(activity);
     }
 
     private void doInBackground(FragmentActivity activity, boolean forceCheck, boolean launch) {
@@ -135,7 +150,10 @@ public class Updater implements Download.Callback, UpdateListener {
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
         applyForce(awaitPolicy(policyFuture, deadline));
         if (launch) {
+            // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待回前台重试
+            if (stable.hasManifest() || beta.hasManifest()) launchChecked = true;
             if (!forceMode || selected == null || !selected.hasUpdate()) return;
+            // 弹窗被权限框/页面保存状态挡住时，回前台由 resume() 的强制态补弹
             App.post(() -> show(activity));
             return;
         }
@@ -350,7 +368,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private String readReleaseNotes(String tag) {
         try {
-            return new JSONObject(OkHttp.string(Github.getReleaseApi(tag), GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS)).optString("body");
+            // 与版本清单同源：优先镜像加速线路，全部失败才回退直连
+            return new JSONObject(fetchGithub(Github.getReleaseApi(tag))).optString("body");
         } catch (Exception ignored) {
             return "";
         }
@@ -360,9 +379,9 @@ public class Updater implements Download.Callback, UpdateListener {
         return !stable.hasManifest() && !beta.hasManifest() && (!TextUtils.isEmpty(stable.error) || !TextUtils.isEmpty(beta.error));
     }
 
-    private void show(FragmentActivity activity) {
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
-        if (activity.getSupportFragmentManager().isStateSaved()) return;
+    private boolean show(FragmentActivity activity) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return false;
+        if (activity.getSupportFragmentManager().isStateSaved()) return false;
         bind(activity);
         dismiss();
         // 旋转后 FragmentManager 会自动恢复一个无状态的旧实例，统一移除后以完整状态重建
@@ -372,6 +391,7 @@ public class Updater implements Download.Callback, UpdateListener {
         Notify.dismissToast();
         String channel = selected == null ? Update.CHANNEL_STABLE : selected.channel;
         dialog = UpdateDialog.create().stable(stable).beta(beta).selected(channel).force(forceMode, forceMsg).listener(this).show(activity);
+        return true;
     }
 
     @Override

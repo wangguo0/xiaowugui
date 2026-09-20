@@ -120,7 +120,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
         initFragment(savedInstanceState);
         initConfig();
-        App.post(() -> Updater.create().checkOnLaunch(this), 1500);
+        Updater.create().checkOnLaunch(this);
     }
 
     @Override

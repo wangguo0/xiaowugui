@@ -159,7 +159,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         App.post(this::initConfig, 80);
         App.post(() -> PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this)), 1800);
         App.post(() -> DLNARendererService.start(this), 2500);
-        App.post(() -> Updater.create().checkOnLaunch(this), 3000);
+        Updater.create().checkOnLaunch(this);
     }
 
     private void runAfterFirstFrame(Runnable runnable) {
