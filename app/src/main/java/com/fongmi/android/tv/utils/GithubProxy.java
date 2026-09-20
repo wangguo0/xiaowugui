@@ -197,6 +197,137 @@ public class GithubProxy {
         return FILE_PREFIX.get();
     }
 
+    // 下载线路：prefix 为空串表示 GitHub 官方直连
+    public static final class Line {
+        public final String prefix;
+        public final long cost;
+
+        Line(String prefix, long cost) {
+            this.prefix = prefix;
+            this.cost = cost;
+        }
+    }
+
+    private static final OkHttpClient RANGE = new OkHttpClient.Builder()
+            .connectTimeout(PROBE_TIMEOUT, TimeUnit.MILLISECONDS)
+            .readTimeout(PROBE_TIMEOUT, TimeUnit.MILLISECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build();
+    // 裸下载客户端：不经过 App 爬虫网络栈的全局缓存/代理/拦截器，杜绝重定向命中旧缓存
+    private static final OkHttpClient DOWNLOAD = new OkHttpClient.Builder()
+            .connectTimeout(PROBE_TIMEOUT, TimeUnit.MILLISECONDS)
+            .readTimeout(30000, TimeUnit.MILLISECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build();
+
+    public static okhttp3.OkHttpClient downloadClient() {
+        return DOWNLOAD;
+    }
+
+    // 拼下载 URL：镜像线路带 ?t 防缓存；直连保持原样（GitHub 永不缓存）
+    public static String build(Line line, String url) {
+        return line.prefix.isEmpty() ? url : line.prefix + bust(url);
+    }
+
+    // 线路名（展示用）：镜像取主机名，直连返回空串由调用方本地化
+    public static String name(Line line) {
+        if (line.prefix.isEmpty()) return "";
+        String host = line.prefix;
+        int scheme = host.indexOf("://");
+        if (scheme >= 0) host = host.substring(scheme + 3);
+        int slash = host.indexOf('/');
+        if (slash >= 0) host = host.substring(0, slash);
+        return host;
+    }
+
+    // 带内容验证的并发测速：对每条线路 + 直连用 Range 拉取 APK 头 2KB，核对
+    // ①总大小与清单一致（Content-Range/Content-Length）②文件头为合法 zip（PK）。
+    // 只有验证通过的线路才返回（按耗时升序），从源头杜绝"下载到陈旧/残缺内容"。
+    public static List<Line> probeVerified(String url, long size) {
+        List<String> lines = prefixes();
+        List<Line> result = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch latch = new CountDownLatch(lines.size() + 1);
+        for (String prefix : lines) {
+            Task.largeExecutor().execute(() -> {
+                try {
+                    long start = System.currentTimeMillis();
+                    if (verify(prefix + bust(url), size)) result.add(new Line(prefix, System.currentTimeMillis() - start));
+                } catch (Exception ignored) {
+                } finally {
+                    latch.countDown();
+                }
+            });
+        }
+        Task.largeExecutor().execute(() -> {
+            try {
+                long start = System.currentTimeMillis();
+                if (verify(url, size)) result.add(new Line("", System.currentTimeMillis() - start));
+            } catch (Exception ignored) {
+            } finally {
+                latch.countDown();
+            }
+        });
+        await(latch, PROBE_BUDGET);
+        cancelRange();
+        result.sort((a, b) -> Long.compare(a.cost, b.cost));
+        return result;
+    }
+
+    private static boolean verify(String fullUrl, long size) {
+        Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=0-2047").build();
+        try (Response res = RANGE.newCall(request).execute()) {
+            if (!res.isSuccessful() && res.code() != 206) return false;
+            long total = contentRangeTotal(res);
+            if (total <= 0) total = res.body() != null && res.code() == 200 ? getLength(res) : -1;
+            if (size > 0 && total > 0 && total != size) return false;
+            byte[] head = new byte[2];
+            int read = res.body() == null ? -1 : readFully(res.body(), head, 2);
+            return read == 2 && head[0] == 'P' && head[1] == 'K';
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static long getLength(Response res) {
+        try {
+            String header = res.header("Content-Length");
+            return header != null ? Long.parseLong(header) : -1;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private static long contentRangeTotal(Response res) {
+        // Content-Range: bytes 0-2047/71509357
+        String header = res.header("Content-Range");
+        if (header == null) return -1;
+        int slash = header.lastIndexOf('/');
+        if (slash < 0 || slash == header.length() - 1) return -1;
+        try {
+            String total = header.substring(slash + 1).trim();
+            return "*".equals(total) ? -1 : Long.parseLong(total);
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private static int readFully(okhttp3.ResponseBody body, byte[] buffer, int length) throws java.io.IOException {
+        int offset = 0;
+        while (offset < length) {
+            int read = body.byteStream().read(buffer, offset, length - offset);
+            if (read < 0) break;
+            offset += read;
+        }
+        return offset;
+    }
+
+    private static void cancelRange() {
+        for (Call call : RANGE.dispatcher().queuedCalls()) call.cancel();
+        for (Call call : RANGE.dispatcher().runningCalls()) call.cancel();
+    }
+
     // 镜像 URL 追加防缓存时间戳
     private static String bust(String url) {
         return url + (url.contains("?") ? "&" : "?") + "t=" + System.currentTimeMillis();

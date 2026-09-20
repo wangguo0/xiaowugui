@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleEventObserver;
 import com.fongmi.android.tv.bean.Update;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
@@ -74,6 +75,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private volatile long lastLaunchCheckAt;
     private boolean forceMode;
     private String forceMsg = "";
+    private GithubProxy.Line currentLine;
+    private boolean retriedDirect;
     private int lastProgress = -1;
     private long lastBytes;
     private long lastTotal;
@@ -406,6 +409,10 @@ public class Updater implements Download.Callback, UpdateListener {
             update.force = object.optBoolean("force");
             update.forceMsg = normalizeText(object.optString("forceMsg"));
             update.apkUrl = getApkUrl(update, source);
+            // 清单严格校验：apkUrl/size/sha256/code 缺任一即视为无效数据整体废弃，
+            // 绝不允许带空字段进入下载流程（否则下载后的大小/SHA 校验会被空值整体跳过，旧包可蒙混过关）
+            if (TextUtils.isEmpty(update.apkUrl) || update.size <= 0 || update.sha256.length() != 64 || update.code <= 0)
+                throw new IllegalStateException("Invalid update manifest: " + manifestUrl);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
                 String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
@@ -413,7 +420,9 @@ public class Updater implements Download.Callback, UpdateListener {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            update.error = e.getMessage();
+            Update failed = Update.empty(channel);
+            failed.error = e.getMessage();
+            return failed;
         }
         return update;
     }
@@ -505,19 +514,47 @@ public class Updater implements Download.Callback, UpdateListener {
         view.setEnabled(false);
         downloading = true;
         canceled = false;
+        retriedDirect = false;
         resetProgress();
         Path.clear(getFile());
         setDialogProgress(0, 0, selected.size, 0, 0);
-        // 后台探测加速线路（最长8秒），完成后开始下载；无可用线路自动回退原地址
         String url = selected.apkUrl;
+        long size = selected.size;
+        FragmentActivity act = activityRef == null ? null : activityRef.get();
+        // 下载前核对：24 镜像+直连并发 Range 探测（每线仅 2KB），总大小与 PK 文件头都对上的线路才有资格进列表；
+        // 用户在弹窗手点线路或选「自动选择」（最快），从源头杜绝下载到陈旧/残缺内容
         Task.execute(() -> {
             if (canceled || !downloading) return;
-            startDownload(GithubProxy.accelerate(url));
+            List<GithubProxy.Line> lines = GithubProxy.probeVerified(url, size);
+            if (canceled || !downloading) return;
+            if (lines.isEmpty()) {
+                App.post(() -> {
+                    Notify.show(R.string.update_line_empty);
+                    startDownload(url, null);
+                });
+                return;
+            }
+            App.post(() -> {
+                if (act == null || act.isFinishing() || act.isDestroyed()) {
+                    startDownload(GithubProxy.build(lines.get(0), url), lines.get(0));
+                    return;
+                }
+                DownloadLineDialog.show(act, lines, line -> startDownload(GithubProxy.build(line, url), line), () -> {
+                    // 用户取消选线路：中止本次更新下载
+                    canceled = true;
+                    downloading = false;
+                    resetProgress();
+                    Path.clear(getFile());
+                    dismiss();
+                });
+            });
         });
     }
 
-    private void startDownload(String url) {
-        download = Download.create(url, getFile()).tag(url);
+    private void startDownload(String url, GithubProxy.Line line) {
+        currentLine = line;
+        // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
+        download = Download.create(url, getFile()).tag(url).client(GithubProxy.downloadClient());
         download.start(this);
     }
 
@@ -605,14 +642,23 @@ public class Updater implements Download.Callback, UpdateListener {
             String error = validate(file, target);
             App.post(() -> {
                 if (canceled) return;
-                downloading = false;
-                resetProgress();
                 if (!TextUtils.isEmpty(error)) {
                     Path.clear(file);
+                    // 校验不过且当前走的是镜像线路：自动改用官方直连重试一次（罕见兜底，防传输中途坏数据）
+                    if (!retriedDirect && currentLine != null && target != null && !TextUtils.isEmpty(target.apkUrl)) {
+                        retriedDirect = true;
+                        Notify.show(R.string.update_retry_direct);
+                        startDownload(target.apkUrl, null);
+                        return;
+                    }
+                    downloading = false;
+                    resetProgress();
                     Notify.show(error);
                     dismiss();
                     return;
                 }
+                downloading = false;
+                resetProgress();
                 FileUtil.openFile(file);
                 dismiss();
             });
@@ -629,7 +675,11 @@ public class Updater implements Download.Callback, UpdateListener {
         if (file == null || !file.exists() || file.length() <= 0) return ResUtil.getString(R.string.update_download_invalid);
         if (update != null && update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
         if (update != null && !TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
-        if (App.get().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0) == null) return ResUtil.getString(R.string.update_download_invalid);
+        android.content.pm.PackageInfo info = App.get().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0);
+        if (info == null) return ResUtil.getString(R.string.update_download_invalid);
+        // 版本核对（零流量，只读本地文件头）：APK 实际 versionCode 必须与清单一致，杜绝任何环节把旧包冒充新包递给安装器
+        if (update != null && update.code > 0 && androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info) != update.code)
+            return ResUtil.getString(R.string.update_download_version);
         return "";
     }
 

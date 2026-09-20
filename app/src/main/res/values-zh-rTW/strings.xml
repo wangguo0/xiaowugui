@@ -1289,6 +1289,12 @@
     <string name="update_download_incomplete">更新包下載不完整，請重試。</string>
     <string name="update_download_checksum">更新包校驗失敗，請重試。</string>
     <string name="update_download_invalid">更新包無效，請重試。</string>
+    <string name="update_download_version">下載包版本與目標版本不符</string>
+    <string name="update_line_title">選擇更新線路</string>
+    <string name="update_line_direct">GitHub 官方直連</string>
+    <string name="update_line_auto">自動選擇</string>
+    <string name="update_line_empty">無已驗證的鏡像線路，改用官方直連下載</string>
+    <string name="update_retry_direct">下載包校驗失敗，正在改用官方直連重試</string>
     <string name="update_confirm">更新</string>
     <string name="update_confirm_channel">更新%1$s</string>
     <string name="update_cancel">取消更新</string>

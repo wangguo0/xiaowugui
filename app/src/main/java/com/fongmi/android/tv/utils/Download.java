@@ -21,6 +21,8 @@ public class Download {
     private Callback callback;
     private Future<?> future;
     private String tag;
+    private okhttp3.OkHttpClient client;
+    private volatile okhttp3.Call call;
     private volatile boolean canceled;
 
     public static Download create(String url, File file) {
@@ -35,6 +37,12 @@ public class Download {
 
     public Download tag(String tag) {
         this.tag = tag;
+        return this;
+    }
+
+    // 指定独立 OkHttpClient（如 GitHub 裸下载客户端），不传则沿用 App 爬虫网络栈
+    public Download client(okhttp3.OkHttpClient client) {
+        this.client = client;
         return this;
     }
 
@@ -53,13 +61,18 @@ public class Download {
         canceled = true;
         if (future != null) future.cancel(true);
         OkHttp.cancel(tag);
+        okhttp3.Call current = call;
+        if (current != null) current.cancel();
         Path.clear(file);
         future = null;
         return this;
     }
 
     private void doInBackground() {
-        try (Response res = OkHttp.newCall(url, tag).execute()) {
+        okhttp3.Request request = new okhttp3.Request.Builder().url(url).build();
+        okhttp3.Call newCall = client != null ? client.newCall(request) : OkHttp.newCall(url, tag);
+        this.call = newCall;
+        try (Response res = newCall.execute()) {
             if (!res.isSuccessful()) throw new IOException("Download failed: HTTP " + res.code());
             if (res.body() == null) throw new IOException("Download failed: empty response");
             boolean completed = download(res.body().byteStream(), getLength(res));
