@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag = 项目名+版本号, e.g. 小乌龟1.1（不可重复，发新版请递增版本号）; blank = 小乌龟<versionName>-yyyyMMddHHmm"
+        description: "Release tag = 项目名+版本号, e.g. 小乌龟1.2（不可重复）; 留空 = 自动递增版本号（如 小乌龟1.0.2，beta 通道加 -beta 后缀），不再带时间戳"
         required: false
         type: string
       release_channel:
@@ -89,7 +89,7 @@ jobs:
           INPUT_CHANNEL: ${{ inputs.release_channel }}
           BRANCH_NAME: ${{ github.ref_name }}
         run: |
-          # 版本基线：version.properties 优先（正式版构建自动递增的持久基线），回退解析 build.gradle 字面量
+          # 版本基线：version.properties 优先（发布构建自动递增并写回的持久基线），回退解析 build.gradle 字面量
           VERSION_NAME="$(sed -n 's/^versionName=//p' version.properties 2>/dev/null | head -1 | tr -d '[:space:]')"
           VERSION_CODE="$(sed -n 's/^versionCode=//p' version.properties 2>/dev/null | head -1 | tr -d '[:space:]')"
           if [ -z "$VERSION_NAME" ]; then
@@ -106,22 +106,32 @@ jobs:
               CHANNEL="stable"
             fi
           fi
-          # tag 格式：项目名+版本号（如 小乌龟1.1），可带 -yyyyMMddHHmm 时间后缀；beta 通道带时间防互相覆盖
           if [ "$CHANNEL" = "beta" ]; then
             APK_SUFFIX="-beta"
-            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*-beta-[0-9]{12}$"
-            TAG_DEFAULT="小乌龟${VERSION_NAME}-beta-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="小乌龟1.1-beta-202609101530"
           else
             APK_SUFFIX=""
-            TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*(-[0-9]{12})?$"
-            TAG_DEFAULT="小乌龟${VERSION_NAME}-$(date +%Y%m%d%H%M)"
-            TAG_EXPECT="小乌龟1.1 或 小乌龟1.1-202609101530"
           fi
+          # 版本号递增：patch 位（最后一段）+1，如 1.0.1 → 1.0.2、1.1 → 1.2
+          bump_version() {
+            local v="$1"
+            local head="${v%.*}"
+            local tail="${v##*.}"
+            if [ "$head" = "$v" ]; then printf '%s' "$((v + 1))"; else printf '%s' "$head.$((tail + 1))"; fi
+          }
+          # tag 格式：项目名+版本号（如 小乌龟1.0.2），beta 带 -beta 后缀；兼容旧 -yyyyMMddHHmm 时间戳格式
+          TAG_PATTERN="^小乌龟[0-9]+(\.[0-9]+)*(-beta)?(-[0-9]{12})?$"
+          TAG_EXPECT="小乌龟1.2 或 小乌龟1.2-beta"
           TAG="$INPUT_TAG"
           if [ -z "$TAG" ]; then
-            TAG="$TAG_DEFAULT"
+            # 未手填：自动递增版本号（不再带时间戳），beta 通道加 -beta 后缀
+            NEW_NAME="$(bump_version "$VERSION_NAME")"
+            TAG="小乌龟${NEW_NAME}"
+            if [ "$CHANNEL" = "beta" ]; then TAG="${TAG}-beta"; fi
+          else
+            # 手填 tag：以 tag 内版本号作为新基线（不自动递增），versionCode 仍 +1
+            NEW_NAME="$(printf '%s' "$TAG" | sed -E 's/^小乌龟//; s/(-beta)?(-[0-9]{12})?$//')"
           fi
+          NEW_CODE="$((VERSION_CODE + 1))"
           if ! printf '%s' "$TAG" | grep -Eq "$TAG_PATTERN"; then
             echo "::error title=Invalid release tag::格式应为 项目名+版本号（例如 $TAG_EXPECT），收到: $TAG"
             exit 1
@@ -130,14 +140,18 @@ jobs:
             echo "::error title=Release tag exists::$TAG 已发布过，版本号不可覆盖，请递增（如 $TAG → 下一版）"
             exit 1
           fi
+          # 把新基线写入 checkout 的 version.properties：构建产物 versionName/versionCode 与 tag、清单 code 四者一致
+          # Release 创建成功后由后续步骤 commit+push 写回仓库；发布失败不写回，基线不前进
+          # 注意：版本号只增不回收——删除 release/tag 不会回退基线，防止镜像残留缓存冒充新版本
+          sed -i "s/^versionName=.*/versionName=${NEW_NAME}/; s/^versionCode=.*/versionCode=${NEW_CODE}/" version.properties
           # URL 百分号编码后的 tag（中文等非 ASCII 字符在下载链接/API 中必须编码）
           TAG_ENCODED="$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$TAG")"
           {
             echo "tag=$TAG"
             echo "tag_encoded=$TAG_ENCODED"
             echo "title=$TAG"
-            echo "version_name=$VERSION_NAME"
-            echo "version_code=$VERSION_CODE"
+            echo "version_name=$NEW_NAME"
+            echo "version_code=$NEW_CODE"
             echo "short_sha=$(git rev-parse --short=7 HEAD)"
             echo "channel=$CHANNEL"
             echo "apk_suffix=$APK_SUFFIX"
@@ -282,6 +296,25 @@ jobs:
             --notes "$NOTES" \
             $PRERELEASE_FLAG \
             dist/*.apk dist/*.json
+
+      - name: Write version baseline back to repo
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+          NEW_NAME: ${{ steps.meta.outputs.version_name }}
+          NEW_CODE: ${{ steps.meta.outputs.version_code }}
+        run: |
+          # Release 已创建成功：把递增后的版本基线写回仓库，作为下次发布的起点（只增不回收）
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- version.properties; then
+            echo "version.properties unchanged, skip write-back"
+            exit 0
+          fi
+          git add version.properties
+          git commit -m "ci: bump version to ${NEW_NAME} (code ${NEW_CODE}) [skip ci]"
+          git push origin "HEAD:refs/heads/${BRANCH_NAME}" || {
+            git pull --rebase origin "$BRANCH_NAME" && git push origin "HEAD:refs/heads/${BRANCH_NAME}"
+          } || echo "::warning title=Version write-back failed::发布成功但 version.properties 未推回 ${BRANCH_NAME}，请手动提交基线 ${NEW_NAME}/${NEW_CODE}"
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
