@@ -1308,6 +1308,9 @@
     <string name="update_download_version">下载包版本与目标版本不符</string>
     <string name="update_download_package">更新包与当前应用不匹配，请重试。</string>
     <string name="update_download_older">下载到的不是更新版本（不高于当前已安装版本），已阻止安装，请稍后重试。</string>
+    <string name="update_install_result">系统安装器未完成安装：%1$s</string>
+    <string name="update_install_manual">安装包已保存到「下载」：%1$s，可在文件管理器中点击安装</string>
+    <string name="update_install_permission">本应用未开启「安装未知应用」权限</string>
     <string name="update_line_title">选择更新线路</string>
     <string name="update_line_direct">GitHub 官方直连</string>
     <string name="update_line_auto">自动选择</string>

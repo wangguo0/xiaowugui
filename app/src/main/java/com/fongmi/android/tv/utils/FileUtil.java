@@ -40,7 +40,10 @@ public class FileUtil {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setDataAndType(getShareUri(file), FileUtil.getMimeType(file.getName()));
+        Uri uri = getShareUri(file);
+        intent.setDataAndType(uri, FileUtil.getMimeType(file.getName()));
+        // ClipData 是部分 ROM（MIUI 等）放行 URI 读取授权的必要条件，缺失会被安装器按无权限处理
+        intent.setClipData(android.content.ClipData.newRawUri("file", uri));
         App.get().startActivity(intent);
     }
 
@@ -150,6 +153,8 @@ public class FileUtil {
     }
 
     private static String getMimeType(String fileName) {
+        // .apk 不在系统 MIME 表内，靠文件名推导会落到 */*，安装器随之拒绝或误判，这里显式指定
+        if (!TextUtils.isEmpty(fileName) && fileName.toLowerCase().endsWith(".apk")) return ApkInstaller.APK_MIME;
         String mimeType = URLConnection.guessContentTypeFromName(fileName);
         return TextUtils.isEmpty(mimeType) ? "*/*" : mimeType;
     }

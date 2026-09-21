@@ -1292,6 +1292,9 @@
     <string name="update_download_version">下載包版本與目標版本不符</string>
     <string name="update_download_package">更新包與目前應用不符，請重試。</string>
     <string name="update_download_older">下載到的不是更新版本（不高於目前已安裝版本），已阻止安裝，請稍後重試。</string>
+    <string name="update_install_result">系統安裝器未完成安裝：%1$s</string>
+    <string name="update_install_manual">安裝包已儲存到「下載」：%1$s，可在檔案管理員中點擊安裝</string>
+    <string name="update_install_permission">本應用未開啟「安裝未知應用」權限</string>
     <string name="update_line_title">選擇更新線路</string>
     <string name="update_line_direct">GitHub 官方直連</string>
     <string name="update_line_auto">自動選擇</string>

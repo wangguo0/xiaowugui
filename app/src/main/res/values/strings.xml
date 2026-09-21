@@ -1311,6 +1311,9 @@
     <string name="update_download_version">The downloaded package version does not match the target version</string>
     <string name="update_download_package">The update package does not match this app. Please try again.</string>
     <string name="update_download_older">The downloaded package is not newer than the installed version. Installation was blocked, please try again later.</string>
+    <string name="update_install_result">Installation was not completed by the system installer: %1$s</string>
+    <string name="update_install_manual">The package was saved to Downloads: %1$s — tap it in a file manager to install</string>
+    <string name="update_install_permission">This app is not allowed to install unknown apps</string>
     <string name="update_line_title">Select update line</string>
     <string name="update_line_direct">GitHub official direct</string>
     <string name="update_line_auto">Auto select</string>

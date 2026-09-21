@@ -14,9 +14,9 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.AppVersion;
+import com.fongmi.android.tv.utils.ApkInstaller;
 import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.Download;
-import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.ForcePolicy;
 import com.fongmi.android.tv.utils.Github;
 import com.fongmi.android.tv.utils.GithubProxy;
@@ -97,6 +97,7 @@ public class Updater implements Download.Callback, UpdateListener {
     private static final class Snapshot {
 
         private final String asset;
+        private final String name;
         private final String url;
         private final String sha256;
         private final long size;
@@ -104,6 +105,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
         Snapshot(Update update, String asset) {
             this.asset = asset;
+            this.name = update.name;
             this.url = update.apkUrl;
             this.sha256 = update.sha256;
             this.size = update.size;
@@ -115,8 +117,21 @@ public class Updater implements Download.Callback, UpdateListener {
         return INSTANCE;
     }
 
+    // 送装文件名带上目标版本与机型：固定名会让系统/安装器按同一路径与同一 content URI 复用上一次的解析结果
     private File getFile() {
-        return Path.cache("update.apk");
+        return Path.cache("update-" + versionTag() + "-" + AppVersion.deviceName() + ".apk");
+    }
+
+    // 目标版本串（冻结快照优先），形如 小乌龟1.0.7
+    private String versionTag() {
+        Snapshot target = snapshot;
+        String name = target == null ? "" : target.name;
+        return TextUtils.isEmpty(name) ? AppVersion.fullName() : name;
+    }
+
+    // 公共「下载」目录里的对外文件名：用户需要手动安装时一眼可辨版本与机型
+    private String downloadName() {
+        return versionTag() + "-" + AppVersion.deviceName() + ".apk";
     }
 
     // 发布产物文件名模式段用拼音（mobile→shouji、leanback→dianshi），与 CI 上传的 Release 附件名保持一致
@@ -659,11 +674,21 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private void startDownload(String url, GithubProxy.Line line) {
         currentLine = line;
+        clearOldPackages();
         // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
         long limit = snapshot == null || retriedLatest ? 0 : snapshot.size;
         DiagLog.log(LOG, "[下载] 开始 线路=%s 限长=%s url=%s", lineName(line), limit, url);
         download = Download.create(url, getFile()).tag(url).limit(limit).client(GithubProxy.downloadClient());
         download.start(this);
+    }
+
+    // 文件名随版本变化后旧包不再被同名覆盖，这里清掉历史残留，避免缓存里堆着几十兆的无用安装包
+    private void clearOldPackages() {
+        File dir = Path.cache();
+        File[] files = dir == null ? null : dir.listFiles((parent, name) -> name.startsWith("update-") && name.endsWith(".apk"));
+        if (files == null) return;
+        String current = getFile().getAbsolutePath();
+        for (File item : files) if (!item.getAbsolutePath().equals(current)) Path.clear(item);
     }
 
     @Override
@@ -780,13 +805,23 @@ public class Updater implements Download.Callback, UpdateListener {
                     dismiss();
                     return;
                 }
-                DiagLog.log(LOG, "[结果] 校验通过 → 送装 file=%s", file == null ? "" : file.getName());
+                DiagLog.log(LOG, "[结果] 校验通过 → 送装 file=%s 大小=%s", file == null ? "" : file.getAbsolutePath(), file == null ? 0 : file.length());
                 downloading = false;
                 resetProgress();
-                FileUtil.openFile(file);
                 dismiss();
+                ApkInstaller.install(file, downloadName(), this::onInstallResult);
             });
         });
+    }
+
+    // 送装结果：会话安装未完成时，把安装器的真实原因与手动安装出路一并告知用户
+    private void onInstallResult(boolean ok, String detail) {
+        if (ok) {
+            DiagLog.log(LOG, "[送装] 已受理，等待系统安装完成");
+            return;
+        }
+        DiagLog.log(LOG, "[送装] 未完成：%s", detail);
+        Notify.show(ResUtil.getString(R.string.update_install_result, detail) + "\n" + ResUtil.getString(R.string.update_install_manual, downloadName()));
     }
 
     private void restoreDialog(FragmentActivity activity) {
@@ -811,9 +846,10 @@ public class Updater implements Download.Callback, UpdateListener {
             return ResUtil.getString(R.string.update_download_package);
         }
         long real = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info);
+        long installed = installedCode();
         // 闸门③（装前铁律）：APK 内嵌版本码必须严格大于本机已安装版本码，否则一律拒绝送装
-        if (real <= BuildConfig.VERSION_CODE) {
-            DiagLog.log(LOG, "[闸门] 送装前拒绝：APK内嵌 code=%s 不高于本机 code=%s", real, BuildConfig.VERSION_CODE);
+        if (real <= installed) {
+            DiagLog.log(LOG, "[闸门] 送装前拒绝：APK内嵌 code=%s 不高于本机已安装 code=%s", real, installed);
             return ResUtil.getString(R.string.update_download_older);
         }
         if (update == null) return "";
@@ -837,8 +873,19 @@ public class Updater implements Download.Callback, UpdateListener {
             DiagLog.log(LOG, "[校验] 拒绝：版本码不符 apkCode=%s 清单code=%s", real, update.code);
             return ResUtil.getString(R.string.update_download_version);
         }
-        DiagLog.log(LOG, "[校验] 通过 长度=%s apkCode=%s 本机code=%s sha=%s", file.length(), real, BuildConfig.VERSION_CODE, shaPrefix(actual));
+        DiagLog.log(LOG, "[校验] 通过 长度=%s apkCode=%s 本机已装code=%s 本机BuildConfig=%s sha=%s", file.length(), real, installed, BuildConfig.VERSION_CODE, shaPrefix(actual));
         return "";
+    }
+
+    // 系统里真实安装的版本码（权威来源）：日志与闸门以它为准，编译期常量仅作交叉对照
+    private long installedCode() {
+        try {
+            android.content.pm.PackageInfo info = App.get().getPackageManager().getPackageInfo(BuildConfig.APPLICATION_ID, 0);
+            return androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info);
+        } catch (Exception e) {
+            DiagLog.log(LOG, "[校验] 读取本机安装版本失败 %s", e.getMessage());
+            return BuildConfig.VERSION_CODE;
+        }
     }
 
     private String sha256(File file) {
