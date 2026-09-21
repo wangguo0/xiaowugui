@@ -1299,6 +1299,8 @@
     <string name="update_line_direct">GitHub 官方直連</string>
     <string name="update_line_auto">自動選擇</string>
     <string name="update_line_empty">無已驗證的鏡像線路，改用官方直連下載</string>
+    <string name="update_line_loading">正在獲取可用更新線路…</string>
+    <string name="update_line_countdown">%1$d 秒後自動選擇最快線路</string>
     <string name="update_retry_direct">下載包校驗失敗，正在改用官方直連重試</string>
     <string name="update_retry_latest">下載包校驗失敗，正在改用最新發布直鏈重試</string>
     <string name="update_confirm">更新</string>

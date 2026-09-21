@@ -1,9 +1,20 @@
 package com.fongmi.android.tv;
 
+import android.content.ContentUris;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleEventObserver;
@@ -68,6 +79,10 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private WeakReference<FragmentActivity> activityRef;
     private UpdateDialog dialog;
+    // 手动检查更新期间的常驻转圈弹窗（不可取消，出结果即关）
+    private AlertDialog checkDialog;
+    // 启动兜底清理只跑一次（进程级）
+    private boolean staleCleaned;
     private Download download;
     private Update stable;
     private Update beta;
@@ -141,7 +156,6 @@ public class Updater implements Download.Callback, UpdateListener {
 
     public Updater force() {
         force = true;
-        Notify.show(R.string.update_check);
         Setting.putUpdate(true);
         return this;
     }
@@ -158,12 +172,23 @@ public class Updater implements Download.Callback, UpdateListener {
             DiagLog.log(LOG, "[检查] 跳过：检查更新开关已关闭");
             return;
         }
-        Task.execute(() -> doInBackground(activity, forceCheck, false));
+        // 手动检查：常驻转圈弹窗直到出结果（替代一闪而过的 toast）
+        if (forceCheck) showCheckDialog(activity);
+        Task.execute(() -> {
+            try {
+                doInBackground(activity, forceCheck, false);
+            } finally {
+                // 兜底：任何意外路径都不允许转圈常驻
+                if (forceCheck) App.post(this::closeCheckDialog);
+            }
+        });
     }
 
     // 冷启动静默检查：仅命中强制更新（发布清单 force 或远端最低版本策略）才弹窗，否则完全不打扰
     // 检查失败（镜像+直连全挂/超时）不锁定状态，回前台经 resume() 自动重试（节流 30 秒）
     public void checkOnLaunch(FragmentActivity activity) {
+        // 启动兜底：清理本机已装不低的残留安装包（上次更新成功后进程被杀没来得及删的）
+        cleanupStalePackages();
         if (launchChecked || launchChecking) return;
         if (downloading || dialog != null) return;
         long now = SystemClock.elapsedRealtime();
@@ -224,18 +249,27 @@ public class Updater implements Download.Callback, UpdateListener {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = stable;
                 DiagLog.log(LOG, "[结果] 手动检查：清单版本不高于本机 → 仅展示当前版本信息");
-                App.post(() -> show(activity));
+                App.post(() -> {
+                    closeCheckDialog();
+                    show(activity);
+                });
                 return;
             }
             if (forceCheck) {
-                DiagLog.log(LOG, "[结果] 手动检查：已是最新（检查失败=%s）", hasErrorOnly());
-                App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
+                DiagLog.log(LOG, "[结果] 手动检查：检查失败（无任何有效清单=%s）→ 弹窗提示", hasErrorOnly());
+                App.post(() -> {
+                    closeCheckDialog();
+                    showCheckFailed(activity);
+                });
             }
             return;
         }
         if (!forceMode) selected = stable;
         DiagLog.log(LOG, "[结果] 发现可更新版本 → 弹窗 目标=%s", describe(selected));
-        App.post(() -> show(activity));
+        App.post(() -> {
+            closeCheckDialog();
+            show(activity);
+        });
     }
 
     // 触发方式（诊断日志用）：静默 = 冷启动/回前台自动检查；手动 = 用户点检查更新
@@ -632,49 +666,56 @@ public class Updater implements Download.Callback, UpdateListener {
         snapshot = new Snapshot(selected, getFileName(selected.apkUrl, selected.channel));
         DiagLog.log(LOG, "[闸门] 冻结清单快照 asset=%s size=%s sha=%s code=%s url=%s",
                 snapshot.asset, snapshot.size, shaPrefix(snapshot.sha256), snapshot.code, snapshot.url);
-        setDialogProgress(0, 0, snapshot.size, 0, 0);
         String url = snapshot.url;
         long size = snapshot.size;
         FragmentActivity act = activityRef == null ? null : activityRef.get();
+        // 点「更新」立即弹出选线窗：探测期间常驻转圈，线路就绪后 5 秒倒计时自动选最快，用户随时可手点；
+        // 选定线路之后才显示下载进度条，不再出现"进度条先闪一下再弹选线窗"的旧观感
+        DownloadLineDialog lineDialog = act == null ? null : new DownloadLineDialog(act, line -> {
+            DiagLog.log(LOG, "[选线] 选定线路=%s", lineName(line));
+            startDownload(GithubProxy.build(line, url), line);
+        }, () -> {
+            // 用户取消选线路：中止本次更新下载
+            DiagLog.log(LOG, "[选线] 用户取消选线路 → 中止本次更新");
+            canceled = true;
+            downloading = false;
+            resetProgress();
+            Path.clear(getFile());
+            dismiss();
+        });
+        if (lineDialog != null) lineDialog.showLoading();
         // 下载前核对：24 镜像+直连并发 Range 探测（每线仅 2KB），总大小与 PK 文件头都对上的线路才有资格进列表；
-        // 用户在弹窗手点线路或选「自动选择」（最快），从源头杜绝下载到陈旧/残缺内容
+        // 从源头杜绝下载到陈旧/残缺内容
         Task.execute(() -> {
             if (canceled || !downloading) return;
             List<GithubProxy.Line> lines = GithubProxy.probeVerified(url, size);
-            if (canceled || !downloading) return;
+            if (canceled || !downloading) {
+                if (lineDialog != null) App.post(lineDialog::dismissQuietly);
+                return;
+            }
             if (lines.isEmpty()) {
                 DiagLog.log(LOG, "[探测] 无任何线路通过验证 → 仍用原始直链尝试一次");
                 App.post(() -> {
+                    if (lineDialog != null) lineDialog.dismissQuietly();
                     Notify.show(R.string.update_line_empty);
                     startDownload(url, null);
                 });
                 return;
             }
-            App.post(() -> {
-                if (act == null || act.isFinishing() || act.isDestroyed()) {
-                    DiagLog.log(LOG, "[选线] 无可用界面 → 自动选择最快线路=%s", lineName(lines.get(0)));
-                    startDownload(GithubProxy.build(lines.get(0), url), lines.get(0));
-                    return;
-                }
-                DownloadLineDialog.show(act, lines, line -> {
-                    DiagLog.log(LOG, "[选线] 选定线路=%s 是否最快=%s 候选=%s", lineName(line), line == lines.get(0), lines.size());
-                    startDownload(GithubProxy.build(line, url), line);
-                }, () -> {
-                    // 用户取消选线路：中止本次更新下载
-                    DiagLog.log(LOG, "[选线] 用户取消选线路 → 中止本次更新");
-                    canceled = true;
-                    downloading = false;
-                    resetProgress();
-                    Path.clear(getFile());
-                    dismiss();
-                });
-            });
+            if (lineDialog == null) {
+                DiagLog.log(LOG, "[选线] 无可用界面 → 自动选择最快线路=%s", lineName(lines.get(0)));
+                App.post(() -> startDownload(GithubProxy.build(lines.get(0), url), lines.get(0)));
+                return;
+            }
+            App.post(() -> lineDialog.setLines(lines));
         });
     }
 
     private void startDownload(String url, GithubProxy.Line line) {
         currentLine = line;
         clearOldPackages();
+        // 线路选定（或直连兜底）后才展示下载进度条
+        setDialogProgress(0, 0, snapshot == null ? 0 : snapshot.size, 0, 0);
         // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
         long limit = snapshot == null || retriedLatest ? 0 : snapshot.size;
         DiagLog.log(LOG, "[下载] 开始 线路=%s 限长=%s url=%s", lineName(line), limit, url);
@@ -818,10 +859,143 @@ public class Updater implements Download.Callback, UpdateListener {
     private void onInstallResult(boolean ok, String detail) {
         if (ok) {
             DiagLog.log(LOG, "[送装] 已受理，等待系统安装完成");
+            // 安装已受理（字节流已在安装器会话内），本次下载的包即刻删除；
+            // 若进程在安装中被杀没删成，由启动兜底扫描 cleanupStalePackages 补删
+            File installed = getFile();
+            String name = downloadName();
+            Task.execute(() -> {
+                Path.clear(installed);
+                DiagLog.log(LOG, "[清理] 删除缓存安装包 %s", installed.getName());
+                deleteDownloadCopy(name);
+            });
             return;
         }
         DiagLog.log(LOG, "[送装] 未完成：%s", detail);
         Notify.show(ResUtil.getString(R.string.update_install_result, detail) + "\n" + ResUtil.getString(R.string.update_install_manual, downloadName()));
+    }
+
+    // 手动检查更新的常驻转圈弹窗：不可取消、点外不关，出结果即由 closeCheckDialog 关闭
+    private void showCheckDialog(FragmentActivity activity) {
+        closeCheckDialog();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        int pad = ResUtil.dp2px(24);
+        LinearLayout shell = new LinearLayout(activity);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setGravity(Gravity.CENTER);
+        shell.setPadding(pad, pad, pad, pad);
+        shell.addView(new ProgressBar(activity, null, android.R.attr.progressBarStyleLarge));
+        TextView text = new TextView(activity);
+        text.setText(R.string.update_check);
+        text.setTextSize(15);
+        text.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = ResUtil.dp2px(12);
+        shell.addView(text, lp);
+        checkDialog = new AlertDialog.Builder(activity).setView(shell).setCancelable(false).create();
+        checkDialog.setCanceledOnTouchOutside(false);
+        checkDialog.show();
+        DiagLog.log(LOG, "[检查弹窗] 显示常驻转圈（手动检查）");
+    }
+
+    private void closeCheckDialog() {
+        try {
+            if (checkDialog != null) checkDialog.dismiss();
+        } catch (Exception ignored) {
+        } finally {
+            checkDialog = null;
+        }
+    }
+
+    // 手动检查失败：弹窗提示 + 「我已知悉」按钮（替代一闪而过的 toast）
+    private void showCheckFailed(FragmentActivity activity) {
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        DiagLog.log(LOG, "[检查弹窗] 检查失败 → 弹窗提示");
+        new AlertDialog.Builder(activity)
+                .setMessage(R.string.update_failed)
+                .setCancelable(false)
+                .setPositiveButton(R.string.about_acknowledge, null)
+                .show();
+    }
+
+    // 启动兜底清理（进程内仅一次，后台执行）：删除内嵌版本码不高于本机已装版本的残留安装包。
+    // 只认自家命名（缓存 update-*.apk / 下载目录 小乌龟…-机型.apk），浏览器下载的文件名不同绝不触碰
+    private void cleanupStalePackages() {
+        if (staleCleaned) return;
+        staleCleaned = true;
+        Task.execute(() -> {
+            long installed = installedCode();
+            File dir = Path.cache();
+            File[] cached = dir == null ? null : dir.listFiles((parent, name) -> name.startsWith("update-") && name.endsWith(".apk"));
+            if (cached != null) {
+                for (File item : cached) {
+                    long code = embeddedCode(item.getAbsolutePath());
+                    if (code > 0 && code <= installed) {
+                        Path.clear(item);
+                        DiagLog.log(LOG, "[清理] 缓存残留已删 %s code=%s 本机=%s", item.getName(), code, installed);
+                    }
+                }
+            }
+            String suffix = "-" + AppVersion.deviceName() + ".apk";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try (Cursor cursor = App.get().getContentResolver().query(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.DATA},
+                        MediaStore.MediaColumns.DISPLAY_NAME + " LIKE ?", new String[]{"小乌龟%" + suffix}, null)) {
+                    if (cursor == null) return;
+                    while (cursor.moveToNext()) {
+                        String path = cursor.getString(2);
+                        long code = TextUtils.isEmpty(path) ? 0 : embeddedCode(path);
+                        if (code <= 0 || code > installed) continue;
+                        Uri uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cursor.getLong(0));
+                        App.get().getContentResolver().delete(uri, null, null);
+                        DiagLog.log(LOG, "[清理] 下载目录残留已删 %s code=%s 本机=%s", cursor.getString(1), code, installed);
+                    }
+                } catch (Exception e) {
+                    DiagLog.log(LOG, "[清理] 扫描下载目录异常 %s", e.getMessage());
+                }
+            } else {
+                File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File[] files = dl == null ? null : dl.listFiles((parent, name) -> name.startsWith("小乌龟") && name.endsWith(suffix));
+                if (files != null) {
+                    for (File item : files) {
+                        long code = embeddedCode(item.getAbsolutePath());
+                        if (code > 0 && code <= installed) {
+                            DiagLog.log(LOG, "[清理] 下载目录残留已删 %s code=%s 本机=%s", item.getName(), code, installed);
+                            if (!item.delete()) DiagLog.log(LOG, "[清理] 下载目录删除失败 %s", item.getName());
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 删除公共「下载」目录里指定文件名的安装包副本（尽力而为 + 日志）
+    private void deleteDownloadCopy(String name) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                App.get().getContentResolver().delete(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                        MediaStore.MediaColumns.DISPLAY_NAME + "=?", new String[]{name});
+            } else {
+                File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                File out = dl == null ? null : new File(dl, name);
+                if (out != null && out.exists() && !out.delete()) {
+                    DiagLog.log(LOG, "[清理] 下载目录副本删除失败 %s", name);
+                    return;
+                }
+            }
+            DiagLog.log(LOG, "[清理] 已删除下载目录副本 %s", name);
+        } catch (Exception e) {
+            DiagLog.log(LOG, "[清理] 下载目录副本删除异常 %s", e.getMessage());
+        }
+    }
+
+    // 只读 APK 文件头取内嵌版本码（零流量）：读不出（残缺/非 APK）返回 0，调用方据此不删
+    private long embeddedCode(String path) {
+        try {
+            android.content.pm.PackageInfo info = App.get().getPackageManager().getPackageArchiveInfo(path, 0);
+            return info == null ? 0 : androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void restoreDialog(FragmentActivity activity) {

@@ -1,11 +1,15 @@
 package com.fongmi.android.tv.ui.dialog;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.BaseAdapter;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
@@ -17,49 +21,162 @@ import com.fongmi.android.tv.utils.ResUtil;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-// 应用内更新的下载线路选择弹窗：仅展示已通过内容验证的线路（含延迟），
-// 支持手动点选某条，或点「自动选择」使用最快线路
+// 应用内更新的下载线路选择弹窗：点「更新」立即弹出（探测期间常驻转圈），
+// 线路就绪后展示列表并启动 5 秒倒计时，超时自动选择最快线路，用户随时可手点某条立即选定
 public class DownloadLineDialog {
 
     public interface OnPicked {
         void onPick(GithubProxy.Line line);
     }
 
-    public static void show(Context context, List<GithubProxy.Line> lines, OnPicked onPicked, Runnable onAbort) {
-        if (context == null || lines == null || lines.isEmpty()) return;
-        ListView listView = new ListView(context);
+    // 倒计时秒数：线路就绪后用户 5 秒内未手选则自动选最快
+    private static final int COUNTDOWN_SECONDS = 5;
+
+    private final Context context;
+    private final OnPicked onPicked;
+    private final Runnable onAbort;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final AtomicBoolean picked = new AtomicBoolean(false);
+    private final AtomicBoolean closed = new AtomicBoolean(false);
+
+    private AlertDialog dialog;
+    private LinearLayout shell;
+    private View loadingView;
+    private ListView listView;
+    private TextView countdownView;
+    private List<GithubProxy.Line> lines;
+    private int remaining;
+    private Runnable ticker;
+
+    public DownloadLineDialog(Context context, OnPicked onPicked, Runnable onAbort) {
+        this.context = context;
+        this.onPicked = onPicked;
+        this.onAbort = onAbort;
+    }
+
+    // 加载态：线路探测完成前先展示转圈，「自动选择」按钮置灰待线路就绪
+    public void showLoading() {
+        if (closed.get()) return;
         int pad = ResUtil.dp2px(16);
-        listView.setPadding(pad, pad / 2, pad, 0);
-        listView.setAdapter(new LineAdapter(context, lines));
         TextView title = new TextView(context);
         title.setText(R.string.update_line_title);
         title.setTextSize(18);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setPadding(pad, pad, pad, 0);
-        LinearLayout shell = new LinearLayout(context);
+        shell = new LinearLayout(context);
         shell.setOrientation(LinearLayout.VERTICAL);
         shell.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        shell.addView(listView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ResUtil.dp2px(320)));
-        AtomicBoolean picked = new AtomicBoolean(false);
-        AlertDialog dialog = new AlertDialog.Builder(context)
+        loadingView = buildLoading(pad);
+        shell.addView(loadingView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ResUtil.dp2px(320)));
+        dialog = new AlertDialog.Builder(context)
                 .setView(shell)
-                .setNegativeButton(android.R.string.cancel, (d, which) -> {
-                    if (!picked.get()) onAbort.run();
-                })
+                .setNegativeButton(android.R.string.cancel, (d, which) -> abort())
                 .setPositiveButton(R.string.update_line_auto, (d, which) -> {
-                    picked.set(true);
-                    onPicked.onPick(lines.get(0));
+                    if (lines != null && !lines.isEmpty()) pick(lines.get(0));
                 })
                 .create();
-        dialog.setOnCancelListener(d -> {
-            if (!picked.get()) onAbort.run();
-        });
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            picked.set(true);
-            dialog.dismiss();
-            onPicked.onPick(lines.get(position));
-        });
+        dialog.setCancelable(false);
         dialog.show();
+        Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (positive != null) positive.setEnabled(false);
+    }
+
+    private View buildLoading(int pad) {
+        LinearLayout box = new LinearLayout(context);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(pad, pad, pad, pad);
+        box.addView(new ProgressBar(context, null, android.R.attr.progressBarStyleLarge));
+        TextView text = new TextView(context);
+        text.setText(R.string.update_line_loading);
+        text.setTextSize(15);
+        text.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = ResUtil.dp2px(12);
+        box.addView(text, lp);
+        return box;
+    }
+
+    // 探测完成：撤掉转圈填充线路列表，底部启动倒计时
+    public void setLines(List<GithubProxy.Line> lines) {
+        if (closed.get() || picked.get() || dialog == null || !dialog.isShowing()) return;
+        if (lines == null || lines.isEmpty()) return;
+        this.lines = lines;
+        int pad = ResUtil.dp2px(16);
+        shell.removeView(loadingView);
+        listView = new ListView(context);
+        listView.setPadding(pad, pad / 2, pad, 0);
+        listView.setAdapter(new LineAdapter(context, lines));
+        listView.setOnItemClickListener((parent, view, position, id) -> pick(lines.get(position)));
+        shell.addView(listView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ResUtil.dp2px(320)));
+        countdownView = new TextView(context);
+        countdownView.setTextSize(13);
+        countdownView.setGravity(Gravity.CENTER);
+        countdownView.setTextColor(ResUtil.getColor(android.R.color.darker_gray));
+        countdownView.setPadding(pad, ResUtil.dp2px(6), pad, ResUtil.dp2px(2));
+        shell.addView(countdownView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (positive != null) positive.setEnabled(true);
+        startCountdown();
+    }
+
+    private void startCountdown() {
+        remaining = COUNTDOWN_SECONDS;
+        updateCountdown();
+        ticker = new Runnable() {
+            @Override
+            public void run() {
+                if (picked.get() || closed.get() || lines == null) return;
+                remaining--;
+                if (remaining <= 0) {
+                    pick(lines.get(0));
+                    return;
+                }
+                updateCountdown();
+                handler.postDelayed(this, 1000);
+            }
+        };
+        handler.postDelayed(ticker, 1000);
+    }
+
+    private void updateCountdown() {
+        if (countdownView != null) countdownView.setText(context.getString(R.string.update_line_countdown, remaining));
+    }
+
+    private void pick(GithubProxy.Line line) {
+        if (picked.get() || closed.get()) return;
+        picked.set(true);
+        stopCountdown();
+        dismissQuietly();
+        onPicked.onPick(line);
+    }
+
+    // 用户主动取消：中止本次更新下载
+    private void abort() {
+        if (picked.get() || closed.get()) return;
+        closed.set(true);
+        stopCountdown();
+        onAbort.run();
+    }
+
+    // 外部中止（探测后任务已被取消等）：静默关窗，不触发 onAbort
+    public void dismissQuietly() {
+        closed.set(true);
+        stopCountdown();
+        try {
+            if (dialog != null && dialog.isShowing()) dialog.dismiss();
+        } catch (Exception ignored) {
+        } finally {
+            dialog = null;
+        }
+    }
+
+    // 倒计时回调随窗口关闭一并移除，防止泄漏
+    private void stopCountdown() {
+        if (ticker != null) {
+            handler.removeCallbacks(ticker);
+            ticker = null;
+        }
     }
 
     private static class LineAdapter extends BaseAdapter {
