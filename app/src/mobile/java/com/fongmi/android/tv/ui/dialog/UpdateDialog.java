@@ -3,9 +3,10 @@ package com.fongmi.android.tv.ui.dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.View;
 
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
@@ -15,10 +16,8 @@ import com.fongmi.android.tv.bean.Update;
 import com.fongmi.android.tv.databinding.DialogUpdateBinding;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.utils.AppVersion;
-import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.MarkdownText;
 import com.fongmi.android.tv.utils.ResUtil;
-import com.fongmi.android.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 public class UpdateDialog extends BaseAlertDialog {
@@ -30,7 +29,6 @@ public class UpdateDialog extends BaseAlertDialog {
     private String selected = Update.CHANNEL_STABLE;
     private boolean stableExpanded = true;
     private boolean betaExpanded;
-    private boolean downloading;
     private boolean forceMode;
     private String forceMsg = "";
 
@@ -84,7 +82,6 @@ public class UpdateDialog extends BaseAlertDialog {
 
     @Override
     protected void initView() {
-        binding.progress.setMax(100);
         render();
     }
 
@@ -126,17 +123,13 @@ public class UpdateDialog extends BaseAlertDialog {
     }
 
     private void action(View view) {
-        if (downloading) {
-            if (listener != null) listener.onCancel(view);
-            return;
-        }
         Update update = getSelected();
         if (update != null && update.hasUpdate()) update(selected, view);
         else if (listener != null) listener.onCancel(view);
     }
 
     private void close(View view) {
-        if (downloading || forceMode) return;
+        if (forceMode) return;
         if (listener != null) listener.onClose();
         dismissAllowingStateLoss();
     }
@@ -156,19 +149,24 @@ public class UpdateDialog extends BaseAlertDialog {
         renderAction();
         binding.close.setVisibility(forceMode ? View.GONE : View.VISIBLE);
         binding.hint.setText(forceMode ? getForceHint() : getString(R.string.update_hint));
-        binding.progressPanel.setVisibility(View.GONE);
-        downloading = false;
+        configureScrollHeight();
     }
 
     private String getForceHint() {
         return TextUtils.isEmpty(forceMsg) ? getString(R.string.update_force_hint) : forceMsg;
     }
 
-    // 强制更新态下载失败后回到可重试状态（非强制态返回 false 让调用方关闭弹窗）
-    public boolean reset() {
-        if (!forceMode || !isProgressTarget()) return false;
-        render();
-        return true;
+    // 滚动区高度随内容自适应：内容少时弹窗整体缩小，内容超高才限高 360dp
+    private void configureScrollHeight() {
+        binding.listScroll.post(() -> {
+            View content = binding.listScroll.getChildAt(0);
+            if (content == null || !isAdded()) return;
+            int height = Math.min(content.getMeasuredHeight(), ResUtil.dp2px(360));
+            ViewGroup.LayoutParams params = binding.listScroll.getLayoutParams();
+            if (params.height == height) return;
+            params.height = height;
+            binding.listScroll.setLayoutParams(params);
+        });
     }
 
     private void renderItem(String channel, Update update) {
@@ -263,48 +261,5 @@ public class UpdateDialog extends BaseAlertDialog {
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setAttributes(params);
         window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
-    }
-
-    public boolean setProgress(int progress) {
-        return setProgress(progress, 0, 0, 0, 0);
-    }
-
-    public boolean setProgress(int progress, long bytes, long total, long speed, long elapsed) {
-        if (!isProgressTarget()) return false;
-        downloading = true;
-        boolean indeterminate = progress < 0;
-        int value = Math.max(0, Math.min(100, progress));
-        binding.stableItem.setEnabled(false);
-        binding.betaItem.setEnabled(false);
-        binding.stableConfirm.setEnabled(false);
-        binding.betaConfirm.setEnabled(false);
-        binding.cancel.setEnabled(!forceMode);
-        binding.close.setVisibility(View.GONE);
-        binding.progressPanel.setVisibility(View.VISIBLE);
-        binding.progress.setIndeterminate(indeterminate);
-        if (!indeterminate) binding.progress.setProgress(value);
-        binding.progressText.setText(getProgressText(indeterminate, value, bytes, total, speed, elapsed));
-        binding.cancel.setText(R.string.update_cancel);
-        return true;
-    }
-
-    private boolean isProgressTarget() {
-        return binding != null && isAdded() && getContext() != null && getDialog() != null;
-    }
-
-    private String getProgressText(boolean indeterminate, int value, long bytes, long total, long speed, long elapsed) {
-        if (speed <= 0 || elapsed <= 0) return indeterminate ? getString(R.string.update_downloading_unknown) : getString(R.string.update_downloading, value);
-        String speedText = FileUtil.byteCountToDisplaySize(speed);
-        String elapsedText = formatDuration(elapsed);
-        if (!indeterminate && total > 0 && bytes >= 0) {
-            long remaining = Math.max(0, total - bytes) * 1000 / speed;
-            return getString(R.string.update_downloading_detail_remaining, value, speedText, formatDuration(remaining), elapsedText);
-        }
-        return indeterminate ? getString(R.string.update_downloading_detail_unknown, speedText, elapsedText) : getString(R.string.update_downloading_detail, value, speedText, elapsedText);
-    }
-
-    private String formatDuration(long time) {
-        String text = Util.timeMs(Math.max(0, time));
-        return TextUtils.isEmpty(text) ? "00:00" : text;
     }
 }

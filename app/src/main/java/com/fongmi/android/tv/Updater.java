@@ -18,6 +18,7 @@ import androidx.lifecycle.LifecycleEventObserver;
 import com.fongmi.android.tv.bean.Update;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.dialog.DownloadDialog;
 import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.AppVersion;
@@ -80,6 +81,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private AlertDialog checkDialog;
     // 当前打开的选线窗（含加载中/倒计时中）：回前台时据此判断要置顶它而非重弹版本弹窗盖住它
     private DownloadLineDialog lineDialog;
+    // 独立的「正在下载」弹窗：选定线路后弹出，下载进度画在这里（与版本弹窗解耦）
+    private DownloadDialog downloadDialog;
     // 启动兜底清理只跑一次（进程级）
     private boolean staleCleaned;
     private Download download;
@@ -693,14 +696,15 @@ public class Updater implements Download.Callback, UpdateListener {
         String url = snapshot.url;
         long size = snapshot.size;
         FragmentActivity act = activityRef == null ? null : activityRef.get();
-        // 点「更新」立即弹出选线窗：探测期间常驻转圈，线路就绪后 5 秒倒计时自动选最快，用户随时可手点；
-        // 选定线路之后才显示下载进度条，不再出现"进度条先闪一下再弹选线窗"的旧观感
+        // 点「更新」立即关闭版本弹窗并弹出选线窗：探测期间常驻转圈，线路就绪后 5 秒倒计时自动选最快，用户随时可手点；
+        // 选定线路之后弹出独立的「正在下载」弹窗，下载进度不再画在版本弹窗里
+        dismiss();
         lineDialog = act == null ? null : new DownloadLineDialog(act, line -> {
             lineDialog = null;
             DiagLog.log(LOG, "[选线] 选定线路=%s", lineName(line));
             startDownload(GithubProxy.build(line, url), line);
         }, () -> {
-            // 用户取消选线路：中止本次更新下载
+            // 用户取消选线路：中止本次更新下载，并弹回版本弹窗供再次发起
             DiagLog.log(LOG, "[选线] 用户取消选线路 → 中止本次更新");
             lineDialog = null;
             canceled = true;
@@ -708,6 +712,7 @@ public class Updater implements Download.Callback, UpdateListener {
             resetProgress();
             Path.clear(getFile());
             dismiss();
+            App.post(() -> show(act));
         });
         if (lineDialog != null) lineDialog.showLoading();
         // 下载前核对：24 镜像+直连并发 Range 探测（每线仅 2KB），总大小与 PK 文件头都对上的线路才有资格进列表；
@@ -750,7 +755,9 @@ public class Updater implements Download.Callback, UpdateListener {
     private void startDownload(String url, GithubProxy.Line line) {
         currentLine = line;
         clearOldPackages();
-        // 线路选定（或直连兜底）后才展示下载进度条
+        // 线路选定（或直连兜底）后才弹出独立的下载弹窗并展示进度
+        FragmentActivity act = activityRef == null ? null : activityRef.get();
+        showDownloadDialog(act);
         setDialogProgress(0, 0, snapshot == null ? 0 : snapshot.size, 0, 0);
         // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
         long limit = snapshot == null || retriedLatest ? 0 : snapshot.size;
@@ -773,20 +780,29 @@ public class Updater implements Download.Callback, UpdateListener {
         // 强制更新态：拒绝取消（下载中不可中断、弹窗不可关闭）
         if (forceMode) return;
         if (downloading) {
-            DiagLog.log(LOG, "[结果] 用户取消下载 → 中止");
-            canceled = true;
-            downloading = false;
-            if (download != null) download.cancel();
-            download = null;
-            resetProgress();
-            Notify.show(R.string.update_canceled);
-            dismiss();
+            cancelDownload();
             return;
         }
         Setting.putUpdate(false);
         DiagLog.log(LOG, "[结果] 用户关闭更新弹窗并停用检查更新");
         if (download != null) download.cancel();
         dismiss();
+    }
+
+    // 用户在下载弹窗点「取消」：中止下载、清理半成品并弹回版本弹窗（强制态无取消按钮，走不到这里）
+    private void cancelDownload() {
+        if (forceMode) return;
+        DiagLog.log(LOG, "[下载弹窗] 用户取消下载 → 中止");
+        canceled = true;
+        downloading = false;
+        if (download != null) download.cancel();
+        download = null;
+        resetProgress();
+        Path.clear(getFile());
+        dismissDownloadDialog();
+        Notify.show(R.string.update_canceled);
+        FragmentActivity act = activityRef == null ? null : activityRef.get();
+        App.post(() -> show(act));
     }
 
     @Override
@@ -810,6 +826,30 @@ public class Updater implements Download.Callback, UpdateListener {
         }
     }
 
+    // 确保下载弹窗在指定页面上展示：同 Activity 已有有效实例则置顶复用，旧实例随页面销毁失效则重建
+    private void showDownloadDialog(FragmentActivity act) {
+        if (act == null || act.isFinishing() || act.isDestroyed()) return;
+        if (downloadDialog != null) {
+            if (downloadDialog.isShowingFor(act)) {
+                downloadDialog.bringToFront();
+                return;
+            }
+            downloadDialog.dismissQuietly();
+            downloadDialog = null;
+        }
+        downloadDialog = DownloadDialog.show(act, forceMode, this::cancelDownload);
+        DiagLog.log(LOG, "[下载弹窗] 显示 强制=%s", forceMode);
+    }
+
+    private void dismissDownloadDialog() {
+        try {
+            if (downloadDialog != null) downloadDialog.dismissQuietly();
+        } catch (Exception ignored) {
+        } finally {
+            downloadDialog = null;
+        }
+    }
+
     @Override
     public void progress(int progress) {
         setDialogProgress(progress, 0, 0, 0, 0);
@@ -830,8 +870,17 @@ public class Updater implements Download.Callback, UpdateListener {
         lastTotal = total;
         lastSpeed = speed;
         lastElapsed = elapsed;
-        if (dialog == null) return;
-        if (!dialog.setProgress(progress, bytes, total, speed, elapsed)) dialog = null;
+        if (downloadDialog == null) return;
+        FragmentActivity act = activityRef == null ? null : activityRef.get();
+        if (downloadDialog.isShowingFor(act)) {
+            downloadDialog.setProgress(progress, bytes, total, speed, elapsed);
+            return;
+        }
+        // 旧下载弹窗随页面销毁失效：在新 Activity 上重建并无缝续接进度
+        DiagLog.log(LOG, "[下载弹窗] 旧弹窗随页面失效 → 在新页面重建补弹");
+        dismissDownloadDialog();
+        showDownloadDialog(act);
+        if (downloadDialog != null) downloadDialog.setProgress(progress, bytes, total, speed, elapsed);
     }
 
     @Override
@@ -841,9 +890,14 @@ public class Updater implements Download.Callback, UpdateListener {
         download = null;
         downloading = false;
         resetProgress();
+        dismissDownloadDialog();
         Notify.show(msg);
-        // 强制更新态下载失败：保留弹窗供重试，不关闭
-        if (forceMode && dialog != null && dialog.reset()) return;
+        // 强制更新态下载失败：重新弹版本弹窗供重试
+        if (forceMode) {
+            FragmentActivity act = activityRef == null ? null : activityRef.get();
+            App.post(() -> show(act));
+            return;
+        }
         dismiss();
     }
 
@@ -879,12 +933,14 @@ public class Updater implements Download.Callback, UpdateListener {
                     downloading = false;
                     resetProgress();
                     Notify.show(error);
+                    dismissDownloadDialog();
                     dismiss();
                     return;
                 }
                 DiagLog.log(LOG, "[结果] 校验通过 → 送装 file=%s 大小=%s", file == null ? "" : file.getAbsolutePath(), file == null ? 0 : file.length());
                 downloading = false;
                 resetProgress();
+                dismissDownloadDialog();
                 dismiss();
                 ApkInstaller.install(file, downloadName(), this::onInstallResult);
             });
@@ -1026,9 +1082,10 @@ public class Updater implements Download.Callback, UpdateListener {
         }
     }
 
+    // 下载中回前台/页面重建后的补弹：弹独立的下载弹窗并续上最近进度（版本弹窗在点「更新」时已关闭）
     private void restoreDialog(FragmentActivity activity) {
         if (!downloading || selected == null) return;
-        show(activity);
+        showDownloadDialog(activity);
         setDialogProgress(lastProgress, lastBytes, lastTotal, lastSpeed, lastElapsed);
     }
 

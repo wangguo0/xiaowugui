@@ -1301,6 +1301,7 @@
     <string name="update_check_title">Check Update</string>
     <string name="update_latest">Already on the latest version</string>
     <string name="update_failed">Update check failed</string>
+    <string name="update_download_title">Downloading</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_downloading_unknown">Downloading…</string>
     <string name="update_downloading_detail">Downloading %1$d%% · %2$s/s · %3$s elapsed</string>

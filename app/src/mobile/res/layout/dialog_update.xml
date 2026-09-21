@@ -51,7 +51,7 @@
     <androidx.core.widget.NestedScrollView
         android:id="@+id/listScroll"
         android:layout_width="match_parent"
-        android:layout_height="360dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:clipToPadding="false"
         android:fadeScrollbars="false"
@@ -261,35 +261,6 @@
         </androidx.appcompat.widget.LinearLayoutCompat>
 
     </androidx.core.widget.NestedScrollView>
-
-    <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/progressPanel"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:orientation="vertical"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/progressText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#5F6368"
-            android:textSize="13sp"
-            tools:text="正在下载 46% · 3.2 MB/s · 已用 00:12" />
-
-        <ProgressBar
-            android:id="@+id/progress"
-            style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="match_parent"
-            android:layout_height="6dp"
-            android:layout_marginTop="8dp"
-            android:indeterminate="false"
-            android:max="100"
-            android:progress="0" />
-
-    </androidx.appcompat.widget.LinearLayoutCompat>
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/cancel"
