@@ -81,6 +81,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private UpdateDialog dialog;
     // 手动检查更新期间的常驻转圈弹窗（不可取消，出结果即关）
     private AlertDialog checkDialog;
+    // 当前打开的选线窗（含加载中/倒计时中）：回前台时据此判断要置顶它而非重弹版本弹窗盖住它
+    private DownloadLineDialog lineDialog;
     // 启动兜底清理只跑一次（进程级）
     private boolean staleCleaned;
     private Download download;
@@ -165,6 +167,7 @@ public class Updater implements Download.Callback, UpdateListener {
         boolean forceCheck = force;
         force = false;
         if (downloading) {
+            if (resumeLineDialog(activity)) return;
             restoreDialog(activity);
             return;
         }
@@ -190,7 +193,8 @@ public class Updater implements Download.Callback, UpdateListener {
         // 启动兜底：清理本机已装不低的残留安装包（上次更新成功后进程被杀没来得及删的）
         cleanupStalePackages();
         if (launchChecked || launchChecking) return;
-        if (downloading || dialog != null) return;
+        // 手动检查转圈窗打开期间跳过静默重查，避免静默检查的结果弹窗盖住转圈窗
+        if (downloading || dialog != null || checkDialog != null) return;
         long now = SystemClock.elapsedRealtime();
         if (lastLaunchCheckAt > 0 && now - lastLaunchCheckAt < TimeUnit.SECONDS.toMillis(30)) return;
         lastLaunchCheckAt = now;
@@ -204,9 +208,32 @@ public class Updater implements Download.Callback, UpdateListener {
         });
     }
 
+    // 回前台/重入时选线窗仍开着：置顶它并返回 true，绝不重弹版本弹窗盖住它（"选线窗消失又出现"问题的根因）；
+    // 若旧选线窗随页面销毁失效则静默关闭：线路已就绪就自动选最快继续下载，探测未完留给探测回调的无界面兜底
+    private boolean resumeLineDialog(FragmentActivity activity) {
+        if (lineDialog == null) return false;
+        if (lineDialog.isShowingFor(activity)) {
+            DiagLog.log(LOG, "[选线] 回前台 → 置顶选线窗，不重弹版本弹窗");
+            lineDialog.bringToFront();
+            return true;
+        }
+        List<GithubProxy.Line> ready = lineDialog.getReadyLines();
+        DiagLog.log(LOG, "[选线] 旧选线窗已随页面销毁 → 关闭；%s", ready == null ? "探测未完，留给探测回调兜底" : "线路已就绪，自动选最快");
+        lineDialog.dismissQuietly();
+        lineDialog = null;
+        if (ready != null && !ready.isEmpty()) {
+            GithubProxy.Line fastest = ready.get(0);
+            restoreDialog(activity);
+            startDownload(GithubProxy.build(fastest, snapshot.url), fastest);
+            return true;
+        }
+        return false;
+    }
+
     public void resume(FragmentActivity activity) {
         bind(activity);
         if (downloading) {
+            if (resumeLineDialog(activity)) return;
             restoreDialog(activity);
             return;
         }
@@ -671,12 +698,14 @@ public class Updater implements Download.Callback, UpdateListener {
         FragmentActivity act = activityRef == null ? null : activityRef.get();
         // 点「更新」立即弹出选线窗：探测期间常驻转圈，线路就绪后 5 秒倒计时自动选最快，用户随时可手点；
         // 选定线路之后才显示下载进度条，不再出现"进度条先闪一下再弹选线窗"的旧观感
-        DownloadLineDialog lineDialog = act == null ? null : new DownloadLineDialog(act, line -> {
+        lineDialog = act == null ? null : new DownloadLineDialog(act, line -> {
+            lineDialog = null;
             DiagLog.log(LOG, "[选线] 选定线路=%s", lineName(line));
             startDownload(GithubProxy.build(line, url), line);
         }, () -> {
             // 用户取消选线路：中止本次更新下载
             DiagLog.log(LOG, "[选线] 用户取消选线路 → 中止本次更新");
+            lineDialog = null;
             canceled = true;
             downloading = false;
             resetProgress();
@@ -697,6 +726,7 @@ public class Updater implements Download.Callback, UpdateListener {
                 DiagLog.log(LOG, "[探测] 无任何线路通过验证 → 仍用原始直链尝试一次");
                 App.post(() -> {
                     if (lineDialog != null) lineDialog.dismissQuietly();
+                    lineDialog = null;
                     Notify.show(R.string.update_line_empty);
                     startDownload(url, null);
                 });
@@ -707,7 +737,16 @@ public class Updater implements Download.Callback, UpdateListener {
                 App.post(() -> startDownload(GithubProxy.build(lines.get(0), url), lines.get(0)));
                 return;
             }
-            App.post(() -> lineDialog.setLines(lines));
+            App.post(() -> {
+                DownloadLineDialog dlg = lineDialog;
+                if (dlg == null || dlg.setLines(lines)) return;
+                // 选线窗已随页面销毁失效：兜底自动选最快，避免卡在 downloading 态永远等不到用户
+                if (canceled || !downloading) return;
+                GithubProxy.Line fastest = lines.get(0);
+                DiagLog.log(LOG, "[选线] 选线窗不可展示（页面已重建）→ 自动选择最快线路=%s", lineName(fastest));
+                lineDialog = null;
+                startDownload(GithubProxy.build(fastest, url), fastest);
+            });
         });
     }
 

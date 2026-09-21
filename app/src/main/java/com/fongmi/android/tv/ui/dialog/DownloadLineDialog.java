@@ -97,10 +97,10 @@ public class DownloadLineDialog {
         return box;
     }
 
-    // 探测完成：撤掉转圈填充线路列表，底部启动倒计时
-    public void setLines(List<GithubProxy.Line> lines) {
-        if (closed.get() || picked.get() || dialog == null || !dialog.isShowing()) return;
-        if (lines == null || lines.isEmpty()) return;
+    // 探测完成：撤掉转圈填充线路列表，底部启动倒计时；返回是否成功展示（弹窗不可用时由调用方兜底自动选最快）
+    public boolean setLines(List<GithubProxy.Line> lines) {
+        if (closed.get() || picked.get() || dialog == null || !dialog.isShowing()) return false;
+        if (lines == null || lines.isEmpty()) return false;
         this.lines = lines;
         int pad = ResUtil.dp2px(16);
         shell.removeView(loadingView);
@@ -118,6 +118,25 @@ public class DownloadLineDialog {
         Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         if (positive != null) positive.setEnabled(true);
         startCountdown();
+        return true;
+    }
+
+    // 弹窗是否仍在指定页面上有效展示（Activity 重建后旧弹窗即失效）
+    public boolean isShowingFor(Context act) {
+        return dialog != null && dialog.isShowing() && context == act && !picked.get() && !closed.get();
+    }
+
+    // 回前台时置顶：重新 attach 弹窗窗口到窗口栈顶，避免被重弹的版本弹窗盖住
+    public void bringToFront() {
+        try {
+            if (dialog != null && dialog.isShowing()) dialog.show();
+        } catch (Exception ignored) {
+        }
+    }
+
+    // 已就绪的线路列表（null 表示探测未完成）
+    public List<GithubProxy.Line> getReadyLines() {
+        return lines;
     }
 
     private void startCountdown() {
