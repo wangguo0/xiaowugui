@@ -156,6 +156,8 @@ public class UpdateDialog extends BaseAlertDialog {
         renderAction();
         updateFocusLinks();
         binding.close.setVisibility(forceMode ? View.GONE : View.VISIBLE);
+        // 强制模式标题改为「强制更新」，普通模式仍「版本更新」
+        binding.title.setText(forceMode ? R.string.update_force_title : R.string.update_title);
         binding.hint.setText(forceMode ? getForceHint() : getString(R.string.update_hint));
         configureScrollHeight();
     }

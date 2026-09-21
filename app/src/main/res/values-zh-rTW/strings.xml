@@ -1282,6 +1282,9 @@
     <string name="update_check_title">檢查更新</string>
     <string name="update_latest">已是最新版本</string>
     <string name="update_failed">檢查更新失敗</string>
+    <string name="update_force_title">強制更新</string>
+    <string name="update_ready_title">新版本已就緒</string>
+    <string name="update_ready_content">已下載 %1$s，點擊立即安裝</string>
     <string name="update_download_title">正在下載</string>
     <string name="update_downloading">正在下載 %1$d%%</string>
     <string name="update_downloading_unknown">正在下載…</string>

@@ -33,6 +33,8 @@ public class DownloadLineDialog {
     private static final int COUNTDOWN_SECONDS = 5;
 
     private final Context context;
+    // 强制更新态：不提供「取消」按钮，用户只能选线或等倒计时自动选最快
+    private final boolean force;
     private final OnPicked onPicked;
     private final Runnable onAbort;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -48,8 +50,9 @@ public class DownloadLineDialog {
     private int remaining;
     private Runnable ticker;
 
-    public DownloadLineDialog(Context context, OnPicked onPicked, Runnable onAbort) {
+    public DownloadLineDialog(Context context, boolean force, OnPicked onPicked, Runnable onAbort) {
         this.context = context;
+        this.force = force;
         this.onPicked = onPicked;
         this.onAbort = onAbort;
     }
@@ -68,13 +71,14 @@ public class DownloadLineDialog {
         shell.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         loadingView = buildLoading(pad);
         shell.addView(loadingView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ResUtil.dp2px(320)));
-        dialog = new AlertDialog.Builder(context)
+        AlertDialog.Builder builder = new AlertDialog.Builder(context)
                 .setView(shell)
-                .setNegativeButton(android.R.string.cancel, (d, which) -> abort())
                 .setPositiveButton(R.string.update_line_auto, (d, which) -> {
                     if (lines != null && !lines.isEmpty()) pick(lines.get(0));
-                })
-                .create();
+                });
+        // 强制更新态：不提供取消按钮，返回键也不关（setCancelable(false)），只能选线或等倒计时自动选最快
+        if (!force) builder.setNegativeButton(android.R.string.cancel, (d, which) -> abort());
+        dialog = builder.create();
         dialog.setCancelable(false);
         dialog.show();
         Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);

@@ -25,6 +25,8 @@ import java.util.Set;
 public class Notify {
 
     public static final String DEFAULT = "default";
+    // 应用内更新「新版本已就绪」安装通知渠道（高优先级）
+    public static final String UPDATE = "update";
     public static final int ID = 9527;
     // 本应用自身弹过的 toast 文本，供窗口级拦截区分「自己人」与源内（jar/ext）弹出的提示
     private static final Set<String> RECENT_TOASTS = new LinkedHashSet<>();
@@ -42,6 +44,12 @@ public class Notify {
     public static void createChannel() {
         NotificationManagerCompat notifyMgr = NotificationManagerCompat.from(App.get());
         notifyMgr.createNotificationChannel(new NotificationChannelCompat.Builder(DEFAULT, NotificationManagerCompat.IMPORTANCE_LOW).setName("TV").build());
+    }
+
+    // 更新送装通知渠道：高优先级，幂等创建（系统对重复创建同名渠道无副作用）
+    public static void createUpdateChannel() {
+        NotificationManagerCompat notifyMgr = NotificationManagerCompat.from(App.get());
+        notifyMgr.createNotificationChannel(new NotificationChannelCompat.Builder(UPDATE, NotificationManagerCompat.IMPORTANCE_HIGH).setName("更新").build());
     }
 
     public static String getError(int resId, Throwable e) {

@@ -1301,6 +1301,9 @@
     <string name="update_check_title">Check Update</string>
     <string name="update_latest">Already on the latest version</string>
     <string name="update_failed">Update check failed</string>
+    <string name="update_force_title">Force Update</string>
+    <string name="update_ready_title">New version ready</string>
+    <string name="update_ready_content">%1$s downloaded. Tap to install</string>
     <string name="update_download_title">Downloading</string>
     <string name="update_downloading">Downloading %1$d%%</string>
     <string name="update_downloading_unknown">Downloading…</string>

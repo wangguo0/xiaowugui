@@ -1,6 +1,11 @@
 package com.fongmi.android.tv;
 
+import android.Manifest;
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.content.ContentUris;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -11,6 +16,9 @@ import android.text.TextUtils;
 import android.view.View;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleEventObserver;
@@ -58,6 +66,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private static final String SOURCE_GITHUB = "github";
     // 诊断日志标签：更新全链路（检查/闸门/探测/选线/下载/校验）统一用该标签，便于在日志页串成一条时间线
     private static final String LOG = "update";
+    // 「新版本已就绪」安装通知的固定 id
+    private static final int INSTALL_NOTIFY_ID = 9528;
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
     // 直连 API 失败后的降级预算：动态镜像（最多 24 条）+ 直连共 25 源并发拉清单取最新
@@ -83,6 +93,8 @@ public class Updater implements Download.Callback, UpdateListener {
     private DownloadLineDialog lineDialog;
     // 独立的「正在下载」弹窗：选定线路后弹出，下载进度画在这里（与版本弹窗解耦）
     private DownloadDialog downloadDialog;
+    // 后台无法拉起安装器时挂起的待送装包（回前台由 resume 补拉）
+    private File pendingInstall;
     // 启动兜底清理只跑一次（进程级）
     private boolean staleCleaned;
     private Download download;
@@ -232,6 +244,15 @@ public class Updater implements Download.Callback, UpdateListener {
 
     public void resume(FragmentActivity activity) {
         bind(activity);
+        // 后台挂起的待送装包：回前台取消通知并正常送装
+        if (pendingInstall != null) {
+            File apk = pendingInstall;
+            pendingInstall = null;
+            cancelInstallNotification();
+            DiagLog.log(LOG, "[送装] 回前台补拉安装");
+            ApkInstaller.install(apk, downloadName(), this::onInstallResult);
+            return;
+        }
         if (downloading) {
             if (resumeLineDialog(activity)) return;
             restoreDialog(activity);
@@ -256,22 +277,14 @@ public class Updater implements Download.Callback, UpdateListener {
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         Future<ForcePolicy> policyFuture = Task.executor().submit(ForcePolicy::fetch);
+        if (launch) {
+            doLaunchCheck(activity, deadline, stableFuture, betaFuture, policyFuture);
+            return;
+        }
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
         applyForce(awaitPolicy(policyFuture, deadline));
         DiagLog.log(LOG, "[检查] 清单结果 stable=%s beta=%s 强制=%s", describe(stable), describe(beta), forceMode);
-        if (launch) {
-            // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待回前台重试
-            if (stable.hasManifest() || beta.hasManifest()) launchChecked = true;
-            if (!forceMode || selected == null || !selected.hasUpdate()) {
-                DiagLog.log(LOG, "[检查] 静默检查结束：无需打扰");
-                return;
-            }
-            DiagLog.log(LOG, "[检查] 静默检查命中强制更新 → 弹窗 目标=%s", describe(selected));
-            // 弹窗被权限框/页面保存状态挡住时，回前台由 resume() 的强制态补弹
-            App.post(() -> show(activity));
-            return;
-        }
         if (!stable.hasUpdate() && !beta.hasUpdate()) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = stable;
@@ -302,6 +315,61 @@ public class Updater implements Download.Callback, UpdateListener {
     // 触发方式（诊断日志用）：静默 = 冷启动/回前台自动检查；手动 = 用户点检查更新
     private String triggerName(boolean forceCheck, boolean launch) {
         return launch ? "静默" : forceCheck ? "手动" : "自动";
+    }
+
+    // 静默检查快路径：stable 清单 force 标志或最低版本策略任一命中（两者都只依赖 stable/策略，通常 1~2 秒完成）
+    // 即立即弹强制更新窗，不再等 beta 清单与剩余超时；其余任务后台继续等待并补齐状态（不改已展示的判定）
+    private void doLaunchCheck(FragmentActivity activity, long deadline, Future<Update> stableFuture, Future<Update> betaFuture, Future<ForcePolicy> policyFuture) {
+        Update quickStable = null;
+        ForcePolicy quickPolicy = null;
+        boolean fast = false;
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (quickStable == null && stableFuture.isDone()) quickStable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
+            if (quickPolicy == null && policyFuture.isDone()) quickPolicy = awaitPolicy(policyFuture, deadline);
+            if (quickStable != null && quickStable.hasManifest() && quickStable.isForceUpdate()) fast = true;
+            else if (quickPolicy != null && quickPolicy.force && quickStable != null && quickStable.hasUpdate()) fast = true;
+            // 快路径命中，或 stable 与策略都已出结果仍不强制（beta 强制罕见，交给常规聚合路径处理）
+            if (fast || (quickStable != null && quickPolicy != null)) break;
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        if (fast) {
+            DiagLog.log(LOG, "[检查] 触发=静默 快路径：强制已确认（清单force=%s 策略force=%s）→ 立即弹窗，不等beta",
+                    quickStable.isForceUpdate(), quickPolicy != null && quickPolicy.force);
+            stable = quickStable;
+            beta = Update.empty(Update.CHANNEL_BETA);
+            applyForce(quickPolicy == null ? ForcePolicy.none() : quickPolicy);
+            // 已拿到 stable 清单 → 检查成功锁定
+            launchChecked = true;
+            DiagLog.log(LOG, "[检查] 静默检查命中强制更新（快路径） → 弹窗 目标=%s", describe(selected));
+            // 弹窗被权限框/页面保存状态挡住时，回前台由 resume() 的强制态补弹
+            App.post(() -> show(activity));
+            // 剩余 beta 清单/策略在后台继续等待，仅补齐字段状态，不重弹不改判定
+            Task.execute(() -> {
+                Update lateBeta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
+                ForcePolicy latePolicy = awaitPolicy(policyFuture, deadline);
+                beta = lateBeta;
+                DiagLog.log(LOG, "[检查] 快路径后台补齐 beta=%s 策略force=%s", describe(lateBeta), latePolicy.force);
+            });
+            return;
+        }
+        // 未命中快路径：走原完整聚合路径（行为与结果与旧版一致）
+        stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
+        beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
+        applyForce(awaitPolicy(policyFuture, deadline));
+        DiagLog.log(LOG, "[检查] 清单结果 stable=%s beta=%s 强制=%s", describe(stable), describe(beta), forceMode);
+        // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待回前台重试
+        if (stable.hasManifest() || beta.hasManifest()) launchChecked = true;
+        if (!forceMode || selected == null || !selected.hasUpdate()) {
+            DiagLog.log(LOG, "[检查] 静默检查结束：无需打扰");
+            return;
+        }
+        DiagLog.log(LOG, "[检查] 静默检查命中强制更新 → 弹窗 目标=%s", describe(selected));
+        App.post(() -> show(activity));
     }
 
     // 清单摘要（诊断日志用）：无清单时带上失败原因，一眼看出是"没有新版本"还是"根本没查到"
@@ -699,7 +767,7 @@ public class Updater implements Download.Callback, UpdateListener {
         // 点「更新」立即关闭版本弹窗并弹出选线窗：探测期间常驻转圈，线路就绪后 5 秒倒计时自动选最快，用户随时可手点；
         // 选定线路之后弹出独立的「正在下载」弹窗，下载进度不再画在版本弹窗里
         dismiss();
-        lineDialog = act == null ? null : new DownloadLineDialog(act, line -> {
+        lineDialog = act == null ? null : new DownloadLineDialog(act, forceMode, line -> {
             lineDialog = null;
             DiagLog.log(LOG, "[选线] 选定线路=%s", lineName(line));
             startDownload(GithubProxy.build(line, url), line);
@@ -942,7 +1010,7 @@ public class Updater implements Download.Callback, UpdateListener {
                 resetProgress();
                 dismissDownloadDialog();
                 dismiss();
-                ApkInstaller.install(file, downloadName(), this::onInstallResult);
+                installOrDefer(file);
             });
         });
     }
@@ -964,6 +1032,55 @@ public class Updater implements Download.Callback, UpdateListener {
         }
         DiagLog.log(LOG, "[送装] 未完成：%s", detail);
         Notify.show(ResUtil.getString(R.string.update_install_result, detail) + "\n" + ResUtil.getString(R.string.update_install_manual, downloadName()));
+    }
+
+    // 送装入口：前台直接送装；后台 Android 10+ 禁止拉起 Activity，改发高优先级通知（点通知属用户行为可合法拉起安装器）
+    // 并挂起待送装包，回前台由 resume() 补拉
+    private void installOrDefer(File file) {
+        FragmentActivity act = activityRef == null ? null : activityRef.get();
+        boolean foreground = act != null && !act.isFinishing() && !act.isDestroyed()
+                && act.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED);
+        if (foreground) {
+            ApkInstaller.install(file, downloadName(), this::onInstallResult);
+            return;
+        }
+        DiagLog.log(LOG, "[送装] 后台送达 → 转通知+挂起 file=%s", file == null ? "" : file.getName());
+        pendingInstall = file;
+        showInstallNotification(file);
+    }
+
+    private void showInstallNotification(File file) {
+        Notify.createUpdateChannel();
+        if (ContextCompat.checkSelfPermission(App.get(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            // Android 13+ 未授予通知权限：通知无法展示，仅靠回前台补拉
+            DiagLog.log(LOG, "[送装] 无通知权限，跳过通知，仅靠回前台补拉");
+            return;
+        }
+        try {
+            Intent target = ApkInstaller.buildInstallIntent(file);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) flags |= PendingIntent.FLAG_IMMUTABLE;
+            PendingIntent pending = PendingIntent.getActivity(App.get(), 0, target, flags);
+            Notification notification = new NotificationCompat.Builder(App.get(), Notify.UPDATE)
+                    .setSmallIcon(R.drawable.ic_notification)
+                    .setContentTitle(ResUtil.getString(R.string.update_ready_title))
+                    .setContentText(ResUtil.getString(R.string.update_ready_content, versionTag()))
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setContentIntent(pending)
+                    .build();
+            NotificationManagerCompat.from(App.get()).notify(INSTALL_NOTIFY_ID, notification);
+            DiagLog.log(LOG, "[送装] 已发「新版本已就绪」通知");
+        } catch (Exception e) {
+            DiagLog.log(LOG, "[送装] 通知发送失败，仅靠回前台补拉 %s", e.getMessage());
+        }
+    }
+
+    private void cancelInstallNotification() {
+        try {
+            NotificationManagerCompat.from(App.get()).cancel(INSTALL_NOTIFY_ID);
+        } catch (Exception ignored) {
+        }
     }
 
     // 手动检查更新的常驻转圈弹窗：不可取消、点外不关，出结果即由 closeCheckDialog 关闭

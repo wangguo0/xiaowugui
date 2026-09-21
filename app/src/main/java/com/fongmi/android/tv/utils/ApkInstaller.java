@@ -134,14 +134,24 @@ public final class ApkInstaller {
         }
     }
 
-    // 兜底：用系统安装器打开「下载」目录里的副本（MIME 写死 + ClipData 授权，与浏览器下载路径等价）
-    private static void openWithSystem(File apk, Copy copy, Callback callback, String detail) {
-        Uri uri = copy == null ? FileUtil.getShareUri(apk) : copy.uri;
+    // 只构造「交给系统安装器」Intent 不启动：供通知点击入口使用——点通知属用户行为，Android 10+ 可合法拉起安装器
+    public static Intent buildInstallIntent(File apk) {
+        return installIntent(FileUtil.getShareUri(apk));
+    }
+
+    private static Intent installIntent(Uri uri) {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         intent.setDataAndType(uri, APK_MIME);
         intent.setClipData(android.content.ClipData.newRawUri("apk", uri));
+        return intent;
+    }
+
+    // 兜底：用系统安装器打开「下载」目录里的副本（MIME 写死 + ClipData 授权，与浏览器下载路径等价）
+    private static void openWithSystem(File apk, Copy copy, Callback callback, String detail) {
+        Uri uri = copy == null ? FileUtil.getShareUri(apk) : copy.uri;
+        Intent intent = installIntent(uri);
         try {
             App.get().startActivity(intent);
             DiagLog.log(LOG, "[送装] 已转交系统安装器 uri=%s 原因=%s", uri, detail);
