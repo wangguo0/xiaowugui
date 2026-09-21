@@ -8,11 +8,7 @@ import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.view.Gravity;
 import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentActivity;
@@ -36,6 +32,7 @@ import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -914,23 +911,15 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     // 手动检查更新的常驻转圈弹窗：不可取消、点外不关，出结果即由 closeCheckDialog 关闭
+    // 样式对齐「分享软件」弹窗：MaterialAlertDialog + 白色圆角卡片 + 粗体标题 + 圆形进度条横排文字
     private void showCheckDialog(FragmentActivity activity) {
         closeCheckDialog();
         if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
-        int pad = ResUtil.dp2px(24);
-        LinearLayout shell = new LinearLayout(activity);
-        shell.setOrientation(LinearLayout.VERTICAL);
-        shell.setGravity(Gravity.CENTER);
-        shell.setPadding(pad, pad, pad, pad);
-        shell.addView(new ProgressBar(activity, null, android.R.attr.progressBarStyleLarge));
-        TextView text = new TextView(activity);
-        text.setText(R.string.update_check);
-        text.setTextSize(15);
-        text.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = ResUtil.dp2px(12);
-        shell.addView(text, lp);
-        checkDialog = new AlertDialog.Builder(activity).setView(shell).setCancelable(false).create();
+        View view = activity.getLayoutInflater().inflate(R.layout.dialog_update_check, null);
+        checkDialog = new MaterialAlertDialogBuilder(activity, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setView(view)
+                .setCancelable(false)
+                .create();
         checkDialog.setCanceledOnTouchOutside(false);
         checkDialog.show();
         DiagLog.log(LOG, "[检查弹窗] 显示常驻转圈（手动检查）");

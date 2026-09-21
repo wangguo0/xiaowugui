@@ -1279,6 +1279,7 @@
     <string name="update_hint">選擇版本查看更新內容並安裝。</string>
     <string name="update_force_hint">當前版本已停止支援，必須更新後才能繼續使用。</string>
     <string name="update_check">正在檢查更新…</string>
+    <string name="update_check_title">檢查更新</string>
     <string name="update_latest">已是最新版本</string>
     <string name="update_failed">檢查更新失敗</string>
     <string name="update_downloading">正在下載 %1$d%%</string>
