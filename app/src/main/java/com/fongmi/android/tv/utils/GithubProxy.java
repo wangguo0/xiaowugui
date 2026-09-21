@@ -44,6 +44,10 @@ public class GithubProxy {
 
     private static final String UA = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
     private static final String TAG = "GithubProxy";
+    private static final String DIRECT = "直连";
+    // 诊断日志标签：update 为更新链路专用（探测/下载），github 为共享的镜像列表拉取
+    private static final String LOG_UPDATE = "update";
+    private static final String LOG_GITHUB = "github";
     private static final int PROBE_TIMEOUT = 4000;
     private static final int FETCH_BUDGET = 5000;
     // 每线两段 Range（头 2KB + 尾 64KB）验证，预算相应放宽
@@ -90,6 +94,7 @@ public class GithubProxy {
         if (cached != null) return cached;
         List<String> lines = fetchList();
         if (!lines.isEmpty()) PREFIXES.compareAndSet(null, lines);
+        else DiagLog.log(LOG_GITHUB, "镜像列表拉取失败：%s 个源全部不可用，本次仅 GitHub 直连兜底", LIST_SOURCES.length);
         return lines;
     }
 
@@ -236,13 +241,18 @@ public class GithubProxy {
 
     // 线路名（展示用）：镜像取主机名，直连返回空串由调用方本地化
     public static String name(Line line) {
-        if (line.prefix.isEmpty()) return "";
-        String host = line.prefix;
-        int scheme = host.indexOf("://");
-        if (scheme >= 0) host = host.substring(scheme + 3);
-        int slash = host.indexOf('/');
-        if (slash >= 0) host = host.substring(0, slash);
-        return host;
+        return line.prefix.isEmpty() ? "" : host(line.prefix);
+    }
+
+    // 从镜像前缀提取主机名（展示与诊断日志共用）
+    private static String host(String prefix) {
+        if (prefix.isEmpty()) return DIRECT;
+        String value = prefix;
+        int scheme = value.indexOf("://");
+        if (scheme >= 0) value = value.substring(scheme + 3);
+        int slash = value.indexOf('/');
+        if (slash >= 0) value = value.substring(0, slash);
+        return value;
     }
 
     // 带内容验证的并发测速：对每条线路 + 直连用 Range 拉取 APK 头 2KB，核对
@@ -251,13 +261,14 @@ public class GithubProxy {
     public static List<Line> probeVerified(String url, long size) {
         List<String> lines = prefixes();
         List<Line> result = Collections.synchronizedList(new ArrayList<>());
+        // 诊断日志用：逐线结果与淘汰原因（每线两段 Range 往返，出问题时要能看出是谁被淘汰、为什么）
+        List<String> passed = Collections.synchronizedList(new ArrayList<>());
+        List<String> rejected = Collections.synchronizedList(new ArrayList<>());
         CountDownLatch latch = new CountDownLatch(lines.size() + 1);
         for (String prefix : lines) {
             Task.largeExecutor().execute(() -> {
                 try {
-                    long start = System.currentTimeMillis();
-                    if (verify(prefix + bust(url), size)) result.add(new Line(prefix, System.currentTimeMillis() - start));
-                } catch (Exception ignored) {
+                    probe(prefix + bust(url), size, prefix, result, passed, rejected);
                 } finally {
                     latch.countDown();
                 }
@@ -265,9 +276,7 @@ public class GithubProxy {
         }
         Task.largeExecutor().execute(() -> {
             try {
-                long start = System.currentTimeMillis();
-                if (verify(url, size)) result.add(new Line("", System.currentTimeMillis() - start));
-            } catch (Exception ignored) {
+                probe(url, size, "", result, passed, rejected);
             } finally {
                 latch.countDown();
             }
@@ -275,42 +284,86 @@ public class GithubProxy {
         await(latch, PROBE_BUDGET);
         cancelRange();
         result.sort((a, b) -> Long.compare(a.cost, b.cost));
+        DiagLog.log(LOG_UPDATE, "[探测] 清单size=%s 候选=%s 通过=%s 线路=%s 淘汰=%s",
+                size, lines.size() + 1, passed.size(), passed, rejected);
         return result;
     }
 
-    private static boolean verify(String fullUrl, long size) {
-        long total = verifyHead(fullUrl, size);
+    private static void probe(String fullUrl, long size, String prefix, List<Line> result, List<String> passed, List<String> rejected) {
+        Verified verified = new Verified();
+        long start = System.currentTimeMillis();
+        try {
+            if (!verify(fullUrl, size, verified)) {
+                rejected.add(host(prefix) + ":" + verified.reason);
+                return;
+            }
+            long cost = System.currentTimeMillis() - start;
+            result.add(new Line(prefix, cost));
+            passed.add(host(prefix) + "(" + cost + "ms)");
+        } catch (Exception e) {
+            rejected.add(host(prefix) + ":" + e.getClass().getSimpleName());
+        }
+    }
+
+    // 单线验证结论：诊断日志用（淘汰原因，含观测到的 HTTP 码/总大小）
+    private static final class Verified {
+        String reason = "未知";
+    }
+
+    private static boolean verify(String fullUrl, long size, Verified out) {
+        long total = verifyHead(fullUrl, size, out);
         if (total <= 0) return false;
-        return verifyTail(fullUrl, total);
+        return verifyTail(fullUrl, total, out);
     }
 
     // 第一段：头 2KB。必须核出文件总大小且与清单 size 严格一致（拿不到总大小 = 无法证明内容正确，直接淘汰），
     // 同时核对文件头为合法 zip（PK）
-    private static long verifyHead(String fullUrl, long size) {
+    private static long verifyHead(String fullUrl, long size, Verified out) {
         Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=0-" + (HEAD_BYTES - 1)).build();
         try (Response res = RANGE.newCall(request).execute()) {
-            if (!res.isSuccessful() && res.code() != 206) return -1;
+            if (!res.isSuccessful() && res.code() != 206) {
+                out.reason = "HTTP" + res.code();
+                return -1;
+            }
             long total = contentRangeTotal(res);
             if (total <= 0) total = res.body() != null && res.code() == 200 ? getLength(res) : -1;
-            if (total <= 0) return -1;
-            if (size > 0 && total != size) return -1;
+            if (total <= 0) {
+                out.reason = "无总大小";
+                return -1;
+            }
+            if (size > 0 && total != size) {
+                out.reason = "大小不符(" + total + "≠" + size + ")";
+                return -1;
+            }
             byte[] head = new byte[2];
             int read = res.body() == null ? -1 : readFully(res.body(), head, 2);
-            if (read != 2 || head[0] != 'P' || head[1] != 'K') return -1;
+            if (read != 2 || head[0] != 'P' || head[1] != 'K') {
+                out.reason = "头非zip";
+                return -1;
+            }
             return total;
         } catch (Exception e) {
+            out.reason = "头段" + e.getClass().getSimpleName();
             return -1;
         }
     }
 
     // 第二段：尾 64KB。尾部必须存在 zip 中央目录结束记录，证明整包结构完整、不是被截断或替换的内容
-    private static boolean verifyTail(String fullUrl, long total) {
+    private static boolean verifyTail(String fullUrl, long total, Verified out) {
         long start = Math.max(0, total - TAIL_BYTES);
         Request request = new Request.Builder().url(fullUrl).addHeader("User-Agent", UA).addHeader("Range", "bytes=" + start + "-" + (total - 1)).build();
         try (Response res = RANGE.newCall(request).execute()) {
-            if (!res.isSuccessful() && res.code() != 206) return false;
-            return hasCentralDirectoryEnd(res.body() == null ? null : res.body().bytes());
+            if (!res.isSuccessful() && res.code() != 206) {
+                out.reason = "尾段HTTP" + res.code();
+                return false;
+            }
+            if (!hasCentralDirectoryEnd(res.body() == null ? null : res.body().bytes())) {
+                out.reason = "尾段无EOCD";
+                return false;
+            }
+            return true;
         } catch (Exception e) {
+            out.reason = "尾段" + e.getClass().getSimpleName();
             return false;
         }
     }
@@ -385,7 +438,9 @@ public class GithubProxy {
         }
         await(latch, LIST_BUDGET);
         List<String> lines = holder.get();
-        return lines == null ? Collections.emptyList() : lines;
+        if (lines == null) return Collections.emptyList();
+        DiagLog.log(LOG_GITHUB, "镜像列表拉取成功：%s 条（上限 %s）", lines.size(), MAX_LINES);
+        return lines;
     }
 
     private static List<String> parseLines(String content) {

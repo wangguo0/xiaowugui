@@ -98,7 +98,20 @@ public final class DiagLog {
 
     public static void log(String tag, String format, Object... args) {
         if (!enabled) return;
-        add(tag, String.format(format, args), false);
+        add(tag, format(format, args), false);
+    }
+
+    // 格式化兜底：URL / 异常消息里可能含裸 %（如 %20），String.format 会抛异常；
+    // 日志绝不能因为一条消息把调用方流程打断，失败时退回原样拼接
+    private static String format(String format, Object... args) {
+        if (args == null || args.length == 0) return format;
+        try {
+            return String.format(format, args);
+        } catch (Throwable e) {
+            StringBuilder builder = new StringBuilder(format);
+            for (Object arg : args) builder.append(' ').append(arg);
+            return builder.toString();
+        }
     }
 
     public static String text() {

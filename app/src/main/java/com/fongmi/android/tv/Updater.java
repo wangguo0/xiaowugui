@@ -14,6 +14,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
 import com.fongmi.android.tv.utils.AppVersion;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.Download;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.ForcePolicy;
@@ -32,6 +33,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.lang.ref.WeakReference;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +47,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private static final String DEFAULT_RELEASE_NOTES = "手动触发 GitHub Actions 构建发布。";
     private static final String SOURCE_GITHUB = "github";
+    // 诊断日志标签：更新全链路（检查/闸门/探测/选线/下载/校验）统一用该标签，便于在日志页串成一条时间线
+    private static final String LOG = "update";
     private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
     // 直连 API 失败后的降级预算：动态镜像（最多 24 条）+ 直连共 25 源并发拉清单取最新
@@ -135,7 +139,10 @@ public class Updater implements Download.Callback, UpdateListener {
             restoreDialog(activity);
             return;
         }
-        if (!Setting.getUpdate()) return;
+        if (!Setting.getUpdate()) {
+            DiagLog.log(LOG, "[检查] 跳过：检查更新开关已关闭");
+            return;
+        }
         Task.execute(() -> doInBackground(activity, forceCheck, false));
     }
 
@@ -173,7 +180,11 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private void doInBackground(FragmentActivity activity, boolean forceCheck, boolean launch) {
         // 静默检查不得覆盖正在展示的检查结果，避免用户已看到的"最新版本"与随后下载对象脱节
-        if (launch && dialog != null && dialog.isAdded()) return;
+        if (launch && dialog != null && dialog.isAdded()) {
+            DiagLog.log(LOG, "[检查] 触发=静默 跳过：正在展示检查结果");
+            return;
+        }
+        DiagLog.log(LOG, "[检查] 触发=%s 本机=%s(code=%s) 机型=%s", triggerName(forceCheck, launch), AppVersion.fullName(), BuildConfig.VERSION_CODE, getName());
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
@@ -181,10 +192,15 @@ public class Updater implements Download.Callback, UpdateListener {
         stable = awaitUpdate(stableFuture, Update.CHANNEL_STABLE, deadline);
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
         applyForce(awaitPolicy(policyFuture, deadline));
+        DiagLog.log(LOG, "[检查] 清单结果 stable=%s beta=%s 强制=%s", describe(stable), describe(beta), forceMode);
         if (launch) {
             // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待回前台重试
             if (stable.hasManifest() || beta.hasManifest()) launchChecked = true;
-            if (!forceMode || selected == null || !selected.hasUpdate()) return;
+            if (!forceMode || selected == null || !selected.hasUpdate()) {
+                DiagLog.log(LOG, "[检查] 静默检查结束：无需打扰");
+                return;
+            }
+            DiagLog.log(LOG, "[检查] 静默检查命中强制更新 → 弹窗 目标=%s", describe(selected));
             // 弹窗被权限框/页面保存状态挡住时，回前台由 resume() 的强制态补弹
             App.post(() -> show(activity));
             return;
@@ -192,14 +208,43 @@ public class Updater implements Download.Callback, UpdateListener {
         if (!stable.hasUpdate() && !beta.hasUpdate()) {
             if (forceCheck && (stable.hasManifest() || beta.hasManifest())) {
                 selected = stable;
+                DiagLog.log(LOG, "[结果] 手动检查：清单版本不高于本机 → 仅展示当前版本信息");
                 App.post(() -> show(activity));
                 return;
             }
-            if (forceCheck) App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
+            if (forceCheck) {
+                DiagLog.log(LOG, "[结果] 手动检查：已是最新（检查失败=%s）", hasErrorOnly());
+                App.post(() -> Notify.show(hasErrorOnly() ? R.string.update_failed : R.string.update_latest));
+            }
             return;
         }
         if (!forceMode) selected = stable;
+        DiagLog.log(LOG, "[结果] 发现可更新版本 → 弹窗 目标=%s", describe(selected));
         App.post(() -> show(activity));
+    }
+
+    // 触发方式（诊断日志用）：静默 = 冷启动/回前台自动检查；手动 = 用户点检查更新
+    private String triggerName(boolean forceCheck, boolean launch) {
+        return launch ? "静默" : forceCheck ? "手动" : "自动";
+    }
+
+    // 清单摘要（诊断日志用）：无清单时带上失败原因，一眼看出是"没有新版本"还是"根本没查到"
+    private String describe(Update update) {
+        if (update == null) return "null";
+        if (!update.hasManifest()) return "无清单(" + (TextUtils.isEmpty(update.error) ? "未知原因" : update.error) + ")";
+        return update.name + "(code=" + update.code + ",可更新=" + update.hasUpdate() + ")";
+    }
+
+    // SHA 前缀（诊断日志用）：只留前 12 位便于人工比对，避免整串刷屏
+    private String shaPrefix(String sha) {
+        return TextUtils.isEmpty(sha) ? "" : sha.substring(0, Math.min(12, sha.length()));
+    }
+
+    // 线路展示名：直连返回「直连」，镜像返回主机名
+    private String lineName(GithubProxy.Line line) {
+        if (line == null) return "直连";
+        String name = GithubProxy.name(line);
+        return TextUtils.isEmpty(name) ? "直连" : name;
     }
 
     // 合并 A（发布清单 force 字段）+ B（远端 force.json 最低版本策略）判定强制更新态
@@ -243,6 +288,7 @@ public class Updater implements Download.Callback, UpdateListener {
         } catch (Exception e) {
             future.cancel(true);
             e.printStackTrace();
+            DiagLog.log(LOG, "[检查] 渠道=%s 清单任务失败：%s %s", channel, e.getClass().getSimpleName(), e.getMessage());
             Update update = Update.empty(channel);
             update.error = e.getMessage();
             return update;
@@ -296,7 +342,10 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update readGithubReleaseUpdate(String channel, JSONObject release) {
         JSONObject asset = findAsset(release.optJSONArray("assets"), getManifestName(channel));
-        if (asset == null) return Update.empty(channel);
+        if (asset == null) {
+            DiagLog.log(LOG, "[检查] 渠道=%s tag=%s 中未找到清单资源 %s", channel, release.optString("tag_name"), getManifestName(channel));
+            return Update.empty(channel);
+        }
         // 优先用资源直链（github.com 文件下载，镜像可代理），缺失时回退 API 地址
         String url = asset.optString("browser_download_url");
         boolean api = TextUtils.isEmpty(url);
@@ -307,14 +356,25 @@ public class Updater implements Download.Callback, UpdateListener {
     // 版本信息 API（latest/releases 移动指针）：直连优先（GitHub API 永不缓存，响应仅 2KB），
     // 直连失败才降级为多源并发拉清单取最新——陈旧镜像缓存不可能在比较中胜出
     private String fetchGithub(String url, String channel) throws Exception {
+        long start = System.currentTimeMillis();
         try {
             String body = OkHttp.string(url, GITHUB_API_HEADERS, GITHUB_REQUEST_TIMEOUT_MS);
-            if (isReleaseJson(body)) return body;
-        } catch (Exception ignored) {
+            if (isReleaseJson(body)) {
+                DiagLog.log(LOG, "[检查] 主路径直连API成功 渠道=%s 耗时=%sms 字节=%s", channel, System.currentTimeMillis() - start, body.length());
+                return body;
+            }
+            DiagLog.log(LOG, "[检查] 主路径直连API返回非发布JSON 渠道=%s 字节=%s → 转降级", channel, body == null ? 0 : body.length());
+        } catch (Exception e) {
+            DiagLog.log(LOG, "[检查] 主路径直连API失败 渠道=%s 耗时=%sms %s: %s → 转降级",
+                    channel, System.currentTimeMillis() - start, e.getClass().getSimpleName(), e.getMessage());
         }
         GithubProxy.clearJsonCache();
-        String best = pickLatest(GithubProxy.fetchJsonAll(url, FALLBACK_COLLECT_MS), channel);
-        if (best == null) throw new IllegalStateException("Update check failed: " + url);
+        List<GithubProxy.Source> sources = GithubProxy.fetchJsonAll(url, FALLBACK_COLLECT_MS);
+        String best = pickLatest(sources, channel);
+        if (best == null) {
+            DiagLog.log(LOG, "[检查] 降级路径失败 渠道=%s 收集=%s 条均无有效发布JSON url=%s", channel, sources.size(), url);
+            throw new IllegalStateException("Update check failed: " + url);
+        }
         return best;
     }
 
@@ -335,16 +395,21 @@ public class Updater implements Download.Callback, UpdateListener {
         String bestBody = null;
         String bestTag = null;
         boolean bestDirect = false;
+        // 诊断日志用：把每个源返回的 tag 列出来，"为什么选中了旧版本"一看即知
+        List<String> detail = new ArrayList<>();
         for (GithubProxy.Source source : sources) {
             if (!isReleaseJson(source.body)) continue;
             String tag = candidateTag(source.body, channel);
             if (TextUtils.isEmpty(tag)) continue;
+            detail.add((source.direct ? "直连" : "镜像") + ":" + tag);
             if (bestTag == null || compareTag(tag, bestTag, source.direct, bestDirect) > 0) {
                 bestBody = source.body;
                 bestTag = tag;
                 bestDirect = source.direct;
             }
         }
+        DiagLog.log(LOG, "[检查] 降级候选 渠道=%s 收集=%s 有效=%s 明细=%s 胜出=%s",
+                channel, sources.size(), detail.size(), detail, bestTag == null ? "无" : bestTag + "(" + (bestDirect ? "直连" : "镜像") + ")");
         return bestBody;
     }
 
@@ -432,8 +497,13 @@ public class Updater implements Download.Callback, UpdateListener {
             update.apkUrl = getApkUrl(update, source);
             // 清单严格校验：apkUrl/size/sha256/code 缺任一即视为无效数据整体废弃，
             // 绝不允许带空字段进入下载流程（否则下载后的大小/SHA 校验会被空值整体跳过，旧包可蒙混过关）
-            if (TextUtils.isEmpty(update.apkUrl) || update.size <= 0 || update.sha256.length() != 64 || update.code <= 0)
+            if (TextUtils.isEmpty(update.apkUrl) || update.size <= 0 || update.sha256.length() != 64 || update.code <= 0) {
+                DiagLog.log(LOG, "[检查] 清单无效 渠道=%s url=%s name=%s code=%s size=%s sha长度=%s apkUrl=%s",
+                        channel, manifestUrl, update.name, update.code, update.size, update.sha256.length(), update.apkUrl);
                 throw new IllegalStateException("Invalid update manifest: " + manifestUrl);
+            }
+            DiagLog.log(LOG, "[检查] 清单解析成功 渠道=%s name=%s code=%s size=%s sha=%s apkUrl=%s",
+                    channel, update.name, update.code, update.size, shaPrefix(update.sha256), update.apkUrl);
             if (isDefaultReleaseNotes(update.notes)) update.notes = "";
             if (TextUtils.isEmpty(update.notes) && TextUtils.isEmpty(update.desc)) {
                 String notes = TextUtils.isEmpty(fallbackNotes) ? getReleaseNotes(update.name) : fallbackNotes;
@@ -441,6 +511,7 @@ public class Updater implements Download.Callback, UpdateListener {
             }
         } catch (Exception e) {
             e.printStackTrace();
+            DiagLog.log(LOG, "[检查] 清单获取/解析失败 渠道=%s url=%s %s: %s", channel, manifestUrl, e.getClass().getSimpleName(), e.getMessage());
             Update failed = Update.empty(channel);
             failed.error = e.getMessage();
             return failed;
@@ -530,6 +601,8 @@ public class Updater implements Download.Callback, UpdateListener {
     public void onConfirm(View view) {
         // 闸门①：清单版本码必须严格大于本机已安装版本码，否则绝不进入下载（更旧的清单在此被拦下）
         if (selected == null || !selected.hasUpdate()) {
+            DiagLog.log(LOG, "[闸门] 拒绝下载：清单 code=%s 未严格大于本机 code=%s name=%s",
+                    selected == null ? "null" : String.valueOf(selected.code), BuildConfig.VERSION_CODE, selected == null ? "" : selected.name);
             Notify.show(R.string.update_latest);
             return;
         }
@@ -542,6 +615,8 @@ public class Updater implements Download.Callback, UpdateListener {
         Path.clear(getFile());
         // 闸门②：冻结本次下载对象（直链/大小/SHA/版本码），后续任何检查刷新都不得改变它
         snapshot = new Snapshot(selected, getFileName(selected.apkUrl, selected.channel));
+        DiagLog.log(LOG, "[闸门] 冻结清单快照 asset=%s size=%s sha=%s code=%s url=%s",
+                snapshot.asset, snapshot.size, shaPrefix(snapshot.sha256), snapshot.code, snapshot.url);
         setDialogProgress(0, 0, snapshot.size, 0, 0);
         String url = snapshot.url;
         long size = snapshot.size;
@@ -553,6 +628,7 @@ public class Updater implements Download.Callback, UpdateListener {
             List<GithubProxy.Line> lines = GithubProxy.probeVerified(url, size);
             if (canceled || !downloading) return;
             if (lines.isEmpty()) {
+                DiagLog.log(LOG, "[探测] 无任何线路通过验证 → 仍用原始直链尝试一次");
                 App.post(() -> {
                     Notify.show(R.string.update_line_empty);
                     startDownload(url, null);
@@ -561,11 +637,16 @@ public class Updater implements Download.Callback, UpdateListener {
             }
             App.post(() -> {
                 if (act == null || act.isFinishing() || act.isDestroyed()) {
+                    DiagLog.log(LOG, "[选线] 无可用界面 → 自动选择最快线路=%s", lineName(lines.get(0)));
                     startDownload(GithubProxy.build(lines.get(0), url), lines.get(0));
                     return;
                 }
-                DownloadLineDialog.show(act, lines, line -> startDownload(GithubProxy.build(line, url), line), () -> {
+                DownloadLineDialog.show(act, lines, line -> {
+                    DiagLog.log(LOG, "[选线] 选定线路=%s 是否最快=%s 候选=%s", lineName(line), line == lines.get(0), lines.size());
+                    startDownload(GithubProxy.build(line, url), line);
+                }, () -> {
                     // 用户取消选线路：中止本次更新下载
+                    DiagLog.log(LOG, "[选线] 用户取消选线路 → 中止本次更新");
                     canceled = true;
                     downloading = false;
                     resetProgress();
@@ -580,6 +661,7 @@ public class Updater implements Download.Callback, UpdateListener {
         currentLine = line;
         // 裸 OkHttpClient 下载：绕开爬虫网络栈的全局缓存/代理，杜绝镜像 302 重定向命中旧缓存
         long limit = snapshot == null || retriedLatest ? 0 : snapshot.size;
+        DiagLog.log(LOG, "[下载] 开始 线路=%s 限长=%s url=%s", lineName(line), limit, url);
         download = Download.create(url, getFile()).tag(url).limit(limit).client(GithubProxy.downloadClient());
         download.start(this);
     }
@@ -589,6 +671,7 @@ public class Updater implements Download.Callback, UpdateListener {
         // 强制更新态：拒绝取消（下载中不可中断、弹窗不可关闭）
         if (forceMode) return;
         if (downloading) {
+            DiagLog.log(LOG, "[结果] 用户取消下载 → 中止");
             canceled = true;
             downloading = false;
             if (download != null) download.cancel();
@@ -599,6 +682,7 @@ public class Updater implements Download.Callback, UpdateListener {
             return;
         }
         Setting.putUpdate(false);
+        DiagLog.log(LOG, "[结果] 用户关闭更新弹窗并停用检查更新");
         if (download != null) download.cancel();
         dismiss();
     }
@@ -612,6 +696,7 @@ public class Updater implements Download.Callback, UpdateListener {
     public void onChannel(String channel) {
         Setting.putUpdateChannel(channel);
         selected = Update.CHANNEL_BETA.equals(channel) ? beta : stable;
+        DiagLog.log(LOG, "[检查] 用户切换渠道=%s 目标=%s", channel, describe(selected));
     }
 
     private void dismiss() {
@@ -649,6 +734,7 @@ public class Updater implements Download.Callback, UpdateListener {
 
     @Override
     public void error(String msg) {
+        DiagLog.log(LOG, "[下载] 失败 线路=%s msg=%s", lineName(currentLine), msg);
         if (canceled) return;
         download = null;
         downloading = false;
@@ -664,6 +750,7 @@ public class Updater implements Download.Callback, UpdateListener {
         if (canceled) return;
         download = null;
         Snapshot target = snapshot;
+        DiagLog.log(LOG, "[下载] 完成 线路=%s 字节=%s", lineName(currentLine), file == null ? 0 : file.length());
         Task.execute(() -> {
             String error = validate(file, target);
             App.post(() -> {
@@ -673,6 +760,7 @@ public class Updater implements Download.Callback, UpdateListener {
                     // 校验不过且当前走的是镜像线路：自动改用官方直连重试一次（罕见兜底，防传输中途坏数据）
                     if (!retriedDirect && currentLine != null && target != null && !TextUtils.isEmpty(target.url)) {
                         retriedDirect = true;
+                        DiagLog.log(LOG, "[结果] 校验不过（%s）→ 改用官方直连重试一次", error);
                         Notify.show(R.string.update_retry_direct);
                         startDownload(target.url, null);
                         return;
@@ -680,16 +768,19 @@ public class Updater implements Download.Callback, UpdateListener {
                     // 官方直连仍不过：最后改用与分享软件同源的 latest 直链（latest 永远指向最新 Release）
                     if (!retriedLatest && target != null) {
                         retriedLatest = true;
+                        DiagLog.log(LOG, "[结果] 校验不过（%s）→ 改用 latest 直链兜底 asset=%s", error, target.asset);
                         Notify.show(R.string.update_retry_latest);
                         startDownload(Github.getGithubLatestAsset(target.asset), null);
                         return;
                     }
+                    DiagLog.log(LOG, "[结果] 校验不过且重试已耗尽 → 放弃本次更新 原因=%s", error);
                     downloading = false;
                     resetProgress();
                     Notify.show(error);
                     dismiss();
                     return;
                 }
+                DiagLog.log(LOG, "[结果] 校验通过 → 送装 file=%s", file == null ? "" : file.getName());
                 downloading = false;
                 resetProgress();
                 FileUtil.openFile(file);
@@ -705,21 +796,48 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     private String validate(File file, Snapshot update) {
-        if (file == null || !file.exists() || file.length() <= 0) return ResUtil.getString(R.string.update_download_invalid);
+        if (file == null || !file.exists() || file.length() <= 0) {
+            DiagLog.log(LOG, "[校验] 拒绝：文件不存在或为空 file=%s", file == null ? "null" : file.getAbsolutePath());
+            return ResUtil.getString(R.string.update_download_invalid);
+        }
         android.content.pm.PackageInfo info = App.get().getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0);
-        if (info == null) return ResUtil.getString(R.string.update_download_invalid);
+        if (info == null) {
+            DiagLog.log(LOG, "[校验] 拒绝：无法读取APK包信息 file=%s", file.getAbsolutePath());
+            return ResUtil.getString(R.string.update_download_invalid);
+        }
         // 包名核对：杜绝任何环节把别的应用递给安装器
-        if (!BuildConfig.APPLICATION_ID.equals(info.packageName)) return ResUtil.getString(R.string.update_download_package);
+        if (!BuildConfig.APPLICATION_ID.equals(info.packageName)) {
+            DiagLog.log(LOG, "[校验] 拒绝：包名不符 实际=%s 期望=%s", info.packageName, BuildConfig.APPLICATION_ID);
+            return ResUtil.getString(R.string.update_download_package);
+        }
         long real = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info);
         // 闸门③（装前铁律）：APK 内嵌版本码必须严格大于本机已安装版本码，否则一律拒绝送装
-        if (real <= BuildConfig.VERSION_CODE) return ResUtil.getString(R.string.update_download_older);
+        if (real <= BuildConfig.VERSION_CODE) {
+            DiagLog.log(LOG, "[闸门] 送装前拒绝：APK内嵌 code=%s 不高于本机 code=%s", real, BuildConfig.VERSION_CODE);
+            return ResUtil.getString(R.string.update_download_older);
+        }
         if (update == null) return "";
         // latest 直链兜底：该地址可能已指向比清单更新的一版，只要求不旧于清单所描述的一版
-        if (retriedLatest) return real < update.code ? ResUtil.getString(R.string.update_download_older) : "";
-        if (update.size > 0 && file.length() != update.size) return ResUtil.getString(R.string.update_download_incomplete);
-        if (!TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(sha256(file))) return ResUtil.getString(R.string.update_download_checksum);
+        if (retriedLatest) {
+            boolean older = real < update.code;
+            DiagLog.log(LOG, "[校验] latest兜底核对 apkCode=%s 清单code=%s 拒绝=%s", real, update.code, older);
+            return older ? ResUtil.getString(R.string.update_download_older) : "";
+        }
+        if (update.size > 0 && file.length() != update.size) {
+            DiagLog.log(LOG, "[校验] 拒绝：长度不符 实际=%s 清单=%s", file.length(), update.size);
+            return ResUtil.getString(R.string.update_download_incomplete);
+        }
+        String actual = TextUtils.isEmpty(update.sha256) ? "" : sha256(file);
+        if (!TextUtils.isEmpty(update.sha256) && !update.sha256.equalsIgnoreCase(actual)) {
+            DiagLog.log(LOG, "[校验] 拒绝：SHA不符 实际=%s 清单=%s", shaPrefix(actual), shaPrefix(update.sha256));
+            return ResUtil.getString(R.string.update_download_checksum);
+        }
         // 零流量核对（只读本地文件头）：APK 实际 versionCode 必须与冻结清单一致
-        if (update.code > 0 && real != update.code) return ResUtil.getString(R.string.update_download_version);
+        if (update.code > 0 && real != update.code) {
+            DiagLog.log(LOG, "[校验] 拒绝：版本码不符 apkCode=%s 清单code=%s", real, update.code);
+            return ResUtil.getString(R.string.update_download_version);
+        }
+        DiagLog.log(LOG, "[校验] 通过 长度=%s apkCode=%s 本机code=%s sha=%s", file.length(), real, BuildConfig.VERSION_CODE, shaPrefix(actual));
         return "";
     }
 
