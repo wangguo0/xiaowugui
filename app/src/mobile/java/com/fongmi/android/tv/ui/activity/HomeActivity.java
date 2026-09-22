@@ -48,6 +48,7 @@ import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
+import com.fongmi.android.tv.ui.dialog.DisclaimerDialog;
 import com.fongmi.android.tv.ui.fragment.BangumiFragment;
 import com.fongmi.android.tv.ui.fragment.CollectFragment;
 import com.fongmi.android.tv.ui.fragment.ConfigManageFragment;
@@ -66,6 +67,7 @@ import com.fongmi.android.tv.ui.fragment.SettingPlaybackFragment;
 import com.fongmi.android.tv.ui.fragment.SettingPlayerFragment;
 import com.fongmi.android.tv.ui.fragment.SettingSourceFragment;
 import com.fongmi.android.tv.ui.fragment.VodFragment;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.MobileWindow;
 import com.fongmi.android.tv.utils.Notify;
@@ -99,6 +101,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private int currentPosition;
     private boolean returnVodFromEnhance;
     private boolean returnAdvancedFromEnhance;
+    private boolean disclaimerShowing;
 
     @Override
     protected ViewBinding getBinding() {
@@ -127,13 +130,12 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState, WebHomeChromeStartup.restore(mStartupConfig));
         mBinding.getRoot().addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> checkWindowShape(right - left, bottom - top));
         mBinding.navigation.setOnItemSelectedListener(this);
-        // 通知权限申请提前到打开软件第一动作，处理完再串行申请文件权限（系统权限弹窗一次只能弹一个）
-        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> {
-        }));
+        // 打开软件即申请通知权限，随后申请文件权限；免责声明不再挂在权限回调上（文件权限跳系统设置页返回时回调链不可靠），
+        // 改由 onWindowFocusChanged 状态机在「文件权限已就绪 + 窗口拿到焦点」时触发
+        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> DiagLog.log("disclaimer", "permission chain done fileAccess=%s", Setting.hasFileAccess())));
         initFragment(savedInstanceState);
         initConfig();
         Updater.create().checkOnLaunch(this);
-        App.post(this::requestOverlayPermissionIfNeeded, 1500);
     }
 
     // 首次使用软件时说明悬浮窗权限用途（小窗播放需要）；有其它弹窗时让路，留待下次进入再问
@@ -142,6 +144,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     private void requestOverlayPermissionIfNeeded(int retry) {
+        if (!DisclaimerDialog.isAgreed()) return;
         if (PlayerSetting.isOverlayPermissionAsked() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
         if (Settings.canDrawOverlays(this)) return;
         if (!hasWindowFocus()) {
@@ -514,6 +517,24 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (mChrome != null) mChrome.onWindowFocusChanged(hasFocus);
+        if (hasFocus) onHomeWindowReady();
+    }
+
+    // 免责声明状态机：不依赖权限回调（文件权限跳系统设置页返回时回调可能丢失），
+    // 改为每次窗口拿到焦点时判断——文件权限就绪且未签署则弹免责声明，同意后引导悬浮窗权限；已签署用户仅走悬浮窗引导
+    private void onHomeWindowReady() {
+        if (DisclaimerDialog.isAgreed()) {
+            requestOverlayPermissionIfNeeded();
+            return;
+        }
+        if (!Setting.hasFileAccess()) return;
+        if (disclaimerShowing || isFinishing() || isDestroyed()) return;
+        disclaimerShowing = true;
+        DiagLog.log("disclaimer", "show onWindowFocus fileAccess=true");
+        DisclaimerDialog.showIfNeeded(this, () -> {
+            disclaimerShowing = false;
+            requestOverlayPermissionIfNeeded();
+        });
     }
 
     private void checkWindowShape() {

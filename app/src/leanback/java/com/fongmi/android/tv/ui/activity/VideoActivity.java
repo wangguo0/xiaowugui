@@ -2913,28 +2913,32 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void configureKaraokeResultDialog(AlertDialog dialog, KaraokeResultView view) {
+        // 尺寸/位置必须在 show 之前定好，否则首帧按默认宽度渲染、onShow 再改宽会左右晃动一下才稳定
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            WindowManager.LayoutParams params = window.getAttributes();
+            if (isLandscapeAudioSheet()) {
+                params.dimAmount = 0f;
+                params.gravity = Gravity.CENTER;
+                params.x = 0;
+                params.y = 0;
+                window.setAttributes(params);
+                window.setLayout(view.getPreferredDialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            } else {
+                params.dimAmount = 0.62f;
+                params.gravity = Gravity.CENTER;
+                window.setAttributes(params);
+                window.setLayout(view.getPreferredDialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            }
+        }
         dialog.setOnShowListener(d -> {
-            Window window = dialog.getWindow();
-            if (window != null) {
-                window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
-                WindowManager.LayoutParams params = window.getAttributes();
-                if (isLandscapeAudioSheet()) {
-                    params.dimAmount = 0f;
-                    params.gravity = Gravity.CENTER;
-                    params.x = 0;
-                    params.y = 0;
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                    window.setAttributes(params);
-                    window.setLayout(view.getPreferredDialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
-                    Util.hideSystemUI(window);
-                    Util.hideSystemUI(this);
-                } else {
-                    params.dimAmount = 0.62f;
-                    params.gravity = Gravity.CENTER;
-                    window.setAttributes(params);
-                    window.setLayout(view.getPreferredDialogWidth(), WindowManager.LayoutParams.WRAP_CONTENT);
-                    window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                }
+            Window w = dialog.getWindow();
+            if (w != null && isLandscapeAudioSheet()) {
+                Util.hideSystemUI(w);
+                Util.hideSystemUI(this);
             }
             view.requestActionFocus();
         });
@@ -5081,9 +5085,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void showAudioDrawerSheet(BottomSheetDialog dialog, boolean atStart) {
-        dialog.setOnShowListener(d -> {
-            FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-            if (sheet == null) return;
+        // 抽屉几何（宽/高/边距/重力/背景）必须在 show 之前定好，否则首帧按默认宽度渲染、onShow 再改宽会左右跳一下；
+        // BottomSheetBehavior 展开与隐藏系统栏仍留在 onShow，以保留纵向滑入动画
+        FrameLayout sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (sheet != null) {
             sheet.setBackgroundColor(Color.TRANSPARENT);
             int height = audioDrawerHeight();
             int bottomMargin = audioDrawerBottomMargin();
@@ -5097,7 +5102,13 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
                 params.setMargins(atStart ? ResUtil.dp2px(16) : 0, mStatusBarInset + ResUtil.dp2px(16), atStart ? 0 : ResUtil.dp2px(16), bottomMargin);
             }
             sheet.setLayoutParams(raw);
-            BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(sheet);
+        }
+        dialog.setOnShowListener(d -> {
+            FrameLayout s = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (s == null) return;
+            int height = audioDrawerHeight();
+            int bottomMargin = audioDrawerBottomMargin();
+            BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(s);
             behavior.setFitToContents(false);
             behavior.setExpandedOffset(Math.max(0, ResUtil.getScreenHeight(this) - height - bottomMargin));
             behavior.setPeekHeight(height);

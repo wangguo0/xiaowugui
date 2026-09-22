@@ -47,7 +47,9 @@ public final class LightDialog {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(root(context, title, content, positive, listener(dialog, onPositive), negative, listener(dialog, onNegative), neutral, listener(dialog, onNeutral)));
         dialog.setCanceledOnTouchOutside(true);
-        dialog.setOnShowListener(d -> applyWindow(dialog, context, landFactor, portFactor, maxDp));
+        // 窗口尺寸必须在 show 之前定好：若放到 setOnShowListener（onShow 是 post 出去的下一条消息，常晚于首帧布局），
+        // 会先以默认宽度渲染再重设宽度，导致弹窗左右晃动一下才稳定
+        applyWindow(dialog, context, landFactor, portFactor, maxDp);
         return dialog;
     }
 

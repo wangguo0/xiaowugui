@@ -58,6 +58,7 @@ import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.CustomRowPresenter;
 import com.fongmi.android.tv.ui.custom.CustomSelector;
 import com.fongmi.android.tv.ui.custom.CustomTitleView;
+import com.fongmi.android.tv.ui.dialog.DisclaimerDialog;
 import com.fongmi.android.tv.ui.dialog.ExitConfirmDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
 import com.fongmi.android.tv.ui.presenter.FuncPresenter;
@@ -158,8 +159,8 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         SpiderDebug.log("startup", "home first frame cost=%sms", System.currentTimeMillis() - App.time());
         App.post(this::initConfig, 80);
         // 通知权限不再延迟 1.8 秒、不再串在文件权限链尾：首帧后即申请，处理完再串行申请文件权限
-        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> {
-        }));
+        // 文件权限处理完立即弹免责声明签署窗（避免被系统权限弹窗盖住）
+        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> DisclaimerDialog.showIfNeeded(this)));
         App.post(() -> DLNARendererService.start(this), 2500);
         Updater.create().checkOnLaunch(this);
     }
