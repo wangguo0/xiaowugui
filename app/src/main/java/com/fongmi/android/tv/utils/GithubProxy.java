@@ -73,6 +73,8 @@ public class GithubProxy {
     private static final AtomicReference<List<String>> PREFIXES = new AtomicReference<>();
     private static final AtomicReference<String> JSON_PREFIX = new AtomicReference<>();
     private static final AtomicReference<String> FILE_PREFIX = new AtomicReference<>();
+    // 列表单飞锁：stable/beta/强制策略三路会并发进来，镜像列表只拉一次，后来者等锁后直接吃缓存
+    private static final Object LIST_LOCK = new Object();
 
     private GithubProxy() {
     }
@@ -89,44 +91,63 @@ public class GithubProxy {
     }
 
     // 当前镜像线路列表（首次调用阻塞拉取；拉取失败返回空列表 = 仅直连兜底，下次调用会重试）
+    // 加单飞锁：三路并发检查只发一轮列表请求，后来者等锁后直接命中缓存
     public static List<String> prefixes() {
         List<String> cached = PREFIXES.get();
         if (cached != null) return cached;
-        List<String> lines = fetchList();
-        if (!lines.isEmpty()) PREFIXES.compareAndSet(null, lines);
-        else DiagLog.log(LOG_GITHUB, "镜像列表拉取失败：%s 个源全部不可用，本次仅 GitHub 直连兜底", LIST_SOURCES.length);
-        return lines;
+        synchronized (LIST_LOCK) {
+            cached = PREFIXES.get();
+            if (cached != null) return cached;
+            List<String> lines = fetchList();
+            if (!lines.isEmpty()) PREFIXES.compareAndSet(null, lines);
+            else DiagLog.log(LOG_GITHUB, "镜像列表拉取失败：%s 个源全部不可用，本次仅 GitHub 直连兜底", LIST_SOURCES.length);
+            return lines;
+        }
     }
 
-    // 拉取 JSON（镜像优先、首个合法结果即返）：适用于 tag 钉死等内容不可变地址；全部失败返回 null（调用方回退直连）
+    // 拉取 JSON：直连与镜像双腿同时起跑，首个合法结果即返（镜像腿命中顺便缓存最快线路）。
+    // 适用于 tag 钉死等内容不可变地址——两路返回必然一致，谁先到都安全；全部失败返回 null（调用方回退直连）。
+    // 不再先阻塞等镜像列表：直连可用时 1 秒内即出结果，镜像腿留在后台兜底
     public static String fetchJson(String url) {
-        List<String> lines = prefixes();
         String cached = JSON_PREFIX.get();
         if (cached != null) {
             String body = get(cached + bust(url));
             if (isJson(body)) return body;
             JSON_PREFIX.compareAndSet(cached, null);
         }
-        if (lines.isEmpty()) return null;
-        AtomicReference<String> holder = new AtomicReference<>();
         AtomicReference<String> winner = new AtomicReference<>();
-        CountDownLatch latch = new CountDownLatch(lines.size());
-        for (String prefix : lines) {
-            Task.largeExecutor().execute(() -> {
-                try {
-                    if (holder.get() != null) return;
+        // 直连腿：立即出发
+        Task.largeExecutor().execute(() -> {
+            String body = get(url);
+            if (isJson(body)) winner.compareAndSet(null, body);
+        });
+        // 镜像腿：后台等列表就绪后再并发打，不占用调用方时间
+        Task.largeExecutor().execute(() -> {
+            for (String prefix : prefixes()) {
+                if (winner.get() != null) return;
+                Task.largeExecutor().execute(() -> {
                     String body = get(prefix + bust(url));
-                    if (isJson(body) && holder.compareAndSet(null, body)) winner.set(prefix);
-                } catch (Exception ignored) {
-                } finally {
-                    latch.countDown();
-                }
-            });
+                    if (isJson(body) && winner.compareAndSet(null, body)) JSON_PREFIX.set(prefix);
+                });
+            }
+        });
+        return awaitWinner(winner, FETCH_BUDGET);
+    }
+
+    // 首个结果即返：30ms 轮询一次，最多等 budgetMs，不再被"最慢的一条线路"拖满整个预算
+    private static String awaitWinner(AtomicReference<String> winner, long budgetMs) {
+        long end = System.currentTimeMillis() + budgetMs;
+        while (System.currentTimeMillis() < end) {
+            String body = winner.get();
+            if (body != null) return body;
+            try {
+                Thread.sleep(30);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
-        await(latch, FETCH_BUDGET);
-        if (holder.get() == null) return null;
-        JSON_PREFIX.set(winner.get());
-        return holder.get();
+        return winner.get();
     }
 
     // 多源收集：镜像 + 直连并发拉同一 URL，预算内收集全部合法 JSON（含直连份标记），由调用方比较取最新。

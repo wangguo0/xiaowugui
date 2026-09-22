@@ -56,7 +56,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -68,7 +67,9 @@ public class Updater implements Download.Callback, UpdateListener {
     private static final String LOG = "update";
     // 「新版本已就绪」安装通知的固定 id
     private static final int INSTALL_NOTIFY_ID = 9528;
-    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    private static final long UPDATE_CHECK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(15);
+    // 超时宽限：到点再给 1 秒，专治"清单刚解析完、只差几毫秒就被当超时丢掉"的竞态
+    private static final long TIMEOUT_GRACE_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long GITHUB_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(4);
     // 直连 API 失败后的降级预算：动态镜像（最多 24 条）+ 直连共 25 源并发拉清单取最新
     private static final long FALLBACK_COLLECT_MS = TimeUnit.SECONDS.toMillis(6);
@@ -200,7 +201,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     // 冷启动静默检查：仅命中强制更新（发布清单 force 或远端最低版本策略）才弹窗，否则完全不打扰
-    // 检查失败（镜像+直连全挂/超时）不锁定状态，回前台经 resume() 自动重试（节流 30 秒）
+    // 检查失败（镜像+直连全挂/超时）不锁定状态，回前台经 resume() 自动重试（节流 10 秒）
     public void checkOnLaunch(FragmentActivity activity) {
         // 启动兜底：清理本机已装不低的残留安装包（上次更新成功后进程被杀没来得及删的）
         cleanupStalePackages();
@@ -208,7 +209,7 @@ public class Updater implements Download.Callback, UpdateListener {
         // 手动检查转圈窗打开期间跳过静默重查，避免静默检查的结果弹窗盖住转圈窗
         if (downloading || dialog != null || checkDialog != null) return;
         long now = SystemClock.elapsedRealtime();
-        if (lastLaunchCheckAt > 0 && now - lastLaunchCheckAt < TimeUnit.SECONDS.toMillis(30)) return;
+        if (lastLaunchCheckAt > 0 && now - lastLaunchCheckAt < TimeUnit.SECONDS.toMillis(10)) return;
         lastLaunchCheckAt = now;
         launchChecking = true;
         Task.execute(() -> {
@@ -426,9 +427,9 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private Update awaitUpdate(Future<Update> future, String channel, long deadline) {
         try {
-            long remaining = deadline - SystemClock.elapsedRealtime();
-            if (remaining <= 0) throw new TimeoutException("Update check timed out");
-            return future.get(remaining, TimeUnit.MILLISECONDS);
+            // 到点后不立刻判死：再给 TIMEOUT_GRACE_MS 宽限把已经算完的结果收下
+            long wait = Math.max(0, deadline - SystemClock.elapsedRealtime()) + TIMEOUT_GRACE_MS;
+            return future.get(wait, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
             future.cancel(true);
             e.printStackTrace();
