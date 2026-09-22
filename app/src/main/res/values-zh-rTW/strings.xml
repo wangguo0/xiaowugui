@@ -235,6 +235,7 @@
     <string name="community_repo_name_hint">倉庫名稱</string>
     <string name="community_repo_url_hint">倉庫地址</string>
     <string name="community_repo_delete_confirm">確定刪除該倉庫？</string>
+    <string name="community_repo_delete">刪除倉庫</string>
     <string name="community_repo_exists">該倉庫地址已存在</string>
     <string name="community_repo_invalid">請輸入倉庫名稱和 http(s) 地址</string>
     <string name="community_extract_github_only">僅支持 GitHub 倉庫提取</string>

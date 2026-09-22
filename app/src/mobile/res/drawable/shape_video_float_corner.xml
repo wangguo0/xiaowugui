@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 四角直角括号：两臂 30、粗 4.5（单位与 View 30dp 对应），25% 不透明白 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30dp"
+    android:height="30dp"
+    android:viewportWidth="30"
+    android:viewportHeight="30">
+    <path
+        android:fillColor="#40FFFFFF"
+        android:pathData="M0,0 h30 v4.5 h-30 z M0,0 h4.5 v30 h-4.5 z" />
+</vector>

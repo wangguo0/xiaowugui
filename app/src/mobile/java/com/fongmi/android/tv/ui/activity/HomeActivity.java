@@ -5,13 +5,21 @@ import android.app.PendingIntent;
 import android.app.SearchManager;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.pm.ShortcutInfoCompat;
 import androidx.core.content.pm.ShortcutManagerCompat;
 import androidx.core.graphics.drawable.IconCompat;
@@ -36,6 +44,7 @@ import com.fongmi.android.tv.player.Source;
 import com.fongmi.android.tv.receiver.ShortcutReceiver;
 import com.fongmi.android.tv.server.Server;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
@@ -66,6 +75,7 @@ import com.fongmi.android.tv.utils.Util;
 import com.fongmi.android.tv.web.WebHomeChromeStartup;
 import com.fongmi.android.tv.web.WebHomeViewport;
 import com.github.catvod.net.OkHttp;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.navigation.NavigationBarView;
 import com.google.gson.JsonObject;
 
@@ -117,10 +127,46 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState, WebHomeChromeStartup.restore(mStartupConfig));
         mBinding.getRoot().addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> checkWindowShape(right - left, bottom - top));
         mBinding.navigation.setOnItemSelectedListener(this);
-        PermissionUtil.requestFile(this, allGranted -> PermissionUtil.requestNotify(this));
+        // 通知权限申请提前到打开软件第一动作，处理完再串行申请文件权限（系统权限弹窗一次只能弹一个）
+        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> {
+        }));
         initFragment(savedInstanceState);
         initConfig();
         Updater.create().checkOnLaunch(this);
+        App.post(this::requestOverlayPermissionIfNeeded, 1500);
+    }
+
+    // 首次使用软件时说明悬浮窗权限用途（小窗播放需要）；有其它弹窗时让路，留待下次进入再问
+    private void requestOverlayPermissionIfNeeded() {
+        requestOverlayPermissionIfNeeded(4);
+    }
+
+    private void requestOverlayPermissionIfNeeded(int retry) {
+        if (PlayerSetting.isOverlayPermissionAsked() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        if (Settings.canDrawOverlays(this)) return;
+        if (!hasWindowFocus()) {
+            if (retry > 0) App.post(() -> requestOverlayPermissionIfNeeded(retry - 1), 1500);
+            return;
+        }
+        PlayerSetting.putOverlayPermissionAsked(true);
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        ((TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
+        ((TextView) content.findViewById(R.id.message)).setText(R.string.video_float_permission_message);
+        ((TextView) content.findViewById(R.id.cancel)).setText(R.string.video_float_permission_later);
+        ((TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.confirm).setOnClickListener(v -> {
+            dialog.dismiss();
+            Notify.show(R.string.video_float_permission_toast);
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+            } catch (Exception e) {
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+            }
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
     }
 
     @Override

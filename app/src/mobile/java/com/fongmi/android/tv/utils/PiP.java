@@ -18,8 +18,6 @@ import androidx.media3.ui.R;
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.event.ActionEvent;
 import com.fongmi.android.tv.receiver.ActionReceiver;
-import com.fongmi.android.tv.setting.BackgroundPlaybackPolicy;
-import com.fongmi.android.tv.setting.PlayerSetting;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,7 +25,6 @@ import java.util.List;
 public class PiP {
 
     private PictureInPictureParams.Builder builder;
-    private boolean audioMode;
 
     public static boolean noPiP() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !App.get().getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
@@ -86,21 +83,9 @@ public class PiP {
         }
     }
 
-    public void setAudioMode(Activity activity, boolean audioMode) {
-        try {
-            if (noPiP()) return;
-            this.audioMode = audioMode;
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
-            setAutoEnter();
-            activity.setPictureInPictureParams(builder.build());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
     public boolean enter(Activity activity, int width, int height, int scale) {
         try {
-            if (noPiP() || activity.isInPictureInPictureMode() || !shouldUsePictureInPicture()) return false;
+            if (noPiP() || activity.isInPictureInPictureMode()) return false;
             setAspectRatio(width, height, scale);
             setAutoEnter();
             return activity.enterPictureInPictureMode(builder.build());
@@ -110,14 +95,12 @@ public class PiP {
         }
     }
 
+    // 系统画中画默认关闭：只在自建小窗创建失败时由播放页显式调用 enter 兜底，
+    // 不再让系统在切后台时自动进入。
     private void setAutoEnter() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            builder.setAutoEnterEnabled(shouldUsePictureInPicture());
+            builder.setAutoEnterEnabled(false);
         }
-    }
-
-    private boolean shouldUsePictureInPicture() {
-        return BackgroundPlaybackPolicy.shouldUsePictureInPicture(PlayerSetting.getBackground(), audioMode);
     }
 
     private void setAspectRatio(int width, int height, int scale) {

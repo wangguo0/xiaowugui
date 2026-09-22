@@ -237,6 +237,7 @@
     <string name="community_repo_name_hint">Repo name</string>
     <string name="community_repo_url_hint">Repo URL</string>
     <string name="community_repo_delete_confirm">Delete this repo?</string>
+    <string name="community_repo_delete">Delete repo</string>
     <string name="community_repo_exists">This repo URL already exists</string>
     <string name="community_repo_invalid">Please enter a repo name and http(s) URL</string>
     <string name="community_extract_github_only">Only GitHub repos can be extracted</string>

@@ -45,7 +45,8 @@ public class PermissionUtil {
         if (callback != null) callback.accept(granted);
     }
 
-    public static void requestNotify(FragmentActivity activity) {
-        PermissionX.init(activity).permissions(PermissionX.permission.POST_NOTIFICATIONS).request(new PermissionCallback());
+    // 通知权限：打开软件即第一动作申请（不再串在文件权限链尾），回调仅用于把文件权限申请排到其后
+    public static void requestNotify(FragmentActivity activity, Consumer<Boolean> callback) {
+        PermissionX.init(activity).permissions(PermissionX.permission.POST_NOTIFICATIONS).request(new PermissionCallback(callback));
     }
 }

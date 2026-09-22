@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * 订阅源全网资源社区：内置 github 资源库 + 用户自定义仓库入口。
  * 自定义仓库持久化在 Prefers（键 community_repos，JSON 数组 name/url），
- * 点击跳转应用内网页浏览，长按弹确认框删除。内置 github 资源库亦可长按删除（持久隐藏）。
+ * 点击跳转应用内网页浏览，条目右侧删除图标弹确认框删除。内置 github 资源库同样支持删除（持久隐藏）。
  */
 public class CommunityRepoDialog extends BaseAlertDialog {
 
@@ -63,11 +63,8 @@ public class CommunityRepoDialog extends BaseAlertDialog {
     @Override
     protected void initEvent() {
         binding.githubRepo.setOnClickListener(v -> open("https://github.com/qist/tvbox", getString(R.string.community_repo_github), true));
-        // 内置 github 资源库同样支持长按删除（持久隐藏；可通过「添加仓库」重新添加该地址恢复）
-        binding.githubRepo.setOnLongClickListener(v -> {
-            confirmDeleteGithub();
-            return true;
-        });
+        // 内置 github 资源库支持右侧图标删除（持久隐藏；可通过「添加仓库」重新添加该地址恢复）
+        binding.githubDelete.setOnClickListener(v -> confirmDeleteGithub());
         binding.addRepo.setOnClickListener(v -> showAddDialog());
     }
 
@@ -105,12 +102,9 @@ public class CommunityRepoDialog extends BaseAlertDialog {
             ItemCommunityRepoBinding row = ItemCommunityRepoBinding.inflate(inflater, binding.customList, false);
             row.name.setText(item[0]);
             row.url.setText(item[1]);
-            // 自定义仓库仅浏览，不提供提取
+            // 自定义仓库仅浏览，不提供提取；右侧图标删除
             row.getRoot().setOnClickListener(v -> open(item[1], item[0], false));
-            row.getRoot().setOnLongClickListener(v -> {
-                confirmDelete(item);
-                return true;
-            });
+            row.delete.setOnClickListener(v -> confirmDelete(item));
             binding.customList.addView(row.getRoot());
         }
     }

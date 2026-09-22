@@ -126,6 +126,11 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         this.stop = stop;
     }
 
+    // 子类可覆写：页面 onStop 时（如自建小窗显示中）不让播放器自动暂停
+    protected boolean keepPlayingWhenStopped() {
+        return false;
+    }
+
     protected boolean isLock() {
         return lock;
     }
@@ -472,7 +477,7 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         attachSurface();
     }
 
-    private int getRender() {
+    protected int getRender() {
         if (mService != null && player().isNativePlayer()) return 0;
         if (mService != null && player().requiresTextureRenderForLut()) return PlayerSetting.RENDER_TEXTURE;
         return PlayerSetting.getRender();
@@ -786,7 +791,8 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
         restoreExoOutputMode();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("playback-lifecycle", "activity stop backgroundOff=%s %s", PlayerSetting.isBackgroundOff(), lifecycleState());
         super.onStop();
-        if (isOwner() && !isAudioOnly() && PlayerSetting.isBackgroundOff() && mController != null) mController.pause();
+        if (isOwner() && !isAudioOnly() && PlayerSetting.isBackgroundOff() && !keepPlayingWhenStopped() && mController != null)
+            mController.pause();
     }
 
     @Override

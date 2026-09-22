@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 手机端自建小窗内容：全幅视频 + 快照占位 + 点按显隐的纯图标控制层 + 8 向缩放手柄 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/shape_video_float_bg">
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/exo"
+        style="@style/Player.Vod"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:surface_type="none"
+        app:use_controller="false" />
+
+    <!-- 快照占位：进入小窗时贴当前画面，首帧渲染后淡出；截不到图时保持黑底兜底 -->
+    <ImageView
+        android:id="@+id/placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        android:importantForAccessibility="no"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
+    <!-- 8 段拖拽提示：与控制层同步显隐，四边短条 + 四角方块 -->
+    <View
+        android:id="@+id/segTop"
+        android:layout_width="64dp"
+        android:layout_height="3dp"
+        android:layout_gravity="top|center_horizontal"
+        android:background="@drawable/shape_video_float_seg"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segBottom"
+        android:layout_width="64dp"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:background="@drawable/shape_video_float_seg"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segLeft"
+        android:layout_width="3dp"
+        android:layout_height="64dp"
+        android:layout_gravity="start|center_vertical"
+        android:background="@drawable/shape_video_float_seg"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segRight"
+        android:layout_width="3dp"
+        android:layout_height="64dp"
+        android:layout_gravity="end|center_vertical"
+        android:background="@drawable/shape_video_float_seg"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segTopLeft"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="top|start"
+        android:background="@drawable/shape_video_float_corner"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segTopRight"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="top|end"
+        android:background="@drawable/shape_video_float_corner"
+        android:importantForAccessibility="no"
+        android:rotation="90"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segBottomLeft"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="bottom|start"
+        android:background="@drawable/shape_video_float_corner"
+        android:importantForAccessibility="no"
+        android:rotation="270"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/segBottomRight"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="bottom|end"
+        android:background="@drawable/shape_video_float_corner"
+        android:importantForAccessibility="no"
+        android:rotation="180"
+        android:visibility="gone" />
+
+    <!-- 8 向缩放手柄：透明叠层，四边 + 四角（声明在控制层之前，避免角部点击被手柄拦截） -->
+    <View
+        android:id="@+id/handleLeft"
+        android:layout_width="30dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start|center_vertical" />
+
+    <View
+        android:id="@+id/handleRight"
+        android:layout_width="30dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end|center_vertical" />
+
+    <View
+        android:id="@+id/handleTop"
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:layout_gravity="top|center_horizontal" />
+
+    <View
+        android:id="@+id/handleBottom"
+        android:layout_width="match_parent"
+        android:layout_height="30dp"
+        android:layout_gravity="bottom|center_horizontal" />
+
+    <View
+        android:id="@+id/handleTopLeft"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start" />
+
+    <View
+        android:id="@+id/handleTopRight"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end" />
+
+    <View
+        android:id="@+id/handleBottomLeft"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|start" />
+
+    <View
+        android:id="@+id/handleBottomRight"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="bottom|end" />
+
+    <!-- 控制层：点按小窗显隐，3 秒无操作自动隐藏（声明在最上层，按钮点击优先于手柄） -->
+    <FrameLayout
+        android:id="@+id/controlLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/close"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="14dp"
+            android:background="@drawable/shape_video_float_btn"
+            android:contentDescription="@string/video_float_close"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_action_close"
+            app:tint="@color/white" />
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/full"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center"
+            android:background="@drawable/shape_video_float_btn"
+            android:contentDescription="@string/video_float_back"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_control_fullscreen"
+            app:tint="@color/white" />
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:id="@+id/bottomBar"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="6dp"
+            android:layout_marginBottom="2dp"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp">
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/prev"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center_vertical"
+                android:background="@null"
+                android:contentDescription="@string/video_float_prev"
+                android:padding="2dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_float_prev"
+                app:tint="@color/white" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/play"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center_vertical"
+                android:background="@null"
+                android:contentDescription="@string/video_float_pause"
+                android:padding="2dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/exo_icon_pause"
+                app:tint="@color/white" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/next"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center_vertical"
+                android:background="@null"
+                android:contentDescription="@string/video_float_next"
+                android:padding="2dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_float_next"
+                app:tint="@color/white" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
+
+    </FrameLayout>
+
+</FrameLayout>

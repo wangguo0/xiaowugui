@@ -17,6 +17,8 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -25,6 +27,9 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.PixelCopy;
+import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -100,6 +105,7 @@ import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.engine.PlayerEngine;
 import com.fongmi.android.tv.player.engine.PlaySpec;
+import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.player.karaoke.KaraokeController;
 import com.fongmi.android.tv.player.karaoke.KaraokePitchTrackGenerator;
 import com.fongmi.android.tv.player.karaoke.KaraokeResult;
@@ -114,6 +120,7 @@ import com.fongmi.android.tv.player.lut.LutPreset;
 import com.fongmi.android.tv.player.lut.LutSetting;
 import com.fongmi.android.tv.player.lut.LutStore;
 import com.fongmi.android.tv.service.PlaybackService;
+import com.fongmi.android.tv.setting.BackgroundPlaybackPolicy;
 import com.fongmi.android.tv.setting.DanmakuSetting;
 import com.fongmi.android.tv.setting.LyricsSetting;
 import com.fongmi.android.tv.setting.JarBlockSetting;
@@ -166,6 +173,7 @@ import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Timer;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
+import com.fongmi.android.tv.utils.VideoFloatWindow;
 import com.fongmi.android.tv.utils.VodMatcher;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -190,6 +198,7 @@ import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public class VideoActivity extends PlaybackActivity implements Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, DanmakuDialog.Host, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, EpisodeGroupAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, ParseAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener {
 
@@ -367,6 +376,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     };
     private PiP mPiP;
+    private VideoFloatWindow mFloat;
+    private boolean floatPending;
     private String mContextWallUrl;
     private String mContextWallLockedUrl;
     private String playHealthKey;
@@ -374,6 +385,36 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private long playerStartTime;
     private boolean pendingLutImport;
     private boolean skipPausePiP;
+
+    // 小窗控制层回调：上一集、暂停/播放、下一集、返回大屏、关闭
+    private final VideoFloatWindow.Listener mFloatListener = new VideoFloatWindow.Listener() {
+        @Override
+        public void onFloatPlayPause() {
+            checkPlay();
+        }
+
+        @Override
+        public void onFloatPrev() {
+            checkPrev();
+        }
+
+        @Override
+        public void onFloatNext() {
+            checkNext();
+        }
+
+        @Override
+        public void onFloatBack() {
+            exitFloatWindow(true);
+            bringVideoToFront();
+        }
+
+        @Override
+        public void onFloatClose() {
+            exitFloatWindow(false);
+            finishPlayback();
+        }
+    };
 
     private final ActivityResultLauncher<Intent> mLutDir = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
@@ -690,6 +731,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return mBinding.getRoot().getTag().equals("port");
     }
 
+    // 小窗显示中切后台（如回桌面）不自动暂停，与系统画中画同等对待
+    @Override
+    protected boolean keepPlayingWhenStopped() {
+        return isFloatShowing();
+    }
+
     @Override
     protected ViewBinding getBinding() {
         return mBinding = ActivityVideoBinding.inflate(getLayoutInflater());
@@ -702,7 +749,14 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected PlayerView getExoView() {
-        return mBinding.exo;
+        return isFloatShowing() ? mFloat.getExoView() : mBinding.exo;
+    }
+
+    // 小窗期间仅 EXO 强制走 TextureView；IJK/MPV 为 native 内核需要 SurfaceHolder，保持 SurfaceView 渲染
+    @Override
+    protected int getRender() {
+        if (isFloatShowing() && service() != null && !player().isNativePlayer()) return PlayerSetting.RENDER_TEXTURE;
+        return super.getRender();
     }
 
     @Override
@@ -926,6 +980,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.back.setOnClickListener(view -> onBack());
         mBinding.control.cast.setOnClickListener(view -> onCast());
         mBinding.control.right.info.setOnClickListener(view -> onInfo());
+        mBinding.control.right.floatWindow.setOnClickListener(view -> onFloatWindow());
         mBinding.control.keep.setOnClickListener(view -> onKeep());
         mBinding.control.osdDiagnostics.setOnClickListener(view -> onOsdDiagnostics());
         mBinding.control.play.setOnClickListener(view -> checkPlay());
@@ -1997,6 +2052,133 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void onInfo() {
         InfoDialog.create().title(mBinding.control.title.getText()).headers(player().getHeaders()).url(player().getUrl()).show(this);
+    }
+
+    private boolean isFloatShowing() {
+        return mFloat != null && mFloat.isShowing();
+    }
+
+    // 小窗按钮：已在小窗时返回大屏，否则校验可播画面与悬浮窗权限后进入
+    private void onFloatWindow() {
+        if (isFloatShowing()) {
+            exitFloatWindow(true);
+            return;
+        }
+        if (isAudioBackgroundMode()) {
+            Notify.show(R.string.video_float_audio_mode);
+            return;
+        }
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) {
+            Notify.show(R.string.video_float_no_video);
+            return;
+        }
+        if (!canDrawOverlays()) {
+            showFloatPermissionDialog();
+            return;
+        }
+        enterFloatWindow();
+    }
+
+    // 进入自建小窗；先截取当前画面快照（全屏帧），快照就绪后再退全屏并创建悬浮窗
+    private boolean enterFloatWindow() {
+        if (isFloatShowing()) return true;
+        if (!canDrawOverlays()) return false;
+        hideControl();
+        View surface = mBinding.exo.getVideoSurfaceView();
+        if (surface instanceof SurfaceView surfaceView && !(surface instanceof TextureView)) {
+            captureSurfaceSnapshot(surfaceView, this::openFloatWindow);
+            return true;
+        }
+        Bitmap snapshot = surface instanceof TextureView textureView ? textureView.getBitmap() : null;
+        return openFloatWindow(snapshot);
+    }
+
+    // PixelCopy 截取 SurfaceView 当前帧；失败或超时以 null 继续（黑底兜底）
+    private void captureSurfaceSnapshot(SurfaceView view, Consumer<Bitmap> callback) {
+        int width = view.getWidth();
+        int height = view.getHeight();
+        if (width <= 0 || height <= 0) {
+            callback.accept(null);
+            return;
+        }
+        AtomicBoolean done = new AtomicBoolean(false);
+        try {
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            PixelCopy.request(view, bitmap, result -> {
+                if (done.compareAndSet(false, true)) callback.accept(result == PixelCopy.SUCCESS ? bitmap : null);
+            }, new Handler(Looper.getMainLooper()));
+            App.post(() -> {
+                if (done.compareAndSet(false, true)) callback.accept(null);
+            }, 300);
+        } catch (Throwable e) {
+            if (done.compareAndSet(false, true)) callback.accept(null);
+        }
+    }
+
+    // 快照就绪后真正创建小窗；异步回调时页面可能已退出，需先守卫；创建失败时提示原因并回退系统画中画
+    private boolean openFloatWindow(Bitmap snapshot) {
+        if (isFloatShowing()) return true;
+        if (isFinishing() || isDestroyed() || isPlaybackExiting()) return false;
+        if (isFullscreen()) exitFullscreen();
+        VideoFloatWindow window = new VideoFloatWindow(this, mFloatListener);
+        if (!window.show()) {
+            String reason = TextUtils.isEmpty(window.getError()) ? getString(R.string.video_float_failed_unknown) : window.getError();
+            window.release();
+            Notify.show(getString(R.string.video_float_failed, reason));
+            // 按 Home 走异步路径时 Activity 可能已退出前台，此时系统会拒绝进入画中画，需明确提示
+            if (!isStop()) requestPiP();
+            else Notify.show(R.string.video_float_pip_unavailable);
+            return false;
+        }
+        mFloat = window;
+        ExoUtil.setPlayerView(window.getExoView());
+        window.setPlaying(player().isPlaying());
+        window.setPlaceholder(snapshot);
+        mBinding.exo.setPlayer(null);
+        mBinding.exo.setVisibility(View.INVISIBLE);
+        setRender();
+        return true;
+    }
+
+    // 退出小窗；rebind 为 true 时把画面迁回播放页
+    private void exitFloatWindow(boolean rebind) {
+        if (mFloat == null) return;
+        VideoFloatWindow window = mFloat;
+        mFloat = null;
+        try {
+            window.getExoView().setPlayer(null);
+        } catch (Throwable ignored) {
+        }
+        window.release();
+        if (!rebind) return;
+        mBinding.exo.setVisibility(View.VISIBLE);
+        setRender();
+    }
+
+    private void bringVideoToFront() {
+        try {
+            startActivity(new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void showFloatPermissionDialog() {
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        ((TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
+        ((TextView) content.findViewById(R.id.message)).setText(R.string.video_float_permission_message);
+        ((TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> {
+            floatPending = false;
+            dialog.dismiss();
+        });
+        content.findViewById(R.id.confirm).setOnClickListener(v -> {
+            floatPending = true;
+            dialog.dismiss();
+            openOverlayPermission(R.string.video_float_permission_toast);
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
     }
 
     private void onKeep() {
@@ -3338,7 +3520,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void openOverlayPermission() {
-        Notify.show(R.string.player_desktop_lyrics_permission);
+        openOverlayPermission(R.string.player_desktop_lyrics_permission);
+    }
+
+    private void openOverlayPermission(int messageRes) {
+        Notify.show(messageRes);
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
         try {
             startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
@@ -4411,6 +4597,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.control.action.getRoot().setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
         mBinding.control.right.lock.setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
         mBinding.control.right.info.setVisibility(isLock() || player().isEmpty() ? View.GONE : View.VISIBLE);
+        mBinding.control.right.floatWindow.setVisibility(isLock() || player().isEmpty() ? View.GONE : View.VISIBLE);
         mBinding.control.cast.setVisibility(View.GONE);
         mBinding.control.center.setVisibility(isLock() ? View.GONE : View.VISIBLE);
         mBinding.control.bottom.setVisibility(isLock() ? View.GONE : View.VISIBLE);
@@ -4836,7 +5023,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         @Override
         public void onAudio() {
             setAudioOnly(true);
-            syncPiPForPlaybackMode();
             Util.moveToBackground(VideoActivity.this);
         }
     };
@@ -4857,7 +5043,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     protected void onTracksChanged() {
         updateAudioOnlyState();
-        syncPiPForPlaybackMode();
         refreshLyrics();
         setTrackVisible();
         mClock.setCallback(this);
@@ -4881,13 +5066,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (visible) ensureImmersiveAudioControllers();
         if (visible && isAutoRotate() && !isLock() && !isRotate()) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
         if (mAudioStageVisible == visible) {
-            syncPiPForPlaybackMode();
             updateAudioStageText();
             updateAudioStageControls();
             return;
         }
         mAudioStageVisible = visible;
-        syncPiPForPlaybackMode();
         if (!visible) mAudioLightEffectAnimated = false;
         mBinding.audioStage.setVisibility(visible ? View.VISIBLE : View.GONE);
         if (visible) mBinding.audioStage.bringToFront();
@@ -6046,7 +6229,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 break;
             case Player.STATE_ENDED:
                 checkEnded(true);
-                updatePlayControl(false, syncPiPForPlaybackMode());
+                updatePlayControl(false, isAudioBackgroundMode());
                 break;
         }
     }
@@ -6057,8 +6240,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         debugLyricsLoop("playingChanged=" + isPlaying, true);
         syncLyricsPlaybackState(isPlaying);
         syncKaraokePosition();
-        boolean audioMode = syncPiPForPlaybackMode();
-        if (isPlaying || isPaused()) updatePlayControl(isPlaying, audioMode);
+        if (mFloat != null) mFloat.setPlaying(isPlaying);
+        if (isPlaying || isPaused()) updatePlayControl(isPlaying, isAudioBackgroundMode());
     }
 
     private void updatePlayControl(boolean isPlaying, boolean audioMode) {
@@ -6795,45 +6978,34 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (resultCode == RESULT_OK && requestCode == 1001) PlayerHelper.onExternalResult(data, service()::dispatchNext, controller()::seekTo);
     }
 
+    // 按 Home 或系统请求进入后台播放：后台播放开启且非纯音频时优先自建小窗，
+    // 小窗创建失败才回退系统画中画（在 enterFloatWindow 内处理）。
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            preparePiP("userLeaveHint");
-        } else {
-            requestPiP("userLeaveHint");
-        }
+        requestBackgroundVideo();
     }
 
     @Override
     public boolean onPictureInPictureRequested() {
-        return requestPiP("systemRequest");
+        return requestBackgroundVideo();
     }
 
-    private boolean preparePiP(String reason) {
-        if (isRedirect() || isPlaybackExiting()) return false;
-        if (syncPiPForPlaybackMode()) return false;
+    private boolean requestBackgroundVideo() {
+        if (isRedirect() || isPlaybackExiting() || isFloatShowing()) return false;
+        if (!BackgroundPlaybackPolicy.shouldUsePictureInPicture(PlayerSetting.getBackground(), isAudioBackgroundMode())) return false;
         if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
-        mPiP.update(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
-        return true;
-    }
-
-    private boolean requestPiP(String reason) {
-        if (!preparePiP(reason)) return false;
+        // 无悬浮窗权限时不进小窗也不回退系统画中画，交由小窗按钮统一引导授权
+        if (!canDrawOverlays()) return false;
         if (isLock()) App.post(this::onLock, 500);
-        return enterPiP(reason);
+        return enterFloatWindow();
     }
 
-    private boolean enterPiP(String reason) {
-        if (syncPiPForPlaybackMode()) return false;
+    // 系统画中画兜底：仅在小窗创建失败时调用
+    private boolean requestPiP() {
         if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
+        if (isAudioBackgroundMode()) return false;
         return mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale());
-    }
-
-    private boolean syncPiPForPlaybackMode() {
-        boolean audioMode = isAudioBackgroundMode();
-        if (mPiP != null) mPiP.setAudioMode(this, audioMode);
-        return audioMode;
     }
 
     private boolean isAudioBackgroundMode() {
@@ -6869,11 +7041,17 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (mAudioStageVisible) applyAudioBackground();
         syncLyricsPlaybackState();
         syncKaraokePosition();
+        // 从系统设置授权返回：权限已给则继续用户最初的小窗意图，未给则静默等待下次点击
+        if (floatPending) {
+            floatPending = false;
+            if (canDrawOverlays()) App.post(this::enterFloatWindow, 200);
+        }
     }
 
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        if (isFloatShowing()) mFloat.reclamp();
         if (shouldRecreateAudioStageForOrientation(newConfig)) {
             setAudioOnly(true);
             recreate();
@@ -6974,6 +7152,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             mLyrics.release();
         }
         if (mKaraoke != null) mKaraoke.release();
+        if (mFloat != null) {
+            mFloat.release();
+            mFloat = null;
+        }
         mClock.release();
         saveHistory(true);
         Timer.get().reset();

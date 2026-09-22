@@ -192,6 +192,25 @@
     <string name="dex_patch_notice_walk">该源的杀进程代码经过加固混淆，软件无法安全定位并中和。</string>
     <string name="dex_patch_notice_not_found">该源的杀进程逻辑藏在加密载荷中，软件无法中和。</string>
     <string name="dex_patch_notice_io">处理该源文件时发生错误，软件无法中和。</string>
+
+    <!-- 小窗播放 -->
+    <string name="video_float_play">播放</string>
+    <string name="video_float_pause">暂停</string>
+    <string name="video_float_prev">上一集</string>
+    <string name="video_float_next">下一集</string>
+    <string name="video_float_back">返回大屏</string>
+    <string name="video_float_close">关闭</string>
+    <string name="video_float_audio_mode">纯音频模式不支持小窗播放</string>
+    <string name="video_float_no_video">当前没有视频画面，无法进入小窗</string>
+    <string name="video_float_no_permission">小窗播放需要悬浮窗权限</string>
+    <string name="video_float_failed">小窗创建失败：%1$s</string>
+    <string name="video_float_pip_unavailable">应用已在后台，系统画中画暂不可用</string>
+    <string name="video_float_failed_unknown">未知错误</string>
+    <string name="video_float_permission_title">允许悬浮窗</string>
+    <string name="video_float_permission_message">小窗播放需要「显示在其他应用上层」权限。是否前往系统设置授权？授权后返回软件会自动打开小窗。</string>
+    <string name="video_float_permission_go">去授权</string>
+    <string name="video_float_permission_later">暂不</string>
+    <string name="video_float_permission_toast">请为小乌龟开启「显示在其他应用上层」权限</string>
     <string name="dex_patch_notice_result">处理结果：该 jar 已被永久屏蔽，对应站源无法播放；订阅源本身已保留，其它源不受影响。</string>
     <string name="dex_patch_notice_hint">建议：可在「源设置 → 屏蔽订阅源管理」查看被屏蔽的 jar 地址（%1$s）。若确认该源可信，可关闭「添加订阅源安全检测」后重新添加，风险自负。</string>
 

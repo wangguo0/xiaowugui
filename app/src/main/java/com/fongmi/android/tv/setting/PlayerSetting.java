@@ -434,6 +434,39 @@ public class PlayerSetting {
         Prefers.remove("desktop_lyrics_y");
     }
 
+    // 手机端自建小窗的几何信息：位置与尺寸（像素），越界时由小窗自行拉回屏内
+    public static int getFloatWindowX(int defaultValue) {
+        return Prefers.getInt("video_float_x", defaultValue);
+    }
+
+    public static int getFloatWindowY(int defaultValue) {
+        return Prefers.getInt("video_float_y", defaultValue);
+    }
+
+    public static int getFloatWindowWidth(int defaultValue) {
+        return Prefers.getInt("video_float_width", defaultValue);
+    }
+
+    public static int getFloatWindowHeight(int defaultValue) {
+        return Prefers.getInt("video_float_height", defaultValue);
+    }
+
+    public static void putFloatWindowRect(int x, int y, int width, int height) {
+        Prefers.put("video_float_x", x);
+        Prefers.put("video_float_y", y);
+        Prefers.put("video_float_width", width);
+        Prefers.put("video_float_height", height);
+    }
+
+    // 悬浮窗权限是否已在首次使用时弹过说明弹窗（用户拒绝后不再重复打扰）
+    public static boolean isOverlayPermissionAsked() {
+        return Prefers.getBoolean("overlay_permission_asked");
+    }
+
+    public static void putOverlayPermissionAsked(boolean asked) {
+        Prefers.put("overlay_permission_asked", asked);
+    }
+
     public static long getLyricsTimeOffsetMs() {
         return Math.min(Math.max(Prefers.getLong("lyrics_time_offset", 0L), -5000L), 5000L);
     }

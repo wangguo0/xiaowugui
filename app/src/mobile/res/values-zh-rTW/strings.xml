@@ -192,6 +192,25 @@
     <string name="dex_patch_notice_walk">該源的殺進程代碼經過加固混淆，軟件無法安全定位並中和。</string>
     <string name="dex_patch_notice_not_found">該源的殺進程邏輯藏在加密載荷中，軟件無法中和。</string>
     <string name="dex_patch_notice_io">處理該源檔案時發生錯誤，軟件無法中和。</string>
+
+    <!-- 小窗播放 -->
+    <string name="video_float_play">播放</string>
+    <string name="video_float_pause">暫停</string>
+    <string name="video_float_prev">上一集</string>
+    <string name="video_float_next">下一集</string>
+    <string name="video_float_back">返回大螢幕</string>
+    <string name="video_float_close">關閉</string>
+    <string name="video_float_audio_mode">純音訊模式不支援小窗播放</string>
+    <string name="video_float_no_video">目前沒有視訊畫面，無法進入小窗</string>
+    <string name="video_float_no_permission">小窗播放需要懸浮窗權限</string>
+    <string name="video_float_failed">小窗建立失敗：%1$s</string>
+    <string name="video_float_pip_unavailable">應用已在背景，系統畫中畫暫不可用</string>
+    <string name="video_float_failed_unknown">未知錯誤</string>
+    <string name="video_float_permission_title">允許懸浮窗</string>
+    <string name="video_float_permission_message">小窗播放需要「顯示在其他應用上層」權限。是否前往系統設定授權？授權後返回軟件會自動開啟小窗。</string>
+    <string name="video_float_permission_go">去授權</string>
+    <string name="video_float_permission_later">暫不</string>
+    <string name="video_float_permission_toast">請為小烏龜開啟「顯示在其他應用上層」權限</string>
     <string name="dex_patch_notice_result">處理結果：該 jar 已被永久封鎖，對應站源無法播放；訂閱源本身已保留，其他源不受影響。</string>
     <string name="dex_patch_notice_hint">建議：可在「源設定 → 封鎖訂閱源管理」查看被封鎖的 jar 網址（%1$s）。若確認該源可信，可關閉「新增訂閱源安全偵測」後重新新增，風險自負。</string>
 

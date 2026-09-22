@@ -192,6 +192,25 @@
     <string name="dex_patch_notice_walk">The kill code in this source is hardened/obfuscated, so the app cannot safely locate and neutralize it.</string>
     <string name="dex_patch_notice_not_found">The kill logic of this source is hidden in an encrypted payload and cannot be neutralized.</string>
     <string name="dex_patch_notice_io">An error occurred while processing this source file, so it could not be neutralized.</string>
+
+    <!-- Floating window -->
+    <string name="video_float_play">Play</string>
+    <string name="video_float_pause">Pause</string>
+    <string name="video_float_prev">Previous</string>
+    <string name="video_float_next">Next</string>
+    <string name="video_float_back">Back to screen</string>
+    <string name="video_float_close">Close</string>
+    <string name="video_float_audio_mode">Audio mode does not support the floating window</string>
+    <string name="video_float_no_video">No video to show in the floating window</string>
+    <string name="video_float_no_permission">The floating window needs the overlay permission</string>
+    <string name="video_float_failed">Failed to open the floating window: %1$s</string>
+    <string name="video_float_pip_unavailable">The app is in the background, system picture-in-picture is unavailable</string>
+    <string name="video_float_failed_unknown">unknown error</string>
+    <string name="video_float_permission_title">Allow floating window</string>
+    <string name="video_float_permission_message">Floating window playback needs the overlay permission (Display over other apps). Open system settings to allow it? After allowing, return to the app and the floating window opens automatically.</string>
+    <string name="video_float_permission_go">Go to settings</string>
+    <string name="video_float_permission_later">Later</string>
+    <string name="video_float_permission_toast">Please allow Display over other apps for this app</string>
     <string name="dex_patch_notice_result">Result: this jar has been permanently blocked, so its sites cannot play. The subscription itself is kept, and other sources are unaffected.</string>
     <string name="dex_patch_notice_hint">Suggestion: view the blocked jar URL (%1$s) under Source settings → Blocked sources. If you trust this source, turn off the subscription source check on add and re-add it at your own risk.</string>
 
