@@ -131,6 +131,12 @@
             android:stopWithTask="false" />
 
         <service
+            android:name=".service.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
+        <service
             android:name=".remote.RemoteAgentService"
             android:exported="false"
             android:foregroundServiceType="dataSync|connectedDevice"

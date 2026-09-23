@@ -27,6 +27,8 @@ public class Notify {
     public static final String DEFAULT = "default";
     // 应用内更新「新版本已就绪」安装通知渠道（高优先级）
     public static final String UPDATE = "update";
+    // 更新下载前台服务进度通知渠道（静默低优先级）
+    public static final String DOWNLOAD = "download";
     public static final int ID = 9527;
     // 本应用自身弹过的 toast 文本，供窗口级拦截区分「自己人」与源内（jar/ext）弹出的提示
     private static final Set<String> RECENT_TOASTS = new LinkedHashSet<>();

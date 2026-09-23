@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.View;
 
@@ -26,6 +27,7 @@ import androidx.lifecycle.LifecycleEventObserver;
 import com.fongmi.android.tv.bean.Update;
 import com.fongmi.android.tv.impl.UpdateListener;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.service.UpdateDownloadService;
 import com.fongmi.android.tv.ui.dialog.DownloadDialog;
 import com.fongmi.android.tv.ui.dialog.DownloadLineDialog;
 import com.fongmi.android.tv.ui.dialog.UpdateDialog;
@@ -807,10 +809,14 @@ public class Updater implements Download.Callback, UpdateListener {
             downloading = false;
             resetProgress();
             Path.clear(getFile());
+            UpdateDownloadService.stop(App.get());
             dismiss();
             App.post(() -> show(act));
         });
         if (lineDialog != null) lineDialog.showLoading();
+        // 前台服务保活：从线路探测起就把进程钉在前台优先级，切后台/杀任务都不中断
+        UpdateDownloadService.start(App.get());
+        DiagLog.log(LOG, "[下载] 前台服务已启动（保活）");
         // 下载前核对：24 镜像+直连并发 Range 探测（每线仅 2KB），总大小与 PK 文件头都对上的线路才有资格进列表；
         // 从源头杜绝下载到陈旧/残缺内容
         Task.execute(() -> {
@@ -895,6 +901,7 @@ public class Updater implements Download.Callback, UpdateListener {
         download = null;
         resetProgress();
         Path.clear(getFile());
+        UpdateDownloadService.stop(App.get());
         dismissDownloadDialog();
         Notify.show(R.string.update_canceled);
         FragmentActivity act = activityRef == null ? null : activityRef.get();
@@ -953,6 +960,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     @Override
     public void progress(int progress, long bytes, long total, long speed, long elapsed) {
+        // 同步刷新前台服务通知进度（Download 回调已按 1 秒/1% 节流）
+        UpdateDownloadService.progress(bytes, total > 0 ? total : (snapshot == null ? 0 : snapshot.size), speed);
         setDialogProgress(progress, bytes, total, speed, elapsed);
     }
 
@@ -986,6 +995,7 @@ public class Updater implements Download.Callback, UpdateListener {
         download = null;
         downloading = false;
         resetProgress();
+        UpdateDownloadService.stop(App.get());
         dismissDownloadDialog();
         Notify.show(msg);
         // 强制更新态下载失败：重新弹版本弹窗供重试
@@ -1028,6 +1038,7 @@ public class Updater implements Download.Callback, UpdateListener {
                     DiagLog.log(LOG, "[结果] 校验不过且重试已耗尽 → 放弃本次更新 原因=%s", error);
                     downloading = false;
                     resetProgress();
+                    UpdateDownloadService.stop(App.get());
                     Notify.show(error);
                     dismissDownloadDialog();
                     dismiss();
@@ -1045,6 +1056,8 @@ public class Updater implements Download.Callback, UpdateListener {
 
     // 送装结果：会话安装未完成时，把安装器的真实原因与手动安装出路一并告知用户
     private void onInstallResult(boolean ok, String detail) {
+        // 安装已受理或已明确失败：下载保活使命结束，撤掉前台服务
+        UpdateDownloadService.stop(App.get());
         if (ok) {
             DiagLog.log(LOG, "[送装] 已受理，等待系统安装完成");
             // 安装已受理（字节流已在安装器会话内），本次下载的包即刻删除；
@@ -1062,8 +1075,8 @@ public class Updater implements Download.Callback, UpdateListener {
         Notify.show(ResUtil.getString(R.string.update_install_result, detail) + "\n" + ResUtil.getString(R.string.update_install_manual, downloadName()));
     }
 
-    // 送装入口：前台直接送装；后台 Android 10+ 禁止拉起 Activity，改发高优先级通知（点通知属用户行为可合法拉起安装器）
-    // 并挂起待送装包，回前台由 resume() 补拉
+    // 送装入口：前台直接送装；后台 Android 10+ 默认禁止拉起 Activity，但持有「显示在其他应用上层」
+    // 权限的应用豁免该限制 → 立即拉起安装器（覆盖在用户当前页面上方）；无豁免渠道才转通知+挂起，回前台补拉
     private void installOrDefer(File file) {
         FragmentActivity act = activityRef == null ? null : activityRef.get();
         boolean foreground = act != null && !act.isFinishing() && !act.isDestroyed()
@@ -1072,9 +1085,25 @@ public class Updater implements Download.Callback, UpdateListener {
             ApkInstaller.install(file, downloadName(), this::onInstallResult);
             return;
         }
-        DiagLog.log(LOG, "[送装] 后台送达 → 转通知+挂起 file=%s", file == null ? "" : file.getName());
+        if (canLaunchFromBackground()) {
+            DiagLog.log(LOG, "[送装] 后台送达 → 悬浮窗权限豁免拉起限制，立即拉起安装器 file=%s", file == null ? "" : file.getName());
+            ApkInstaller.install(file, downloadName(), this::onInstallResult);
+            return;
+        }
+        DiagLog.log(LOG, "[送装] 后台送达且无拉起豁免 → 转通知+挂起 file=%s", file == null ? "" : file.getName());
+        UpdateDownloadService.stop(App.get());
         pendingInstall = file;
         showInstallNotification(file);
+    }
+
+    // Android 10+ 后台拉起 Activity 豁免：已授予「显示在其他应用上层」即可合法拉起安装器；10 以下本无限制
+    private boolean canLaunchFromBackground() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+        try {
+            return Settings.canDrawOverlays(App.get());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void showInstallNotification(File file) {
