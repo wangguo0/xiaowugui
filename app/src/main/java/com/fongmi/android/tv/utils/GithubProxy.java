@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -73,6 +74,8 @@ public class GithubProxy {
     private static final AtomicReference<List<String>> PREFIXES = new AtomicReference<>();
     private static final AtomicReference<String> JSON_PREFIX = new AtomicReference<>();
     private static final AtomicReference<String> FILE_PREFIX = new AtomicReference<>();
+    // 直连健康标志：直连腿赢过清单竞速后，后续 fetchJson 跳过镜像腿（省每次检查约 25 个无效请求）；直连一失败立即恢复双腿
+    private static final AtomicBoolean DIRECT_OK = new AtomicBoolean(false);
     // 列表单飞锁：stable/beta/强制策略三路会并发进来，镜像列表只拉一次，后来者等锁后直接吃缓存
     private static final Object LIST_LOCK = new Object();
 
@@ -107,7 +110,7 @@ public class GithubProxy {
 
     // 拉取 JSON：直连与镜像双腿同时起跑，首个合法结果即返（镜像腿命中顺便缓存最快线路）。
     // 适用于 tag 钉死等内容不可变地址——两路返回必然一致，谁先到都安全；全部失败返回 null（调用方回退直连）。
-    // 不再先阻塞等镜像列表：直连可用时 1 秒内即出结果，镜像腿留在后台兜底
+    // 不再先阻塞等镜像列表：直连可用时 1 秒内即出结果；直连健康时（DIRECT_OK）镜像腿整条跳过，不再白打 25 个请求
     public static String fetchJson(String url) {
         String cached = JSON_PREFIX.get();
         if (cached != null) {
@@ -115,36 +118,65 @@ public class GithubProxy {
             if (isJson(body)) return body;
             JSON_PREFIX.compareAndSet(cached, null);
         }
+        Object monitor = new Object();
         AtomicReference<String> winner = new AtomicReference<>();
-        // 直连腿：立即出发
+        // 直连腿：立即出发；赢了点亮健康标志，输了立刻熄灭恢复双腿
         Task.largeExecutor().execute(() -> {
-            String body = get(url);
-            if (isJson(body)) winner.compareAndSet(null, body);
+            String body = fetchDirect(url);
+            if (body == null) {
+                DIRECT_OK.set(false);
+                return;
+            }
+            DIRECT_OK.set(true);
+            if (winner.compareAndSet(null, body)) notifyWinner(monitor);
         });
         // 镜像腿：后台等列表就绪后再并发打，不占用调用方时间
-        Task.largeExecutor().execute(() -> {
+        if (!DIRECT_OK.get()) Task.largeExecutor().execute(() -> {
             for (String prefix : prefixes()) {
                 if (winner.get() != null) return;
                 Task.largeExecutor().execute(() -> {
-                    String body = get(prefix + bust(url));
-                    if (isJson(body) && winner.compareAndSet(null, body)) JSON_PREFIX.set(prefix);
+                    String body = fetchJsonVia(prefix, url);
+                    if (body != null && winner.compareAndSet(null, body)) {
+                        JSON_PREFIX.set(prefix);
+                        notifyWinner(monitor);
+                    }
                 });
             }
         });
-        return awaitWinner(winner, FETCH_BUDGET);
+        return awaitWinner(monitor, winner, FETCH_BUDGET);
     }
 
-    // 首个结果即返：30ms 轮询一次，最多等 budgetMs，不再被"最慢的一条线路"拖满整个预算
-    private static String awaitWinner(AtomicReference<String> winner, long budgetMs) {
+    // 直连取 JSON：非法/失败返回 null
+    private static String fetchDirect(String url) {
+        String body = get(url);
+        return isJson(body) ? body : null;
+    }
+
+    // 经指定镜像线路取 JSON（统一加防缓存参数）：非法/失败返回 null
+    private static String fetchJsonVia(String prefix, String url) {
+        String body = get(prefix + bust(url));
+        return isJson(body) ? body : null;
+    }
+
+    private static void notifyWinner(Object monitor) {
+        synchronized (monitor) {
+            monitor.notifyAll();
+        }
+    }
+
+    // 首个结果即返：wait/notify 事件驱动，结果到达即刻唤醒；预算内无结果返回 null
+    private static String awaitWinner(Object monitor, AtomicReference<String> winner, long budgetMs) {
         long end = System.currentTimeMillis() + budgetMs;
-        while (System.currentTimeMillis() < end) {
-            String body = winner.get();
-            if (body != null) return body;
-            try {
-                Thread.sleep(30);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
+        synchronized (monitor) {
+            while (winner.get() == null) {
+                long remain = end - System.currentTimeMillis();
+                if (remain <= 0) break;
+                try {
+                    monitor.wait(remain);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
         }
         return winner.get();
@@ -160,11 +192,10 @@ public class GithubProxy {
         for (String prefix : lines) {
             Task.largeExecutor().execute(() -> {
                 try {
-                    String body = get(prefix + bust(url));
-                    if (!isJson(body)) return;
+                    String body = fetchJsonVia(prefix, url);
+                    if (body == null) return;
                     result.add(new Source(body, false));
                     if (fastest.compareAndSet(null, prefix)) JSON_PREFIX.set(prefix);
-                } catch (Exception ignored) {
                 } finally {
                     latch.countDown();
                 }
@@ -172,9 +203,8 @@ public class GithubProxy {
         }
         Task.largeExecutor().execute(() -> {
             try {
-                String body = get(url);
-                if (isJson(body)) result.add(new Source(body, true));
-            } catch (Exception ignored) {
+                String body = fetchDirect(url);
+                if (body != null) result.add(new Source(body, true));
             } finally {
                 latch.countDown();
             }

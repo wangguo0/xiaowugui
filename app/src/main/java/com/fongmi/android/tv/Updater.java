@@ -108,6 +108,9 @@ public class Updater implements Download.Callback, UpdateListener {
     private volatile boolean launchChecked;
     private volatile boolean launchChecking;
     private volatile long lastLaunchCheckAt;
+    // 静默检查失败后的定时自重试：至多一个待触发任务、至多 5 次（之后交给回前台路径），防止断网时无限轮询耗电
+    private volatile boolean launchRetryPending;
+    private volatile int launchRetryCount;
     private boolean forceMode;
     private String forceMsg = "";
     private GithubProxy.Line currentLine;
@@ -201,7 +204,7 @@ public class Updater implements Download.Callback, UpdateListener {
     }
 
     // 冷启动静默检查：仅命中强制更新（发布清单 force 或远端最低版本策略）才弹窗，否则完全不打扰
-    // 检查失败（镜像+直连全挂/超时）不锁定状态，回前台经 resume() 自动重试（节流 10 秒）
+    // 检查失败（镜像+直连全挂/超时）不锁定状态，由 scheduleLaunchRetry 定时重试 + 回前台 resume() 重试双保险（节流 10 秒）
     public void checkOnLaunch(FragmentActivity activity) {
         // 启动兜底：清理本机已装不低的残留安装包（上次更新成功后进程被杀没来得及删的）
         cleanupStalePackages();
@@ -275,6 +278,8 @@ public class Updater implements Download.Callback, UpdateListener {
         }
         DiagLog.log(LOG, "[检查] 触发=%s 本机=%s(code=%s) 机型=%s", triggerName(forceCheck, launch), AppVersion.fullName(), BuildConfig.VERSION_CODE, getName());
         long deadline = SystemClock.elapsedRealtime() + UPDATE_CHECK_TIMEOUT_MS;
+        // 预热镜像列表：与直连 API 并行拉取，清单镜像腿要用时列表已就绪（降级路径省 4~5 秒串行等待）
+        Task.execute(GithubProxy::prefixes);
         Future<Update> stableFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_STABLE));
         Future<Update> betaFuture = Task.executor().submit(() -> getUpdate(Update.CHANNEL_BETA));
         Future<ForcePolicy> policyFuture = Task.executor().submit(ForcePolicy::fetch);
@@ -363,14 +368,31 @@ public class Updater implements Download.Callback, UpdateListener {
         beta = awaitUpdate(betaFuture, Update.CHANNEL_BETA, deadline);
         applyForce(awaitPolicy(policyFuture, deadline));
         DiagLog.log(LOG, "[检查] 清单结果 stable=%s beta=%s 强制=%s", describe(stable), describe(beta), forceMode);
-        // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待回前台重试
+        // 拿到任一渠道清单即视为检查成功并锁定；全失败则留待定时重试与回前台重试
         if (stable.hasManifest() || beta.hasManifest()) launchChecked = true;
+        else scheduleLaunchRetry(activity);
         if (!forceMode || selected == null || !selected.hasUpdate()) {
             DiagLog.log(LOG, "[检查] 静默检查结束：无需打扰");
             return;
         }
         DiagLog.log(LOG, "[检查] 静默检查命中强制更新 → 弹窗 目标=%s", describe(selected));
         App.post(() -> show(activity));
+    }
+
+    // 静默检查失败（所有源都没拿到清单）：不坐等回前台事件——用户留在前台时永远等不到 resume，
+    // 自挂 11 秒定时重试（比 10 秒节流大一点，天然通过 checkOnLaunch 的节流判定）；至多 5 次，断网时不无限轮询
+    private void scheduleLaunchRetry(FragmentActivity activity) {
+        if (launchRetryPending || launchRetryCount >= 5) return;
+        launchRetryPending = true;
+        DiagLog.log(LOG, "[检查] 静默检查失败 → 已排定 11 秒后自动重试（第 %s 次，不依赖回前台）", launchRetryCount + 1);
+        App.post(() -> {
+            launchRetryPending = false;
+            launchRetryCount += 1;
+            if (launchChecked || launchChecking) return;
+            // 页面已销毁：留给新页面的 resume() 路径接管
+            if (activity.isFinishing() || activity.isDestroyed()) return;
+            checkOnLaunch(activity);
+        }, TimeUnit.SECONDS.toMillis(11));
     }
 
     // 清单摘要（诊断日志用）：无清单时带上失败原因，一眼看出是"没有新版本"还是"根本没查到"
@@ -416,27 +438,32 @@ public class Updater implements Download.Callback, UpdateListener {
 
     private ForcePolicy awaitPolicy(Future<ForcePolicy> future, long deadline) {
         try {
-            long remaining = deadline - SystemClock.elapsedRealtime();
-            if (remaining <= 0) return ForcePolicy.none();
-            return future.get(remaining, TimeUnit.MILLISECONDS);
+            return awaitWithGrace(future, deadline);
         } catch (Exception e) {
-            future.cancel(true);
             return ForcePolicy.none();
         }
     }
 
     private Update awaitUpdate(Future<Update> future, String channel, long deadline) {
         try {
-            // 到点后不立刻判死：再给 TIMEOUT_GRACE_MS 宽限把已经算完的结果收下
-            long wait = Math.max(0, deadline - SystemClock.elapsedRealtime()) + TIMEOUT_GRACE_MS;
-            return future.get(wait, TimeUnit.MILLISECONDS);
+            return awaitWithGrace(future, deadline);
         } catch (Exception e) {
-            future.cancel(true);
             e.printStackTrace();
             DiagLog.log(LOG, "[检查] 渠道=%s 清单任务失败：%s %s", channel, e.getClass().getSimpleName(), e.getMessage());
             Update update = Update.empty(channel);
             update.error = e.getMessage();
             return update;
+        }
+    }
+
+    // 通用等待：deadline 到点后仍多给 TIMEOUT_GRACE_MS 宽限，把刚好算完的结果收下；超时/失败则取消任务并抛出
+    private <T> T awaitWithGrace(Future<T> future, long deadline) throws Exception {
+        long wait = Math.max(0, deadline - SystemClock.elapsedRealtime()) + TIMEOUT_GRACE_MS;
+        try {
+            return future.get(wait, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            future.cancel(true);
+            throw e;
         }
     }
 
