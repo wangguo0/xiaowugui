@@ -42,6 +42,7 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.blockNotice.setChecked(Setting.isBlockNotice());
         mBinding.neutralizeKill.setChecked(Setting.isNeutralizeKill());
         mBinding.homeAutoSwitch.setChecked(Setting.isHomeAutoSwitch());
+        mBinding.vodAutoEnableChange.setChecked(Setting.isAutoEnableChange());
     }
 
     @Override
@@ -63,6 +64,9 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.blockNotice.setOnClickListener(this::toggleBlockNotice);
         mBinding.neutralizeKillRow.setOnClickListener(v -> mBinding.neutralizeKill.performClick());
         mBinding.neutralizeKill.setOnClickListener(v -> toggleNeutralizeKill());
+        // 点播新增订阅后自动参与换源：低风险开关，整行点击即切，无需二次确认
+        mBinding.vodAutoEnableChangeRow.setOnClickListener(v -> mBinding.vodAutoEnableChange.performClick());
+        mBinding.vodAutoEnableChange.setOnClickListener(v -> Setting.putAutoEnableChange(mBinding.vodAutoEnableChange.isChecked()));
         mBinding.homeAutoSwitchRow.setOnClickListener(v -> mBinding.homeAutoSwitch.performClick());
         mBinding.homeAutoSwitch.setOnClickListener(v -> Setting.putHomeAutoSwitch(mBinding.homeAutoSwitch.isChecked()));
     }

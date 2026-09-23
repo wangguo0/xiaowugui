@@ -582,6 +582,15 @@ public class Setting {
         Prefers.put("neutralize_kill", enable);
     }
 
+    // 点播新增订阅成功后自动将本订阅全部站源设为「参与换源」，默认关闭（不自动改站源换源状态）
+    public static boolean isAutoEnableChange() {
+        return Prefers.getBoolean("auto_enable_change");
+    }
+
+    public static void putAutoEnableChange(boolean enable) {
+        Prefers.put("auto_enable_change", enable);
+    }
+
     // 第三方源弹窗拦截，默认开启
     public static boolean isPopupShield() {
         return Prefers.getBoolean("popup_shield", true);

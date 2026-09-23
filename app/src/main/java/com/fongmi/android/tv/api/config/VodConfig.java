@@ -17,6 +17,7 @@ import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.Callback;
 import com.fongmi.android.tv.setting.CustomCspSetting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.UrlUtil;
@@ -50,8 +51,10 @@ public class VodConfig extends BaseConfig {
     /**
      * 需求4：点播订阅「8 秒试运行」真正通过后（终审存活），将其全部站点设为「参与换源」并提示。
      * 必须在试运行通过、配置已激活时调用（此时站点已在内存）。
+     * 受订阅源管理页「点播新增订阅后自动参与换源」开关节制（默认关：不改状态、不弹提示）。
      */
     public static void onTrialPassed(String url) {
+        if (!Setting.isAutoEnableChange()) return;
         try {
             if (!getUrl().equals(url)) return;
             com.fongmi.android.tv.setting.SiteBlockSetting.enableChange(get().getSites());
@@ -192,6 +195,8 @@ public class VodConfig extends BaseConfig {
         if (TextUtils.isEmpty(pendingEnableChange)) return;
         if (!pendingEnableChange.equals(getUrl())) return;
         pendingEnableChange = null;
+        // 受订阅源管理页「点播新增订阅后自动参与换源」开关节制（默认关：标记照常消费，仅跳过自动设置与提示）
+        if (!Setting.isAutoEnableChange()) return;
         List<Site> sites = getSites();
         App.post(() -> {
             com.fongmi.android.tv.setting.SiteBlockSetting.enableChange(sites);
