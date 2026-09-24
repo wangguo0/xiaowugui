@@ -18,7 +18,6 @@ import com.fongmi.android.tv.databinding.DialogEpisodeGridBinding;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
 import com.fongmi.android.tv.ui.fragment.EpisodeFragment;
-import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.tabs.TabLayoutMediator;
 
 import java.util.ArrayList;
@@ -96,7 +95,9 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     }
 
     private void setSortText() {
+        // 按钮文字表示点击后的目标态：「正序」配向下箭头 ↓，「倒序」配向上箭头 ↑
         binding.sort.setText(reverse ? R.string.setting_order_normal : R.string.setting_order_reverse);
+        binding.sort.setCompoundDrawablesRelativeWithIntrinsicBounds(reverse ? R.drawable.ic_action_order_normal : R.drawable.ic_action_order_reverse, 0, 0, 0);
     }
 
     private void onColumnToggle(View view) {
@@ -114,7 +115,8 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
         else if (avg >= 4) spanCount = 3;
         else if (avg >= 2) spanCount = 4;
         else spanCount = 5;
-        itemCount = episodes.size() <= 60 ? 20 : spanCount * (ResUtil.isLand(requireActivity()) ? 5 : 10);
+        // 不分段：单页装下全部集数，直接滚动选任意集
+        itemCount = Math.max(episodes.size(), 1);
         binding.column.setVisibility(longTitle ? View.VISIBLE : View.GONE);
         binding.column.setImageResource(spanCount == 1 ? R.drawable.ic_site_double_column : R.drawable.ic_site_single_column);
     }
@@ -126,6 +128,8 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     }
 
     private void setPager() {
+        // 不分段后恒为单页，仅一页时隐藏顶部分段标签行
+        binding.tabs.setVisibility(titles.size() > 1 ? View.VISIBLE : View.GONE);
         binding.tabs.removeAllTabs();
         binding.pager.setAdapter(new PageAdapter(this));
         new TabLayoutMediator(binding.tabs, binding.pager, (tab, position) -> tab.setText(titles.get(position))).attach();

@@ -143,7 +143,9 @@ public class EpisodeListDialog extends AppCompatDialogFragment implements FlagAd
     }
 
     private void setSortText() {
+        // 按钮文字表示点击后的目标态：「正序」配向下箭头 ↓，「倒序」配向上箭头 ↑
         binding.sort.setText(reverse ? R.string.setting_order_normal : R.string.setting_order_reverse);
+        binding.sort.setCompoundDrawablesRelativeWithIntrinsicBounds(reverse ? R.drawable.ic_action_order_normal : R.drawable.ic_action_order_reverse, 0, 0, 0);
     }
 
     private void setRecyclerView() {

@@ -87,14 +87,9 @@ public class EpisodeGroupAdapter extends RecyclerView.Adapter<EpisodeGroupAdapte
         return groups;
     }
 
+    // 不分段：全部集数归入单组（如 1-200），分组条随 size>1 判定自动隐藏，直接滑动选任意集
     private static int getGroupSize(int size) {
-        if (size <= 60) return 20;
-        if (size > 2500) return 300;
-        if (size > 1500) return 200;
-        if (size > 1000) return 150;
-        if (size > 500) return 100;
-        if (size > 300) return 50;
-        return 40;
+        return Math.max(size, 1);
     }
 
     public static class Group {

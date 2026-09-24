@@ -1,13 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 正序（目标态）竖向箭头：向下 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:tint="@color/white"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M18,12l4,-4l-4,-4l0,3l-15,0l0,2l15,0z" />
-    <path
-        android:fillColor="@android:color/white"
-        android:pathData="M6,12l-4,4l4,4l0,-3l15,0l0,-2l-15,0z" />
+        android:pathData="M20,12l-1.41,-1.41L13,16.17V4h-2v12.17l-5.58,-5.59L4,12l8,8 8,-8z" />
 </vector>
