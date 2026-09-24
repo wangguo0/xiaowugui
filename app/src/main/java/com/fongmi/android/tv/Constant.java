@@ -11,6 +11,8 @@ public class Constant {
     public static final long TIMEOUT_EPG = TimeUnit.SECONDS.toMillis(5);
     public static final long TIMEOUT_XML = TimeUnit.SECONDS.toMillis(15);
     public static final long TIMEOUT_PLAY = TimeUnit.SECONDS.toMillis(15);
+    // 点播起播超时默认值（站点未配置 timeout 时生效）；直播/投屏仍使用 TIMEOUT_PLAY
+    public static final long TIMEOUT_PLAY_VOD = TimeUnit.SECONDS.toMillis(8);
     public static final long TIMEOUT_SYNC = TimeUnit.SECONDS.toMillis(2);
     public static final long TIMEOUT_SYNC_TRANSFER = TimeUnit.MINUTES.toMillis(10);
     public static final long TIMEOUT_SEARCH = TimeUnit.SECONDS.toMillis(10);

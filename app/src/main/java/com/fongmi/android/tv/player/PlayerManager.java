@@ -232,6 +232,8 @@ public class PlayerManager implements ParseCallback {
     private boolean pendingLutPreview;
     private boolean waitingLutBeforePlay;
     private boolean playWhenReady = true;
+    // 本次播放的起播超时（点播8秒/直播15秒），自救重启、换解码、恢复等路径沿用
+    private long playTimeout = Constant.TIMEOUT_PLAY;
     private boolean lutWarmupRecoveryActive;
     private boolean lutWarmupRefreshRequested;
     private boolean lutWarmupReloadPreviewPending;
@@ -1324,7 +1326,7 @@ public class PlayerManager implements ParseCallback {
         playWhenReady = wasPlayWhenReady;
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh decode=%d position=%d spec=%s", next, position, debugSpec());
         callback.onPlayerRebuild(player, resetVideoSurface);
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
         if (position > 0) seekTo(position);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
@@ -1360,7 +1362,7 @@ public class PlayerManager implements ParseCallback {
             spec = PlaySpec.from(result, key, metadata);
             bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch decode fresh result decode=%d position=%d spec=%s", next, position, debugSpec());
-            setMediaItem(Constant.TIMEOUT_PLAY);
+            setMediaItem(playTimeout);
             if (position > 0) seekTo(position);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
@@ -1395,7 +1397,7 @@ public class PlayerManager implements ParseCallback {
         engine = buildEngine(playerType, decode);
         player = engine.getPlayer();
         callback.onPlayerRebuild(player, false);
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
         if (position > 0) seekTo(position);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
@@ -1432,7 +1434,7 @@ public class PlayerManager implements ParseCallback {
             spec = PlaySpec.from(result, key, metadata);
             bindPlaybackTrace();
             if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player fresh result type=%d position=%d spec=%s", type, position, debugSpec());
-            setMediaItem(Constant.TIMEOUT_PLAY);
+            setMediaItem(playTimeout);
             if (position > 0) seekTo(position);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
@@ -1465,7 +1467,7 @@ public class PlayerManager implements ParseCallback {
         if (spec == null || spec.getUrl() == null) return;
         this.playWhenReady = wasPlayWhenReady;
         if (reparseForPlayerSwitch(position, speed, repeat)) return;
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
         if (position > 0) seekTo(position);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
@@ -2397,7 +2399,7 @@ public class PlayerManager implements ParseCallback {
                     "action=restore-state result=partial errorType=%s",
                     error.getClass().getSimpleName());
         }
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         return true;
     }
 
@@ -2439,7 +2441,7 @@ public class PlayerManager implements ParseCallback {
                     "action=restore-state result=partial errorType=%s",
                     error.getClass().getSimpleName());
         }
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         return true;
     }
 
@@ -2488,7 +2490,7 @@ public class PlayerManager implements ParseCallback {
                     "action=restore-state result=partial errorType=%s",
                     error.getClass().getSimpleName());
         }
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         return true;
     }
 
@@ -3332,7 +3334,7 @@ public class PlayerManager implements ParseCallback {
                 return true;
             }
             pendingIjkRuntimeFallbackReparse = false;
-            setMediaItem(Constant.TIMEOUT_PLAY);
+            setMediaItem(playTimeout);
             if (position > 0) seekTo(position);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
@@ -4591,7 +4593,7 @@ public class PlayerManager implements ParseCallback {
         startNativeAudioSession(wasPlayWhenReady);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         return true;
     }
 
@@ -4624,7 +4626,7 @@ public class PlayerManager implements ParseCallback {
         startNativeAudioSession(wasPlayWhenReady);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         return true;
     }
 
@@ -4895,6 +4897,7 @@ public class PlayerManager implements ParseCallback {
         retry = 0;
         localProxyRetry = 0;
         hardDecodeSwitchRetryArmed = false;
+        this.playTimeout = timeout;
         setMediaItem(timeout);
     }
 
@@ -4981,7 +4984,7 @@ public class PlayerManager implements ParseCallback {
         spec = PlaySpec.from(result, key, metadata);
         bindPlaybackTrace();
         if (SpiderDebug.isEnabled()) SpiderDebug.log("player", "switch player refreshed direct spec=%s", debugSpec());
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
         restoreAfterSwitchReparse();
     }
 
@@ -5004,9 +5007,14 @@ public class PlayerManager implements ParseCallback {
         pendingSwitchRepeat = false;
     }
 
+    // 解析播放（parse）路径在起播前记录本次起播超时，供后续重启路径沿用
+    public void setPlayTimeout(long timeout) {
+        playTimeout = timeout;
+    }
+
     public void setMediaItem() {
         playWhenReady = player == null || player.getPlayWhenReady();
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
     }
 
     private void setMediaItem(long timeout) {
@@ -5889,7 +5897,7 @@ public class PlayerManager implements ParseCallback {
         if (headers != null) headers.remove(HttpHeaders.RANGE);
         if (spec != null) spec.setHeaders(headers);
         if (spec != null) spec.setUrl(url);
-        setMediaItem(Constant.TIMEOUT_PLAY);
+        setMediaItem(playTimeout);
         restoreAfterSwitchReparse();
     }
 
@@ -6394,7 +6402,7 @@ public class PlayerManager implements ParseCallback {
             engine.restart(spec.checkUa(), position, wasPlayWhenReady);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
-            App.post(runnable, Constant.TIMEOUT_PLAY);
+            App.post(runnable, playTimeout);
             return true;
         } catch (Throwable error) {
             mpvHlsManagedReload = false;
@@ -6732,7 +6740,7 @@ public class PlayerManager implements ParseCallback {
         engine.restart(spec.checkUa(), C.TIME_UNSET, wasPlayWhenReady);
         if (speed != 1f) setSpeed(speed);
         setRepeatOne(repeat);
-        App.post(runnable, Constant.TIMEOUT_PLAY);
+        App.post(runnable, playTimeout);
         callback.onPrepare();
         return true;
     }
@@ -7530,7 +7538,7 @@ public class PlayerManager implements ParseCallback {
                 setRepeatOne(recovery.repeat());
                 setTextOffsetMs(recovery.textOffsetMs());
                 setAudioOffsetMs(recovery.audioOffsetMs());
-                App.post(runnable, Constant.TIMEOUT_PLAY);
+                App.post(runnable, playTimeout);
                 callback.onPrepare();
                 PlaybackTrace.log(
                         "exo-decoder-resource",
@@ -7581,7 +7589,7 @@ public class PlayerManager implements ParseCallback {
             scheduleMpvAutoOutputEvaluation();
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
-            App.post(runnable, Constant.TIMEOUT_PLAY);
+            App.post(runnable, playTimeout);
             callback.onPrepare();
         }, HARD_DECODE_SWITCH_RETRY_DELAY_MS);
         return true;
@@ -7611,7 +7619,7 @@ public class PlayerManager implements ParseCallback {
             engine.start(target.checkUa(), position, wasPlayWhenReady);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
-            App.post(runnable, Constant.TIMEOUT_PLAY);
+            App.post(runnable, playTimeout);
             callback.onPrepare();
         }, EXO_TUNNELING_RETRY_DELAY_MS);
         return true;
@@ -7659,7 +7667,7 @@ public class PlayerManager implements ParseCallback {
             engine.start(target.checkUa(), position, wasPlayWhenReady);
             if (speed != 1f) setSpeed(speed);
             setRepeatOne(repeat);
-            App.post(runnable, Constant.TIMEOUT_PLAY);
+            App.post(runnable, playTimeout);
             callback.onPrepare();
         }, EXO_DECODER_RUNTIME_RETRY_DELAY_MS);
         return true;

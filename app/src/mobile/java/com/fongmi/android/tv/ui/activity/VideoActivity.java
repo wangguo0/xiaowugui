@@ -94,6 +94,7 @@ import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.ActivityVideoBinding;
 import com.fongmi.android.tv.db.AppDatabase;
 import com.fongmi.android.tv.event.CastEvent;
+import com.fongmi.android.tv.event.CollectFailEvent;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
@@ -347,6 +348,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private Runnable mR4;
     private Runnable mAutoSwitchCheck;
     private long mAutoSwitchDeadline;
+    // 自动换源候选接受截止线：搜索发出后第5秒起，晚到的结果不再进入候选池（0=未启动）
+    private long mAutoSwitchAcceptUntil;
     private boolean mBlockedSwitch;
     private Clock mClock;
     // 全屏点播控制层右上角当前时间：每分钟刷新一次
@@ -1333,6 +1336,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
             DiagLog.log("video", "finish: detail empty collect=%s msg=%s", isFromCollect(), finish);
+            // 搜索页入口：通知发起点击的页面把该卡片原地轮转到下一个同名站源
+            if (isFromCollect()) CollectFailEvent.post(getKey(), getId());
             finish();
         } else if (getName().isEmpty()) {
             showEmpty();
@@ -2072,6 +2077,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             Notify.show(R.string.video_float_no_video);
             return;
         }
+        // 播放设置关闭"自建小窗"时直接走系统画中画（无需悬浮窗权限）；PiP 不可用则继续回退自建小窗流程
+        if (!Setting.isVodFloatWindow() && requestPiP()) return;
         if (!canDrawOverlays()) {
             showFloatPermissionDialog();
             return;
@@ -2162,7 +2169,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
+    private boolean floatPermShowing; // 悬浮窗权限弹窗防重复展示标志
+
     private void showFloatPermissionDialog() {
+        if (floatPermShowing || isFinishing() || isDestroyed()) return;
         View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
         ((TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
@@ -2177,6 +2187,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             dialog.dismiss();
             openOverlayPermission(R.string.video_float_permission_toast);
         });
+        dialog.setOnDismissListener(d -> floatPermShowing = false);
+        floatPermShowing = true;
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
     }
@@ -6542,11 +6554,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
-    // 搜索发起后等待约5秒，让「切换站源」列表尽量加载齐全后再自动换站；无候选时每秒轮询，最长15秒
+    // 搜索发起后每秒轮询一次，有候选立刻换站；第5秒为候选接受截止线，晚到结果不再接受；
+    // 候选用尽/过滤干净时第10秒到点放弃
     private void startAutoSwitchWait() {
         App.removeCallbacks(mAutoSwitchCheck);
-        mAutoSwitchDeadline = System.currentTimeMillis() + 15000;
-        App.post(mAutoSwitchCheck, 5000);
+        mAutoSwitchAcceptUntil = System.currentTimeMillis() + 5000;
+        mAutoSwitchDeadline = System.currentTimeMillis() + 10000;
+        App.post(mAutoSwitchCheck, 1000);
+    }
+
+    // 自动换源的候选接受窗口是否已关闭（未启动自动换源时不设截止，手动搜索不受影响）
+    private boolean acceptClosed() {
+        return mAutoSwitchAcceptUntil != 0 && System.currentTimeMillis() >= mAutoSwitchAcceptUntil;
     }
 
     private void autoSwitchCheck() {
@@ -6587,6 +6606,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickAllReturned = false;
         mQuickAutoNeedMore = false;
         mQuickRefreshPending = false;
+        mAutoSwitchAcceptUntil = 0;
         mQuickHandler.removeCallbacksAndMessages(null);
         mQuickAdapter.clear();
         mBinding.quick.setVisibility(View.GONE);
@@ -6601,6 +6621,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setSearch(Result result) {
+        // 第5秒接受截止后晚到的结果直接丢弃，不再进入候选池
+        if (acceptClosed()) return;
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.GONE);
@@ -6669,10 +6691,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
     }
 
-    // 是否还有可能追加新候选：剩余候选非空，或站点未全部返回（池子还会增长），
-    // 或清洗池尚有未清洗结果（冻结期间入池的新结果要等「加载更多」重清洗后才可见）
+    // 是否还有可能追加新候选：剩余候选非空，或清洗池尚有未清洗结果，
+    // 或站点未全部返回且自动换源接受窗口（第5秒）未关闭；窗口关闭后未返回站点不再视为可能增长
     private boolean hasMoreQuick() {
-        return !mQuickRest.isEmpty() || mQuickPool.size() != mQuickCleanedCount || !mQuickAllReturned;
+        if (!mQuickRest.isEmpty() || mQuickPool.size() != mQuickCleanedCount) return true;
+        return !mQuickAllReturned && !acceptClosed();
     }
 
     // 「加载更多」：冻结期间若有新结果入池，此刻对全池重清洗一次（后台单飞，只此一轮），
@@ -6738,8 +6761,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (getId().equals(item.getId())) return true;
         if (mBroken.contains(item.getId())) return true;
         String keyword = TextUtils.isEmpty(mQuickSearchKeyword) ? mBinding.name.getText().toString() : mQuickSearchKeyword;
-        if (isAutoMode()) return !item.getName().equals(keyword);
-        else return !item.getName().contains(keyword);
+        // 手动与自动统一：片名去除所有空白（含全角空格）后必须完全相等才保留
+        return !stripSpace(item.getName()).equals(stripSpace(keyword));
+    }
+
+    private static String stripSpace(String text) {
+        return text == null ? "" : text.replaceAll("[\\s\\u3000]+", "");
     }
 
     private void nextParse(int position) {
@@ -7001,8 +7028,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (isRedirect() || isPlaybackExiting() || isFloatShowing()) return false;
         if (!BackgroundPlaybackPolicy.shouldUsePictureInPicture(PlayerSetting.getBackground(), isAudioBackgroundMode())) return false;
         if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
-        // 无悬浮窗权限时不进小窗也不回退系统画中画，交由小窗按钮统一引导授权
-        if (!canDrawOverlays()) return false;
+        // 播放设置关闭"自建小窗"时优先系统画中画（不依赖悬浮窗权限），失败再走自建小窗流程
+        if (!Setting.isVodFloatWindow() && requestPiP()) return true;
+        // 无悬浮窗权限：先弹权限申请弹窗引导授予，当次由系统 PiP 兜底悬窗；授予后下次直接自建小窗
+        if (!canDrawOverlays()) {
+            showFloatPermissionDialog();
+            return requestPiP();
+        }
         if (isLock()) App.post(this::onLock, 500);
         return enterFloatWindow();
     }

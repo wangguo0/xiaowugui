@@ -304,7 +304,7 @@ public class Site implements Parcelable {
     }
 
     public long getTimeout() {
-        return timeout == null ? Constant.TIMEOUT_PLAY : TimeUnit.SECONDS.toMillis(Math.max(timeout, 1));
+        return timeout == null ? Constant.TIMEOUT_PLAY_VOD : TimeUnit.SECONDS.toMillis(Math.max(timeout, 1));
     }
 
     public Integer getSearchable() {

@@ -30,6 +30,7 @@ import com.fongmi.android.tv.bean.Result;
 import com.fongmi.android.tv.bean.Site;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.FragmentCollectBinding;
+import com.fongmi.android.tv.event.CollectFailEvent;
 import com.fongmi.android.tv.model.SiteViewModel;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.SiteBlockSetting;
@@ -39,9 +40,14 @@ import com.fongmi.android.tv.ui.activity.VideoActivity;
 import com.fongmi.android.tv.ui.adapter.SearchAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.utils.MobileWindow;
+import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.VodMatcher;
+
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -129,6 +135,13 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     private String getBangumiName() {
         return getArguments().getString("bangumiName");
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // 订阅「立马返回」事件：详情失败的卡片需要原地轮转到下一个同名站源
+        EventBus.getDefault().register(this);
     }
 
     @Override
@@ -538,6 +551,68 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         }
     }
 
+    // 卡片轮转：搜索入口进详情页「立马返回」（详情为空）后，把失败卡片原地换成
+    // 原始结果池中同名同内容（片名全等 + 五维指纹不冲突）里健康度最优的候选站点；
+    // 每失败一次消耗一个候选，无候选可用时 toast 提示
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onEventMainThread(CollectFailEvent event) {
+        if (!isAdded() || mSearchAdapter == null) return;
+        int index = -1;
+        Vod failed = null;
+        for (int i = 0; i < mDisplayed.size(); i++) {
+            Vod vod = mDisplayed.get(i);
+            if (vod.getSiteKey().equals(event.siteKey()) && vod.getId().equals(event.vodId())) {
+                index = i;
+                failed = vod;
+                break;
+            }
+        }
+        // 卡片已被列表刷新移除/替换：过期事件直接忽略
+        if (failed == null) return;
+        String key = normalize(failed.getName());
+        Vod best = null;
+        for (Vod vod : mAllResults) {
+            if (vod.isFolder()) continue;
+            if (vod.getSiteKey().equals(event.siteKey()) && vod.getId().equals(event.vodId())) continue;
+            if (!normalize(vod.getName()).equals(key)) continue;
+            if (VodMatcher.isConflict(failed, vod)) continue;
+            if (isTaken(vod)) continue;
+            if (best == null || SiteHealthStore.compareVods(best, vod) > 0) best = vod;
+        }
+        // 消费失败条目：从原始池移除，避免轮转时再次选中或「加载更多」重清洗后又生成卡片
+        mAllResults.removeIf(vod -> vod.getSiteKey().equals(event.siteKey()) && vod.getId().equals(event.vodId()));
+        if (best == null) {
+            Notify.show(getString(R.string.video_error_no_site));
+            return;
+        }
+        fillFields(best, failed);
+        mDisplayed.set(index, best);
+        List<Vod> shown = mShownByName.get(key);
+        if (shown != null) {
+            int j = -1;
+            for (int i = 0; i < shown.size(); i++) {
+                if (shown.get(i) == failed) {
+                    j = i;
+                    break;
+                }
+            }
+            if (j >= 0) shown.set(j, best);
+            else shown.add(best);
+        }
+        submitPage();
+    }
+
+    // 候选是否已被已展示卡片或剩余候选占用（按 siteKey+id 判断，Vod.equals 只比 id 不可靠）
+    private boolean isTaken(Vod vod) {
+        for (Vod item : mDisplayed) {
+            if (item.getSiteKey().equals(vod.getSiteKey()) && item.getId().equals(vod.getId())) return true;
+        }
+        for (Vod item : mRest) {
+            if (item.getSiteKey().equals(vod.getSiteKey()) && item.getId().equals(vod.getId())) return true;
+        }
+        return false;
+    }
+
     @Override
     public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
         menuInflater.inflate(R.menu.menu_collect, menu);
@@ -565,6 +640,12 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     public void onHiddenChanged(boolean hidden) {
         if (hidden) requireActivity().removeMenuProvider(this);
         else initMenu();
+    }
+
+    @Override
+    public void onDestroy() {
+        EventBus.getDefault().unregister(this);
+        super.onDestroy();
     }
 
     @Override
