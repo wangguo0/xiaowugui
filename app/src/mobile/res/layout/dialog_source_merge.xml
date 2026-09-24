@@ -34,11 +34,12 @@
             android:textColor="#5F6368"
             android:textSize="13sp" />
 
-        <ScrollView
+        <!-- ScrollView 不支持 maxHeight，16+ 源会把弹窗撑出一屏裁掉底部按钮；换用支持 app:maxHeight 的控件 -->
+        <com.fongmi.android.tv.ui.custom.CustomNestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:maxHeight="200dp"
+            app:maxHeight="200dp"
             android:overScrollMode="never">
 
             <androidx.appcompat.widget.LinearLayoutCompat
@@ -46,7 +47,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
-        </ScrollView>
+        </com.fongmi.android.tv.ui.custom.CustomNestedScrollView>
 
         <androidx.appcompat.widget.LinearLayoutCompat
             android:id="@+id/manualList"
