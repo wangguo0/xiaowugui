@@ -45,6 +45,11 @@ public class PermissionUtil {
         if (callback != null) callback.accept(granted);
     }
 
+    // 通知权限是否已开启（Android 13 以下默认开，但用户在系统设置手动关闭同样为 false）
+    public static boolean isNotifyEnabled(android.content.Context context) {
+        return androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled();
+    }
+
     // 通知权限：打开软件即第一动作申请（不再串在文件权限链尾），回调仅用于把文件权限申请排到其后
     public static void requestNotify(FragmentActivity activity, Consumer<Boolean> callback) {
         PermissionX.init(activity).permissions(PermissionX.permission.POST_NOTIFICATIONS).request(new PermissionCallback(callback));

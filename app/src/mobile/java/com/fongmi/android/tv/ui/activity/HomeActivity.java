@@ -84,6 +84,11 @@ import com.google.gson.JsonObject;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.function.BooleanSupplier;
+
 public class HomeActivity extends BaseActivity implements NavigationBarView.OnItemSelectedListener, WebHomeChromeController.Host {
 
     public static final String EXTRA_NAV_POSITION = "nav_position";
@@ -130,9 +135,7 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         mChrome = new WebHomeChromeController(this, mBinding, this, savedInstanceState, WebHomeChromeStartup.restore(mStartupConfig));
         mBinding.getRoot().addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> checkWindowShape(right - left, bottom - top));
         mBinding.navigation.setOnItemSelectedListener(this);
-        // 打开软件即申请通知权限，随后申请文件权限；免责声明不再挂在权限回调上（文件权限跳系统设置页返回时回调链不可靠），
-        // 改由 onWindowFocusChanged 状态机在「文件权限已就绪 + 窗口拿到焦点」时触发
-        PermissionUtil.requestNotify(this, granted -> PermissionUtil.requestFile(this, ignored -> DiagLog.log("disclaimer", "permission chain done fileAccess=%s", Setting.hasFileAccess())));
+        // 自动权限申请链路由启动权限墙（onHomeWindowReady）取代：通知/文件未授予时阻断引导，不再静默申请
         initFragment(savedInstanceState);
         initConfig();
         Updater.create().checkOnLaunch(this);
@@ -145,31 +148,67 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
 
     private void requestOverlayPermissionIfNeeded(int retry) {
         if (!DisclaimerDialog.isAgreed()) return;
-        if (PlayerSetting.isOverlayPermissionAsked() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+        if (isOverlayAskedToday() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
         if (Settings.canDrawOverlays(this)) return;
         if (!hasWindowFocus()) {
             if (retry > 0) App.post(() -> requestOverlayPermissionIfNeeded(retry - 1), 1500);
             return;
         }
-        PlayerSetting.putOverlayPermissionAsked(true);
+        // 真正弹窗时才记录日期：让路重试失败不消耗当日机会
+        PlayerSetting.putOverlayAskDate(overlayToday());
         View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
         AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
         ((TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
         ((TextView) content.findViewById(R.id.message)).setText(R.string.video_float_permission_message);
         ((TextView) content.findViewById(R.id.cancel)).setText(R.string.video_float_permission_later);
         ((TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
-        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.cancel).setOnClickListener(v -> {
+            dialog.dismiss();
+            // 点「暂不」不直接结束，弹二次提醒强调自建小窗功能受影响，坚持不授权才关闭
+            showOverlayPermissionAgainDialog();
+        });
         content.findViewById(R.id.confirm).setOnClickListener(v -> {
             dialog.dismiss();
-            Notify.show(R.string.video_float_permission_toast);
-            try {
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
-            } catch (Exception e) {
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
-            }
+            openOverlaySettings();
         });
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    }
+
+    // 悬浮窗权限提醒是否当天已弹过（同一自然日只提醒一次）
+    private boolean isOverlayAskedToday() {
+        return overlayToday().equals(PlayerSetting.getOverlayAskDate());
+    }
+
+    private String overlayToday() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+    }
+
+    // 悬浮窗权限二次提醒弹窗：说明不授予的后果与自建小窗优势
+    private void showOverlayPermissionAgainDialog() {
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        ((TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
+        ((TextView) content.findViewById(R.id.message)).setText(R.string.video_float_permission_again_message);
+        ((TextView) content.findViewById(R.id.cancel)).setText(R.string.video_float_permission_again_later);
+        ((TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.confirm).setOnClickListener(v -> {
+            dialog.dismiss();
+            openOverlaySettings();
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    }
+
+    // 跳转系统「显示在其他应用上层」授权页
+    private void openOverlaySettings() {
+        Notify.show(R.string.video_float_permission_toast);
+        try {
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+        } catch (Exception e) {
+            startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+        }
     }
 
     @Override
@@ -514,27 +553,118 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // 权限墙弹窗是独立窗口、持有焦点，从系统设置授权返回时 Activity 收不到 onWindowFocusChanged(true)，
+        // 必须靠 onResume 这条必定触发的通道核验权限并自动关窗
+        if (wallShowing) onHomeWindowReady();
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (mChrome != null) mChrome.onWindowFocusChanged(hasFocus);
         if (hasFocus) onHomeWindowReady();
     }
 
-    // 免责声明状态机：不依赖权限回调（文件权限跳系统设置页返回时回调可能丢失），
-    // 改为每次窗口拿到焦点时判断——文件权限就绪且未签署则弹免责声明，同意后引导悬浮窗权限；已签署用户仅走悬浮窗引导
+    // 权限墙状态机：每次窗口拿到焦点按 通知 → 文件 → 免责声明 → 悬浮窗提醒 顺序检查；
+    // 通知/文件未授予时弹阻断窗（仅「去授予 / 退出应用」），不授予无法进入首页
+    private boolean wallShowing; // 阻断弹窗防重入
+
+    private AlertDialog wallDialog; // 当前权限墙弹窗（授权通过后自动核验关闭用）
+    private BooleanSupplier wallCheck; // 当前墙对应的权限判定
+
     private void onHomeWindowReady() {
+        if (isFinishing() || isDestroyed()) return;
+        if (wallShowing) {
+            // 弹窗保持显示期间从系统设置授权返回：权限已通过则自动关窗继续链式检查，未通过则维持阻断
+            if (wallCheck != null && wallCheck.getAsBoolean()) {
+                closeWall();
+                onHomeWindowReady();
+            }
+            return;
+        }
+        if (!PermissionUtil.isNotifyEnabled(this)) {
+            showWallDialog(R.string.perm_wall_notify_title, R.string.perm_wall_notify_message, () -> PermissionUtil.isNotifyEnabled(this), this::requestNotifyForWall);
+            return;
+        }
+        if (!Setting.hasFileAccess()) {
+            showWallDialog(R.string.perm_wall_file_title, R.string.perm_wall_file_message, Setting::hasFileAccess, () -> PermissionUtil.requestFile(this, ignored -> {}));
+            return;
+        }
         if (DisclaimerDialog.isAgreed()) {
             requestOverlayPermissionIfNeeded();
             return;
         }
-        if (!Setting.hasFileAccess()) return;
-        if (disclaimerShowing || isFinishing() || isDestroyed()) return;
+        if (disclaimerShowing) return;
         disclaimerShowing = true;
         DiagLog.log("disclaimer", "show onWindowFocus fileAccess=true");
         DisclaimerDialog.showIfNeeded(this, () -> {
             disclaimerShowing = false;
             requestOverlayPermissionIfNeeded();
         });
+    }
+
+    // 阻断式权限弹窗：不可取消、点外不关、返回键无效；「退出应用」直接结束进程；
+    // 「去授予」不提前关窗（避免关窗焦点竞态重弹残留窗），跳系统设置后由 onHomeWindowReady 核验权限自动放行
+    private void showWallDialog(int titleRes, int messageRes, BooleanSupplier check, Runnable onGo) {
+        wallShowing = true;
+        wallCheck = check;
+        View content = LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this).setView(content).create();
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
+        wallDialog = dialog;
+        ((TextView) content.findViewById(R.id.title)).setText(titleRes);
+        ((TextView) content.findViewById(R.id.message)).setText(messageRes);
+        ((TextView) content.findViewById(R.id.cancel)).setText(R.string.perm_wall_exit);
+        ((TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> {
+            closeWall();
+            finishAffinity();
+        });
+        content.findViewById(R.id.confirm).setOnClickListener(v -> onGo.run());
+        dialog.setOnDismissListener(d -> {
+            if (d == wallDialog) closeWall();
+        });
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    }
+
+    private void closeWall() {
+        AlertDialog dialog = wallDialog;
+        wallShowing = false;
+        wallDialog = null;
+        wallCheck = null;
+        if (dialog != null && dialog.isShowing()) dialog.dismiss();
+    }
+
+    // 通知墙「去授予」：Android 13+ 先尝试系统弹窗（仅首次有机会），被拒后跳应用通知设置页；
+    // 13 以下通知权限非运行时权限（系统弹窗立即回调），直接跳设置页，避免「去授予」点了没反应
+    private void requestNotifyForWall() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            openNotifySettings();
+            return;
+        }
+        PermissionUtil.requestNotify(this, granted -> {
+            if (granted && PermissionUtil.isNotifyEnabled(this)) return;
+            openNotifySettings();
+        });
+    }
+
+    private void openNotifySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
+        } catch (Exception e) {
+            openAppDetails();
+        }
+    }
+
+    private void openAppDetails() {
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+        } catch (Exception ignored) {
+        }
     }
 
     private void checkWindowShape() {

@@ -591,6 +591,24 @@ public class Setting {
         Prefers.put("auto_enable_change", enable);
     }
 
+    // 点播小窗使用自建悬浮小窗（默认开）；关闭后小窗按钮与按 Home 直接走系统画中画
+    public static boolean isVodFloatWindow() {
+        return Prefers.getBoolean("vod_float_custom", true);
+    }
+
+    public static void putVodFloatWindow(boolean enable) {
+        Prefers.put("vod_float_custom", enable);
+    }
+
+    // 直播悬窗使用自建悬浮小窗（默认关=系统画中画，维持现状）；开启后按 Home 优先自建小窗，无悬浮窗权限回退 PiP
+    public static boolean isLiveFloatWindow() {
+        return Prefers.getBoolean("live_float_custom", false);
+    }
+
+    public static void putLiveFloatWindow(boolean enable) {
+        Prefers.put("live_float_custom", enable);
+    }
+
     // 第三方源弹窗拦截，默认开启
     public static boolean isPopupShield() {
         return Prefers.getBoolean("popup_shield", true);

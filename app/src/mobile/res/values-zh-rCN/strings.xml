@@ -187,6 +187,15 @@
     <string name="block_interface_toast">屏蔽订阅源接口toast提示</string>
     <string name="neutralize_kill">订阅源检测包名中和指令</string>
     <string name="vod_auto_enable_change">点播新增订阅后自动参与换源</string>
+    <string name="player_vod_float_custom">点播小窗使用自建小窗</string>
+    <string name="player_live_float_custom">直播悬窗使用自建小窗</string>
+    <string name="video_float_permission_again_message">不授予悬浮窗权限将无法使用点播和直播自建小窗功能。\n\n自建小窗可随意调整小窗窗口大小且可以随意移动位置，不授权将无法正常使用，请慎重考虑！</string>
+    <string name="video_float_permission_again_later">仍不授予</string>
+    <string name="perm_wall_notify_title">需要通知权限</string>
+    <string name="perm_wall_notify_message">更新下载进度与重要提醒依赖通知权限，未授予将无法使用本软件。</string>
+    <string name="perm_wall_file_title">需要存储权限</string>
+    <string name="perm_wall_file_message">本地订阅导入、字幕弹幕、日志导出等功能需要文件管理权限，未授予将无法使用本软件。</string>
+    <string name="perm_wall_exit">退出应用</string>
     <string name="neutralize_kill_confirm">开启后，含杀进程代码的源将不再被阻止添加，软件会在加载前原地中和其杀进程指令（其余功能不受影响）。被中和的源仍会执行其它代码，存在一定风险。确定开启吗？</string>
     <string name="neutralize_kill_close_confirm">关闭此功能后，对软件包名/软件名带检测的订阅源将无法添加，是否确认关闭？</string>
     <string name="dex_patch_notice_title">杀进程指令中和失败</string>

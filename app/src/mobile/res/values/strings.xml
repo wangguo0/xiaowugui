@@ -187,6 +187,15 @@
     <string name="block_interface_toast">Block source interface toasts</string>
     <string name="neutralize_kill">Neutralize kill on package check</string>
     <string name="vod_auto_enable_change">Auto-enable site switching for new VOD subs</string>
+    <string name="player_vod_float_custom">Use custom float window for VOD</string>
+    <string name="player_live_float_custom">Use custom float window for Live</string>
+    <string name="video_float_permission_again_message">Without the overlay permission, the custom float window for VOD and Live will be unavailable.\n\nThe custom float window can be freely resized and moved anywhere. Please consider carefully before declining!</string>
+    <string name="video_float_permission_again_later">Still don\'t grant</string>
+    <string name="perm_wall_notify_title">Notification permission required</string>
+    <string name="perm_wall_notify_message">Update download progress and important alerts rely on the notification permission. The app cannot be used until it is granted.</string>
+    <string name="perm_wall_file_title">Storage permission required</string>
+    <string name="perm_wall_file_message">Importing local subscriptions, subtitles, danmaku and log export require the file manager permission. The app cannot be used until it is granted.</string>
+    <string name="perm_wall_exit">Exit app</string>
     <string name="neutralize_kill_confirm">When on, sources containing process-killing code will no longer be blocked. The app neutralizes the kill instructions in place before loading (other features are unaffected). Neutralized sources still run their remaining code, which carries some risk. Turn it on?</string>
     <string name="neutralize_kill_close_confirm">If you turn this off, sources that check the app package name or app name cannot be added. Turn it off?</string>
     <string name="dex_patch_notice_title">Process-kill neutralization failed</string>

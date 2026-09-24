@@ -5,14 +5,21 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.PixelCopy;
+import android.view.SurfaceView;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewConfiguration;
@@ -63,11 +70,13 @@ import com.fongmi.android.tv.model.LiveViewModel;
 import com.fongmi.android.tv.player.PlayerHelper;
 import com.fongmi.android.tv.player.PlayerManager;
 import com.fongmi.android.tv.player.Source;
+import com.fongmi.android.tv.player.exo.ExoUtil;
 import com.fongmi.android.tv.playback.PlaybackOrientation;
 import com.fongmi.android.tv.service.PlaybackService;
 import com.fongmi.android.tv.setting.LiveEpgSetting;
 import com.fongmi.android.tv.setting.LiveSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
+import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.setting.CustomCspSetting;
 import com.fongmi.android.tv.ui.adapter.ChannelAdapter;
 import com.fongmi.android.tv.ui.adapter.EpgDataAdapter;
@@ -94,6 +103,7 @@ import com.fongmi.android.tv.utils.PiP;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
+import com.fongmi.android.tv.utils.VideoFloatWindow;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -101,6 +111,8 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public class LiveActivity extends PlaybackActivity implements CustomKeyDown.Listener, TrackDialog.Listener, Biometric.Callback, PassListener, ConfigListener, LiveListener, GroupAdapter.OnClickListener, ChannelAdapter.OnClickListener, EpgDataAdapter.OnClickListener, CastDialog.Listener, InfoDialog.Listener, LiveControlDialog.Listener, LiveEpgDialog.Listener {
 
@@ -130,6 +142,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     private boolean rotate;
     private int count;
     private PiP mPiP;
+    // 自建悬浮小窗（直播）：受 Setting.isLiveFloatWindow() 开关控制，与系统画中画共存但同一时刻仅一个
+    private VideoFloatWindow mFloat;
     private boolean liveMenuRendered;
     private Boolean embeddedUiMode;
     private Channel lastLineClickChannel;
@@ -192,8 +206,49 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected PlayerView getExoView() {
-        return mBinding.exo;
+        return isFloatShowing() ? mFloat.getExoView() : mBinding.exo;
     }
+
+    // 小窗显示中切后台（如回桌面）不自动暂停，与系统画中画同等对待
+    @Override
+    protected boolean keepPlayingWhenStopped() {
+        return isFloatShowing();
+    }
+
+    // 小窗期间仅 EXO 强制走 TextureView；IJK/MPV 为 native 内核需要 SurfaceHolder，保持 SurfaceView 渲染
+    @Override
+    protected int getRender() {
+        if (isFloatShowing() && service() != null && !player().isNativePlayer()) return PlayerSetting.RENDER_TEXTURE;
+        return super.getRender();
+    }
+
+    // 小窗控制层回调：直播无集数概念，上一集/下一集空实现；播放暂停、返回大屏、关闭
+    private final VideoFloatWindow.Listener mFloatListener = new VideoFloatWindow.Listener() {
+        @Override
+        public void onFloatPlayPause() {
+            checkPlay();
+        }
+
+        @Override
+        public void onFloatPrev() {
+        }
+
+        @Override
+        public void onFloatNext() {
+        }
+
+        @Override
+        public void onFloatBack() {
+            exitFloatWindow(true);
+            bringVideoToFront();
+        }
+
+        @Override
+        public void onFloatClose() {
+            exitFloatWindow(false);
+            finishLivePlayback();
+        }
+    };
 
     @Override
     protected CustomSeekView getSeekView() {
@@ -1286,6 +1341,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public void onLivePiPPanel() {
+        // 面板"悬窗"同样尊重自建小窗开关：开则优先自建小窗（无权限弹授权并当次回退 PiP），失败回退系统画中画
+        if (Setting.isLiveFloatWindow() && requestFloatWindow()) return;
         enterPiP("panel");
     }
 
@@ -1413,6 +1470,7 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     protected void onPlayingChanged(boolean isPlaying) {
+        if (mFloat != null) mFloat.setPlaying(isPlaying);
         if (isPlaying || isPaused()) updatePlayControl(isPlaying);
     }
 
@@ -1774,6 +1832,8 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
+        // 自建小窗开关开启时优先尝试小窗，进不了（无权限/建窗失败等）再回退原画中画路径
+        if (Setting.isLiveFloatWindow() && requestFloatWindow()) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             preparePiP("userLeaveHint");
         } else {
@@ -1783,10 +1843,55 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
 
     @Override
     public boolean onPictureInPictureRequested() {
+        if (Setting.isLiveFloatWindow() && requestFloatWindow()) return true;
         return requestPiP("systemRequest");
     }
 
+    // 退后台时尝试进入自建小窗：无悬浮窗权限先弹权限申请弹窗，当次由调用方回退系统画中画兜底；
+    // native 内核（IJK/MPV）不支持自建小窗，静默回退 PiP
+    private boolean requestFloatWindow() {
+        if (isRedirect() || isPlaybackExiting() || isFloatShowing()) return false;
+        if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
+        // 自建小窗仅适配 ExoPlayer 内核
+        if (player().isNativePlayer()) return false;
+        if (!canDrawOverlays()) {
+            showFloatPermissionDialog();
+            return false;
+        }
+        if (isLock()) App.post(this::onLock, 500);
+        return enterFloatWindow();
+    }
+
+    private boolean floatPermShowing; // 悬浮窗权限弹窗防重复展示标志
+
+    // 与点播同款权限申请弹窗（dialog_bangumi_bind 复用），确认后跳系统设置授予
+    private void showFloatPermissionDialog() {
+        if (floatPermShowing || isFinishing() || isDestroyed()) return;
+        android.view.View content = android.view.LayoutInflater.from(this).inflate(R.layout.dialog_bangumi_bind, null);
+        androidx.appcompat.app.AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(this).setView(content).create();
+        ((android.widget.TextView) content.findViewById(R.id.title)).setText(R.string.video_float_permission_title);
+        ((android.widget.TextView) content.findViewById(R.id.message)).setText(R.string.video_float_permission_message);
+        ((android.widget.TextView) content.findViewById(R.id.confirm)).setText(R.string.video_float_permission_go);
+        content.findViewById(R.id.cancel).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.confirm).setOnClickListener(v -> {
+            dialog.dismiss();
+            Notify.show(R.string.video_float_permission_toast);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + getPackageName())));
+            } catch (Exception e) {
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));
+            }
+        });
+        dialog.setOnDismissListener(d -> floatPermShowing = false);
+        floatPermShowing = true;
+        dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+    }
+
     private boolean preparePiP(String reason) {
+        // 自建小窗显示中忽略一切系统画中画请求，防止双窗
+        if (isFloatShowing()) return false;
         if (isRedirect() || isPlaybackExiting()) return false;
         if (service() == null || !player().haveTrack(C.TRACK_TYPE_VIDEO)) return false;
         mPiP.update(this, LIVE_PIP_WIDTH, LIVE_PIP_HEIGHT, LiveSetting.getScale());
@@ -1826,10 +1931,102 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         getSupportFragmentManager().executePendingTransactions();
     }
 
+    private boolean isFloatShowing() {
+        return mFloat != null && mFloat.isShowing();
+    }
+
+    // 进入自建小窗；先截取当前画面快照，快照就绪后再创建悬浮窗
+    private boolean enterFloatWindow() {
+        if (isFloatShowing()) return true;
+        if (!canDrawOverlays()) return false;
+        hideControl();
+        dismissLiveControlDialog();
+        View surface = mBinding.exo.getVideoSurfaceView();
+        if (surface instanceof SurfaceView surfaceView && !(surface instanceof TextureView)) {
+            captureSurfaceSnapshot(surfaceView, this::openFloatWindow);
+            return true;
+        }
+        Bitmap snapshot = surface instanceof TextureView textureView ? textureView.getBitmap() : null;
+        return openFloatWindow(snapshot);
+    }
+
+    // PixelCopy 截取 SurfaceView 当前帧；失败或超时以 null 继续（黑底兜底）
+    private void captureSurfaceSnapshot(SurfaceView view, Consumer<Bitmap> callback) {
+        int width = view.getWidth();
+        int height = view.getHeight();
+        if (width <= 0 || height <= 0) {
+            callback.accept(null);
+            return;
+        }
+        AtomicBoolean done = new AtomicBoolean(false);
+        try {
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            PixelCopy.request(view, bitmap, result -> {
+                if (done.compareAndSet(false, true)) callback.accept(result == PixelCopy.SUCCESS ? bitmap : null);
+            }, new Handler(Looper.getMainLooper()));
+            App.post(() -> {
+                if (done.compareAndSet(false, true)) callback.accept(null);
+            }, 300);
+        } catch (Throwable e) {
+            if (done.compareAndSet(false, true)) callback.accept(null);
+        }
+    }
+
+    // 快照就绪后真正创建小窗；异步回调时页面可能已退出，需先守卫；创建失败回退系统画中画
+    private boolean openFloatWindow(Bitmap snapshot) {
+        if (isFloatShowing()) return true;
+        if (isFinishing() || isDestroyed() || isPlaybackExiting()) return false;
+        VideoFloatWindow window = new VideoFloatWindow(this, mFloatListener);
+        // 直播无集数概念，隐藏上一集/下一集按钮
+        window.setEpisodeButtonsVisible(false);
+        if (!window.show()) {
+            window.release();
+            // 建窗失败回退画中画；Activity 已退到后台时系统会拒绝进入，需明确提示
+            if (!isStop()) requestPiP("floatFallback");
+            else Notify.show(R.string.video_float_pip_unavailable);
+            return false;
+        }
+        mFloat = window;
+        ExoUtil.setPlayerView(window.getExoView());
+        window.setPlaying(player().isPlaying());
+        window.setPlaceholder(snapshot);
+        mBinding.exo.setPlayer(null);
+        mBinding.exo.setVisibility(View.INVISIBLE);
+        setRender();
+        return true;
+    }
+
+    // 退出小窗；rebind 为 true 时把画面迁回直播播放页
+    private void exitFloatWindow(boolean rebind) {
+        if (mFloat == null) return;
+        VideoFloatWindow window = mFloat;
+        mFloat = null;
+        try {
+            window.getExoView().setPlayer(null);
+        } catch (Throwable ignored) {
+        }
+        window.release();
+        if (!rebind) return;
+        mBinding.exo.setVisibility(View.VISIBLE);
+        setRender();
+    }
+
+    private void bringVideoToFront() {
+        try {
+            startActivity(new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private boolean canDrawOverlays() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this);
+    }
+
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         Log.i(ORIENTATION_TAG, "configuration changed new=" + newConfig.orientation + " " + orientationState());
+        if (isFloatShowing()) mFloat.reclamp();
         updateSystemUI();
         applyPadLiveMode();
     }
@@ -2053,6 +2250,11 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
         clearArtworkTarget();
         Source.get().exit();
         App.removeCallbacks(mR1, mR2, mR3);
+        // 页面销毁时兜底释放自建小窗，防止悬浮窗残留
+        if (mFloat != null) {
+            mFloat.release();
+            mFloat = null;
+        }
         if (mOsd != null) mOsd.release();
         mViewModel.url().removeObserver(mObserveUrl);
         mViewModel.epg().removeObserver(mObserveEpg);

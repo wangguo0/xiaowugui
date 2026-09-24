@@ -892,6 +892,62 @@
 
             </androidx.appcompat.widget.LinearLayoutCompat>
 
+            <!-- 点播小窗模式：开=自建悬浮小窗（默认），关=系统画中画 -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/vodFloat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/player_vod_float_custom"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/vodFloatText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="開啟" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
+            <!-- 直播悬窗模式：开=自建悬浮小窗，关=系统画中画（默认） -->
+            <androidx.appcompat.widget.LinearLayoutCompat
+                android:id="@+id/liveFloat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/shape_item"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:text="@string/player_live_float_custom"
+                    android:textColor="@color/white"
+                    android:textSize="16sp" />
+
+                <com.google.android.material.textview.MaterialTextView
+                    android:id="@+id/liveFloatText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    tools:text="開啟" />
+
+            </androidx.appcompat.widget.LinearLayoutCompat>
+
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/ua"
                 android:layout_width="match_parent"

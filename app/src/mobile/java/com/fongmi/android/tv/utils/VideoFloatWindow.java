@@ -77,6 +77,10 @@ public class VideoFloatWindow {
     private ImageView placeholder;
     private PlayerView exoView;
     private ImageView playView;
+    private View prevView;
+    private View nextView;
+    // 上一集/下一集按钮显隐：直播等无选集场景可隐藏，默认显示（点播行为不变）
+    private boolean episodeButtonsVisible = true;
     private final Point scratch = new Point();
     private DisplayManager displayManager;
     // 挂在系统显示服务上的旋转监听：Activity 退到后台也能即时回调，不受其配置延迟刷新影响
@@ -126,6 +130,13 @@ public class VideoFloatWindow {
 
     public PlayerView getExoView() {
         return exoView;
+    }
+
+    // 隐藏/显示上一集、下一集按钮：直播小窗无选集概念时隐藏；show() 之前调用会在建窗时生效
+    public void setEpisodeButtonsVisible(boolean visible) {
+        episodeButtonsVisible = visible;
+        if (prevView != null) prevView.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (nextView != null) nextView.setVisibility(visible ? View.VISIBLE : View.GONE);
     }
 
     public void setPlaying(boolean playing) {
@@ -200,6 +211,8 @@ public class VideoFloatWindow {
             segViews = null;
             exoView = null;
             playView = null;
+            prevView = null;
+            nextView = null;
             return false;
         }
     }
@@ -230,15 +243,18 @@ public class VideoFloatWindow {
     }
 
     private void bindActions() {
+        prevView = root.findViewById(R.id.prev);
+        nextView = root.findViewById(R.id.next);
+        setEpisodeButtonsVisible(episodeButtonsVisible);
         root.findViewById(R.id.play).setOnClickListener(v -> {
             if (listener != null) listener.onFloatPlayPause();
             showControls();
         });
-        root.findViewById(R.id.prev).setOnClickListener(v -> {
+        prevView.setOnClickListener(v -> {
             if (listener != null) listener.onFloatPrev();
             showControls();
         });
-        root.findViewById(R.id.next).setOnClickListener(v -> {
+        nextView.setOnClickListener(v -> {
             if (listener != null) listener.onFloatNext();
             showControls();
         });

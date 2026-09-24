@@ -187,6 +187,15 @@
     <string name="block_interface_toast">封鎖訂閱源接口toast提示</string>
     <string name="neutralize_kill">訂閱源檢測包名中和指令</string>
     <string name="vod_auto_enable_change">點播新增訂閱後自動參與換源</string>
+    <string name="player_vod_float_custom">點播小窗使用自建小窗</string>
+    <string name="player_live_float_custom">直播懸窗使用自建小窗</string>
+    <string name="video_float_permission_again_message">不授予懸浮窗權限將無法使用點播和直播自建小窗功能。\n\n自建小窗可隨意調整小窗視窗大小且可以隨意移動位置，不授權將無法正常使用，請慎重考慮！</string>
+    <string name="video_float_permission_again_later">仍不授予</string>
+    <string name="perm_wall_notify_title">需要通知權限</string>
+    <string name="perm_wall_notify_message">更新下載進度與重要提醒依賴通知權限，未授予將無法使用本軟件。</string>
+    <string name="perm_wall_file_title">需要存儲權限</string>
+    <string name="perm_wall_file_message">本地訂閱導入、字幕彈幕、日誌導出等功能需要文件管理權限，未授予將無法使用本軟件。</string>
+    <string name="perm_wall_exit">退出應用</string>
     <string name="neutralize_kill_confirm">開啟後，含殺進程代碼的源將不再被阻止新增，軟件會在載入前原地中和其殺進程指令（其餘功能不受影響）。被中和的源仍會執行其他代碼，存在一定風險。確定開啟嗎？</string>
     <string name="neutralize_kill_close_confirm">關閉此功能後，對軟件包名/軟件名帶檢測的訂閱源將無法新增，是否確認關閉？</string>
     <string name="dex_patch_notice_title">殺進程指令中和失敗</string>

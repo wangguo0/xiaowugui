@@ -458,13 +458,13 @@ public class PlayerSetting {
         Prefers.put("video_float_height", height);
     }
 
-    // 悬浮窗权限是否已在首次使用时弹过说明弹窗（用户拒绝后不再重复打扰）
-    public static boolean isOverlayPermissionAsked() {
-        return Prefers.getBoolean("overlay_permission_asked");
+    // 悬浮窗权限提醒上次弹窗日期（yyyy-MM-dd）：同一自然日只提醒一次
+    public static String getOverlayAskDate() {
+        return Prefers.getString("overlay_perm_ask_date", "");
     }
 
-    public static void putOverlayPermissionAsked(boolean asked) {
-        Prefers.put("overlay_permission_asked", asked);
+    public static void putOverlayAskDate(String date) {
+        Prefers.put("overlay_perm_ask_date", date);
     }
 
     public static long getLyricsTimeOffsetMs() {

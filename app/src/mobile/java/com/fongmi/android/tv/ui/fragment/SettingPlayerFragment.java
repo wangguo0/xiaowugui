@@ -97,12 +97,22 @@ public class SettingPlayerFragment extends BaseFragment implements UaListener, B
         mBinding.renderText.setText((render = ResUtil.getStringArray(R.array.select_render))[PlayerSetting.getRender()]);
         mBinding.captionText.setText((caption = ResUtil.getStringArray(R.array.select_caption))[PlayerSetting.isCaption() ? 1 : 0]);
         mBinding.backgroundText.setText((background = ResUtil.getStringArray(R.array.select_background))[PlayerSetting.getBackground()]);
+        mBinding.vodFloatText.setText(getSwitch(Setting.isVodFloatWindow()));
+        mBinding.liveFloatText.setText(getSwitch(Setting.isLiveFloatWindow()));
         hidePerformanceRows();
     }
 
     @Override
     protected void initEvent() {
         mBinding.ua.setOnClickListener(this::onUa);
+        mBinding.vodFloat.setOnClickListener(v -> {
+            Setting.putVodFloatWindow(!Setting.isVodFloatWindow());
+            mBinding.vodFloatText.setText(getSwitch(Setting.isVodFloatWindow()));
+        });
+        mBinding.liveFloat.setOnClickListener(v -> {
+            Setting.putLiveFloatWindow(!Setting.isLiveFloatWindow());
+            mBinding.liveFloatText.setText(getSwitch(Setting.isLiveFloatWindow()));
+        });
         mBinding.aac.setOnClickListener(this::setAAC);
         mBinding.kernel.setOnClickListener(this::onKernel);
         mBinding.scale.setOnClickListener(this::onScale);
