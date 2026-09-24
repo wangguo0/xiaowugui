@@ -12,8 +12,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 // 同名影片「是否同一内容」判定：5 维指纹（类型桶/年份/地区/导演/主演）。
-// 强证据（类型桶冲突、年份相差≥2）任一命中即判不同；
-// 弱证据（年份差1、地区无交集、导演无交集、主演无交集）累计≥2 判不同；
+// 强证据（类型桶冲突、年份相差≥2、导演双方有值且零重合）任一命中即判不同；
+// 弱证据（年份差1、地区无交集、主演无交集）累计≥2 判不同；
 // 字段缺失的维度弃权，全部弃权时保守视为同一内容（宁合勿错拆）。
 public class VodMatcher {
 
@@ -38,10 +38,11 @@ public class VodMatcher {
         int yearA = year(a.getYear());
         int yearB = year(b.getYear());
         if (yearA > 0 && yearB > 0 && Math.abs(yearA - yearB) >= 2) return true;
+        // 导演为强证据：双方都有导演数据且零重合直接判不同；任一方缺失则弃权（disjoint 返回 false）
+        if (disjoint(a.getDirector(), b.getDirector(), false)) return true;
         int score = 0;
         if (yearA > 0 && yearB > 0 && yearA != yearB) score += 1;
         if (disjoint(a.getArea(), b.getArea(), true)) score += 1;
-        if (disjoint(a.getDirector(), b.getDirector(), false)) score += 1;
         if (disjoint(a.getActor(), b.getActor(), false)) score += 1;
         return score >= 2;
     }
