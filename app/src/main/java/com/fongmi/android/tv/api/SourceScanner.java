@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.io.ByteArrayInputStream;
 import java.util.concurrent.ConcurrentHashMap;
@@ -231,6 +232,7 @@ public final class SourceScanner {
         String lower = t.toLowerCase();
         if (lower.startsWith("#") || lower.startsWith("#3") || lower.startsWith("#4") || lower.startsWith("#5")) return false; // m3u/m3u8
         if (t.startsWith("http") && isPlaylistOr(t.toLowerCase())) return false;
+        if (isNameUrlPlaylist(t)) return false;
         if (isHexBlob(t)) return true;
         if (isBase64Blob(t)) return true;
         return true; // 无法识别为合法播放列表/文本协议的较长内容
@@ -239,6 +241,29 @@ public final class SourceScanner {
     private static boolean isPlaylistOr(String t) {
         // 直链播放列表（http...m3u8 等）无数话：不标可疑
         return t.contains(".m3u") || t.contains(".m3u8") || t.contains("/playlist");
+    }
+
+    // TVBox txt 直播播单结构判定：非空非注释行中，≥80% 为「名称,协议URL」/「名称,#genre#」/
+    // 「名称,」/ 纯协议URL行 → 视为合法播单。base64/hex 载荷行不含逗号且不以协议头开头，
+    // 无法伪装通过（此前中文频道名开头的 txt 源会被整体误判为疑似加密载荷而拦截）
+    private static boolean isNameUrlPlaylist(String text) {
+        String[] lines = text.split("\\r?\\n");
+        int total = 0;
+        int hit = 0;
+        for (String line : lines) {
+            String s = line.trim();
+            if (s.isEmpty() || s.startsWith("#")) continue; // 空行与 m3u 注释行不参与统计
+            total++;
+            int c = s.indexOf(',');
+            String body = c > 0 ? s.substring(c + 1).trim() : s; // 无名称前缀则整行按 URL 判
+            if (body.isEmpty() || body.equals("#genre#") || hasStreamScheme(body)) hit++;
+        }
+        return total > 0 && (double) hit / total >= 0.8;
+    }
+
+    private static boolean hasStreamScheme(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("rtmp://") || lower.startsWith("rtsp://") || lower.startsWith("udp://") || lower.startsWith("rtp://");
     }
 
     // 公文流极端十六进制字符明文判定（0-9a-f，长度>48）
