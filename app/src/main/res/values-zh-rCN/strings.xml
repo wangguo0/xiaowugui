@@ -80,6 +80,7 @@
     <string name="video_error_message">视频内容存在错误，与我要的视频内容无关，点击彻底屏蔽后当前站源将彻底屏蔽，不会出现在搜索、快搜、换源列表。如需解除手动去首页屏蔽订阅源管理自行解除！</string>
     <string name="video_error_confirm">彻底屏蔽</string>
     <string name="video_error_blocked">已彻底屏蔽当前站源</string>
+    <string name="video_vote_mismatch">当前站点内容与多数站点不符，已自动切换站源</string>
     <string name="video_error_no_site">已无可用站源</string>
     <string name="search_load_more">点击加载更多搜索结果</string>
     <string name="search_load_end">到底了</string>
@@ -906,6 +907,7 @@
     <!-- Device Sync -->
     <string name="device_select">选择设备</string>
     <string name="device_offline">设备已离线</string>
+    <string name="device_cast_badge">小乌龟</string>
     <string name="cast_not_ready">播放信息尚未就绪，请稍后重试</string>
     <string name="sync_success">同步完成</string>
     <string name="sync_progress">正在同步...</string>

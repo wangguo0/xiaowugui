@@ -568,8 +568,12 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     // 权限墙状态机：每次窗口拿到焦点按 通知 → 文件 → 免责声明 → 悬浮窗提醒 顺序检查；
-    // 通知/文件未授予时弹阻断窗（仅「去授予 / 退出应用」），不授予无法进入首页
+    // 通知未授予弹阻断窗（仅「去授予 / 退出应用」）；文件未授予先直跳系统授权页一次，
+    // 未授权返回后才弹同款阻断窗；不授予均无法进入首页
     private boolean wallShowing; // 阻断弹窗防重入
+    // 存储权限直跳标志：每次冷启动首次检测到未授权时直接跳系统授权页，
+    // 用户未授权返回后才弹阻断弹窗（每进程一次，不循环直跳）
+    private boolean mFileDirectAsked;
 
     private AlertDialog wallDialog; // 当前权限墙弹窗（授权通过后自动核验关闭用）
     private BooleanSupplier wallCheck; // 当前墙对应的权限判定
@@ -589,6 +593,13 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             return;
         }
         if (!Setting.hasFileAccess()) {
+            // 首次检测到未授权：直接跳系统授权页，不先弹窗；未授权返回后走下方阻断弹窗
+            if (!mFileDirectAsked) {
+                mFileDirectAsked = true;
+                DiagLog.log("permission", "file wall direct jump to grant page");
+                PermissionUtil.requestFile(this, ignored -> {});
+                return;
+            }
             showWallDialog(R.string.perm_wall_file_title, R.string.perm_wall_file_message, Setting::hasFileAccess, () -> PermissionUtil.requestFile(this, ignored -> {}));
             return;
         }

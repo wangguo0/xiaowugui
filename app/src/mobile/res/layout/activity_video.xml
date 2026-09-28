@@ -597,6 +597,7 @@
                             style="@style/VideoActionButton"
                             android:layout_marginEnd="8dp"
                             android:text="@string/play_search"
+                            android:visibility="gone"
                             app:drawableTopCompat="@drawable/ic_action_search_shadow" />
 
                         <com.google.android.material.textview.MaterialTextView

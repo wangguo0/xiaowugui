@@ -168,6 +168,7 @@ import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.PiP;
+import com.fongmi.android.tv.utils.QuickPoolHandoff;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Task;
@@ -265,6 +266,22 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private boolean mQuickFrozen;
     private boolean mQuickLoadingMore;
     private boolean mQuickAllReturned;
+    // 簇交接模式：池来自搜索页「被点卡片簇」（已完成5维冲突清洗），切换站源列表按健康度直排提交，
+    // 不再二次清洗、不再发起搜索；列表恒不含当前播放站点
+    private boolean mQuickClusterMode;
+    // ===== 多数表决详情核验 =====
+    // 会话级详情指纹缓存：siteKey|vodId → 指纹；核验过一次全会话复用，不重复请求
+    private static final Map<String, Vod> sVerifiedDetails = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
+    private static final int VERIFY_CONCURRENCY = 3;
+    private static final int VERIFIED_CACHE_MAX = 300;
+    // 证据池：已收集到的各站详情指纹（含当前站），key=siteKey，后来者覆盖
+    private final Map<String, Vod> mEvidence = new java.util.LinkedHashMap<>();
+    private final List<Vod> mVerifyQueue = new ArrayList<>();
+    private int mVerifyRunning;
+    private int mVerifyEpoch;
+    private boolean mVerifyStarted;
+    // 当前站被多数派证伪时的改切守卫：每部片至多触发一次
+    private boolean mVoteRedirected;
     // 自动换源已切完展示候选、正等待「加载更多」清洗结果：清洗完成后自动续跑换站
     private boolean mQuickAutoNeedMore;
     // 搜索轮次代号：startSearch 递增，异步清洗回投时校验，丢弃过期轮次的结果
@@ -658,11 +675,33 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
     }
 
-    // 彻底屏蔽后原地换源：当前条目加入失效列表，重新快搜（已屏蔽站点被过滤）并自动切换续播，不退出播放页
+    // 彻底屏蔽后原地换源：当前条目加入失效列表并自动切换续播，不退出播放页；
+    // 候选池非空时直接复用（剔除刚被屏蔽的站点后重排提交），不再发起全站搜索
     private void blockAndSwitch() {
         mBlockedSwitch = true;
         mBroken.add(getId());
-        initSearch(mBinding.name.getText().toString(), true);
+        if (mQuickPool.isEmpty()) {
+            initSearch(mBinding.name.getText().toString(), true);
+        } else {
+            setAutoMode(true);
+            revealManualSearch = false;
+            mQuickPool.removeIf(vod -> {
+                Site site = VodConfig.get().getSite(vod.getSiteKey());
+                return site == null || !isPass(site) || SiteHealthStore.isCrashed(site) || SiteBlockSetting.isBlocked(site);
+            });
+            mQuickDisplayed.clear();
+            mQuickRest.clear();
+            mQuickAutoNeedMore = false;
+            if (mQuickClusterMode) {
+                // 簇模式：刚屏蔽的当前站本就不在列表内；剩余线路按健康度直接重排提交，不再清洗
+                mQuickDisplayed.addAll(clusterToPool(new ArrayList<>(mQuickPool)));
+                mQuickCleanedCount = mQuickPool.size();
+            } else {
+                mQuickCleanedCount = 0;
+                mQuickFrozen = false;
+                scheduleQuickRefresh();
+            }
+        }
         startAutoSwitchWait();
     }
 
@@ -854,6 +893,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }, 12f);
         setVideoView();
         setViewModel();
+        seedQuickPoolFromHandoff();
         setShortDisplay();
         setupBangumiBind();
         if (shouldUseImmersiveAudio()) {
@@ -966,7 +1006,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     @Override
     @SuppressLint("ClickableViewAccessibility")
     protected void initEvent() {
-        mBinding.name.setOnClickListener(view -> onName());
         mBinding.episodeTitle.setOnClickListener(view -> onMore());
         mBinding.shortDisplay.setOnClickListener(view -> onShortDisplay());
         mBinding.reportError.setOnClickListener(view -> showVideoErrorDialog());
@@ -1363,6 +1402,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         item.checkName(getName());
         item.checkContent(getContent());
         mDetailVod = item;
+        onDetailReady(item);
         mBinding.name.setText(item.getName());
         mFlagAdapter.addAll(item.getFlags());
         App.removeCallbacks(mR4);
@@ -1383,6 +1423,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setDetailLyrics(item.getContent());
         setText(mBinding.remark, 0, item.getRemarks());
         setOther(mBinding.other, item);
+        updateSearchButtonVisibility();
         updateAudioStageText();
         if (mAudioStageVisible) applyAudioPageMode(true);
     }
@@ -1546,6 +1587,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     public void onItemClick(Vod item) {
         setAutoMode(false);
         applySearchArtwork(item);
+        // 簇模式：切换后新当前站不应再出现在切换站源列表，同站线路一并移除
+        if (mQuickClusterMode) {
+            mQuickPool.removeIf(vod -> vod.getSiteKey().equals(item.getSiteKey()));
+            mQuickDisplayed.removeIf(vod -> vod.getSiteKey().equals(item.getSiteKey()));
+            mQuickRest.removeIf(vod -> vod.getSiteKey().equals(item.getSiteKey()));
+            mQuickCleanedCount = mQuickPool.size();
+        }
         getDetail(item);
     }
 
@@ -1614,6 +1662,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         List<Vod> result = new ArrayList<>(map.values());
         if (detail != null && typeFilter) result.removeIf(vod -> !vod.getSiteKey().equals(currentKey) && (VodMatcher.isConflict(detail, vod) || VodMatcher.isTypeConflict(detail, vod)));
+        if (typeFilter) result = cleanSameNameConflicts(result, currentKey);
         if (threshold > 0) {
             int maxValue = 0;
             for (Vod vod : result) maxValue = Math.max(maxValue, parseEpisodeCount(vod.getRemarks()));
@@ -1629,6 +1678,32 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         sortQuickItems(result, keyword);
         return result;
+    }
+
+    // 同名候选两两冲突清洗：详情字段不全时「只与详情比」会放行不同内容
+    // （如 1970 与 2023、动漫与短剧并存），此处同名候选按健康度降序两两比对，
+    // 与已保留条目强冲突者剔除；当前播放源永不剔除，字段缺失者弃权、保守保留
+    private static List<Vod> cleanSameNameConflicts(List<Vod> items, String currentKey) {
+        List<Vod> kept = new ArrayList<>();
+        List<Vod> rest = new ArrayList<>();
+        for (Vod vod : items) {
+            if (vod.getSiteKey().equals(currentKey)) kept.add(vod);
+            else rest.add(vod);
+        }
+        rest.sort(SiteHealthStore::compareVods);
+        for (Vod vod : rest) {
+            String name = normalizeQuick(vod.getName());
+            boolean conflict = false;
+            for (Vod item : kept) {
+                if (!normalizeQuick(item.getName()).equals(name)) continue;
+                if (VodMatcher.isConflict(item, vod) || VodMatcher.isTypeConflict(item, vod)) {
+                    conflict = true;
+                    break;
+                }
+            }
+            if (!conflict) kept.add(vod);
+        }
+        return kept;
     }
 
     // 相关性排序（快搜弹窗与换源列表共用）：tier 完全相等(0) > 前缀(1) > 包含(2) > 其它(3)；
@@ -1825,16 +1900,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (scroll) scrollEpisodeToSelected();
     }
 
-    private void onName() {
-        String name = mBinding.name.getText().toString();
-        Notify.show(getString(R.string.detail_search, name));
-        showQuickSearch(name);
-        initSearch(name, false);
-    }
-
+    // 详情页快搜入口已隐藏：点片名不再弹快搜窗，仅保留音频模式下的歌词搜索
     private void onSearch() {
-        if (onLyricsSearch()) return;
-        onName();
+        onLyricsSearch();
     }
 
     private boolean onLyricsSearch() {
@@ -5065,6 +5133,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         syncDesktopLyricsAudioContent();
         setAudioStageVisible(shouldUseImmersiveAudio());
         setKaraokeActionState();
+        updateSearchButtonVisibility();
+    }
+
+    // 视频模式下隐藏「搜索」按钮（快搜入口已移除，点了无反应）；
+    // 音频/音乐内容下保留，点击仍是"重新搜索歌词"
+    private void updateSearchButtonVisibility() {
+        if (mBinding == null) return;
+        boolean available = mLyrics != null && service() != null && (isAudioOnly() || isMusicLike());
+        mBinding.search.setVisibility(available ? View.VISIBLE : View.GONE);
     }
 
     private void syncDesktopLyricsAudioContent() {
@@ -5141,12 +5218,12 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         boolean qualityVisible = mQualityAdapter != null && mQualityAdapter.getItemCount() > 1;
         boolean episodeGroupVisible = mEpisodeGroupAdapter != null && mEpisodeGroupAdapter.getItemCount() > 1;
         boolean episodeVisible = mEpisodeAdapter != null && mEpisodeAdapter.getItemCount() > 0;
-        boolean quickVisible = mQuickAdapter != null && mQuickAdapter.getItemCount() > 0;
         mBinding.qualityText.setVisibility(visible || !qualityVisible ? View.GONE : View.VISIBLE);
         mBinding.quality.setVisibility(visible || !qualityVisible ? View.GONE : View.VISIBLE);
         mBinding.episodeGroup.setVisibility(visible || !episodeGroupVisible ? View.GONE : View.VISIBLE);
         mBinding.episode.setVisibility(visible || !episodeVisible ? View.GONE : View.VISIBLE);
-        mBinding.quick.setVisibility(visible || !quickVisible ? View.GONE : View.VISIBLE);
+        // 快搜行已隐藏不使用：换源候选仅通过「切换站源」弹窗展示
+        mBinding.quick.setVisibility(View.GONE);
     }
 
     private void updateAudioStageText() {
@@ -6583,6 +6660,212 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
     }
 
+    // 复用搜索结果页交接的「被点卡片簇」：簇内线路已在搜索页完成5维冲突清洗，播放页仅做轻量处理
+    // 后直接提交为切换站源列表（健康度降序、不含当前站），换源秒开、自动换源按序切换；
+    // 无交接（收藏/历史等入口）时保持现状——用到时即时搜索
+    private void seedQuickPoolFromHandoff() {
+        List<Vod> handoff = QuickPoolHandoff.take();
+        if (handoff == null || handoff.isEmpty()) return;
+        String keyword = getName();
+        if (TextUtils.isEmpty(keyword)) return;
+        mQuickSearchKeyword = keyword;
+        List<Vod> items = clusterToPool(handoff);
+        if (items.isEmpty()) return;
+        mQuickClusterMode = true;
+        mQuickPool.addAll(items);
+        mQuickDisplayed.addAll(items);
+        mQuickCleanedCount = mQuickPool.size();
+        mQuickAllReturned = true;
+        mQuickFrozen = true;
+    }
+
+    // 簇线路轻量处理：剔除不可换/屏蔽/坏站 → 剔除当前播放站点 → 同站去重留集数多者 → 健康度降序
+    private List<Vod> clusterToPool(List<Vod> source) {
+        String currentKey = getSite().getKey();
+        Map<String, Vod> map = new java.util.LinkedHashMap<>();
+        for (Vod vod : source) {
+            if (vod.getSiteKey().equals(currentKey)) continue;
+            Site site = VodConfig.get().getSite(vod.getSiteKey());
+            if (site == null || !isPass(site) || SiteHealthStore.isCrashed(site) || SiteBlockSetting.isBlocked(site)) continue;
+            Vod best = map.get(vod.getSiteKey());
+            if (best == null || parseEpisodeCount(vod.getRemarks()) > parseEpisodeCount(best.getRemarks())) map.put(vod.getSiteKey(), vod);
+        }
+        List<Vod> items = new ArrayList<>(map.values());
+        SiteHealthStore.sortVods(items);
+        return items;
+    }
+
+    // ===== 多数表决详情核验 =====
+    // 搜索接口常不返回导演字段，5维指纹「字段缺失弃权」会让导演完全不符的站点漏网混入簇/列表。
+    // 进播放页后后台拉取各候选站详情收集证据，按5维冲突聚类做「多数表决」：最大簇=真内容基准，
+    // 与基准簇全体冲突的站点从切换站源列表剔除；当前站若属少数派则判「挂错内容」，自动改切基准簇最优站。
+
+    /// 当前站详情就绪：作为第一份证据入池并启动核验
+    private void onDetailReady(Vod detail) {
+        if (detail == null || getSite() == null) return;
+        String siteKey = getSite().getKey();
+        if (TextUtils.isEmpty(siteKey)) return;
+        addEvidence(siteKey, detail);
+        if (!mVerifyStarted) startVerification();
+        else applyVote();
+    }
+
+    private void startVerification() {
+        mVerifyStarted = true;
+        for (Vod vod : new ArrayList<>(mQuickPool)) maybeEnqueueVerify(vod);
+        pumpVerifyQueue();
+        applyVote();
+    }
+
+    /// 候选站入核验队列：已有证据/已排队/命中会话缓存则不再重复请求
+    private void maybeEnqueueVerify(Vod vod) {
+        String siteKey = vod.getSiteKey();
+        if (TextUtils.isEmpty(siteKey) || mEvidence.containsKey(siteKey)) return;
+        Vod cached = sVerifiedDetails.get(cacheKey(siteKey, vod.getId()));
+        if (cached != null) {
+            addEvidence(siteKey, cached);
+            return;
+        }
+        if (TextUtils.isEmpty(vod.getId())) return;
+        for (Vod q : mVerifyQueue) if (q.getSiteKey().equals(siteKey)) return;
+        mVerifyQueue.add(vod);
+    }
+
+    /// 并发上限 3 的详情抓取泵；回主线程校验轮次后更新证据并触发表决
+    private void pumpVerifyQueue() {
+        while (mVerifyRunning < VERIFY_CONCURRENCY && !mVerifyQueue.isEmpty()) {
+            Vod vod = mVerifyQueue.remove(0);
+            String siteKey = vod.getSiteKey();
+            String id = vod.getId();
+            final int epoch = mVerifyEpoch;
+            mVerifyRunning++;
+            Task.execute(() -> {
+                Vod detail = null;
+                try {
+                    detail = SiteApi.detailContent(siteKey, id).getVod();
+                } catch (Exception e) {
+                    SpiderDebug.log("verify", "detail failed key=%s: %s", siteKey, e.getMessage());
+                }
+                final Vod result = detail;
+                mQuickHandler.post(() -> {
+                    mVerifyRunning--;
+                    if (epoch != mVerifyEpoch || isFinishing() || isDestroyed()) return;
+                    if (result != null) {
+                        if (sVerifiedDetails.size() > VERIFIED_CACHE_MAX) sVerifiedDetails.clear();
+                        sVerifiedDetails.put(cacheKey(siteKey, id), result);
+                        addEvidence(siteKey, result);
+                    }
+                    applyVote();
+                    pumpVerifyQueue();
+                });
+            });
+        }
+    }
+
+    private void addEvidence(String siteKey, Vod detail) {
+        if (TextUtils.isEmpty(siteKey) || detail == null) return;
+        mEvidence.put(siteKey, detail);
+    }
+
+    private String cacheKey(String siteKey, String id) {
+        return siteKey + "|" + id;
+    }
+
+    /// 证据聚类 → 选基准簇 → 剔除少数派/未核验冲突候选 → 必要时当前站改切
+    private void applyVote() {
+        if (!mVerifyStarted || mEvidence.isEmpty()) return;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        List<List<String>> clusters = new ArrayList<>();
+        List<List<Vod>> clusterVods = new ArrayList<>();
+        for (Map.Entry<String, Vod> entry : mEvidence.entrySet()) {
+            List<Vod> target = null;
+            for (int i = 0; i < clusters.size(); i++) {
+                if (!conflictsWithAny(entry.getValue(), clusterVods.get(i))) {
+                    target = clusterVods.get(i);
+                    target.add(entry.getValue());
+                    clusters.get(i).add(entry.getKey());
+                    break;
+                }
+            }
+            if (target == null) {
+                target = new ArrayList<>();
+                target.add(entry.getValue());
+                clusterVods.add(target);
+                List<String> keys = new ArrayList<>();
+                keys.add(entry.getKey());
+                clusters.add(keys);
+            }
+        }
+        int best = 0;
+        for (int i = 1; i < clusters.size(); i++) {
+            if (clusters.get(i).size() > clusters.get(best).size()) best = i;
+            else if (clusters.get(i).size() == clusters.get(best).size() && clusters.get(i).contains(currentKey)) best = i;
+        }
+        List<String> baseline = clusters.get(best);
+        List<Vod> baselineVods = clusterVods.get(best);
+        List<String> removeKeys = new ArrayList<>();
+        // 少数派站点：有证据且与基准簇全体冲突才剔除（只冲突部分成员时保守保留）
+        for (int i = 0; i < clusters.size(); i++) {
+            if (i == best) continue;
+            for (String key : clusters.get(i)) {
+                if (key.equals(currentKey)) continue;
+                if (conflictsWithAll(mEvidence.get(key), baselineVods)) removeKeys.add(key);
+            }
+        }
+        // 未核验候选：基准簇至少 2 家时才敢剔除（单家基准证据不足，保守不动）
+        if (baseline.size() >= 2) {
+            for (Vod vod : mQuickPool) {
+                String key = vod.getSiteKey();
+                if (TextUtils.isEmpty(key) || mEvidence.containsKey(key) || removeKeys.contains(key)) continue;
+                if (conflictsWithAll(vod, baselineVods)) removeKeys.add(key);
+            }
+        }
+        if (!removeKeys.isEmpty()) {
+            removeSitesFromPool(removeKeys);
+            mQuickCleanedCount = mQuickPool.size();
+            submitQuickPage();
+        }
+        maybeRedirectToMajority(currentKey, baseline);
+    }
+
+    private void removeSitesFromPool(List<String> keys) {
+        mQuickPool.removeIf(vod -> keys.contains(vod.getSiteKey()));
+        mQuickDisplayed.removeIf(vod -> keys.contains(vod.getSiteKey()));
+        mQuickRest.removeIf(vod -> keys.contains(vod.getSiteKey()));
+        mVerifyQueue.removeIf(vod -> keys.contains(vod.getSiteKey()));
+    }
+
+    /// 当前站被多数派证伪：记坏、提示、改切基准簇健康度最优站（每部片至多一次）
+    private void maybeRedirectToMajority(String currentKey, List<String> baseline) {
+        if (mVoteRedirected || baseline.size() < 2) return;
+        if (TextUtils.isEmpty(currentKey) || !mEvidence.containsKey(currentKey) || baseline.contains(currentKey)) return;
+        mVoteRedirected = true;
+        SiteHealthStore.recordDetail(currentKey, false, 0, "vote-mismatch");
+        Vod target = null;
+        for (Vod vod : mQuickDisplayed) {
+            if (!baseline.contains(vod.getSiteKey())) continue;
+            if (target == null || SiteHealthStore.compareVods(target, vod) > 0) target = vod;
+        }
+        if (target == null) return;
+        Notify.show(getString(R.string.video_vote_mismatch));
+        onItemClick(target);
+    }
+
+    private boolean conflictsWithAny(Vod vod, List<Vod> members) {
+        for (Vod m : members) if (conflict(vod, m)) return true;
+        return false;
+    }
+
+    private boolean conflictsWithAll(Vod vod, List<Vod> members) {
+        if (members.isEmpty()) return false;
+        for (Vod m : members) if (!conflict(vod, m)) return false;
+        return true;
+    }
+
+    private boolean conflict(Vod a, Vod b) {
+        return VodMatcher.isConflict(a, b) || VodMatcher.isTypeConflict(a, b);
+    }
+
     private void initSearch(String keyword, boolean auto) {
         setAutoMode(auto);
         revealManualSearch = !auto;
@@ -6627,6 +6910,11 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         items.removeIf(this::mismatch);
         mBinding.quick.setVisibility(View.GONE);
         mQuickPool.addAll(items);
+        // 核验已启动时，新入池候选也纳入证据收集（不重排已展示列表，仅影响表决池）
+        if (mVerifyStarted) {
+            for (Vod vod : items) maybeEnqueueVerify(vod);
+            pumpVerifyQueue();
+        }
         if (revealManualSearch && !items.isEmpty()) revealManualSearch = false;
         if (items.isEmpty()) return;
         App.removeCallbacks(mR4);
@@ -6806,6 +7094,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 break;
             }
         }
+        // 簇模式：消费即当前站，同步计数避免误判「还有未清洗新结果」触发多余的加载更多
+        if (mQuickClusterMode) mQuickCleanedCount = mQuickPool.size();
         mBlockedSwitch = false;
         Episode current = getEpisode();
         if (current != null) getIntent().putExtra("mark", current.getName());
@@ -7180,6 +7470,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onDestroy() {
+        mVerifyEpoch++;
         dismissKaraokeResultDialogForRecreation();
         mLyricsSearchSeq++;
         cancelKaraokePitchGeneration(false);

@@ -1,6 +1,7 @@
 package com.fongmi.android.tv.ui.adapter;
 
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -46,6 +47,8 @@ public class DeviceAdapter extends BaseDiffAdapter<Device, DeviceAdapter.ViewHol
         holder.binding.name.setText(item.getName());
         holder.binding.host.setText(item.getHost());
         holder.binding.type.setImageResource(getIcon(item));
+        // 小乌龟通道设备（电视端/手机端App，HTTP推送）加徽标，与DLNA投屏设备区分
+        holder.binding.badge.setVisibility(item.isApp() ? View.VISIBLE : View.GONE);
         holder.binding.getRoot().setOnClickListener(v -> listener.onItemClick(item));
         holder.binding.getRoot().setOnLongClickListener(v -> listener.onLongClick(item));
     }

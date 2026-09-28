@@ -21,14 +21,36 @@
         android:layout_marginStart="8dp"
         android:orientation="vertical">
 
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/name"
+        <androidx.appcompat.widget.LinearLayoutCompat
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:singleLine="true"
-            android:textColor="#202124"
-            android:textSize="14sp"
-            tools:text="Google Chrome Cast" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="#202124"
+                android:textSize="14sp"
+                tools:text="Google Chrome Cast" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/shape_device_cast_badge"
+                android:paddingHorizontal="6dp"
+                android:paddingVertical="1dp"
+                android:text="@string/device_cast_badge"
+                android:textColor="#004D26"
+                android:textSize="10sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+        </androidx.appcompat.widget.LinearLayoutCompat>
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/host"

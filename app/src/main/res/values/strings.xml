@@ -81,6 +81,7 @@
     <string name="video_error_message">The video content is incorrect and unrelated to what I want. Tapping \"Block Site\" will permanently block this site from search, quick search and source switching. To unblock, go to Blocked Subscription Sources on the Home page.</string>
     <string name="video_error_confirm">Block Site</string>
     <string name="video_error_blocked">Current site has been blocked</string>
+    <string name="video_vote_mismatch">Current site content differs from most sites, switched source</string>
     <string name="video_error_no_site">No available site left</string>
     <string name="search_load_more">Tap to load more results</string>
     <string name="search_load_end">No more results</string>
@@ -908,6 +909,7 @@
     <!-- Device Sync -->
     <string name="device_select">Select devices</string>
     <string name="device_offline">Device is offline</string>
+    <string name="device_cast_badge">小乌龟</string>
     <string name="cast_not_ready">Playback information is not ready. Try again shortly.</string>
     <string name="sync_success">Sync completed</string>
     <string name="sync_progress">Syncing...</string>

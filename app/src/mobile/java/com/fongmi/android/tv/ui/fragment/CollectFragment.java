@@ -41,6 +41,7 @@ import com.fongmi.android.tv.ui.adapter.SearchAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.utils.MobileWindow;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.QuickPoolHandoff;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.VodMatcher;
@@ -52,6 +53,7 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -82,6 +84,11 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     // 冻结后原位换源的相关度门槛：关键词长度/片名长度 > 0.9 才允许替换已展示卡片
     private static final double UPGRADE_MIN_SCORE = 0.9;
     private final Map<String, List<Vod>> mShownByName = new HashMap<>();
+    // 每张已展示卡片背后的同簇成员（不含卡片本身）：判重时比对全部成员而非仅代表，
+    // 杜绝「全弃权代表」把 1970 与 2023、动漫与短剧接力误合到同一张卡
+    private final Map<Vod, List<Vod>> mShownMembers = new IdentityHashMap<>();
+    // 剩余候选中代表对应的簇成员，「加载更多」展示该卡片时登记入已展示簇
+    private Map<Vod, List<Vod>> mRestMembers = new IdentityHashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private boolean mRefreshPending;
     private boolean mRefreshing;
@@ -326,11 +333,13 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         String keyword = getKeyword();
         mRefreshing = true;
         Task.execute(() -> {
-            List<Vod> sorted = sortByRelevance(dedupe(snapshot), keyword);
+            List<List<Vod>> clusters = dedupe(snapshot);
+            List<Vod> sorted = sortByRelevance(repsOf(clusters), keyword);
+            Map<Vod, List<Vod>> members = membersOf(clusters);
             App.post(() -> {
                 mRefreshing = false;
                 if (!isAdded()) return;
-                commitFirstPage(sorted, snapshot.size());
+                commitFirstPage(sorted, snapshot.size(), members);
                 if (mRefreshAgain) {
                     mRefreshAgain = false;
                     scheduleRefresh();
@@ -341,18 +350,22 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     // 提交首屏：前 PAGE_SIZE 条钉死展示，其余清洗结果留在剩余候选中等「加载更多」追加。
     // 集满即冻结；未集满则等全部站点返回后由 progress 收尾冻结
-    private void commitFirstPage(List<Vod> sorted, int cleanedCount) {
+    private void commitFirstPage(List<Vod> sorted, int cleanedCount, Map<Vod, List<Vod>> members) {
         if (sorted.isEmpty()) return;
         int end = Math.min(PAGE_SIZE, sorted.size());
         mDisplayed.clear();
         mShownByName.clear();
+        mShownMembers.clear();
         mRest.clear();
         for (int i = 0; i < end; i++) {
             Vod vod = sorted.get(i);
             mDisplayed.add(vod);
             trackShown(vod);
+            List<Vod> list = members.get(vod);
+            if (list != null) mShownMembers.put(vod, list);
         }
         mRest.addAll(sorted.subList(end, sorted.size()));
+        mRestMembers = members;
         mCleanedCount = cleanedCount;
         if (mDisplayed.size() >= PAGE_SIZE) mFrozen = true;
         submitPage();
@@ -391,14 +404,17 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         List<Vod> snapshot = new ArrayList<>(mAllResults);
         String keyword = getKeyword();
         Task.execute(() -> {
-            List<Vod> sorted = sortByRelevance(dedupe(snapshot), keyword);
+            List<List<Vod>> clusters = dedupe(snapshot);
+            List<Vod> sorted = sortByRelevance(repsOf(clusters), keyword);
+            Map<Vod, List<Vod>> members = membersOf(clusters);
             App.post(() -> {
                 mLoadingMore = false;
                 if (!isAdded()) return;
                 mRest.clear();
                 for (Vod vod : sorted) {
-                    if (!mergeIntoShown(vod)) mRest.add(vod);
+                    if (!mergeIntoShown(vod, members.get(vod))) mRest.add(vod);
                 }
+                mRestMembers = members;
                 mCleanedCount = snapshot.size();
                 appendFromRest();
             });
@@ -415,6 +431,8 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         for (Vod vod : mRest.subList(0, end)) {
             mDisplayed.add(vod);
             trackShown(vod);
+            List<Vod> list = mRestMembers.get(vod);
+            if (list != null) mShownMembers.put(vod, list);
         }
         mRest.subList(0, end).clear();
         submitPage();
@@ -425,15 +443,45 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         mShownByName.computeIfAbsent(normalize(vod.getName()), k -> new ArrayList<>()).add(vod);
     }
 
-    // 与已展示卡片同片名且内容不冲突（VodMatcher 五维指纹一致）即视为重复：
-    // 已展示卡片钉死不可改动，故直接丢弃新到条目并返回 true
-    private boolean mergeIntoShown(Vod vod) {
+    // 与已展示卡片同片名且整簇（代表 + 成员）与卡片簇无任何冲突即视为重复：
+    // 已展示卡片钉死不可改动，故丢弃新到条目、把其成员并入卡片簇并返回 true
+    private boolean mergeIntoShown(Vod vod, List<Vod> members) {
         List<Vod> shown = mShownByName.get(normalize(vod.getName()));
         if (shown == null) return false;
         for (Vod item : shown) {
-            if (!VodMatcher.isConflict(item, vod)) return true;
+            if (item == vod) return true;
+            if (!clusterMatchesShown(item, vod, members)) continue;
+            List<Vod> target = mShownMembers.computeIfAbsent(item, k -> new ArrayList<>());
+            target.add(vod);
+            if (members != null) for (Vod member : members) if (member != item) target.add(member);
+            return true;
         }
         return false;
+    }
+
+    // 整簇（代表 + 成员）是否与已展示卡片同簇：任一对冲突即为不同内容
+    private boolean clusterMatchesShown(Vod shown, Vod rep, List<Vod> members) {
+        if (!sameCluster(shown, rep)) return false;
+        if (members == null) return true;
+        for (Vod member : members) if (!sameCluster(shown, member)) return false;
+        return true;
+    }
+
+    // 条目与已展示卡片是否同簇：与卡片代表及其簇内全部成员均无冲突
+    private boolean sameCluster(Vod shown, Vod vod) {
+        if (VodMatcher.isConflict(shown, vod)) return false;
+        List<Vod> members = mShownMembers.get(shown);
+        if (members == null) return true;
+        for (Vod member : members) if (VodMatcher.isConflict(member, vod)) return false;
+        return true;
+    }
+
+    // 原位换源/轮转后：旧卡片及其簇成员（按对象身份）整体迁移到新代表名下，保持判重基准不丢
+    private void migrateMembers(Vod from, Vod to) {
+        List<Vod> members = mShownMembers.remove(from);
+        if (members == null) members = new ArrayList<>();
+        members.add(from);
+        mShownMembers.computeIfAbsent(to, k -> new ArrayList<>()).addAll(members);
     }
 
     // 冻结后原位换源：新到结果与已展示卡片同名同簇、相关度 > 90% 且新站点健康度严格更优时，
@@ -450,7 +498,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             if (shown == null || shown.isEmpty()) continue;
             for (int i = 0; i < shown.size(); i++) {
                 Vod item = shown.get(i);
-                if (VodMatcher.isConflict(item, vod)) continue;
+                if (!sameCluster(item, vod)) continue;
                 if (SiteHealthStore.compareVods(item, vod) <= 0) break;
                 int index = -1;
                 for (int j = 0; j < mDisplayed.size(); j++) {
@@ -463,6 +511,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
                 fillFields(vod, item);
                 mDisplayed.set(index, vod);
                 shown.set(i, vod);
+                migrateMembers(item, vod);
                 changed = true;
                 break;
             }
@@ -471,9 +520,11 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     }
 
     // 同名聚类去重：片名相同的条目按 5 维指纹（VodMatcher）分簇，
-    // 无冲突者合并为一簇（取站点健康度最优为代表，并用其它成员补齐空字段），
-    // 类型/年份/演员等冲突的（如动漫版与真人版同名）各自独立成卡片
-    private List<Vod> dedupe(List<Vod> items) {
+    // 新条目须与簇内每一个成员都不冲突才可合入（而非只比当前代表），
+    // 杜绝「全弃权代表」把 1970 与 2023、动漫与短剧接力误合到同一张卡；
+    // 簇内取站点健康度最优为代表（置于下标 0），并用其它成员补齐其空字段。
+    // 返回各簇（代表 + 成员），调用方经 repsOf/membersOf 拆分使用
+    private List<List<Vod>> dedupe(List<Vod> items) {
         Map<String, List<Vod>> groups = new LinkedHashMap<>();
         for (Vod vod : items) {
             String key = vod.getName().trim().toLowerCase(Locale.ROOT);
@@ -484,31 +535,56 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             }
             group.add(vod);
         }
-        List<Vod> result = new ArrayList<>();
+        List<List<Vod>> result = new ArrayList<>();
         for (List<Vod> group : groups.values()) {
-            List<Vod> representatives = new ArrayList<>();
+            List<List<Vod>> clusters = new ArrayList<>();
             for (Vod vod : group) {
-                int index = -1;
-                for (int i = 0; i < representatives.size(); i++) {
-                    if (!VodMatcher.isConflict(representatives.get(i), vod)) {
-                        index = i;
+                List<Vod> target = null;
+                for (List<Vod> cluster : clusters) {
+                    if (!conflictsWithAny(cluster, vod)) {
+                        target = cluster;
                         break;
                     }
                 }
-                if (index < 0) {
-                    representatives.add(vod);
+                if (target == null) {
+                    target = new ArrayList<>();
+                    target.add(vod);
+                    clusters.add(target);
                 } else {
-                    // 同簇：健康度更优的站点作为代表卡片，另一方空字段用于补齐
-                    Vod rep = representatives.get(index);
-                    if (SiteHealthStore.compareVods(rep, vod) > 0) {
-                        fillFields(vod, rep);
-                        representatives.set(index, vod);
-                    } else {
-                        fillFields(rep, vod);
-                    }
+                    target.add(vod);
                 }
             }
-            result.addAll(representatives);
+            for (List<Vod> cluster : clusters) {
+                int best = 0;
+                for (int i = 1; i < cluster.size(); i++) {
+                    if (SiteHealthStore.compareVods(cluster.get(best), cluster.get(i)) > 0) best = i;
+                }
+                if (best > 0) cluster.add(0, cluster.remove(best));
+                Vod rep = cluster.get(0);
+                for (int i = 1; i < cluster.size(); i++) fillFields(rep, cluster.get(i));
+                result.add(cluster);
+            }
+        }
+        return result;
+    }
+
+    private static boolean conflictsWithAny(List<Vod> cluster, Vod vod) {
+        for (Vod member : cluster) if (VodMatcher.isConflict(member, vod)) return true;
+        return false;
+    }
+
+    // 各簇代表（下标 0）拉平为卡片列表，供相关性排序与展示
+    private static List<Vod> repsOf(List<List<Vod>> clusters) {
+        List<Vod> result = new ArrayList<>();
+        for (List<Vod> cluster : clusters) result.add(cluster.get(0));
+        return result;
+    }
+
+    // 代表 → 簇内其它成员（按对象身份索引，供登记已展示簇）
+    private static Map<Vod, List<Vod>> membersOf(List<List<Vod>> clusters) {
+        Map<Vod, List<Vod>> result = new IdentityHashMap<>();
+        for (List<Vod> cluster : clusters) {
+            if (cluster.size() > 1) result.put(cluster.get(0), new ArrayList<>(cluster.subList(1, cluster.size())));
         }
         return result;
     }
@@ -546,6 +622,13 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         else {
             String pic = item.getPic().isEmpty() ? getPic() : item.getPic();
             String bangumiName = getBangumiName();
+            // 把被点卡片的同簇线路（代表+全部成员，聚类时已完成5维冲突清洗）交接给播放页：
+            // 切换站源列表直接复用这条线路，不再重新全站搜索、不再二次清洗
+            List<Vod> cluster = new ArrayList<>();
+            List<Vod> members = mShownMembers.get(item);
+            if (members != null) cluster.addAll(members);
+            cluster.add(item);
+            QuickPoolHandoff.put(cluster);
             if (bangumiName == null || bangumiName.isEmpty()) VideoActivity.collect(requireActivity(), item.getSiteKey(), item.getId(), item.getName(), pic, getWallPic());
             else VideoActivity.start(requireActivity(), item.getSiteKey(), item.getId(), item.getName(), pic, null, true, getWallPic(), null, bangumiName);
         }
@@ -575,7 +658,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             if (vod.isFolder()) continue;
             if (vod.getSiteKey().equals(event.siteKey()) && vod.getId().equals(event.vodId())) continue;
             if (!normalize(vod.getName()).equals(key)) continue;
-            if (VodMatcher.isConflict(failed, vod)) continue;
+            if (!sameCluster(failed, vod)) continue;
             if (isTaken(vod)) continue;
             if (best == null || SiteHealthStore.compareVods(best, vod) > 0) best = vod;
         }
@@ -599,6 +682,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
             if (j >= 0) shown.set(j, best);
             else shown.add(best);
         }
+        migrateMembers(failed, best);
         submitPage();
     }
 
