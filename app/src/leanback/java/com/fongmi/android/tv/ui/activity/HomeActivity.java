@@ -99,6 +99,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private static final String TV_OVERLAY = "tv-overlay";
     private static final String TV_FULL = "tv-full";
 
+    public static final String EXTRA_BOOT = "extra_boot";
+    private boolean fromBoot;
+
     private ActivityHomeBinding mBinding;
     private ArrayObjectAdapter mHistoryAdapter;
     private ArrayObjectAdapter mFuncAdapter;
@@ -115,6 +118,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     private String webDefaultChromeMode = TV_FULL;
     private boolean webToolbarVisible = true;
     private boolean loadingHomeCategory;
+    // 首页内容刷新（切换站源/添加配置）会清空并重建列表，记录原滚动位置以便数据回填后恢复，避免触屏滚动被打回顶部
+    private int mSavedScrollOffset;
+    private boolean mRestoreScrollOnLoad;
 
     private Site getHome() {
         return VodConfig.get().getHome();
@@ -132,13 +138,17 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        setIntent(intent);
         checkAction(intent);
+        // 从后台残留栈恢复开机自启时，onCreate 不会再次执行，需在此补齐 EXTRA_BOOT 的跳转
+        if (intent.getBooleanExtra(EXTRA_BOOT, false)) applyBootTarget();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         setTheme(R.style.Theme_App);
         super.onCreate(savedInstanceState);
+        fromBoot = getIntent().getBooleanExtra(EXTRA_BOOT, false);
     }
 
     @Override
@@ -206,7 +216,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
     private void syncNativeContentInset() {
-        int top = isToolbarVisible() ? toolbarHeight() : 0;
+        // 方案A：滚动隐藏工具栏时仅隐藏悬浮层，不改变 nativeContent 的 paddingTop，
+        // 避免父容器尺寸塌缩导致 VerticalGridView 重排、滚动位置被拉回顶端。
+        int top = toolbarHeight();
         if (mBinding.nativeContent.getPaddingTop() == top) return;
         mBinding.nativeContent.setPadding(mBinding.nativeContent.getPaddingLeft(), top, mBinding.nativeContent.getPaddingRight(), mBinding.nativeContent.getPaddingBottom());
     }
@@ -257,6 +269,22 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         }
     }
 
+    private void checkBootTarget() {
+        if (!fromBoot) return;
+        fromBoot = false;
+        applyBootTarget();
+    }
+
+    private void applyBootTarget() {
+        // BOOT_LIVE：跳转到直播页
+        if (Setting.getBootPage() == Setting.BOOT_LIVE) {
+            LiveActivity.start(this);
+            return;
+        }
+        // BOOT_VOD（点播页）：HomeActivity 本身就是点播内容页，停留于此即可
+        fromBoot = false;
+    }
+
     @SuppressLint("RestrictedApi")
     private void setRecyclerView() {
         CustomSelector selector = new CustomSelector();
@@ -305,7 +333,22 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
             }
             mResult = result;
             addVideo(result);
+            restoreHomeScrollIfNeeded();
         });
+    }
+
+    private void restoreHomeScrollIfNeeded() {
+        if (!mRestoreScrollOnLoad) return;
+        mRestoreScrollOnLoad = false;
+        int offset = mSavedScrollOffset;
+        mSavedScrollOffset = 0;
+        if (offset <= 0) return;
+        // 让刚追加的数据完成布局后再恢复滚动，避免 VerticalGridView 自动回顶
+        App.post(() -> {
+            if (!isFinishing() && mBinding.recycler.getAdapter() != null) {
+                mBinding.recycler.scrollBy(0, offset);
+            }
+        }, 100);
     }
 
     private boolean isHomeCategoryResult(Result result) {
@@ -353,6 +396,7 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         SpiderDebug.log("startup", "home showContent start cost=%sms", System.currentTimeMillis() - App.time());
         mBinding.progressLayout.showContent();
         checkAction(getIntent());
+        checkBootTarget();
         setTitle();
         setLogo();
         setFunc();
@@ -406,6 +450,9 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
         hideWebOverlay();
         applyTvChrome(TV_NORMAL);
         mBinding.recycler.setVisibility(View.VISIBLE);
+        // 记录当前滚动位置，重建完成后恢复，避免刷新把触屏滚动打回顶部
+        mSavedScrollOffset = mBinding.recycler.computeVerticalScrollOffset();
+        mRestoreScrollOnLoad = mSavedScrollOffset > 0;
         mResult = Result.empty();
         mHomeResult = Result.empty();
         loadingHomeCategory = false;

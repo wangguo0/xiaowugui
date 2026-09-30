@@ -45,6 +45,8 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
     private DialogInterface.OnDismissListener dismissListener;
     private List<Flag> flags;
     private int panelWidth;
+    private boolean reverse;
+    private Runnable sortListener;
 
     public EpisodeListDialog() {
         segmentStarts = new ArrayList<>();
@@ -61,6 +63,16 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
 
     public EpisodeListDialog dismissListener(DialogInterface.OnDismissListener dismissListener) {
         this.dismissListener = dismissListener;
+        return this;
+    }
+
+    public EpisodeListDialog reverse(boolean reverse) {
+        this.reverse = reverse;
+        return this;
+    }
+
+    public EpisodeListDialog sortListener(Runnable sortListener) {
+        this.sortListener = sortListener;
         return this;
     }
 
@@ -146,6 +158,8 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
             segmentStarts.add(i);
             items.add((i + 1) + "-" + Math.min(i + segment, size));
         }
+        // 排序开关：点击后在正/倒序间切换，走 onRevSort
+        items.add(getString(R.string.play_reverse));
         arrayAdapter.setSegmentSize(segment);
         arrayAdapter.addAll(items);
         binding.array.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
@@ -271,6 +285,10 @@ public class EpisodeListDialog extends BaseAlertDialog implements FlagAdapter.On
 
     @Override
     public void onRevSort() {
+        reverse = !reverse;
+        // 同步到底层数据：活动端据此翻转选集顺序并滚动到当前集
+        if (sortListener != null) sortListener.run();
+        setEpisodes(getSelectedFlag());
     }
 
     @Override

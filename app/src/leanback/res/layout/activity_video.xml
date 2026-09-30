@@ -700,7 +700,7 @@
             app:drawableStartCompat="@drawable/ic_detail_short_display" />
 
         <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/search"
+            android:id="@+id/switchLine"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="16dp"
@@ -712,16 +712,15 @@
             android:nextFocusUp="@id/actor"
             android:nextFocusDown="@id/flag"
             android:singleLine="true"
-            android:text="@string/play_search"
+            android:text="@string/play_switch_line"
             android:textColor="@color/white"
             android:textSize="16sp"
-            app:drawableStartCompat="@drawable/ic_action_search" />
+            app:drawableStartCompat="@drawable/ic_detail_change" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/keep"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
             android:background="@drawable/selector_video_item"
             android:drawablePadding="6dp"
             android:focusable="true"
@@ -734,24 +733,6 @@
             android:textColor="@color/white"
             android:textSize="16sp"
             app:drawableStartCompat="@drawable/ic_detail_keep_off" />
-
-        <com.google.android.material.textview.MaterialTextView
-            android:id="@+id/change1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/selector_video_item"
-            android:drawablePadding="6dp"
-            android:focusable="true"
-            android:focusableInTouchMode="true"
-            android:gravity="center"
-            android:nextFocusRight="@id/change1"
-            android:nextFocusUp="@id/actor"
-            android:nextFocusDown="@id/flag"
-            android:singleLine="true"
-            android:text="@string/play_change"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            app:drawableStartCompat="@drawable/ic_detail_change" />
 
     </androidx.appcompat.widget.LinearLayoutCompat>
 

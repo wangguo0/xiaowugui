@@ -15,6 +15,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
@@ -80,6 +82,7 @@ import com.fongmi.android.tv.bean.Track;
 import com.fongmi.android.tv.bean.Vod;
 import com.fongmi.android.tv.databinding.ActivityVideoBinding;
 import com.fongmi.android.tv.db.AppDatabase;
+import com.fongmi.android.tv.event.CollectFailEvent;
 import com.fongmi.android.tv.event.ConfigEvent;
 import com.fongmi.android.tv.event.RefreshEvent;
 import com.fongmi.android.tv.impl.CustomTarget;
@@ -109,6 +112,7 @@ import com.fongmi.android.tv.setting.JarBlockSetting;
 import com.fongmi.android.tv.setting.PlayerButtonSetting;
 import com.fongmi.android.tv.setting.PlayerSetting;
 import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.setting.SiteBlockSetting;
 import com.fongmi.android.tv.setting.SiteHealthStore;
 import com.fongmi.android.tv.ui.adapter.ArrayAdapter;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
@@ -141,11 +145,13 @@ import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.KeyUtil;
 import com.fongmi.android.tv.utils.Notify;
+import com.fongmi.android.tv.utils.QuickPoolHandoff;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.fongmi.android.tv.utils.Sniffer;
 import com.fongmi.android.tv.utils.Task;
 import com.fongmi.android.tv.utils.Traffic;
 import com.fongmi.android.tv.utils.Util;
+import com.fongmi.android.tv.utils.VodMatcher;
 import com.github.catvod.crawler.SpiderDebug;
 import com.github.bassaer.library.MDColor;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
@@ -259,6 +265,29 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean autoMode;
     private boolean revealManualSearch;
     private boolean quickSearchDialogClosed;
+    // ===== 自动换源（对齐手机端可靠管线） =====
+    // 手机端行为：播放失败后并非只撞一次换站，而是拉取候选并在「接受窗口(5s) → 放弃截止(10s)」内
+    // 持续轮询，候选可用即切换、用尽则放弃，避免"一次不中就停住"。电视端在原单发式基础上补齐该轮询。
+    private Runnable mAutoSwitchCheck;
+    private long mAutoSwitchAcceptUntil;
+    private long mAutoSwitchDeadline;
+
+    // ===== 多数表决详情核验（换源候选） =====
+    // 会话级详情指纹缓存：siteKey|vodId → 指纹；核验过一次全会话复用，不重复请求
+    private static final Map<String, Vod> sVerifiedDetails = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
+    private static final int VERIFY_CONCURRENCY = 3;
+    private static final int VERIFIED_CACHE_MAX = 300;
+    private final android.os.Handler mQuickHandler = new android.os.Handler(Looper.getMainLooper());
+    // 换源候选池：镜像 mQuickAdapter 内容，供表决核验逐站收集证据、剔除挂错内容的站点
+    private final List<Vod> mQuickPool = new ArrayList<>();
+    // 证据池：已收集到的各站详情指纹（含当前站），key=siteKey
+    private final Map<String, Vod> mEvidence = new java.util.LinkedHashMap<>();
+    private final List<Vod> mVerifyQueue = new ArrayList<>();
+    private int mVerifyRunning;
+    private int mVerifyEpoch;
+    private boolean mVerifyStarted;
+    // 当前站被多数派证伪时的改切守卫：每部片至多触发一次
+    private boolean mVoteRedirected;
     private boolean useParse;
     private int mLyricsSearchSeq;
     private int mLyricsSearchSheetSeq;
@@ -621,6 +650,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         setVideoView();
         SpiderDebug.log("video-flow", "initView video view ready cost=%dms", System.currentTimeMillis() - start);
         setViewModel();
+        seedQuickPoolFromHandoff();
         checkId();
         SpiderDebug.log("video-flow", "initView end cost=%dms sinceLaunch=%dms", System.currentTimeMillis() - start, getLaunchCost(System.currentTimeMillis()));
     }
@@ -661,9 +691,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     @SuppressLint("ClickableViewAccessibility")
     protected void initEvent() {
         mBinding.keep.setOnClickListener(view -> onKeep());
-        mBinding.search.setOnClickListener(view -> onSearch());
+        mBinding.switchLine.setOnClickListener(view -> onSwitchSite());
         mBinding.video.setOnClickListener(view -> onVideo());
-        mBinding.change1.setOnClickListener(view -> onChange());
         mBinding.content.setOnClickListener(view -> onContent());
         mBinding.control.action.text.setOnClickListener(this::onTrack);
         mBinding.control.action.audio.setOnClickListener(this::onTrack);
@@ -1011,6 +1040,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void setEmpty(boolean finish) {
         if (isFromCollect() || finish) {
+            // 搜索页入口：详情为空返回，通知发起点击的搜索页把该卡片原地轮转到下一个同名站源
+            if (isFromCollect()) CollectFailEvent.post(getKey(), getId());
             finish();
         } else if (getName().isEmpty()) {
             showEmpty();
@@ -1039,6 +1070,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         checkKeepImg();
         setText(item);
         updateKeep();
+        // 当前站详情就绪：作为多数表决的第一份证据入池（换源候选随后被清洗重置）
+        onDetailReady(item);
     }
 
     private void setText(Vod item) {
@@ -1370,7 +1403,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mPartAdapter.setNextFocus(findFocusUp(4), findFocusDown(4));
         mQuickAdapter.setNextFocus(findFocusUp(5), findFocusDown(5));
         int searchDown = isVisible(mBinding.quick) ? R.id.quick : findFocusDown(-1);
-        mBinding.search.setNextFocusDownId(searchDown == 0 ? View.NO_ID : searchDown);
+        mBinding.switchLine.setNextFocusDownId(searchDown == 0 ? View.NO_ID : searchDown);
     }
 
     private boolean onEpisodeKey(KeyEvent event) {
@@ -1447,11 +1480,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         if (mLyrics != null) mLyrics.update(target);
     }
 
-    private void onSearch() {
-        if (onLyricsSearch()) return;
-        String keyword = mBinding.name.getText().toString();
-        if (TextUtils.isEmpty(keyword)) return;
-        initSearch(keyword, false);
+    private void onSwitchSite() {
+        if (mQuickPool.isEmpty()) {
+            String keyword = mBinding.part.getTag() == null ? mBinding.name.getText().toString() : Objects.toString(mBinding.part.getTag());
+            if (TextUtils.isEmpty(keyword)) return;
+            initSearch(keyword, false);
+        } else {
+            quickSearchDialogClosed = false;
+            showQuickSearchDialog(new ArrayList<>(mQuickPool));
+        }
     }
 
     private boolean onLyricsSearch() {
@@ -2378,7 +2415,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onEpisodes() {
         if (mFlagAdapter.getItemCount() == 0 || mEpisodeAdapter.getItemCount() < 2) return;
         hideControl();
-        EpisodeListDialog.create().flags(mFlagAdapter.getItems()).show(this);
+        EpisodeListDialog.create().flags(mFlagAdapter.getItems()).reverse(mHistory.isRevSort()).sortListener(this::onRevSort).show(this);
     }
 
     private void onRepeat() {
@@ -5544,8 +5581,39 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void startFlow() {
         if (!PlayerSetting.isAutoChange()) return;
         if (!getSite().isChangeable()) return;
+        startAutoSwitchWait();
         if (isUseParse()) checkParse();
         else checkFlag();
+    }
+
+    // 自动换源接受窗口（对齐手机端）：发起换站/换线路后，在「5s 接收截止 → 10s 放弃截止」内
+    // 每秒轮询一次，候选一可用即切换；用尽或超时才放弃。避免"播放失败后只撞一次、不中即停"。
+    private void startAutoSwitchWait() {
+        mAutoSwitchAcceptUntil = System.currentTimeMillis() + 5000;
+        mAutoSwitchDeadline = System.currentTimeMillis() + 10000;
+        App.removeCallbacks(mAutoSwitchCheck);
+        mAutoSwitchCheck = () -> autoSwitchCheck();
+        App.post(mAutoSwitchCheck, 1000);
+    }
+
+    private boolean acceptClosed() {
+        return mAutoSwitchAcceptUntil != 0 && System.currentTimeMillis() >= mAutoSwitchAcceptUntil;
+    }
+
+    // 每秒轮询：候选已就绪即换站；手动搜索或自动换源被关闭时停止；候选未就绪且未到放弃截止线则继续等
+    private void autoSwitchCheck() {
+        if (mBinding == null || isFinishing() || isDestroyed()) return;
+        if (!isInitAuto() || !PlayerSetting.isAutoChange()) { mAutoSwitchAcceptUntil = 0; return; }
+        if (mQuickAdapter.getItemCount() > 0) {
+            nextSite();
+            return;
+        }
+        if (System.currentTimeMillis() < mAutoSwitchDeadline) {
+            App.post(mAutoSwitchCheck, 1000);
+        } else {
+            mAutoSwitchAcceptUntil = 0;
+            Notify.show(R.string.video_error_no_site);
+        }
     }
 
     private void checkParse() {
@@ -5574,6 +5642,208 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         else if (isAutoMode() || force) nextSite();
     }
 
+    // ===== 多数表决详情核验 =====
+    // 搜索接口常不返回导演字段，5维指纹「字段缺失弃权」会让导演完全不符的站点漏网混入换源候选。
+    // 进播放页/换站后后台拉取各候选站详情收集证据，按5维冲突聚类做「多数表决」：最大簇=真内容基准，
+    // 与基准簇全体冲突的站点从换源候选剔除；当前站若属少数派则判「挂错内容」，自动改切基准簇最优站。
+    // 电视端用 mQuickAdapter 为换源候选源，mQuickPool 镜像其内容作为表决池。
+
+    /// 当前站详情就绪：作为第一份证据入池并启动核验
+    private void onDetailReady(Vod detail) {
+        if (detail == null || getSite() == null) return;
+        String siteKey = getSite().getKey();
+        if (TextUtils.isEmpty(siteKey)) return;
+        addEvidence(siteKey, detail);
+        if (!mVerifyStarted) startVerification();
+        else applyVote();
+    }
+
+    private void startVerification() {
+        mVerifyStarted = true;
+        for (Vod vod : new ArrayList<>(mQuickPool)) maybeEnqueueVerifyVod(vod);
+        pumpVerifyQueue();
+        applyVote();
+    }
+
+    /// 候选站入核验队列：已有证据/已排队/命中会话缓存则不再重复请求
+    private void maybeEnqueueVerifyVod(Vod vod) {
+        String siteKey = vod.getSiteKey();
+        if (TextUtils.isEmpty(siteKey) || mEvidence.containsKey(siteKey)) return;
+        Vod cached = sVerifiedDetails.get(cacheKey(siteKey, vod.getId()));
+        if (cached != null) {
+            addEvidence(siteKey, cached);
+            return;
+        }
+        if (TextUtils.isEmpty(vod.getId())) return;
+        for (Vod q : mVerifyQueue) if (q.getSiteKey().equals(siteKey)) return;
+        mVerifyQueue.add(vod);
+    }
+
+    /// 并发上限 3 的详情抓取泵；回主线程检验轮次后更新证据并触发表决
+    private void pumpVerifyQueue() {
+        while (mVerifyRunning < VERIFY_CONCURRENCY && !mVerifyQueue.isEmpty()) {
+            Vod vod = mVerifyQueue.remove(0);
+            String siteKey = vod.getSiteKey();
+            String id = vod.getId();
+            final int epoch = mVerifyEpoch;
+            mVerifyRunning++;
+            Task.execute(() -> {
+                Vod detail = null;
+                try {
+                    detail = SiteApi.detailContent(siteKey, id).getVod();
+                } catch (Exception e) {
+                    SpiderDebug.log("verify", "detail failed key=%s: %s", siteKey, e.getMessage());
+                }
+                final Vod result = detail;
+                mQuickHandler.post(() -> {
+                    mVerifyRunning--;
+                    if (epoch != mVerifyEpoch || isFinishing() || isDestroyed()) return;
+                    if (result != null) {
+                        if (sVerifiedDetails.size() > VERIFIED_CACHE_MAX) sVerifiedDetails.clear();
+                        sVerifiedDetails.put(cacheKey(siteKey, id), result);
+                        addEvidence(siteKey, result);
+                    }
+                    applyVote();
+                    pumpVerifyQueue();
+                });
+            });
+        }
+    }
+
+    private void addEvidence(String siteKey, Vod detail) {
+        if (TextUtils.isEmpty(siteKey) || detail == null) return;
+        mEvidence.put(siteKey, detail);
+    }
+
+    private String cacheKey(String siteKey, String id) {
+        return siteKey + "|" + id;
+    }
+
+    /// 证据聚类 → 选基准簇 → 剔除少数派/未核验冲突候选 → 必要时当前站改切
+    private void applyVote() {
+        if (!mVerifyStarted || mEvidence.isEmpty()) return;
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        List<List<String>> clusters = new ArrayList<>();
+        List<List<Vod>> clusterVods = new ArrayList<>();
+        for (Map.Entry<String, Vod> entry : mEvidence.entrySet()) {
+            List<Vod> target = null;
+            for (int i = 0; i < clusters.size(); i++) {
+                if (!conflictsWithAny(entry.getValue(), clusterVods.get(i))) {
+                    target = clusterVods.get(i);
+                    target.add(entry.getValue());
+                    clusters.get(i).add(entry.getKey());
+                    break;
+                }
+            }
+            if (target == null) {
+                target = new ArrayList<>();
+                target.add(entry.getValue());
+                clusterVods.add(target);
+                List<String> keys = new ArrayList<>();
+                keys.add(entry.getKey());
+                clusters.add(keys);
+            }
+        }
+        int best = 0;
+        for (int i = 1; i < clusters.size(); i++) {
+            if (clusters.get(i).size() > clusters.get(best).size()) best = i;
+            else if (clusters.get(i).size() == clusters.get(best).size() && clusters.get(i).contains(currentKey)) best = i;
+        }
+        List<String> baseline = clusters.get(best);
+        List<Vod> baselineVods = clusterVods.get(best);
+        List<String> removeKeys = new ArrayList<>();
+        // 少数派站点：有证据且与基准簇全体冲突才剔除（只冲突部分成员时保守保留）
+        for (int i = 0; i < clusters.size(); i++) {
+            if (i == best) continue;
+            for (String key : clusters.get(i)) {
+                if (key.equals(currentKey)) continue;
+                if (conflictsWithAll(mEvidence.get(key), baselineVods)) removeKeys.add(key);
+            }
+        }
+        // 未核验候选：基准簇至少 2 家时才敢剔除（单家基准证据不足，保守不动）
+        if (baseline.size() >= 2) {
+            for (Vod vod : new ArrayList<>(mQuickPool)) {
+                String key = vod.getSiteKey();
+                if (TextUtils.isEmpty(key) || mEvidence.containsKey(key) || removeKeys.contains(key)) continue;
+                if (conflictsWithAll(vod, baselineVods)) removeKeys.add(key);
+            }
+        }
+        if (!removeKeys.isEmpty()) removeSitesFromPool(removeKeys);
+        maybeRedirectToMajority(currentKey, baseline);
+    }
+
+    /// 剔除挂错内容的站点：同步从表决池与换源候选列表 mQuickAdapter 移除
+    private void removeSitesFromPool(List<String> keys) {
+        mQuickPool.removeIf(vod -> keys.contains(vod.getSiteKey()));
+        mVerifyQueue.removeIf(vod -> keys.contains(vod.getSiteKey()));
+        for (int i = mQuickAdapter.getItemCount() - 1; i >= 0; i--) {
+            if (keys.contains(mQuickAdapter.get(i).getSiteKey())) mQuickAdapter.remove(i);
+        }
+    }
+
+    /// 当前站被多数派证伪：记坏、提示、改切基准簇健康度最优站（每部片至多一次）
+    private void maybeRedirectToMajority(String currentKey, List<String> baseline) {
+        if (mVoteRedirected || baseline.size() < 2) return;
+        if (TextUtils.isEmpty(currentKey) || !mEvidence.containsKey(currentKey) || baseline.contains(currentKey)) return;
+        mVoteRedirected = true;
+        SiteHealthStore.recordDetail(currentKey, false, 0, "vote-mismatch");
+        List<Vod> candidates = new ArrayList<>();
+        for (Vod vod : mQuickPool) {
+            if (baseline.contains(vod.getSiteKey()) && !vod.getSiteKey().equals(currentKey)) candidates.add(vod);
+        }
+        Vod target = null;
+        for (Vod vod : candidates) {
+            if (target == null || SiteHealthStore.compareVods(target, vod) > 0) target = vod;
+        }
+        if (target == null) return;
+        Notify.show(getString(R.string.video_vote_mismatch));
+        onItemClick(target);
+    }
+
+    private boolean conflictsWithAny(Vod vod, List<Vod> members) {
+        for (Vod m : members) if (conflict(vod, m)) return true;
+        return false;
+    }
+
+    private boolean conflictsWithAll(Vod vod, List<Vod> members) {
+        if (members.isEmpty()) return false;
+        for (Vod m : members) if (!conflict(vod, m)) return false;
+        return true;
+    }
+
+    private boolean conflict(Vod a, Vod b) {
+        return VodMatcher.isConflict(a, b) || VodMatcher.isTypeConflict(a, b);
+    }
+
+    // 复用搜索结果页交接的「被点卡片簇」：簇内线路已在搜索页完成冲突清洗，播放页仅做轻量处理
+    // 后直接作为换源候选（健康度降序、不含当前站点），秒开换源；无交接时保持现状——用到时即时搜索
+    private void seedQuickPoolFromHandoff() {
+        List<Vod> handoff = QuickPoolHandoff.take();
+        if (handoff == null || handoff.isEmpty()) return;
+        if (TextUtils.isEmpty(getName())) return;
+        List<Vod> items = clusterToPool(handoff);
+        if (items.isEmpty()) return;
+        mQuickPool.addAll(items);
+        mQuickAdapter.addAll(items);
+        mBinding.quick.setVisibility(View.GONE);
+        updateFocus();
+    }
+
+    // 簇线路轻量处理：剔除不可换/屏蔽/坏站 → 剔除当前播放站点 → 同站去重留一条 → 健康度降序
+    private List<Vod> clusterToPool(List<Vod> source) {
+        String currentKey = getSite() == null ? "" : getSite().getKey();
+        Map<String, Vod> map = new java.util.LinkedHashMap<>();
+        for (Vod vod : source) {
+            if (TextUtils.isEmpty(vod.getSiteKey()) || vod.getSiteKey().equals(currentKey)) continue;
+            Site site = VodConfig.get().getSite(vod.getSiteKey());
+            if (site == null || !isPass(site) || SiteHealthStore.isCrashed(site) || SiteBlockSetting.isBlocked(site)) continue;
+            map.put(vod.getSiteKey(), vod);
+        }
+        List<Vod> items = new ArrayList<>(map.values());
+        SiteHealthStore.sortVods(items);
+        return items;
+    }
+
     private void initSearch(String keyword, boolean auto) {
         setAutoMode(auto);
         setInitAuto(auto);
@@ -5589,6 +5859,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void startSearch(String keyword) {
         mQuickAdapter.clear();
+        // 新一轮搜索：重置表决状态与候选池
+        mQuickPool.clear();
+        mEvidence.clear();
+        mVerifyQueue.clear();
+        mVerifyRunning = 0;
+        mVerifyStarted = false;
+        mVoteRedirected = false;
+        mQuickHandler.removeCallbacksAndMessages(null);
+        mVerifyEpoch++;
         mBinding.quick.setVisibility(View.GONE);
         dismissQuickSearchDialog();
         quickSearchDialogClosed = false;
@@ -5599,14 +5878,24 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         updateFocus();
         List<Site> sites = new ArrayList<>();
         for (Site site : VodConfig.get().getSites()) if (isPass(site)) sites.add(site);
+        // 自动换源候选：与手机端一致，剔除不可换源与曾解析崩溃的站点，避免候选切换时炸站
+        if (isInitAuto()) sites.removeIf(site -> !site.isChangeable() || SiteHealthStore.isCrashed(site));
         SiteHealthStore.sortSites(sites);
         mViewModel.searchContent(sites, keyword, true);
     }
 
     private void setSearch(Result result) {
+        // 第5秒接受截止后晚到的结果直接丢弃，不再进入候选池（对齐手机端）
+        if (acceptClosed()) return;
         List<Vod> items = result.getList();
         items.removeIf(this::mismatch);
         mQuickAdapter.addAll(items);
+        mQuickPool.addAll(items);
+        // 核验已启动时，新入池候选也纳入证据收集（不重排已展示列表，仅影响表决池）
+        if (mVerifyStarted) {
+            for (Vod vod : items) maybeEnqueueVerifyVod(vod);
+            pumpVerifyQueue();
+        }
         mBinding.quick.setVisibility(View.GONE);
         updateFocus();
         if (!isInitAuto() && !items.isEmpty()) {
@@ -6264,7 +6553,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         DanmakuApi.cancel();
         dismissQuickSearchDialog();
         RefreshEvent.keep();
-        App.removeCallbacks(mR1, mR2, mR3, mR4, mAudioRefreshLyricsRunnable, mApplyAudioBackgroundRunnable, mHideAudioFocusRunnable);
+        App.removeCallbacks(mR1, mR2, mR3, mR4, mAutoSwitchCheck, mAudioRefreshLyricsRunnable, mApplyAudioBackgroundRunnable, mHideAudioFocusRunnable);
         stopAudioCoverRotation();
         if (mOsd != null) mOsd.release();
         mViewModel.getResult().removeObserver(mObserveDetail);

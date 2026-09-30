@@ -3,6 +3,7 @@ package com.fongmi.android.tv.utils;
 import android.text.TextUtils;
 
 import com.fongmi.android.tv.api.Decoder;
+import com.fongmi.android.tv.api.SourceScanner;
 import com.fongmi.android.tv.api.parser.LiveParser;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.bean.Channel;
@@ -29,6 +30,7 @@ import java.util.Set;
  * 点播：合并 sites，按 key 去重；多仓(depot)递归展开子仓。
  * 直播：合并 groups/channels，组内同名频道合并线路；多仓递归展开。
  * 产物始终是单仓 JSON，写入本地文件后以 file:// 注册为一条普通配置。
+ * 两端共用（手机/电视）。
  */
 public class ConfigMerger {
 
@@ -155,7 +157,7 @@ public class ConfigMerger {
                 String spider = Json.safeString(object, "spider");
                 // 合并期安全闸口：全局 spider 引用宿主自杀 API（System.exit/killProcess）→ 整个订阅源剔除不合并
                 // 受「合并源安全检测」开关控制：关闭时不执行静态扫描；「杀进程中和」开启时放行（加载期 NOP 中和）
-                if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !spider.isEmpty() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(spider)) {
+                if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !spider.isEmpty() && SourceScanner.hasExitRef(spider)) {
                     failed.add(url);
                     return;
                 }
@@ -167,7 +169,7 @@ public class ConfigMerger {
                     JsonObject item = element.getAsJsonObject().deepCopy();
                     // 站点自带 jar 引用自杀 API → 仅剔除该站点，保留源内其它站点
                     String siteJar = Json.safeString(item, "jar");
-                    if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !siteJar.isEmpty() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(siteJar)) continue;
+                    if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !siteJar.isEmpty() && SourceScanner.hasExitRef(siteJar)) continue;
                     // Site.objectFrom 会把空 jar 填成 spider，故须检查原始 JSON 是否自带 jar
                     if (siteJar.isEmpty() && !spider.isEmpty()) item.addProperty("jar", spider);
                     sites.add(item);
@@ -192,16 +194,15 @@ public class ConfigMerger {
                     }
                 } else if (object.has("lives")) {
                     String spider = Json.safeString(object, "spider");
-                    // 合并期安全闸口：全局 spider 引用宿主自杀 API → 整个订阅源剔除不合并
-                    // 受「合并源安全检测」开关控制：关闭时不执行静态扫描；「杀进程中和」开启时放行（加载期 NOP 中和）
-                    if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !spider.isEmpty() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(spider)) {
+                    // 合并期安全闸：全局 spider 引用自杀 API → 整个订阅源剔除不合并
+                    if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !spider.isEmpty() && SourceScanner.hasExitRef(spider)) {
                         failed.add(url);
                         return;
                     }
                     for (JsonElement element : Json.safeListElement(object, "lives")) {
-                        // lives 分组自带 jar 引用自杀 API → 仅剔除该分组
+                        // lives 分组自带 jar 自杀 API → 仅剔除该分组
                         String groupJar = element.isJsonObject() ? Json.safeString(element.getAsJsonObject(), "jar") : "";
-                        if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !groupJar.isEmpty() && com.fongmi.android.tv.api.SourceScanner.hasExitRef(groupJar)) continue;
+                        if (Setting.isProbeMerge() && !Setting.isNeutralizeKill() && !groupJar.isEmpty() && SourceScanner.hasExitRef(groupJar)) continue;
                         Live live = Live.objectFrom(element, spider);
                         collectLiveGroups(live, groups, keepAll);
                         if (listener != null) listener.onSite(countChannels(groups));

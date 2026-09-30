@@ -59,6 +59,7 @@ import com.fongmi.android.tv.ui.custom.CustomLiveListView;
 import com.fongmi.android.tv.ui.custom.CustomSeekView;
 import com.fongmi.android.tv.ui.custom.PlayerOsdController;
 import com.fongmi.android.tv.ui.dialog.HistoryDialog;
+import com.fongmi.android.tv.ui.dialog.ConfigDialog;
 import com.fongmi.android.tv.ui.dialog.LiveDialog;
 import com.fongmi.android.tv.ui.dialog.PassDialog;
 import com.fongmi.android.tv.ui.dialog.PlayerKernelDialog;
@@ -216,6 +217,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.control.action.decode.setOnClickListener(view -> onDecode());
         mBinding.control.action.speed.setOnLongClickListener(view -> onSpeedLong());
         mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
+        mBinding.btnConfigSource.setOnClickListener(view -> openConfig());
         mBinding.group.addOnChildViewHolderSelectedListener(new OnChildViewHolderSelectedListener() {
             @Override
             public void onChildViewHolderSelected(@NonNull RecyclerView parent, @Nullable RecyclerView.ViewHolder child, int position, int subposition) {
@@ -269,10 +271,25 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
 
     private void checkLive() {
         if (isEmpty()) {
-            LiveConfig.get().init().load(getCallback());
+            if (LiveConfig.isEmpty()) showLiveEmpty();
+            else LiveConfig.get().init().load(getCallback());
         } else {
             getLive();
         }
+    }
+
+    private void showLiveEmpty() {
+        hideProgress();
+        mBinding.liveEmpty.setVisibility(View.VISIBLE);
+    }
+
+    private void hideLiveEmpty() {
+        mBinding.liveEmpty.setVisibility(View.GONE);
+    }
+
+    private void openConfig() {
+        hideLiveEmpty();
+        ConfigDialog.create().live().show(this);
     }
 
     private Callback getCallback() {
@@ -290,6 +307,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
     }
 
     private void getLive() {
+        hideLiveEmpty();
         mViewModel.parse(getHome());
         showProgress();
     }

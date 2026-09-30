@@ -819,6 +819,10 @@
     <string name="setting_auto">自动</string>
     <string name="setting_custom">自定义</string>
     <string name="setting_language">语言</string>
+    <string name="setting_boot">开机自动启动</string>
+    <string name="boot_off">关闭</string>
+    <string name="boot_live">直播页</string>
+    <string name="boot_vod">点播页</string>
     <string name="setting_size">图片尺寸</string>
     <string name="setting_ui_scale">界面大小</string>
     <string name="dialog_close">关闭</string>
@@ -862,6 +866,12 @@
     <string name="site_enable_change_all_toast">已将本订阅下所有站源设为「参与换源」。</string>
     <string name="home_auto_switch_setting">首页站点内容为空自动切换</string>
     <string name="home_switch_banner">默认站点无数据，已自动切换至「%1$s」</string>
+    <string name="popup_shield">拦截订阅源广告弹窗</string>
+    <string name="block_interface_toast">屏蔽订阅源接口toast提示</string>
+    <string name="neutralize_kill">订阅源检测包名中和指令</string>
+    <string name="neutralize_kill_confirm">开启后，含杀进程代码的源将不再被阻止添加，软件会在加载前原地中和其杀进程指令（其余功能不受影响）。被中和的源仍会执行其它代码，存在一定风险。确定开启吗？</string>
+    <string name="neutralize_kill_close_confirm">关闭此功能后，对软件包名/软件名带检测的订阅源将无法添加，是否确认关闭？</string>
+    <string name="vod_auto_enable_change">点播新增订阅后自动参与换源</string>
 
     <string name="source_probe_trial_rollback_title">安全提醒</string>
     <string name="source_probe_trial_rollback_message">你最近添加的源在 8 秒试运行期间导致软件闪退，已自动删除该源并恢复原配置，该源已被永久拉黑。</string>
@@ -1663,4 +1673,6 @@
 
     <string name="player_audio_badge_queue">队列</string>
     <string name="player_audio_repeat">循环</string>
+    <string name="live_config_no_source">尚未配置可用的直播源，请先添加订阅源。</string>
+    <string name="live_config_add_source">添加订阅源</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.Updater;
+import com.fongmi.android.tv.api.PopupShield;
 import com.fongmi.android.tv.api.config.LiveConfig;
 import com.fongmi.android.tv.api.config.VodConfig;
 import com.fongmi.android.tv.api.config.WallConfig;
@@ -35,6 +36,7 @@ import com.fongmi.android.tv.ui.dialog.LiveDialog;
 import com.fongmi.android.tv.ui.dialog.RestoreDialog;
 import com.fongmi.android.tv.ui.dialog.BackupProgressDialog;
 import com.fongmi.android.tv.ui.dialog.SiteDialog;
+import com.fongmi.android.tv.ui.dialog.SourceMergeDialog;
 import com.fongmi.android.tv.utils.AppVersion;
 import com.fongmi.android.tv.utils.FileUtil;
 import com.fongmi.android.tv.utils.Notify;
@@ -45,6 +47,8 @@ import com.github.catvod.net.OkHttp;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
+
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,6 +99,14 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
         mBinding.languageText.setText((language = ResUtil.getStringArray(R.array.select_language))[Setting.getLanguageIndex()]);
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);
+        mBinding.probeAddText.setText(getSwitch(Setting.isProbeAdd()));
+        mBinding.probeMergeText.setText(getSwitch(Setting.isProbeMerge()));
+        mBinding.popupShieldText.setText(getSwitch(Setting.isPopupShield()));
+        mBinding.blockNoticeText.setText(getSwitch(Setting.isBlockNotice()));
+        mBinding.neutralizeKillText.setText(getSwitch(Setting.isNeutralizeKill()));
+        mBinding.homeAutoSwitchText.setText(getSwitch(Setting.isHomeAutoSwitch()));
+        mBinding.vodAutoEnableChangeText.setText(getSwitch(Setting.isAutoEnableChange()));
+        mBinding.bootStartText.setText(getBootLabel(Setting.getBootPage()));
     }
 
     private void setCacheText() {
@@ -112,6 +124,8 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.doh.setOnClickListener(this::setDoh);
         mBinding.live.setOnClickListener(this::onLive);
         mBinding.wall.setOnClickListener(this::onWall);
+        mBinding.vodMerge.setOnClickListener(v -> onVodMerge());
+        mBinding.liveMerge.setOnClickListener(v -> onLiveMerge());
         mBinding.size.setOnClickListener(this::setSize);
         mBinding.language.setOnClickListener(this::setLanguage);
         mBinding.cache.setOnClickListener(this::onCache);
@@ -127,6 +141,14 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         mBinding.liveHome.setOnClickListener(this::onLiveHome);
         mBinding.wall.setOnLongClickListener(this::onWallEdit);
         mBinding.incognito.setOnClickListener(this::setIncognito);
+        mBinding.probeAdd.setOnClickListener(this::setProbeAdd);
+        mBinding.probeMerge.setOnClickListener(this::setProbeMerge);
+        mBinding.popupShield.setOnClickListener(this::setPopupShield);
+        mBinding.blockNotice.setOnClickListener(this::setBlockNotice);
+        mBinding.neutralizeKill.setOnClickListener(this::setNeutralizeKill);
+        mBinding.homeAutoSwitch.setOnClickListener(this::setHomeAutoSwitch);
+        mBinding.vodAutoEnableChange.setOnClickListener(this::setVodAutoEnableChange);
+        mBinding.bootStart.setOnClickListener(this::setBootStart);
         mBinding.vodHistory.setOnClickListener(this::onVodHistory);
         mBinding.liveHistory.setOnClickListener(this::onLiveHistory);
         mBinding.wallDefault.setOnClickListener(this::setWallDefault);
@@ -218,6 +240,14 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
         return true;
     }
 
+    private void onVodMerge() {
+        SourceMergeDialog.create().vod().show(this);
+    }
+
+    private void onLiveMerge() {
+        SourceMergeDialog.create().live().show(this);
+    }
+
     private void onVodHome(View view) {
         SiteDialog.create().action().show(this);
     }
@@ -270,6 +300,117 @@ public class SettingActivity extends BaseActivity implements ConfigListener, Sit
     private void setIncognito(View view) {
         Setting.putIncognito(!Setting.isIncognito());
         mBinding.incognitoText.setText(getSwitch(Setting.isIncognito()));
+    }
+
+    // 关闭「添加订阅源安全检测」需二次确认（开启立即生效）
+    private void setProbeAdd(View view) {
+        boolean target = !Setting.isProbeAdd();
+        if (target) {
+            Setting.putProbeAdd(true);
+            mBinding.probeAddText.setText(getSwitch(true));
+            return;
+        }
+        new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.video_error_title)
+                .setMessage(R.string.source_probe_switch_confirm)
+                .setNegativeButton(R.string.dialog_negative, (dialog, which) -> mBinding.probeAddText.setText(getSwitch(true)))
+                .setPositiveButton(R.string.source_probe_switch_close, (dialog, which) -> {
+                    Setting.putProbeAdd(false);
+                    mBinding.probeAddText.setText(getSwitch(false));
+                })
+                .show();
+    }
+
+    // 关闭「合并订阅源安全检测」需二次确认
+    private void setProbeMerge(View view) {
+        boolean target = !Setting.isProbeMerge();
+        if (target) {
+            Setting.putProbeMerge(true);
+            mBinding.probeMergeText.setText(getSwitch(true));
+            return;
+        }
+        new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                .setTitle(R.string.video_error_title)
+                .setMessage(R.string.source_probe_switch_confirm)
+                .setNegativeButton(R.string.dialog_negative, (dialog, which) -> mBinding.probeMergeText.setText(getSwitch(true)))
+                .setPositiveButton(R.string.source_probe_switch_close, (dialog, which) -> {
+                    Setting.putProbeMerge(false);
+                    mBinding.probeMergeText.setText(getSwitch(false));
+                })
+                .show();
+    }
+
+    // 开启「中和杀进程指令」与关闭均需二次确认
+    private void setNeutralizeKill(View view) {
+        boolean enable = !Setting.isNeutralizeKill();
+        if (enable) {
+            new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                    .setTitle(R.string.video_error_title)
+                    .setMessage(R.string.neutralize_kill_confirm)
+                    .setNegativeButton(R.string.dialog_negative, (dialog, which) -> {})
+                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
+                        Setting.putNeutralizeKill(true);
+                        mBinding.neutralizeKillText.setText(getSwitch(true));
+                    })
+                    .show();
+        } else {
+            new MaterialAlertDialogBuilder(this, R.style.ThemeOverlay_WebHTV_LightDialog)
+                    .setMessage(R.string.neutralize_kill_close_confirm)
+                    .setNegativeButton(R.string.dialog_negative, (dialog, which) -> {})
+                    .setPositiveButton(R.string.dialog_positive, (dialog, which) -> {
+                        Setting.putNeutralizeKill(false);
+                        mBinding.neutralizeKillText.setText(getSwitch(false));
+                    })
+                    .show();
+        }
+    }
+
+    // 弹窗拦截即时生效，无需二次确认
+    private void setPopupShield(View view) {
+        boolean enable = !Setting.isPopupShield();
+        Setting.putPopupShield(enable);
+        PopupShield.setEnabled(enable);
+        mBinding.popupShieldText.setText(getSwitch(enable));
+    }
+
+    // 接口提示拦截即时生效
+    private void setBlockNotice(View view) {
+        boolean enable = !Setting.isBlockNotice();
+        Setting.putBlockNotice(enable);
+        PopupShield.reload();
+        mBinding.blockNoticeText.setText(getSwitch(enable));
+    }
+
+    // 首页自动切换（空源切换）开关
+    private void setHomeAutoSwitch(View view) {
+        boolean enable = !Setting.isHomeAutoSwitch();
+        Setting.putHomeAutoSwitch(enable);
+        mBinding.homeAutoSwitchText.setText(getSwitch(enable));
+    }
+
+    // 点播新增订阅后自动参与换源开关
+    private void setVodAutoEnableChange(View view) {
+        boolean enable = !Setting.isAutoEnableChange();
+        Setting.putAutoEnableChange(enable);
+        mBinding.vodAutoEnableChangeText.setText(getSwitch(enable));
+    }
+
+    // 开机启动：关闭 → 直播页 → 点播页 循环
+    private void setBootStart(View view) {
+        int page = (Setting.getBootPage() + 1) % 3;
+        Setting.putBootPage(page);
+        mBinding.bootStartText.setText(getBootLabel(page));
+    }
+
+    private String getBootLabel(int page) {
+        switch (page) {
+            case Setting.BOOT_LIVE:
+                return getString(R.string.boot_live);
+            case Setting.BOOT_VOD:
+                return getString(R.string.boot_vod);
+            default:
+                return getString(R.string.boot_off);
+        }
     }
 
     private void setSize(View view) {

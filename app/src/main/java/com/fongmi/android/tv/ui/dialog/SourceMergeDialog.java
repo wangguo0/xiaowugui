@@ -16,6 +16,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.LinearLayoutCompat;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.App;
@@ -68,6 +69,10 @@ public class SourceMergeDialog extends BaseAlertDialog {
 
     public void show(Fragment fragment) {
         show(fragment.getChildFragmentManager(), null);
+    }
+
+    public void show(FragmentActivity activity) {
+        show(activity.getSupportFragmentManager(), null);
     }
 
     @Override

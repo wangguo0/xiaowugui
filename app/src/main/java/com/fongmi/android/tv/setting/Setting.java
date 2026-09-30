@@ -46,6 +46,10 @@ public class Setting {
     public static final int CSP_WARMUP_DEFAULT = 1;
     public static final int CSP_WARMUP_CUSTOM = 2;
 
+    public static final int BOOT_OFF = 0;
+    public static final int BOOT_LIVE = 1;
+    public static final int BOOT_VOD = 2;
+
     public static final int UI_SCALE_FOLLOW_SYSTEM = 0;
     public static final int UI_SCALE_STANDARD = 1;
     public static final int UI_SCALE_COMPACT = 2;
@@ -301,6 +305,14 @@ public class Setting {
 
     public static void putSyncMode(int mode) {
         Prefers.put("sync_mode", mode);
+    }
+
+    public static int getBootPage() {
+        return Prefers.getInt("boot_page", BOOT_OFF);
+    }
+
+    public static void putBootPage(int page) {
+        Prefers.put("boot_page", page);
     }
 
     public static String getSyncPaths() {

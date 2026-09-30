@@ -10,6 +10,8 @@ import androidx.annotation.NonNull;
 
 import com.fongmi.android.tv.App;
 import com.fongmi.android.tv.api.config.LiveConfig;
+import com.fongmi.android.tv.setting.Setting;
+import com.fongmi.android.tv.ui.activity.HomeActivity;
 
 public class BootReceiver extends BroadcastReceiver {
 
@@ -17,6 +19,15 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null || !isBootAction(intent.getAction())) return;
         registerCallback();
+        startHome(context);
+    }
+
+    private void startHome(Context context) {
+        if (Setting.getBootPage() == Setting.BOOT_OFF) return;
+        Intent home = new Intent(context, HomeActivity.class);
+        home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        home.putExtra(HomeActivity.EXTRA_BOOT, true);
+        context.startActivity(home);
     }
 
     private boolean isBootAction(String action) {
