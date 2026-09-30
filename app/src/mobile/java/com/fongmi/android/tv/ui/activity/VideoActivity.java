@@ -269,6 +269,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     // 簇交接模式：池来自搜索页「被点卡片簇」（已完成5维冲突清洗），切换站源列表按健康度直排提交，
     // 不再二次清洗、不再发起搜索；列表恒不含当前播放站点
     private boolean mQuickClusterMode;
+    // 「已无可用站源」提示在同一次播放页会话内只弹一次
+    private boolean mNoSiteNotified;
     // ===== 多数表决详情核验 =====
     // 会话级详情指纹缓存：siteKey|vodId → 指纹；核验过一次全会话复用，不重复请求
     private static final Map<String, Vod> sVerifiedDetails = java.util.Collections.synchronizedMap(new java.util.LinkedHashMap<>());
@@ -6651,13 +6653,21 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
             else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
             else {
                 mBlockedSwitch = false;
-                Notify.show(R.string.video_error_no_site);
+                notifyNoSite();
             }
             return;
         }
         if (!PlayerSetting.isAutoChange() || !isAutoMode()) return;
         if (!buildQuickItems().isEmpty() || hasMoreQuick()) nextSite();
         else if (System.currentTimeMillis() < mAutoSwitchDeadline) App.post(mAutoSwitchCheck, 1000);
+        else notifyNoSite();
+    }
+
+    // 自动换源彻底放弃时给出明确提示，避免用户把「已停止换源」误认为软件卡死
+    private void notifyNoSite() {
+        if (mNoSiteNotified) return;
+        mNoSiteNotified = true;
+        Notify.show(R.string.video_error_no_site);
     }
 
     // 复用搜索结果页交接的「被点卡片簇」：簇内线路已在搜索页完成5维冲突清洗，播放页仅做轻量处理
@@ -6677,6 +6687,9 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mQuickCleanedCount = mQuickPool.size();
         mQuickAllReturned = true;
         mQuickFrozen = true;
+        // 交接池同样是自动换源的候选来源：必须标记为自动模式，否则播放出错时 checkSearch 因
+        // autoMode=false 直接返回，导致「播放地址解析失败」后一次都不换站
+        setAutoMode(true);
     }
 
     // 簇线路轻量处理：剔除不可换/屏蔽/坏站 → 剔除当前播放站点 → 同站去重留集数多者 → 健康度降序
@@ -6880,6 +6893,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private void startSearch(String keyword) {
         mQuickSearchKeyword = keyword;
         mQuickEpoch++;
+        mNoSiteNotified = false;
         mQuickPool.clear();
         mQuickDisplayed.clear();
         mQuickRest.clear();
@@ -7084,6 +7098,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         }
         if (mQuickDisplayed.isEmpty()) {
             mQuickAutoNeedMore = false;
+            if (isAutoMode() && PlayerSetting.isAutoChange()) notifyNoSite();
             return;
         }
         mQuickAutoNeedMore = false;

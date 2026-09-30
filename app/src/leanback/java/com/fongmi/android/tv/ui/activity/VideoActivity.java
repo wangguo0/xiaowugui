@@ -263,6 +263,8 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private boolean fullscreen;
     private boolean initAuto;
     private boolean autoMode;
+    // 「已无可用站源」提示在同一次播放页会话内只弹一次
+    private boolean mNoSiteNotified;
     private boolean revealManualSearch;
     private boolean quickSearchDialogClosed;
     // ===== 自动换源（对齐手机端可靠管线） =====
@@ -5612,8 +5614,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
             App.post(mAutoSwitchCheck, 1000);
         } else {
             mAutoSwitchAcceptUntil = 0;
-            Notify.show(R.string.video_error_no_site);
+            notifyNoSite();
         }
+    }
+
+    // 自动换源彻底放弃时给出明确提示，避免用户把「已停止换源」误认为软件卡死
+    private void notifyNoSite() {
+        if (mNoSiteNotified) return;
+        mNoSiteNotified = true;
+        Notify.show(R.string.video_error_no_site);
     }
 
     private void checkParse() {
@@ -5827,6 +5836,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
         mQuickAdapter.addAll(items);
         mBinding.quick.setVisibility(View.GONE);
         updateFocus();
+        // 交接池同样是自动换源的候选来源：必须标记为自动模式，否则播放出错时 checkSearch 因
+        // autoMode=false 直接返回，导致「播放地址解析失败」后一次都不换站
+        setAutoMode(true);
     }
 
     // 簇线路轻量处理：剔除不可换/屏蔽/坏站 → 剔除当前播放站点 → 同站去重留一条 → 健康度降序
@@ -5860,6 +5872,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void startSearch(String keyword) {
         mQuickAdapter.clear();
         // 新一轮搜索：重置表决状态与候选池
+        mNoSiteNotified = false;
         mQuickPool.clear();
         mEvidence.clear();
         mVerifyQueue.clear();
@@ -5962,7 +5975,10 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void nextSite() {
-        if (mQuickAdapter.getItemCount() == 0) return;
+        if (mQuickAdapter.getItemCount() == 0) {
+            if (isAutoMode() && PlayerSetting.isAutoChange()) notifyNoSite();
+            return;
+        }
         int position = mQuickAdapter.getBestPosition();
         Vod item = mQuickAdapter.get(position);
         Notify.show(getString(R.string.play_switch_site, item.getSiteName()));
