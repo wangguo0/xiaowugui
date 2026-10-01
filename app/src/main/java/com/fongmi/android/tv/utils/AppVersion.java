@@ -23,6 +23,11 @@ public final class AppVersion {
         return "mobile".equals(mode) ? "shouji" : "leanback".equals(mode) ? "dianshi" : mode;
     }
 
+    // 是否为电视端（leanback），用于区分 D-pad 焦点管理等平台差异化 UI
+    public static boolean isTv() {
+        return "leanback".equals(BuildConfig.FLAVOR_mode);
+    }
+
     // 机型串：shouji-arm64_v8a / dianshi-armeabi_v7a
     public static String deviceName() {
         return modeName() + "-" + BuildConfig.FLAVOR_abi;

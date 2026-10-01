@@ -3,6 +3,7 @@ package com.fongmi.android.tv.ui.dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -20,6 +21,10 @@ import com.fongmi.android.tv.utils.MarkdownText;
 import com.fongmi.android.tv.utils.ResUtil;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
+/**
+ * 检查更新 / 版本更新 / 强制更新弹窗。
+ * 电视端（leanback）与手机端（mobile）共用此单一实现，平台差异化（D-pad 焦点、窗口尺寸）通过 AppVersion.isTv() 区分。
+ */
 public class UpdateDialog extends BaseAlertDialog {
 
     private DialogUpdateBinding binding;
@@ -90,6 +95,10 @@ public class UpdateDialog extends BaseAlertDialog {
         binding.close.setOnClickListener(this::close);
         binding.stableItem.setOnClickListener(view -> toggle(Update.CHANNEL_STABLE));
         binding.betaItem.setOnClickListener(view -> toggle(Update.CHANNEL_BETA));
+        if (AppVersion.isTv()) {
+            binding.stableItem.setOnKeyListener((view, keyCode, event) -> onItemKey(Update.CHANNEL_STABLE, view, keyCode, event));
+            binding.betaItem.setOnKeyListener((view, keyCode, event) -> onItemKey(Update.CHANNEL_BETA, view, keyCode, event));
+        }
         binding.stableConfirm.setOnClickListener(view -> update(Update.CHANNEL_STABLE, view));
         binding.betaConfirm.setOnClickListener(view -> update(Update.CHANNEL_BETA, view));
         binding.cancel.setOnClickListener(this::action);
@@ -99,8 +108,17 @@ public class UpdateDialog extends BaseAlertDialog {
     public void onStart() {
         super.onStart();
         setCancelable(false);
-        if (getDialog() != null) getDialog().setCanceledOnTouchOutside(false);
-        setDialogWidth(ResUtil.isLand(requireActivity()) ? 0.62f : 0.92f);
+        if (getDialog() != null) {
+            getDialog().setCanceledOnTouchOutside(false);
+            if (AppVersion.isTv()) getDialog().setOnKeyListener((dialog, keyCode, event) -> onDialogKey(keyCode, event));
+        }
+        if (AppVersion.isTv()) {
+            clearWindowInset();
+            configureWindow();
+            (forceMode ? binding.cancel : binding.stableItem).requestFocus();
+        } else {
+            setDialogWidth(ResUtil.isLand(requireActivity()) ? 0.62f : 0.92f);
+        }
     }
 
     private void select(String channel) {
@@ -114,7 +132,6 @@ public class UpdateDialog extends BaseAlertDialog {
             update(channel, getItem(channel));
             return;
         }
-        if (!hasBeta()) return;
         selected = channel;
         stableExpanded = Update.CHANNEL_STABLE.equals(channel);
         betaExpanded = Update.CHANNEL_BETA.equals(channel);
@@ -147,6 +164,7 @@ public class UpdateDialog extends BaseAlertDialog {
         renderItem(Update.CHANNEL_STABLE, forceMode ? getSelected() : stable);
         if (hasBeta() && !forceMode) renderItem(Update.CHANNEL_BETA, beta);
         renderAction();
+        if (AppVersion.isTv()) updateFocusLinks();
         binding.close.setVisibility(forceMode ? View.GONE : View.VISIBLE);
         // 强制模式标题改为「强制更新」，普通模式仍「版本更新」
         binding.title.setText(forceMode ? R.string.update_force_title : R.string.update_title);
@@ -158,17 +176,20 @@ public class UpdateDialog extends BaseAlertDialog {
         return TextUtils.isEmpty(forceMsg) ? getString(R.string.update_force_hint) : forceMsg;
     }
 
-    // 滚动区高度随内容自适应：内容少时弹窗整体缩小，内容超高才限高 360dp
-    private void configureScrollHeight() {
-        binding.listScroll.post(() -> {
-            View content = binding.listScroll.getChildAt(0);
-            if (content == null || !isAdded()) return;
-            int height = Math.min(content.getMeasuredHeight(), ResUtil.dp2px(360));
-            ViewGroup.LayoutParams params = binding.listScroll.getLayoutParams();
-            if (params.height == height) return;
-            params.height = height;
-            binding.listScroll.setLayoutParams(params);
-        });
+    private String getVersion(Update update) {
+        return update != null && update.hasManifest() ? AppVersion.stripPrefix(update.name) : getString(R.string.update_status_unavailable);
+    }
+
+    private String getStatus(Update update) {
+        if (update == null || !update.hasManifest()) return getString(R.string.update_status_unavailable);
+        return update.hasUpdate() ? getString(R.string.update_status_available) : getString(R.string.update_status_latest);
+    }
+
+    private String getBody(Update update) {
+        if (update == null || !update.hasManifest()) return getString(R.string.update_channel_unavailable);
+        if (!TextUtils.isEmpty(update.getText())) return update.getText();
+        if (!update.hasUpdate()) return getString(R.string.update_channel_latest);
+        return update.getText();
     }
 
     private void renderItem(String channel, Update update) {
@@ -210,22 +231,6 @@ public class UpdateDialog extends BaseAlertDialog {
         else binding.cancel.setText(hasBeta() ? getString(R.string.update_confirm_channel, getSelectedName()) : getString(R.string.update_confirm));
     }
 
-    private String getVersion(Update update) {
-        return update != null && update.hasManifest() ? AppVersion.stripPrefix(update.name) : getString(R.string.update_status_unavailable);
-    }
-
-    private String getStatus(Update update) {
-        if (update == null || !update.hasManifest()) return getString(R.string.update_status_unavailable);
-        return update.hasUpdate() ? getString(R.string.update_status_available) : getString(R.string.update_status_latest);
-    }
-
-    private String getBody(Update update) {
-        if (update == null || !update.hasManifest()) return getString(R.string.update_channel_unavailable);
-        if (!TextUtils.isEmpty(update.getText())) return update.getText();
-        if (!update.hasUpdate()) return getString(R.string.update_channel_latest);
-        return update.getText();
-    }
-
     private boolean hasBeta() {
         return beta != null && beta.hasManifest();
     }
@@ -253,6 +258,97 @@ public class UpdateDialog extends BaseAlertDialog {
         return getString(Update.CHANNEL_BETA.equals(selected) ? R.string.update_channel_beta : R.string.update_channel_stable);
     }
 
+    // ===== 电视端（leanback）专属：D-pad 焦点管理与窗口配置 =====
+
+    private void updateFocusLinks() {
+        int nextAfterStable = hasBeta() && !forceMode ? R.id.betaItem : R.id.cancel;
+        int nextBeforeStable = forceMode ? R.id.stableItem : R.id.close;
+        binding.close.setFocusable(true);
+        binding.close.setNextFocusUpId(R.id.close);
+        binding.close.setNextFocusLeftId(R.id.close);
+        binding.close.setNextFocusRightId(R.id.close);
+        binding.close.setNextFocusDownId(R.id.stableItem);
+        binding.stableItem.setNextFocusUpId(nextBeforeStable);
+        binding.stableItem.setNextFocusDownId(nextAfterStable);
+        binding.stableConfirm.setNextFocusDownId(nextAfterStable);
+        binding.betaItem.setNextFocusUpId(R.id.stableItem);
+        binding.betaItem.setNextFocusDownId(R.id.cancel);
+        binding.betaConfirm.setNextFocusUpId(R.id.betaItem);
+        binding.betaConfirm.setNextFocusDownId(R.id.cancel);
+        binding.cancel.setNextFocusUpId(nextAfterStable == R.id.cancel ? R.id.stableItem : R.id.betaItem);
+        binding.cancel.setNextFocusDownId(R.id.cancel);
+        binding.cancel.setNextFocusLeftId(R.id.cancel);
+        binding.cancel.setNextFocusRightId(R.id.cancel);
+    }
+
+    private boolean onDialogKey(int keyCode, KeyEvent event) {
+        if (keyCode != KeyEvent.KEYCODE_BACK || event.getAction() != KeyEvent.ACTION_UP) return false;
+        // 强制更新态：返回键不可关闭/取消
+        if (forceMode) return true;
+        close(binding.close);
+        return true;
+    }
+
+    private boolean onItemKey(String channel, View view, int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN || !isExpanded(channel)) return false;
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+            update(channel, view);
+            return true;
+        }
+        if (keyCode != KeyEvent.KEYCODE_DPAD_UP && keyCode != KeyEvent.KEYCODE_DPAD_DOWN) return false;
+        if (!hasLongNotes(channel)) return false;
+        int direction = keyCode == KeyEvent.KEYCODE_DPAD_DOWN ? 1 : -1;
+        if (!binding.listScroll.canScrollVertically(direction)) return false;
+        binding.listScroll.smoothScrollBy(0, direction * ResUtil.dp2px(96));
+        return true;
+    }
+
+    private boolean hasLongNotes(String channel) {
+        return (Update.CHANNEL_BETA.equals(channel) ? binding.betaDesc : binding.stableDesc).getLineCount() > 10;
+    }
+
+    private void clearWindowInset() {
+        Window window = getDialog() == null ? null : getDialog().getWindow();
+        if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    }
+
+    // 电视弹窗宽度：96dp 边距内，960dp 与 72% 屏宽取小
+    private void configureWindow() {
+        Window window = getDialog() == null ? null : getDialog().getWindow();
+        if (window == null) return;
+        int screenWidth = ResUtil.getScreenWidth(requireContext());
+        int horizontalMargin = ResUtil.dp2px(96);
+        int width = Math.min(ResUtil.dp2px(960), (int) (screenWidth * 0.72f));
+        width = Math.min(width, screenWidth - horizontalMargin);
+        WindowManager.LayoutParams params = window.getAttributes();
+        params.width = width;
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        window.setAttributes(params);
+        window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+    }
+
+    // 滚动区高度随内容自适应：内容少时弹窗整体缩小，内容超高才限高
+    private void configureScrollHeight() {
+        binding.listScroll.post(() -> {
+            View content = binding.listScroll.getChildAt(0);
+            if (content == null || !isAdded()) return;
+            int cap;
+            if (AppVersion.isTv()) {
+                // 电视：320dp 与屏高 42% 取小，且不低于 220dp
+                cap = Math.max(ResUtil.dp2px(220), Math.min(ResUtil.dp2px(320), (int) (ResUtil.getScreenHeight(requireContext()) * 0.42f)));
+            } else {
+                // 手机：固定 360dp
+                cap = ResUtil.dp2px(360);
+            }
+            int height = Math.min(content.getMeasuredHeight(), cap);
+            ViewGroup.LayoutParams params = binding.listScroll.getLayoutParams();
+            if (params.height == height) return;
+            params.height = height;
+            binding.listScroll.setLayoutParams(params);
+        });
+    }
+
+    // 手机端专属：按方向调整弹窗宽度
     private void setDialogWidth(float factor) {
         Window window = getDialog() == null ? null : getDialog().getWindow();
         if (window == null) return;
