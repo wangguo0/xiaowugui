@@ -7206,6 +7206,11 @@ public class PlayerManager implements ParseCallback {
                 clearLutWarmupRecovery();
                 applyLutForCurrentItem();
                 scheduleNetworkProtection(0);
+                // 问题二B：缓冲结束回到 READY 时兜底恢复播放。IJK 等内核缓冲结束时不一定再次
+                // start()，这里对"用户要播但引擎却停下来"的情况统一补一次 play()，覆盖所有内核。
+                if (player != null && player.getPlayWhenReady() && !player.isPlaying()) {
+                    player.play();
+                }
             } else if (state == Player.STATE_BUFFERING) {
                 App.removeCallbacks(networkProtectionRunnable);
                 // Do not reset/disrupt the network guard here. BUFFERING is transient and

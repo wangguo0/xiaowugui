@@ -1663,13 +1663,14 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
             case "eof-reached" -> {
                 boolean wasEnded = playbackState == Player.STATE_ENDED;
                 eofReached = Boolean.TRUE.equals(value);
-                if (eofReached) markPlaybackEnded("property:eof-reached");
+                // 用户在暂停（用户主动停播）时，mpv 空闲导致的上报不能当“播放结束”，否则会误切/退回首页
+                if (eofReached && playWhenReady) markPlaybackEnded("property:eof-reached");
                 stateChanged = !wasEnded && playbackState == Player.STATE_ENDED;
             }
             case "idle-active" -> {
                 boolean wasEnded = playbackState == Player.STATE_ENDED;
                 idleActive = Boolean.TRUE.equals(value);
-                if (idleActive && fileLoaded && !stopping) markPlaybackEnded("property:idle-active");
+                if (idleActive && fileLoaded && !stopping && playWhenReady) markPlaybackEnded("property:idle-active");
                 stateChanged = !wasEnded && playbackState == Player.STATE_ENDED;
             }
             case "width", "height", "video-params/w", "video-params/h", "video-params/dw", "video-params/dh", "video-out-params/w", "video-out-params/h", "video-out-params/dw", "video-out-params/dh", "current-tracks/video/demux-w", "current-tracks/video/demux-h" -> {
@@ -1956,7 +1957,8 @@ public final class MpvPlayer extends SimpleBasePlayer implements MPVLib.EventObs
                 return;
             }
             case MPVLib.MpvEvent.MPV_EVENT_IDLE -> {
-                if (fileLoaded && !stopping) {
+                // 用户主动暂停（playWhenReady=false）时，空闲不判为“结束”，避免误退回首页
+                if (fileLoaded && !stopping && playWhenReady) {
                     markPlaybackEnded("event:idle");
                 } else if (loading && !stopping) {
                     playbackState = Player.STATE_BUFFERING;

@@ -606,6 +606,9 @@ class IjkSimplePlayer extends SimpleBasePlayer implements IMediaPlayer.Listener 
                 || what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START) {
             loading = false;
             playbackState = Player.STATE_READY;
+            // 缓冲结束需显式恢复播放：缓冲期间 playWhenReady 始终为 true，
+            // 不会再次触发 handleSetPlayWhenReady，若不重新 start() 会卡死在缓冲完成处
+            if (playWhenReady && ijk != null) ijk.start();
             startStateRefresh();
         }
         if (what == IMediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START

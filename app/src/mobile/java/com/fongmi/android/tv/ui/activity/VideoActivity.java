@@ -6339,6 +6339,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         syncKaraokePosition();
         if (mFloat != null) mFloat.setPlaying(isPlaying);
         if (isPlaying || isPaused()) updatePlayControl(isPlaying, isAudioBackgroundMode());
+        syncPauseKeepScreenOn(isPlaying);
+    }
+
+    // 问题一B：全屏播放时暂停太久会熄屏 → 被误判/回收退回首页。
+    // 全屏暂停期间保持屏幕常亮（基类 onIsPlayingChanged 暂停即清常亮），
+    // 小窗、纯音频模式、非全屏仍保持可息屏的原有行为。
+    private void syncPauseKeepScreenOn(boolean isPlaying) {
+        if (isPlaying || isFloatShowing() || isAudioOnly() || !isFullscreen()) {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            return;
+        }
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     private void updatePlayControl(boolean isPlaying, boolean audioMode) {
