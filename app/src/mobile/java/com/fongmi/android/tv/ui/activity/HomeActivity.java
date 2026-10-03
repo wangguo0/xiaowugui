@@ -49,6 +49,7 @@ import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.base.BaseActivity;
 import com.fongmi.android.tv.ui.custom.FragmentStateManager;
 import com.fongmi.android.tv.ui.dialog.DisclaimerDialog;
+import com.fongmi.android.tv.ui.guide.GuideManager;
 import com.fongmi.android.tv.ui.fragment.BangumiFragment;
 import com.fongmi.android.tv.ui.fragment.CollectFragment;
 import com.fongmi.android.tv.ui.fragment.ConfigManageFragment;
@@ -107,6 +108,8 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     private boolean returnVodFromEnhance;
     private boolean returnAdvancedFromEnhance;
     private boolean disclaimerShowing;
+    // 当前存活的悬浮窗权限弹窗（首弹或二次提醒）：存活期间新手引导必须让路
+    private AlertDialog overlayDialog;
 
     @Override
     protected ViewBinding getBinding() {
@@ -142,17 +145,18 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
     }
 
     // 首次使用软件时说明悬浮窗权限用途（小窗播放需要）；有其它弹窗时让路，留待下次进入再问
-    private void requestOverlayPermissionIfNeeded() {
-        requestOverlayPermissionIfNeeded(4);
+    // 返回 true = 本轮已弹窗或稍后可能弹窗，新手引导需让路，待弹窗流程结束后由焦点事件续接
+    private boolean requestOverlayPermissionIfNeeded() {
+        return requestOverlayPermissionIfNeeded(4);
     }
 
-    private void requestOverlayPermissionIfNeeded(int retry) {
-        if (!DisclaimerDialog.isAgreed()) return;
-        if (isOverlayAskedToday() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
-        if (Settings.canDrawOverlays(this)) return;
+    private boolean requestOverlayPermissionIfNeeded(int retry) {
+        if (!DisclaimerDialog.isAgreed()) return false;
+        if (isOverlayAskedToday() || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false;
+        if (Settings.canDrawOverlays(this)) return false;
         if (!hasWindowFocus()) {
             if (retry > 0) App.post(() -> requestOverlayPermissionIfNeeded(retry - 1), 1500);
-            return;
+            return true;
         }
         // 真正弹窗时才记录日期：让路重试失败不消耗当日机会
         PlayerSetting.putOverlayAskDate(overlayToday());
@@ -171,8 +175,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             dialog.dismiss();
             openOverlaySettings();
         });
+        overlayDialog = dialog;
+        dialog.setOnDismissListener(d -> { if (overlayDialog == d) overlayDialog = null; });
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        return true;
     }
 
     // 悬浮窗权限提醒是否当天已弹过（同一自然日只提醒一次）
@@ -197,6 +204,8 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             dialog.dismiss();
             openOverlaySettings();
         });
+        overlayDialog = dialog;
+        dialog.setOnDismissListener(d -> { if (overlayDialog == d) overlayDialog = null; });
         dialog.show();
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
     }
@@ -405,7 +414,9 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
         returnVodFromEnhance = false;
         returnAdvancedFromEnhance = false;
         setNavigationVisible(true);
-        if (item.getItemId() == R.id.setting) return changeFragment(1);
+        if (item.getItemId() == R.id.setting) {
+            return changeFragment(1);
+        }
         if (item.getItemId() == R.id.vod) return changeFragment(0);
         if (item.getItemId() == R.id.history) return changeFragment(2);
         if (item.getItemId() == R.id.keep) return changeFragment(4);
@@ -604,7 +615,11 @@ public class HomeActivity extends BaseActivity implements NavigationBarView.OnIt
             return;
         }
         if (DisclaimerDialog.isAgreed()) {
-            requestOverlayPermissionIfNeeded();
+            // 二次确认弹窗仍开着：引导继续让路，其关闭后的焦点事件会再次进入本方法
+            if (overlayDialog != null) return;
+            // 悬浮窗权限弹窗优先：本轮弹了（或稍后可能弹）则引导让路，弹窗流程结束后由焦点事件续接
+            if (requestOverlayPermissionIfNeeded()) return;
+            GuideManager.get().startIfNeeded(this);
             return;
         }
         if (disclaimerShowing) return;

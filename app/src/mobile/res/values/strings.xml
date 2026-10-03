@@ -222,6 +222,33 @@
     <string name="video_float_permission_later">Later</string>
     <string name="video_float_permission_toast">Please allow Display over other apps for this app</string>
     <string name="dex_patch_notice_result">Result: this jar has been permanently blocked, so its sites cannot play. The subscription itself is kept, and other sources are unaffected.</string>
-    <string name="dex_patch_notice_hint">Suggestion: view the blocked jar URL (%1$s) under Source settings → Blocked sources. If you trust this source, turn off the subscription source check on add and re-add it at your own risk.</string>
+    <string name="dex_patch_notice_hint">Suggestion: view the blocked jar URL (%1$s) under Source settings 鈫?Blocked sources. If you trust this source, turn off the subscription source check on add and re-add it at your own risk.</string>
+
+    <!-- 首次安装新手引导（文案统一中文，仅默认目录，各语言环境共用） -->
+    <string name="guide_skip">跳过引导</string>
+    <string name="guide_step">第 %1$d 步 / 共 %2$d 步</string>
+    <string name="guide_continue">继续 ▶</string>
+    <string name="guide_ask_title">开始使用前，先添加订阅源</string>
+    <string name="guide_ask_message">小乌龟本身不带任何内容，需要您添加一个订阅源链接才能观看视频。整个过程大约 1 分钟，我会一步步带您完成。</string>
+    <string name="guide_ask_has">有，我来粘贴</string>
+    <string name="guide_ask_no">没有，帮我找源</string>
+    <string name="guide_kw_title">搜索引擎找源说明</string>
+    <string name="guide_kw_message">打开手机浏览器或任意搜索引擎（必应、百度等），搜索以下关键词：\n\n「tvbox接口」「tvbox订阅源」「tvbox最新可用接口」\n\n从结果页面中找到以 .json 或 .txt 结尾的订阅链接，复制链接文本后返回本软件，点击「拿到链接了，去添加」继续引导。</string>
+    <string name="guide_kw_got">拿到链接了，去添加</string>
+    <string name="guide_home_add">点击「添加订阅」进入订阅管理</string>
+    <string name="guide_cfg_add">点击右上角「添加」新建订阅源</string>
+    <string name="guide_cfg_input">把订阅链接粘贴到这里</string>
+    <string name="guide_cfg_confirm">点击「确定」保存并开始加载</string>
+    <string name="guide_saved_title">订阅源已添加</string>
+    <string name="guide_saved_message">返回首页即可开始观看视频。</string>
+    <string name="guide_back_home">返回首页</string>
+    <string name="guide_done_title">引导完成！</string>
+    <string name="guide_done_message">小乌龟支持添加多个订阅源。在「订阅源管理」中有「点播源合并」和「直播源合并」，可把多个源的点播/直播内容合并成一个列表，换源更方便。</string>
+    <string name="guide_done_look">去看看</string>
+    <string name="guide_done_finish">完成引导</string>
+    <string name="guide_merge_explore">这两行可把多个订阅源合并为一个列表，点击任意一行体验</string>
+    <string name="guide_finish_title">引导完成</string>
+    <string name="guide_finish_message">现在可以开始观看视频了，祝您使用愉快！</string>
+    <string name="guide_finish_ok">知道了</string>
 
 </resources>

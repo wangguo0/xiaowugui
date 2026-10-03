@@ -36,6 +36,7 @@ import com.fongmi.android.tv.ui.activity.ScanActivity;
 import com.fongmi.android.tv.ui.adapter.ConfigCardAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.ConfigDialog;
+import com.fongmi.android.tv.ui.guide.GuideManager;
 import com.fongmi.android.tv.ui.dialog.ProbeDialog;
 import com.fongmi.android.tv.ui.dialog.ShareUrlDialog;
 import com.fongmi.android.tv.utils.Notify;
@@ -90,10 +91,13 @@ public class ConfigManageFragment extends BaseFragment implements ConfigCardAdap
         mBinding.toolbar.setOnMenuItemClickListener(this::onMenuItemClick);
         mBinding.scan.setOnClickListener(this::onScan);
         mBinding.tutorial.setOnClickListener(v -> Notify.show(R.string.setting_subscription_tutorial));
+        // 新手引导：高亮「添加」菜单项
+        if (isVod) GuideManager.get().report(requireActivity(), "cfg_add", () -> mBinding.toolbar.findViewById(R.id.add));
     }
 
     private boolean onMenuItemClick(MenuItem item) {
         if (item.getItemId() == R.id.add) {
+            GuideManager.get().onActionDone(requireActivity(), "cfg_add");
             onAdd();
             return true;
         }

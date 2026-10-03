@@ -16,6 +16,7 @@ import com.fongmi.android.tv.ui.activity.SubSettingActivity;
 import com.fongmi.android.tv.ui.base.BaseFragment;
 import com.fongmi.android.tv.ui.dialog.CommunityRepoDialog;
 import com.fongmi.android.tv.ui.dialog.SourceMergeDialog;
+import com.fongmi.android.tv.ui.guide.GuideManager;
 import com.github.catvod.utils.Prefers;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
@@ -52,6 +53,8 @@ public class SettingSourceFragment extends BaseFragment {
         mBinding.vodMerge.setOnClickListener(this::onVodMerge);
         mBinding.liveMerge.setOnClickListener(this::onLiveMerge);
         mBinding.communityRepo.setOnClickListener(v -> onCommunityRepo());
+        // 新手引导：完成卡「去看看」高亮点播/直播源合并两行
+        GuideManager.get().onTargetReady(requireActivity(), "merge_explore", mBinding.vodMerge, mBinding.liveMerge);
         mBinding.probeAddRow.setOnClickListener(v -> mBinding.probeAdd.performClick());
         mBinding.probeMergeRow.setOnClickListener(v -> mBinding.probeMerge.performClick());
         mBinding.probeAdd.setOnClickListener(v -> toggleProbe(mBinding.probeAdd, true));
@@ -187,10 +190,12 @@ public class SettingSourceFragment extends BaseFragment {
     }
 
     private void onVodMerge(View view) {
+        GuideManager.get().onActionDone(requireActivity(), "merge_explore");
         SourceMergeDialog.create().vod().show(this);
     }
 
     private void onLiveMerge(View view) {
+        GuideManager.get().onActionDone(requireActivity(), "merge_explore");
         SourceMergeDialog.create().live().show(this);
     }
 

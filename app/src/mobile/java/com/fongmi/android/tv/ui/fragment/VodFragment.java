@@ -54,6 +54,7 @@ import com.fongmi.android.tv.ui.activity.SearchActivity;
 import com.fongmi.android.tv.ui.activity.SubSettingActivity;
 import com.fongmi.android.tv.ui.adapter.TypeAdapter;
 import com.fongmi.android.tv.ui.base.BaseFragment;
+import com.fongmi.android.tv.ui.guide.GuideManager;
 import com.fongmi.android.tv.ui.dialog.ApkPushDialog;
 import com.fongmi.android.tv.ui.dialog.FilterDialog;
 import com.fongmi.android.tv.ui.dialog.HistoryDialog;
@@ -389,6 +390,10 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.filter.setVisibility(View.GONE);
         mBinding.link.setVisibility(View.GONE);
         mBinding.top.setVisibility(View.GONE);
+        // 新手引导：空态「添加订阅」就绪上报
+        mBinding.emptyAdd.post(() -> {
+            if (isAdded()) GuideManager.get().onTargetReady(requireActivity(), "home_add", mBinding.emptyAdd);
+        });
     }
 
     private void hideEmptyGuide() {
@@ -397,6 +402,8 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private void onEmptyAdd(View view) {
+        // 新手引导：点击「添加订阅」推进到下一步
+        GuideManager.get().onActionDone(requireActivity(), "home_add");
         // 直接跳转「点播订阅管理」页，页内含添加源 / 扫一扫入口
         SubSettingActivity.start(requireActivity(), 10);
     }

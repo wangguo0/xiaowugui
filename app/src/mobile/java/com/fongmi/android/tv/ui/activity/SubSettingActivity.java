@@ -67,6 +67,13 @@ public class SubSettingActivity extends BaseActivity {
         }
     }
 
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // 新手引导兜底：弹窗关闭/页面回前台重新拿到焦点时重检当前步骤（目标消失则沿链回退）
+        if (hasFocus) com.fongmi.android.tv.ui.guide.GuideManager.get().refresh(this);
+    }
+
     private void applyInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(mBinding.getRoot(), (view, insets) -> {
             int top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;

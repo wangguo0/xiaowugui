@@ -130,7 +130,7 @@
                     android:textSize="18sp" />
             </androidx.appcompat.widget.LinearLayoutCompat>
 
-            <!-- 订阅源全网资源社区 -->
+            <!-- 订阅源全网资源社区：功能保留，界面暂不显示（恢复只需改回 visible） -->
             <androidx.appcompat.widget.LinearLayoutCompat
                 android:id="@+id/communityRepo"
                 android:layout_width="match_parent"
@@ -138,7 +138,8 @@
                 android:layout_marginTop="16dp"
                 android:background="@drawable/shape_item"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:visibility="gone">
 
                 <com.google.android.material.textview.MaterialTextView
                     android:layout_width="0dp"

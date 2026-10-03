@@ -34,6 +34,7 @@ import com.fongmi.android.tv.databinding.DialogConfigBinding;
 import com.fongmi.android.tv.impl.ConfigListener;
 import com.fongmi.android.tv.setting.Setting;
 import com.fongmi.android.tv.ui.custom.CustomTextListener;
+import com.fongmi.android.tv.ui.guide.GuideManager;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.Notify;
 import com.fongmi.android.tv.utils.ResUtil;
@@ -121,6 +122,8 @@ public class ConfigDialog extends BaseAlertDialog {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 detect(s.toString());
+                // 新手引导：输入非空即视为完成粘贴步骤
+                if (!s.isEmpty()) GuideManager.get().onActionDone(requireActivity(), "cfg_input_done");
             }
         });
         binding.url.setOnEditorActionListener((textView, actionId, event) -> {
@@ -138,6 +141,11 @@ public class ConfigDialog extends BaseAlertDialog {
         super.onStart();
         configureWindow();
         binding.url.requestFocus();
+        // 新手引导：高亮链接输入框与「确定」按钮
+        if (type == 0 && !edit && target == null) {
+            GuideManager.get().onTargetReady(requireActivity(), "cfg_input", binding.url);
+            GuideManager.get().onTargetReady(requireActivity(), "cfg_confirm", binding.positive);
+        }
     }
 
     private Config getConfig() {
@@ -293,6 +301,8 @@ public class ConfigDialog extends BaseAlertDialog {
             binding.url.requestFocus();
             return;
         }
+        // 新手引导：保存成功即推进到「返回首页」
+        GuideManager.get().onActionDone(requireActivity(), "cfg_confirm_done");
         ((ConfigListener) requireParentFragment()).setConfig(config);
         dismiss();
     }
