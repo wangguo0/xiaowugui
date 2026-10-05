@@ -42,6 +42,7 @@ lottie = "6.7.1"
 material = "1.14.0"
 materialdesigncolors = "1.0.0"
 media3 = "1.11.0-alpha01-fongmi"
+media3Exoplayer = "1.11.0-alpha01-fongmi2"
 exoplayerHdrUtils = "0.4.0"
 nanohttpd = "2.3.1"
 newpipeextractor = "v0.26.3"
@@ -108,7 +109,7 @@ media3-datasource-okhttp = { group = "androidx.media3", name = "media3-datasourc
 media3-datasource-rtmp = { group = "androidx.media3", name = "media3-datasource-rtmp", version.ref = "media3" }
 media3-decoder = { group = "androidx.media3", name = "media3-decoder", version.ref = "media3" }
 media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3Exoplayer" }
 media3-exoplayer-dash = { group = "androidx.media3", name = "media3-exoplayer-dash", version.ref = "media3" }
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 media3-exoplayer-rtsp = { group = "androidx.media3", name = "media3-exoplayer-rtsp", version.ref = "media3" }

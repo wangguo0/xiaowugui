@@ -127,8 +127,13 @@ android {
             force libs.okhttp
             eachDependency { details ->
                 if (details.requested.group == 'androidx.media3') {
-                    details.useVersion(libs.versions.media3.get())
-                    details.because('Use bundled Media3 build with MediaTitle and danmaku APIs')
+                    if (details.requested.name == 'media3-exoplayer') {
+                        details.useVersion(libs.versions.media3Exoplayer.get())
+                        details.because('PreCacheHelper late-callback crash fix on bundled Media3 build')
+                    } else {
+                        details.useVersion(libs.versions.media3.get())
+                        details.because('Use bundled Media3 build with MediaTitle and danmaku APIs')
+                    }
                 }
             }
         }
