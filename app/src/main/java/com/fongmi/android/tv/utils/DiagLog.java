@@ -171,6 +171,9 @@ public final class DiagLog {
     }
 
     private static void recordCrash(Thread thread, Throwable error) {
+        // 崩溃标记必须最先同步落盘：本进程随后会被崩溃链 killProcess，
+        // 下次启动的验尸/试运行判定靠它把「app 自身崩溃」与「jar 杀宿主」区分开（见 JarGuard.markCrashExit）
+        com.fongmi.android.tv.api.JarGuard.markCrashExit();
         StringWriter writer = new StringWriter();
         error.printStackTrace(new PrintWriter(writer));
         StringBuilder sb = new StringBuilder();

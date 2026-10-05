@@ -102,6 +102,8 @@ public class App extends Application implements Application.ActivityLifecycleCal
         // 主进程启动早期（任何 Activity 加载配置之前）消费「25 秒运行试用」遗留标记：
         // 上次试用源若导致崩溃，此处删除该源并恢复原激活配置，避免启动即崩循环
         if (!isProbeProcess()) com.fongmi.android.tv.api.TrialRun.checkOnStartup(this);
+        // 验尸误判修复后首次启动：清空历史事故计数（旧计数可能含把 app 自身崩溃误记到站源的假账）
+        if (!isProbeProcess()) com.fongmi.android.tv.setting.SiteIncidentSetting.clearAllOnce();
         PlaybackMemoryMonitor.process().initialize(this);
         PlaybackSystemConditionMonitor.process().initialize(this);
         Setting.applyLanguage();

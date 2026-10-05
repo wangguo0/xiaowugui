@@ -22,7 +22,8 @@ import com.github.catvod.utils.Prefers;
  * <p>
  * 试运行防护罩（仅窗口期安装）：
  * ① SecurityManager.checkExit —— 拦截 System.exit / Runtime.exit，置企图标志并抛异常阻止退出；
- * ② 默认未捕获异常处理器 —— 吞掉窗口内 Java 崩溃，置企图标志。
+ * ② 默认未捕获异常处理器 —— 证据归因：堆栈可归因到第三方 jar 才吞掉并置企图标志；
+ *    app 自身 bug 崩溃转交正常崩溃链（留崩溃标记，下次启动不算源之过）。
  * 两者触发即「处决」：立即回滚 + 永久拉黑 + 受控干净退出（不弹崩溃页、
  * 不自动重启、移除任务栈），不等窗口结束。
  * killProcess 等 native 杀进程 Java 层无法拦截 → 走真实闪退路径，
@@ -145,10 +146,30 @@ public final class TrialRun {
         try {
             originalUce = Thread.getDefaultUncaughtExceptionHandler();
             Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
-                onAttempt("uncaught exception swallowed: " + e);
+                // 证据归因：堆栈能落到第三方 jar 才算源之过，立即处决；
+                // app 自身 bug 崩溃（如预加载线程 NPE）不得误杀新源——转交正常崩溃链
+                // （链上 DiagLog.recordCrash 会落崩溃标记，下次启动 isCrash 据标记放行）
+                if (blameJar(e)) onAttempt("uncaught exception swallowed: " + e);
+                else if (originalUce != null) originalUce.uncaughtException(t, e);
             });
         } catch (Throwable ignored) {
             originalUce = null;
+        }
+    }
+
+    // 异常堆栈是否可归因到已加载的第三方 jar（spider 前缀帧直判 + ClassLoader 反查实锤）
+    private static boolean blameJar(Throwable e) {
+        try {
+            if (e == null) return false;
+            for (StackTraceElement f : e.getStackTrace()) {
+                if (f.getClassName().startsWith("com.github.catvod.spider.")) return true;
+            }
+            java.io.StringWriter sw = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(sw));
+            com.fongmi.android.tv.api.loader.JarLoader jl = com.fongmi.android.tv.api.loader.JarLoader.get();
+            return jl != null && jl.blameJarFromStack(sw.toString()) != null;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -253,6 +274,11 @@ public final class TrialRun {
                 if (reason == ApplicationExitInfo.REASON_EXIT_SELF && isExpectedSelfExitAt(exit.getTimestamp())) {
                     return false;
                 }
+                // app 自身 Java 崩溃（崩溃标记与退出时刻吻合）：非源之过，不算源崩溃，试运行放行
+                if (JarGuard.isAppCrashAt(exit.getTimestamp())) {
+                    DiagLog.log("trial", "exit reason=%d attributed to app self crash", reason);
+                    return false;
+                }
                 boolean crash = reason == ApplicationExitInfo.REASON_CRASH
                         || reason == ApplicationExitInfo.REASON_CRASH_NATIVE
                         || reason == ApplicationExitInfo.REASON_ANR
@@ -277,7 +303,9 @@ public final class TrialRun {
      */
     public static void expectSelfExit() {
         try {
-            Prefers.put(SELF_EXIT, String.valueOf(System.currentTimeMillis()));
+            // 必须同步 commit：TVBus 换核心仅 100ms 后就 System.exit，apply() 异步写盘可能来不及落盘，
+            // 标记丢失会让下次启动的验尸/崩溃判定把「主动重启」误归因成 jar 杀宿主
+            Prefers.getPrefers().edit().putString(SELF_EXIT, String.valueOf(System.currentTimeMillis())).commit();
         } catch (Throwable ignored) {
         }
     }

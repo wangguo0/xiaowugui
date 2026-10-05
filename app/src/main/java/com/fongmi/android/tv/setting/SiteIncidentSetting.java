@@ -37,6 +37,25 @@ public final class SiteIncidentSetting {
         return LIMIT;
     }
 
+    /**
+     * 一次性历史误账清理：旧版验尸归因缺少崩溃标记护栏（crash_page_exit 从未落盘），
+     * 会把 app 自身 Java 崩溃误记到在场 jar 的站源头上。修复后首次启动清空全部事故计数
+     * （无法区分真假误账，统一归零；此后新增计数均为修复后的真实记录）。
+     */
+    public static void clearAllOnce() {
+        try {
+            String flag = "site_incident_reset_v1";
+            if (com.github.catvod.utils.Prefers.getBoolean(flag, false)) return;
+            synchronized (LOCK) {
+                counts = new HashMap<>();
+                save();
+            }
+            com.github.catvod.utils.Prefers.getPrefers().edit().putBoolean(flag, true).commit();
+            DiagLog.log("jar-guard", "incident ledger cleared once (misattribution fix)");
+        } catch (Throwable ignored) {
+        }
+    }
+
     // 记录一次事故，返回累计次数（0 表示 key 为空未记录）
     public static int add(String key, String jar) {
         if (TextUtils.isEmpty(key)) return 0;

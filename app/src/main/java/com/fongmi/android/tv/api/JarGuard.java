@@ -175,6 +175,25 @@ public final class JarGuard {
         return false;
     }
 
+    /**
+     * 崩溃标记：DiagLog.recordCrash 在转交崩溃链前同步落盘（进程将死，必须 commit）。
+     * 验尸归因与试运行崩溃判定据此识别「app 自身 Java 崩溃」，防止误归因成 jar 杀宿主——
+     * 崩溃页流程 killProcess 产生的退出记录（SIGNALED + exit_self）与 jar native 硬杀
+     * 在系统层面完全无法区分，本标记是唯一判据。jar 硬杀时无未捕获异常、不会写标记，
+     * 验尸兜底照常生效。
+     */
+    public static void markCrashExit() {
+        try {
+            Prefers.getPrefers().edit().putString(CRASH_EXIT, String.valueOf(System.currentTimeMillis())).commit();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    // 指定退出时刻是否落在 app 自身 Java 崩溃窗口（崩溃标记 ±2 分钟内）
+    public static boolean isAppCrashAt(long timestamp) {
+        return recentMark(CRASH_EXIT, timestamp);
+    }
+
     // 标记时间戳是否落在「死亡时刻」附近（±2 分钟容差：标记在死前写、退出时间由系统记）
     private static boolean recentMark(String key, long died) {
         long mark = parseLong(Prefers.getString(key, ""), 0);
