@@ -18,15 +18,19 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
-            android:background="@null"
+            android:background="@drawable/shape_search_box"
             android:hint="@string/search_keyword"
             android:imeOptions="actionSearch"
             android:inputType="textCapWords|textAutoCorrect|textAutoComplete"
             android:maxLength="255"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp"
             android:singleLine="true"
             android:textAppearance="@style/ToolbarTextAppearance"
             android:textColor="@color/white"
-            android:textColorHint="@color/white"
+            android:textColorHint="#8CFFFFFF"
             android:textCursorDrawable="@drawable/shape_cursor" />
 
     </com.google.android.material.appbar.MaterialToolbar>

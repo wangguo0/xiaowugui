@@ -1249,6 +1249,10 @@
 
     <!-- Search -->
     <string name="search_keyword">Keywords…</string>
+    <string name="search_box_loading">Searching…</string>
+    <string name="search_box_empty_title">No matching videos found</string>
+    <string name="search_box_empty_hint">Try another keyword</string>
+    <string name="search_box_edit_hint">Tap to edit</string>
     <string name="search_column">Search layout</string>
     <string name="site_search_hint">Search sites…</string>
     <string name="search_record">History</string>

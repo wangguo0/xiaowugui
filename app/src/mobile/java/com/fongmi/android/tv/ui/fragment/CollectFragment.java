@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
@@ -163,7 +164,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         activity.setSupportActionBar(mBinding.toolbar);
         activity.getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         activity.addMenuProvider(this, getViewLifecycleOwner(), Lifecycle.State.RESUMED);
-        activity.setTitle(getKeyword());
+        mBinding.searchText.setText(getKeyword());
     }
 
     @Override
@@ -176,7 +177,7 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
 
     @Override
     protected void initEvent() {
-        mBinding.toolbar.setOnClickListener(v -> {
+        mBinding.searchBox.setOnClickListener(v -> {
             Bundle result = new Bundle();
             result.putBoolean("edit", true);
             getParentFragmentManager().setFragmentResult("result", result);
@@ -241,6 +242,13 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         mFrozen = false;
         mLoadingMore = false;
         mAllReturned = false;
+        mBinding.empty.setVisibility(View.GONE);
+        if (mSites.isEmpty()) {
+            mBinding.loading.setVisibility(View.GONE);
+            mBinding.empty.setVisibility(View.VISIBLE);
+            return;
+        }
+        mBinding.loading.setVisibility(View.VISIBLE);
         mViewModel.searchContent(mSites, getKeyword(), false);
     }
 
@@ -351,7 +359,14 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
     // 提交首屏：前 PAGE_SIZE 条钉死展示，其余清洗结果留在剩余候选中等「加载更多」追加。
     // 集满即冻结；未集满则等全部站点返回后由 progress 收尾冻结
     private void commitFirstPage(List<Vod> sorted, int cleanedCount, Map<Vod, List<Vod>> members) {
-        if (sorted.isEmpty()) return;
+        if (sorted.isEmpty()) {
+            // 全部站点已返回仍零结果：撤下转圈，显示无结果提示
+            if (mAllReturned) {
+                mBinding.loading.setVisibility(View.GONE);
+                mBinding.empty.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
         int end = Math.min(PAGE_SIZE, sorted.size());
         mDisplayed.clear();
         mShownByName.clear();
@@ -368,6 +383,9 @@ public class CollectFragment extends BaseFragment implements MenuProvider, Searc
         mRestMembers = members;
         mCleanedCount = cleanedCount;
         if (mDisplayed.size() >= PAGE_SIZE) mFrozen = true;
+        // 首张卡片出现：立即撤下转圈与无结果提示
+        mBinding.loading.setVisibility(View.GONE);
+        mBinding.empty.setVisibility(View.GONE);
         submitPage();
     }
 

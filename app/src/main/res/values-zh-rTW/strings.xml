@@ -1231,6 +1231,10 @@
 
     <!-- Search -->
     <string name="search_keyword">關鍵字…</string>
+    <string name="search_box_loading">正在搜尋…</string>
+    <string name="search_box_empty_title">沒有找到相關視頻</string>
+    <string name="search_box_empty_hint">換個關鍵字再試試</string>
+    <string name="search_box_edit_hint">輕觸編輯</string>
     <string name="site_search_hint">搜尋站點…</string>
     <string name="search_record">歷史</string>
     <string name="search_suggest">建議</string>

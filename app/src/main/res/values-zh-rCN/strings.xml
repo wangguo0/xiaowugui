@@ -1247,6 +1247,10 @@
 
     <!-- Search -->
     <string name="search_keyword">关键字…</string>
+    <string name="search_box_loading">正在搜索…</string>
+    <string name="search_box_empty_title">没有找到相关视频</string>
+    <string name="search_box_empty_hint">换个关键词再试试</string>
+    <string name="search_box_edit_hint">点击编辑</string>
     <string name="site_search_hint">搜索站点…</string>
     <string name="search_record">历史</string>
     <string name="search_suggest">建议</string>
