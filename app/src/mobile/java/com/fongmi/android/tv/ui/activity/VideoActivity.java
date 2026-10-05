@@ -5092,7 +5092,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
         @Override
         public void onStop() {
-            DiagLog.log("video", "finish: player callback onStop");
+            // 本回调仅由外部/系统向媒体会话下发 STOP 时触发（页面内主动停止/返回走 finishPlayback 直接结束，不经此处）。
+            // 前台暂停时收到的 STOP 多为系统媒体清理/误发：若直接 finish 会把用户踢回最近观看页。
+            // 故前台时只暂停播放、保留页面；仅当页面不在前台（后台/息屏）时才 finish。
+            if (!isStop()) {
+                DiagLog.log("video", "onStop: foreground STOP, pause only keep page");
+                if (service() != null) player().pause();
+                return;
+            }
+            DiagLog.log("video", "finish: player callback onStop (background)");
             finish();
         }
 
@@ -6342,11 +6350,10 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         syncPauseKeepScreenOn(isPlaying);
     }
 
-    // 问题一B：全屏播放时暂停太久会熄屏 → 被误判/回收退回首页。
-    // 全屏暂停期间保持屏幕常亮（基类 onIsPlayingChanged 暂停即清常亮），
-    // 小窗、纯音频模式、非全屏仍保持可息屏的原有行为。
+    // 视频普通页无论是否全屏、是否暂停，只要在小窗/纯音频之外的播放场景都保持屏幕常亮，
+    // 避免自动息屏；仅小窗、纯音频模式才允许屏幕正常息屏。
     private void syncPauseKeepScreenOn(boolean isPlaying) {
-        if (isPlaying || isFloatShowing() || isAudioOnly() || !isFullscreen()) {
+        if (isFloatShowing() || isAudioOnly()) {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             return;
         }

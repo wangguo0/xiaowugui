@@ -141,6 +141,7 @@ import com.fongmi.android.tv.ui.dialog.TitleDialog;
 import com.fongmi.android.tv.ui.dialog.TimerDialog;
 import com.fongmi.android.tv.ui.dialog.TrackDialog;
 import com.fongmi.android.tv.utils.Clock;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.FileChooser;
 import com.fongmi.android.tv.utils.ImgUtil;
 import com.fongmi.android.tv.utils.KeyUtil;
@@ -3758,6 +3759,15 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
         @Override
         public void onStop() {
+            // 本回调仅由外部/系统向媒体会话下发 STOP 时触发（返回键/页内停止走 finishVideoPlayback 直接结束，不经此处）。
+            // 前台时收到的 STOP 多为系统媒体清理/误发：若直接结束会把用户踢回首页。
+            // 电视端不维护 stop 标志，故用 Lifecycle 判断前台：未进入 onStop（至少 STARTED）时只暂停、保留页面。
+            if (getLifecycle().getCurrentState().isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                DiagLog.log("video", "onStop: foreground STOP, pause only keep page");
+                if (service() != null) player().pause();
+                return;
+            }
+            DiagLog.log("video", "finish: player callback onStop (background)");
             finishVideoPlayback();
         }
 

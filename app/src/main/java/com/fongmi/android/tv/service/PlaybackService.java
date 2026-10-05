@@ -36,6 +36,7 @@ import com.fongmi.android.tv.player.lyrics.DesktopLyricsWindow;
 import com.fongmi.android.tv.player.lyrics.LyricsLine;
 import com.fongmi.android.tv.player.lyrics.LyricsResult;
 import com.fongmi.android.tv.server.Server;
+import com.fongmi.android.tv.utils.DiagLog;
 import com.fongmi.android.tv.utils.Task;
 import com.github.catvod.crawler.SpiderDebug;
 import com.google.common.collect.ImmutableList;
@@ -368,6 +369,14 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     }
 
     public void dispatchStop() {
+        // 诊断：记录 STOP 的调用来源（区分通知栏/系统媒体控制/外部控制器/网页），便于定位误触发。
+        StackTraceElement[] st = Thread.currentThread().getStackTrace();
+        StringBuilder from = new StringBuilder();
+        for (int i = 2; i < Math.min(st.length, 8); i++) {
+            String cn = st[i].getClassName();
+            from.append(cn, cn.lastIndexOf('.') + 1, cn.length()).append('#').append(st[i].getMethodName()).append(" <- ");
+        }
+        DiagLog.log("playback", "[STOP] state=" + (player == null ? -1 : player.getPlaybackState()) + " owner=" + (hasNavigationCallback() && isNavigationOwner()) + " from=" + from);
         if (!isPlayerAvailable()) return;
         if (player.getPlaybackState() == Player.STATE_IDLE) return;
         if (hasNavigationCallback() && isNavigationOwner()) dispatch(NavigationCallback::onStop);
